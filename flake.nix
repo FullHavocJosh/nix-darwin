@@ -32,7 +32,8 @@
                 # pkgs.rpi-imager BROKEN?
                 pkgs.skhd
                 pkgs.speedtest-cli
-                pkgs.tfswitch
+                pkgs.stow
+		pkgs.tfswitch
                 pkgs.terraform
 	 	pkgs.terraformer
 		pkgs.terraforming
@@ -58,6 +59,7 @@
             ];
             # Install Brew Casks
             casks = [
+		"arc"
 		"alacritty"
 		"audio-hijack"
                 "battle-net"

@@ -13,14 +13,14 @@ System Preferences -> Privacy -> Full Disk Access -> Terminal
 ```
 #### Terminal Commands:
 ```
-brew install git stow
+brew install git
 ${tty_bold}softwareupdate --install-rosetta${tty_reset}
 ```
 
 ### For Fedora
 
 ```
-yum install git stow
+yum install git
 ```
 
 ## Installation
@@ -37,13 +37,13 @@ $ stow .
 sh <(curl -L https://nixos.org/nix/install)
 
 # Execute Nix Config:
-nix run nix-darwin --extra-experimental-features "nix-command flakes" --switch --flake ~/.config/nix#macos
+nix run nix-darwin --extra-experimental-features "nix-command flakes" --switch --flake ~/nix-darwin#macos
 
 # Check if Darwin Tools are Installed:
 which darwin-rebuild
 
 # Deploy Darwin Config
-darwin-rebuild switch --flake ~/.config/nix#macos
+darwin-rebuild switch --flake ~/nix-darwin#macos
 
 # Find Nix Packages * = name of package/app
 nix search nixpkgs *
@@ -51,4 +51,4 @@ nix search nixpkgs *
 
 # Updating Apps
 nix flake update
-darwin-rebuild switch --flake ~/.config/nix#macos
+darwin-rebuild switch --flake ~/nix-darwin#macos
