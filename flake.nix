@@ -22,73 +22,76 @@
             # or search.nixos.org
             environment.systemPackages =
             [
-                # pkgs.arc-browser
-                # pkgs.alacritty
-                # kgs.ansible-core
-                # pkgs.atuin
+                pkgs.arc-browser
+                pkgs.alacritty
+                pkgs.atuin
                 pkgs.btop
-                # pkgs.cider
-                # pkgs.citrix-workspace
-                # pkgs.discord
-                # pkgs.eza
-                # pkgs.firefox
-                # pkgs.fzf
-                # pkhs.go
-                # pkgs.goland
-                # pkgs.globalprotect-openconnect
-                # pkgs.iterm2
-                # pkgs.jetbrains-toolbox
-                # pkgs.krita
-                # pkgs.mkalias
-                # pkgs.neovim
-                # pkgs.obsidian
-                # pkgs.openconnect
-                # pkgs.plexamp
-                # pkgs.plex-media-player
-                # pkgs.powershell
-                # pkgs.python3
-                # pkgs.rpi-imager
-                # pkgs.skhd
-                # pkgs.slack
-                # pkgs.speedtest-cli
-                # pkgs.steam
-                # pkgs.sublimetext
-                # pkgs.tfswitch
-                # pkgs.terraform
-                # pkgs.telegram-desktop
-                # pkgs.tldr
-                # pkgs.via
-                # pkgs.vial
-                # pkgs.vlc
-                # pkgs.wireguard-go
-                # pkgs.yabai
+                pkgs.eza
+                pkgs.fzf
+                pkgs.iterm2
+                pkgs.mkalias
+                pkgs.neovim
+                pkgs.powershell
+                # pkgs.rpi-imager BROKEN?
+                pkgs.skhd
+                pkgs.speedtest-cli
+                pkgs.tfswitch
+                pkgs.terraform
+	 	pkgs.terraformer
+		pkgs.terraforming
+		pkgs.terraform-inventory
+                pkgs.tldr
+                pkgs.yabai
             ];
 
         homebrew = {
             enable = true;
             # Install Brew Apps
             brews = [
-                # "syncthing"
-                # "mas"
+		"ansible"
+		"ansible-lint"
+		"go"
+                "mas"
+		"openconnect"
+		"python3"
+		"syncthing"
                 "telnet"
             ];
             # Install Brew Casks
             casks = [
-                # "audio-hijack"
-                # "battle-net"
-                # "balenaetcher"
-                # "betterdisplay"
-                # "curseforge"
-                # "proton-drive"
-                # "protonvpn"
-                # "proton-pass"
-                # "proton-mail"
-                # "remote-desktop-manager-free"
-                # "the-unarchiver"
-                # "curseforge"
-                # "shottr"
-                # "ultimaker-cura"
-                "vanilla"
+                "audio-hijack"
+                "battle-net"
+                "balenaetcher"
+                "betterdisplay"
+                "cinder"
+		"citrix-workspace"
+		"curseforge"
+		"discord"
+                "firefox"
+		"goland"
+		"openconnect-gui"
+		"jetbrains-toolbox"
+		"krita"
+		"obsidian"
+		"plex"
+		"plexamp"
+		"proton-drive"
+                "protonvpn"
+                "proton-pass"
+                "proton-mail"
+                "remote-desktop-manager-free"
+		"shottr"
+		"slack"
+		"steam"
+		"sublime-text"
+		"telegram-desktop"
+                "the-unarchiver"
+                "ultimaker-cura"
+		"vanilla"
+		"via"
+		"vial"
+		"vlc"
+                "wireguard-go"
             ];
             # Install App Store Apps, search for ID with "mas search "
             # You must be logged into the Apps Store, and you must have purchased the app
@@ -140,16 +143,16 @@
         dock.expose-animation-duration = 0.05;
         # Apps installed via nix package must include ${pkgs.APPNAME}
         dock.persistent-apps = [
-            # "${pkgs.obsidian}/Applications/iTerm.app"
-            # "${pkgs.obsidian}/Applications/GoLand.app"
+            "/Applications/iTerm.app"
+            "/Applications/GoLand.app"
             "/System/Cryptexes/App/System/Applications/Safari.app"
-            # "${pkgs.obsidian}/Applications/Obsidian.app"
+            "/Applications/Obsidian.app"
             "/System/Applications/Freeform.app"
-            # "/Applications/Proton Pass.app"
-            # "/Applications/Proton Mail.app"
-            # "${pkgs.obsidian}/Applications/Discord.app"
+            "/Applications/Proton Pass.app"
+            "/Applications/Proton Mail.app"
+            "/Applications/Discord.app"
             "/System/Applications/Messages.app"
-            # "${pkgs.obsidian}/Applications/Telegram Lite.app"
+            "/Applications/Telegram Lite.app"
             "/System/Applications/Music.app"
         ];
         finder.FXPreferredViewStyle = "clmv";
