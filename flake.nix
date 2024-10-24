@@ -26,7 +26,7 @@
                 # pkgs.alacritty
                 # kgs.ansible-core
                 # pkgs.atuin
-                # pkgs.btop
+                pkgs.btop
                 # pkgs.cider
                 # pkgs.citrix-workspace
                 # pkgs.discord
@@ -70,7 +70,7 @@
             brews = [
                 # "syncthing"
                 # "mas"
-                # "telnet"
+                "telnet"
             ];
             # Install Brew Casks
             casks = [
@@ -88,18 +88,18 @@
                 # "curseforge"
                 # "shottr"
                 # "ultimaker-cura"
-                # "vanilla"
+                "vanilla"
             ];
             # Install App Store Apps, search for ID with "mas search "
             # You must be logged into the Apps Store, and you must have purchased the app
             masApps = {
                 # "VMware Remote Console" = 1230249825;
-                # "Xcode" = 497799835;
+                "Xcode" = 497799835;
             };
             # This Setting will REMOVE apps that are installed by homebrew outside of this config
             onActivation.cleanup = "zap";
             # These Settings will perform "brew update" & "brew upgrade" when darwin-rebuild is run
-            onActivation.autoUpgrade = true;
+            onActivation.autoUpdate = true;
             onActivation.upgrade = true;
         };
 
@@ -140,18 +140,17 @@
         dock.expose-animation-duration = 0.05;
         # Apps installed via nix package must include ${pkgs.APPNAME}
         dock.persistent-apps = [
-            "/Applications/Finder.app"
             # "${pkgs.obsidian}/Applications/iTerm.app"
             # "${pkgs.obsidian}/Applications/GoLand.app"
-            "/Applications/Safari.app"
+            "/System/Cryptexes/App/System/Applications/Safari.app"
             # "${pkgs.obsidian}/Applications/Obsidian.app"
-            "/Applications/Freeform.app"
+            "/System/Applications/Freeform.app"
             # "/Applications/Proton Pass.app"
             # "/Applications/Proton Mail.app"
             # "${pkgs.obsidian}/Applications/Discord.app"
-            "/Applications/Messages.app"
+            "/System/Applications/Messages.app"
             # "${pkgs.obsidian}/Applications/Telegram Lite.app"
-            "/Applications/Music.app"
+            "/System/Applications/Music.app"
         ];
         finder.FXPreferredViewStyle = "clmv";
         finder._FXSortFoldersFirst = true;
