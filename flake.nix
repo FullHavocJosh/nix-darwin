@@ -22,13 +22,10 @@
             # or search.nixos.org
             environment.systemPackages =
             [
-                pkgs.arc-browser
-                pkgs.alacritty
                 pkgs.atuin
                 pkgs.btop
                 pkgs.eza
                 pkgs.fzf
-                pkgs.iterm2
 		pkgs.mkalias
                 pkgs.neovim
                 pkgs.powershell
@@ -61,7 +58,8 @@
             ];
             # Install Brew Casks
             casks = [
-                "audio-hijack"
+		"alacritty"
+		"audio-hijack"
                 "battle-net"
                 "balenaetcher"
                 "betterdisplay"
@@ -70,6 +68,7 @@
 		"curseforge"
 		"discord"
 		"goland"
+		"iterm2"
 		"openconnect-gui"
 		"jetbrains-toolbox"
 		"krita"
@@ -97,7 +96,7 @@
             # Install App Store Apps, search for ID with "mas search "
             # You must be logged into the Apps Store, and you must have purchased the app
             masApps = {
-                # "VMware Remote Console" = 1230249825;
+                "VMware Remote Console" = 1230249825;
                 "Xcode" = 497799835;
             };
             # This Setting will REMOVE apps that are installed by homebrew outside of this config
@@ -153,7 +152,7 @@
             "/Applications/Proton Mail.app"
             "/Applications/Discord.app"
             "/System/Applications/Messages.app"
-            "/Applications/Telegram Lite.app"
+            "/Applications/Telegram Desktop.app"
             "/System/Applications/Music.app"
         ];
         finder.FXPreferredViewStyle = "clmv";
