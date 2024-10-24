@@ -26,7 +26,7 @@
                 # pkgs.alacritty
                 # kgs.ansible-core
                 # pkgs.atuin
-                pkgs.btop
+                # pkgs.btop
                 # pkgs.cider
                 # pkgs.citrix-workspace
                 # pkgs.discord
@@ -68,9 +68,9 @@
             enable = true;
             # Install Brew Apps
             brews = [
-                "syncthing"
-                "mas"
-                "telnet"
+                # "syncthing"
+                # "mas"
+                # "telnet"
             ];
             # Install Brew Casks
             casks = [
@@ -88,13 +88,13 @@
                 # "curseforge"
                 # "shottr"
                 # "ultimaker-cura"
-                "vanilla"
+                # "vanilla"
             ];
             # Install App Store Apps, search for ID with "mas search "
             # You must be logged into the Apps Store, and you must have purchased the app
             masApps = {
-                "VMware Remote Console" = 1230249825;
-                "Xcode" = 497799835;
+                # "VMware Remote Console" = 1230249825;
+                # "Xcode" = 497799835;
             };
             # This Setting will REMOVE apps that are installed by homebrew outside of this config
             onActivation.cleanup = "zap";
