@@ -7,9 +7,14 @@ This directory contains the dotfiles for my systems
 Ensure you have the following installed on your system
 
 ### For MacOS
-
+#### Settings:
+```
+System Preferences -> Privacy -> Full Disk Access -> Terminal
+```
+#### Terminal Commands:
 ```
 brew install git stow
+${tty_bold}softwareupdate --install-rosetta${tty_reset}
 ```
 
 ### For Fedora
