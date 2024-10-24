@@ -29,7 +29,7 @@
                 pkgs.eza
                 pkgs.fzf
                 pkgs.iterm2
-                pkgs.mkalias
+		pkgs.mkalias
                 pkgs.neovim
                 pkgs.powershell
                 # pkgs.rpi-imager BROKEN?
@@ -42,6 +42,7 @@
 		pkgs.terraform-inventory
                 pkgs.tldr
                 pkgs.yabai
+		pkgs.zplug
             ];
 
         homebrew = {
@@ -56,6 +57,7 @@
 		"python3"
 		"syncthing"
                 "telnet"
+		"wireguard-go"
             ];
             # Install Brew Casks
             casks = [
@@ -67,11 +69,11 @@
 		"citrix-workspace"
 		"curseforge"
 		"discord"
-                "firefox"
 		"goland"
 		"openconnect-gui"
 		"jetbrains-toolbox"
 		"krita"
+		"librewolf"
 		"obsidian"
 		"plex"
 		"plexamp"
@@ -91,7 +93,6 @@
 		"via"
 		"vial"
 		"vlc"
-                "wireguard-go"
             ];
             # Install App Store Apps, search for ID with "mas search "
             # You must be logged into the Apps Store, and you must have purchased the app
