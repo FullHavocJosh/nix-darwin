@@ -1,6 +1,6 @@
-# dotfiles
+# nix-darwin
 
-This directory contains the dotfiles for my systems
+This repo contains my nix-darwin config and .files, which will be applied via stow when darwin-rebuild switch is run. 
 
 ## Requirements
 
@@ -25,30 +25,36 @@ yum install git
 
 ## Installation
 
-First, check out the dotfiles repo in your $HOME directory using git
+First, check out the nix-darwin repo in your $HOME directory using git
 
 ```
-$ git clone git@github.com:FullHavocJosh/dotfiles.git
-$ cd dotfiles
-$ stow .
+$ git clone git@github.com:FullHavocJosh/nix-darwin.git
 ```
 
-# Install Nix Package Manager:
+## Install Nix Package Manager:
+```
 sh <(curl -L https://nixos.org/nix/install)
-
-# Execute Nix Config:
+```
+## Execute Nix Config:
+```
 nix run nix-darwin --extra-experimental-features "nix-command flakes" --switch --flake ~/nix-darwin#macos
-
-# Check if Darwin Tools are Installed:
+```
+## Check if Darwin Tools are Installed:
+```
 which darwin-rebuild
-
-# Deploy Darwin Config
+```
+## Deploy Darwin Config
+```
 darwin-rebuild switch --flake ~/nix-darwin#macos
-
-# Find Nix Packages * = name of package/app
+```
+## Find Nix Packages * = name of package/app
+```
 nix search nixpkgs *
-# or search.nixos.org
+```
+## or search.nixos.org
 
-# Updating Apps
+## Updating Apps
+```
 nix flake update
 darwin-rebuild switch --flake ~/nix-darwin#macos
+```
