@@ -26,74 +26,78 @@
                 pkgs.btop
                 pkgs.eza
                 pkgs.fzf
-		pkgs.mkalias
+		        pkgs.mkalias
                 pkgs.neovim
                 pkgs.powershell
                 # pkgs.rpi-imager BROKEN?
                 pkgs.skhd
                 pkgs.speedtest-cli
                 pkgs.stow
-		pkgs.tfswitch
+		        pkgs.tfswitch
                 pkgs.terraform
-	 	pkgs.terraformer
-		pkgs.terraforming
-		pkgs.terraform-inventory
+                pkgs.terraformer
+                pkgs.terraforming
+                pkgs.terraform-inventory
                 pkgs.tldr
+                pkgs.tmux
                 pkgs.yabai
-		pkgs.zplug
+                pkgs.zplug
             ];
 
         homebrew = {
             enable = true;
             # Install Brew Apps
             brews = [
-		"ansible"
-		"ansible-lint"
-		"go"
+                "ansible"
+                "ansible-lint"
+                "go"
                 "mas"
-		"openconnect"
-		"python3"
-		"syncthing"
+                "oh-my-posh"
+                "openconnect"
+                "python3"
+                "syncthing"
                 "telnet"
-		"wireguard-go"
+                "tmuxinator"
+                "tmuxinator-completion"
+                "wireguard-go"
             ];
             # Install Brew Casks
             casks = [
-		"arc"
-		"alacritty"
-		"audio-hijack"
+                "arc"
+                "alacritty"
+                "audio-hijack"
                 "battle-net"
                 "balenaetcher"
                 "betterdisplay"
                 "cinder"
-		"citrix-workspace"
-		"curseforge"
-		"discord"
-		"goland"
-		"iterm2"
-		"openconnect-gui"
-		"jetbrains-toolbox"
-		"krita"
-		"librewolf"
-		"obsidian"
-		"plex"
-		"plexamp"
-		"proton-drive"
+                "citrix-workspace"
+                "curseforge"
+                "discord"
+                "goland"
+                "iterm2"
+                "openconnect-gui"
+                "jetbrains-toolbox"
+                "krita"
+                "librewolf"
+                "obsidian"
+                "plex"
+                "plexamp"
+                "proton-drive"
                 "protonvpn"
                 "proton-pass"
                 "proton-mail"
                 "remote-desktop-manager-free"
-		"shottr"
-		"slack"
-		"steam"
-		"sublime-text"
-		"telegram-desktop"
+                "shottr"
+                "slack"
+                "steam"
+                "sublime-text"
+                "telegram-desktop"
                 "the-unarchiver"
                 "ultimaker-cura"
-		"vanilla"
-		"via"
-		"vial"
-		"vlc"
+                "vanilla"
+                "via"
+                "vial"
+                "vlc"
             ];
             # Install App Store Apps, search for ID with "mas search "
             # You must be logged into the Apps Store, and you must have purchased the app
@@ -145,7 +149,7 @@
         dock.expose-animation-duration = 0.05;
         # Apps installed via nix package must include ${pkgs.APPNAME}
         dock.persistent-apps = [
-            "/Applications/iTerm.app"
+            "/Applications/Alacritty.app"
             "/Applications/GoLand.app"
             "/System/Cryptexes/App/System/Applications/Safari.app"
             "/Applications/Obsidian.app"
