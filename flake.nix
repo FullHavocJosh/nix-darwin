@@ -202,7 +202,7 @@
     system.stateVersion = 4;
 
     # The platform the configuration will be used on.
-    nixpkgs.hostPlatform = "aarch64-services";
+    nixpkgs.hostPlatform = "aarch64-darwin";
 };
 in
 {
@@ -221,6 +221,8 @@ in
                     autoMigrate = true;
                 };
             }
+            ./services/yabai.nix
+            ./services/skhd.nix
         ];
     };
 

@@ -4,9 +4,8 @@
     package = pkgs.yabai;
     enableScriptingAddition = true;
     config = {
-      external_bar = "all:39:0";
-      layout = "stack";
-      auto_balance = "on";
+      layout = "bsp";
+      auto_balance = "off";
 
       mouse_modifier = "alt";
       # set modifier + right-click drag to resize window (default: resize)
@@ -16,7 +15,7 @@
 
       # gaps
       top_padding = 4;
-      bottom_padding = 24;
+      bottom_padding = 4;
       left_padding = 4;
       right_padding = 4;
       window_gap = 4;
