@@ -1,0 +1,78 @@
+export ZPLUG_HOME=/opt/homebrew/opt/zplug
+source $ZPLUG_HOME/init.zsh
+zplug "mafredri/zsh-async", from:github
+zplug "sindresorhus/pure", use:pure.zsh, from:github, as:theme
+zplug "zdharma/fast-syntax-highlighting", as:plugin, defer:2
+zplug "zsh-users/zsh-autosuggestions", as:plugin, defer:2
+zplug load
+# Install plugins if there are plugins that have not been installed
+if ! zplug check --verbose; then
+    printf "Install? [y/N]: "
+    if read -q; then
+        echo; zplug install
+    fi
+fi
+ZSH_THEME=""
+
+# If you come from bash you might have to change your $PATH.
+# export PATH=$HOME/bin:/usr/local/bin:$PATH
+
+# Path to your oh-my-zsh installation.
+export ZSH="$HOME/.oh-my-zsh"
+
+# Path to your terraform installations.
+export PATH="/Users/jrollet@perfectserve.net/bin:$PATH"
+
+# Path to python and pip.
+export PATH="$HOME/Library/Python/3.9/bin:$PATH"
+export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+export no_proxy="*"
+
+# Path to go.
+export GOPATH=/opt/homebrew/Cellar/go/1.23.2
+export GOROOT=/opt/homebrew/Cellar/go/1.23.2/libexec
+export PATH=$PATH:$GOPATH/bin
+export PATH=$PATH:$GOROOT/bin
+
+# Path to ovftool.
+export PATH=$PATH:/opt/homebrew/bin/ovftool
+
+# Environmental Variables:
+source ~/.zshenv_vars
+
+# Which plugins would you like to load?
+# Standard plugins can be found in $ZSH/plugins/
+# Custom plugins may be added to $ZSH_CUSTOM/plugins/
+# Add wisely, as too many plugins slow down shell startup.
+
+plugins=(git)
+
+source $ZSH/oh-my-zsh.sh
+
+# Aliases.
+alias clear="clear ; clear ; clear"
+
+alias eza="eza -lh"
+
+alias tree="find . -print | sed -e 's;[^/]*/;|____;g;s;____|; |;g'"
+
+alias tfs="tfswitch"
+alias tfi="terraform init"
+alias tfp="terraform plan"
+alias tft="rm -rf .terraform* ; tfswitch ; terraform init ; terraform validate ; terraform plan"
+alias tfa="terraform apply"
+
+# alias tft="rm -rf .terraform* ; tfswitch ; terraform init ; terraform validate ; terraform test"
+# alias tfp="rm -rf .terraform* ; tfswitch ; terraform init ; terraform validate ; terraform plan"
+
+alias ssm="aws ssm start-session --target"
+alias sso='function awslogin() { aws sso login --profile "$1" && export AWS_PROFILE="$1"; }; awslogin' #this allows you to login to the aws sso session
+alias ssoswitch='function awsswitch() { export AWS_PROFILE="$1"; } ; awsswitch' #this allows you to switch to another profile you have configured re-using the same session token
+
+# Additional configurations:
+
+eval "$(atuin init zsh)"
+eval "$(fzf --zsh)"
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+alias python=/usr/bin/python3
