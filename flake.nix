@@ -107,7 +107,7 @@
             };
             # This Setting will REMOVE apps that are installed by homebrew outside of this config
             onActivation.cleanup = "zap";
-            # These Settings will perform "brew update" & "brew upgrade" when darwin-rebuild is run
+            # These Settings will perform "brew update" & "brew upgrade" when services-rebuild is run
             onActivation.autoUpdate = true;
             onActivation.upgrade = true;
         };
@@ -137,7 +137,7 @@
         '';
 
     # System Settings for macOS
-    # Documentation at: mynixos.com and look for nix-darwin
+    # Documentation at: mynixos.com and look for nix-services
     system.defaults = {
         dock.autohide = true;
         dock.tilesize = 48;
@@ -181,6 +181,8 @@
         universalaccess.mouseDriverCursorSize = 1.25;
     };
 
+
+
     # Auto upgrade nix package and the daemon service.
     services.nix-daemon.enable = true;
     # nix.package = pkgs.nix;
@@ -188,24 +190,24 @@
     # Necessary for using flakes on this system.
     nix.settings.experimental-features = "nix-command flakes";
 
-    # Create /etc/zshrc that loads the nix-darwin environment.
+    # Create /etc/zshrc that loads the nix-services environment.
     programs.zsh.enable = true;  # default shell on catalina
     # programs.fish.enable = true;
 
-    # Set Git commit hash for darwin-version.
+    # Set Git commit hash for services-version.
     system.configurationRevision = self.rev or self.dirtyRev or null;
 
     # Used for backwards compatibility, please read the changelog before changing.
-    # $ darwin-rebuild changelog
+    # $ services-rebuild changelog
     system.stateVersion = 4;
 
     # The platform the configuration will be used on.
-    nixpkgs.hostPlatform = "aarch64-darwin";
+    nixpkgs.hostPlatform = "aarch64-services";
 };
 in
 {
-    # Build darwin flake using:
-    # $ darwin-rebuild build --flake .#simple
+    # Build services flake using:
+    # $ services-rebuild build --flake .#simple
     darwinConfigurations."macos" = nix-darwin.lib.darwinSystem {
         modules = [
             configuration
