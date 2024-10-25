@@ -116,12 +116,12 @@
             (pkgs.nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
         ];
 
-        system.activationScripts.stow = ''
+        system.activationScripts.script.text = ''
             echo "Stowing dotfiles..."
-            cd ~/nix-darwin/dotfiles || { echo "Failed to cd into ~/nix-darwin/dotfiles"; exit 1; }
+            cd /Users/havoc/nix-darwin || { echo "Failed to cd into ~/nix-darwin/dotfiles"; exit 1; }
             echo "Stowing $dir..."
-            ${pkgs.stow}/bin/stow . || { echo "Failed to stow ."; exit 1; }
-        '';
+            /run/current-system/sw/bin/stow . || { echo "Failed to stow ."; exit 1; }
+            '';
 
         system.activationScripts.applications.text = let
             env = pkgs.buildEnv {

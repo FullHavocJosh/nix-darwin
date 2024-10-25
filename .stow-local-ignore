@@ -1,2 +1,7 @@
-.git
-.idea
+\.git
+\.gitignore
+\.gitmodules
+\.idea
+flake.*
+services
+^/README.md
