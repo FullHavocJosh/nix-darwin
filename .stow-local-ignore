@@ -1,7 +1,9 @@
+\.DS_Store
 \.git
 \.gitignore
 \.gitmodules
 \.idea
 flake.*
 services
+result
 ^/README.md
