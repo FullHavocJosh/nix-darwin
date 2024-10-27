@@ -61,7 +61,7 @@ program = "/bin/zsh"
 [window]
 decorations = "transparent"
 dynamic_title = true
-startup_mode = "Maximized"
+dynamic_padding = true
 opacity = 0.9
 blur = true
 
@@ -71,7 +71,7 @@ lines = 80
 
 [window.padding]
 x = 7
-y = 28
+y = 7
 
 [scrolling]
 history = 100000
