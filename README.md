@@ -37,7 +37,7 @@ sh <(curl -L https://nixos.org/nix/install)
 ```
 ## Execute Nix Config:
 ```
-nix run nix-darwin --extra-experimental-features "nix-command flakes" --switch --flake ~/nix-darwin#macos
+nix run nix-darwin --extra-experimental-features "nix-command flakes" --switch --flake ~/nix-darwin#macos_personal
 ```
 ## Check if Darwin Tools are Installed:
 ```
@@ -45,7 +45,7 @@ which darwin-rebuild
 ```
 ## Deploy Darwin Config
 ```
-darwin-rebuild switch --flake ~/nix-darwin#macos
+darwin-rebuild switch --flake ~/nix-darwin#macos_personal
 ```
 ## Find Nix Packages * = name of package/app
 ```
@@ -60,8 +60,5 @@ darwin-rebuild switch --flake ~/nix-darwin#macos
 ```
 ## Notes:
 ```
-nix-build https://github.com/LnL7/nix-darwin/archive/master.tar.gz -A installer
-./result/bin/darwin-installer
-nix-channel --add https://github.com/LnL7/nix-darwin/archive/master.tar.gz darwin
-nix-channel --update
+
 ```
