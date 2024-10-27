@@ -87,7 +87,7 @@
           "battle-net"
           "balenaetcher"
           "betterdisplay"
-          "cinder"
+          "cider"
           "citrix-workspace"
           "curseforge"
           "discord"
@@ -157,13 +157,18 @@
       # Documentation at: mynixos.com and look for nix-services
       system.defaults = {
         dock.autohide = true;
-        dock.tilesize = 48;
+        dock.tilesize = 32;
+        dock.largesize = 64;
         dock.mineffect = "genie";
         dock.mru-spaces = false;
+        dock.showhidden = true;
+        dock.launchanim = true;
+        dock.orientation = "bottom";
+        dock.static-only = false;
         dock.show-recents = false;
+        dock.magnification = true;
         dock.autohide-delay = 0.05;
-        dock.wvous-tl-corner = 2;
-        dock.expose-animation-duration = 0.05;
+        dock.autohide-time-modifier = 0.05;
         # Apps installed via nix package must include ${pkgs.APPNAME}
         dock.persistent-apps = [
           "/Applications/Alacritty.app"
@@ -178,23 +183,64 @@
           "/Applications/Telegram Desktop.app"
           "/System/Applications/Music.app"
         ];
+        dock.persistent-others =
+                [
+                  "/Applications"
+                  "~/Downloads"
+                ];
+        dock.wvous-bl-corner = 1;
+        dock.wvous-br-corner = 1;
+        dock.wvous-tl-corner = 2;
+        dock.wvous-tr-corner = 1;
+        dock.slow-motion-allowed = false;
+        dock.dashboard-in-overlay = true;
+        dock.expose-group-by-app = false;
+        dock.expose-animation-duration = 0.05;
+        dock.minimize-to-application = false;
+        menuExtraClock.IsAnalog = false;
+        menuExtraClock.ShowAMPM = false;
+        menuExtraClock.ShowDate = 0;
+        menuExtraClock.Show24Hour = false;
+        menuExtraClock.ShowSeconds = false;
+        menuExtraClock.ShowDayOfWeek = false;
+        finder.ShowPathbar = true;
+        finder.QuitMenuItem = false;
+        finder.CreateDesktop = false;
+        finder.ShowStatusBar = true;
+        finder.AppleShowAllFiles = true;
         finder.FXPreferredViewStyle = "clmv";
         finder._FXSortFoldersFirst = true;
-        finder.ShowPathbar = true;
-        finder.CreateDesktop = false;
         finder.AppleShowAllExtensions = true;
         finder._FXShowPosixPathInTitle = true;
+        finder.FXDefaultSearchScope = "SCcf";
+        finder.FXEnableExtensionChangeWarning = false;
         loginwindow.GuestEnabled = false;
-        NSGlobalDomain.AppleInterfaceStyle = "Dark";
-        trackpad.FirstClickThreshold = 2;
         trackpad.TrackpadThreeFingerDrag = true;
+        trackpad.TrackpadThreeFingerTapGesture = 0;
+        WindowManager.AutoHide = true;
         WindowManager.StandardHideDesktopIcons = true;
+        WindowManager.HideDesktop = true;
         WindowManager.EnableStandardClickToShowDesktop = false;
-        SoftwareUpdate.AutomaticallyInstallMacOSUpdates = true;
+        WindowManager.GloballyEnabled = false;
+        WindowManager.AppWindowGroupingBehavior = false;
+        NSGlobalDomain.AppleInterfaceStyle = "Dark";
+        NSGlobalDomain.KeyRepeat = 2;
+        NSGlobalDomain.InitialKeyRepeat = 1;
+        NSGlobalDomain.AppleShowAllFiles = true;
+        NSGlobalDomain.NSWindowResizeTime = 0.05;
+        NSGlobalDomain.AppleShowAllExtensions = true;
+        NSGlobalDomain.ApplePressAndHoldEnabled = false;
+        NSGlobalDomain.NSScrollAnimationEnabled = true;
         NSGlobalDomain.NSDocumentSaveNewDocumentsToCloud = true;
         NSGlobalDomain.NSAutomaticInlinePredictionEnabled = false;
         NSGlobalDomain.NSAutomaticSpellingCorrectionEnabled = false;
         NSGlobalDomain.NSAutomaticPeriodSubstitutionEnabled = false;
+        NSGlobalDomain.NSAutomaticCapitalizationEnabled = false;
+        NSGlobalDomain.NSAutomaticDashSubstitutionEnabled = false;
+        NSGlobalDomain.NSAutomaticQuoteSubstitutionEnabled = false;
+        NSGlobalDomain.NSWindowShouldDragOnGesture = true;
+        NSGlobalDomain.AppleScrollerPagingBehavior = true;
+        NSGlobalDomain."com.apple.keyboard.fnState" = true;
         universalaccess.mouseDriverCursorSize = 1.25;
       };
     };
