@@ -1,0 +1,51 @@
+# Ignore Nix-Darwin generated files and caches
+/result
+/nix/store
+/nix/var/nix/profiles
+/nix/var/nix/gcroots
+/nix/var/log/nix/drvs
+/nix/var/nix/temproots
+/Library/Caches/com.apple.dt.Xcode
+
+# Ignore .DS_Store and other macOS-specific clutter
+.DS_Store
+.AppleDouble
+.Spotlight-V100
+.Trashes
+*.swp
+*.swo
+
+# Ignore Homebrew-specific files (if linked via Homebrew)
+opt/
+/usr/local/Cellar/
+/usr/local/Homebrew/
+Library/Taps/
+
+# Stow ignores
+stow-local-ignore
+**/.stow-local-ignore
+stow-uninstall-local-ignore
+**/.stow-uninstall-local-ignore
+
+# Ignore stow conflicts (e.g., files/folders already in the target location)
+*~
+
+# Ignore sensitive or machine-specific configurations
+**/secrets/
+private/
+*bak
+*.backup
+
+# Ignore logs and temporary files
+*.log
+*.tmp
+.cache/
+*.swp
+*.pid
+
+# Other machine-specific files, if necessary
+*.local
+
+# Avoid ignoring your main flake.nix, but you may ignore .lock files
+.lock
+flake.lock
