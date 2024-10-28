@@ -31,10 +31,6 @@ private/
 /nix/var/nix/temproots
 /Library/Caches/com.apple.dt.Xcode
 
-# Avoid ignoring your main flake.nix, but you may ignore .lock files
-.lock
-flake.lock
-
 # Ignore Homebrew-specific files (if linked via Homebrew)
 opt/
 /usr/local/Cellar/

@@ -87,18 +87,19 @@
           "battle-net"
           "balenaetcher"
           "betterdisplay"
-          "cider"
           "citrix-workspace"
           "curseforge"
           "discord"
           "goland"
           "iglance"
           "iterm2"
-          "openconnect-gui"
           "jetbrains-toolbox"
           "krita"
           "librewolf"
+          "microsoft-outlook"
+          "microsoft-teams"
           "obsidian"
+          "openconnect-gui"
           "plex"
           "plexamp"
           "proton-drive"
@@ -123,6 +124,9 @@
         # Install App Store Apps, search for ID with "mas search "
         # You must be logged into the Apps Store, and you must have purchased the app
         masApps = {
+          "Noir for Safari" = 1592917505;
+          "Proton Pass for Safari" = 6502835663;
+          "SponsorBlock for Safari" = 1573461917;
           "VMware Remote Console" = 1230249825;
           "Xcode" = 497799835;
         };
@@ -186,7 +190,7 @@
         dock.persistent-others =
                 [
                   "/Applications"
-                  "~/Downloads"
+                  "/home/havoc/Downloads"
                 ];
         dock.wvous-bl-corner = 1;
         dock.wvous-br-corner = 1;
