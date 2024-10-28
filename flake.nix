@@ -229,7 +229,7 @@
         WindowManager.AppWindowGroupingBehavior = false;
         NSGlobalDomain.AppleInterfaceStyle = "Dark";
         NSGlobalDomain.KeyRepeat = 2;
-        NSGlobalDomain.InitialKeyRepeat = 1;
+        NSGlobalDomain.InitialKeyRepeat = 10;
         NSGlobalDomain.AppleShowAllFiles = true;
         NSGlobalDomain.NSWindowResizeTime = 0.05;
         NSGlobalDomain.AppleShowAllExtensions = true;
