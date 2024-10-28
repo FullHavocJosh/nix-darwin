@@ -190,7 +190,6 @@
         dock.persistent-others =
                 [
                   "/Applications"
-                  "/home/havoc/Downloads"
                 ];
         dock.wvous-bl-corner = 1;
         dock.wvous-br-corner = 1;
