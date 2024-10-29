@@ -37,7 +37,7 @@
         eza
         fzf
         mkalias
-        neovim
+        # neovim
         powershell
         skhd
         speedtest-cli
@@ -54,7 +54,7 @@
       ];
     };
 
-    macosPackagesModule = { pkgs, config, ... }: {
+    macosPackagesModule_personal = { pkgs, config, ... }: {
       homebrew = {
         enable = true;
         # Install Brew Formulas
@@ -64,7 +64,6 @@
           "go"
           "mas"
           "oh-my-posh"
-          "openconnect"
           "python3"
           "syncthing"
           "telnet"
@@ -76,11 +75,9 @@
         casks = [
           "arc"
           "alacritty"
-          "audio-hijack"
           "battle-net"
           "balenaetcher"
           "betterdisplay"
-          "citrix-workspace"
           "curseforge"
           "discord"
           "goland"
@@ -89,19 +86,14 @@
           "jetbrains-toolbox"
           "krita"
           "librewolf"
-          "microsoft-outlook"
-          "microsoft-teams"
           "obsidian"
-          "openconnect-gui"
           "plex"
           "plexamp"
           "proton-drive"
           "protonvpn"
           "proton-pass"
           "proton-mail"
-          "remote-desktop-manager-free"
           "shottr"
-          "slack"
           "steam"
           "sublime-text"
           "telegram-desktop"
@@ -120,7 +112,6 @@
           "Noir for Safari" = 1592917505;
           "Proton Pass for Safari" = 6502835663;
           "SponsorBlock for Safari" = 1573461917;
-          "VMware Remote Console" = 1230249825;
           "Xcode" = 497799835;
         };
         # This Setting will REMOVE apps that are installed by homebrew outside of this config
@@ -154,7 +145,7 @@
         echo "Stowing dotfiles..."
         cd /Users/havoc/nix-darwin || { echo "Failed to cd into ~/nix-darwin/dotfiles"; exit 1; }
         echo "Stowing $dir..."
-        /run/current-system/sw/bin/stow -R . || { echo "Failed to stow ."; exit 1; }
+        ${pkgs.stow}/bin/stow -R . || { echo "Failed to stow ."; exit 1; }
       '';
 
       # System Settings for macOS
@@ -248,6 +239,64 @@
       };
     };
 
+    macosPackagesModule_work = { pkgs, config, ... }: {
+      homebrew = {
+        enable = true;
+        # Install Brew Formulas
+        brews = [
+          "ansible"
+          "ansible-lint"
+          "go"
+          "mas"
+          "oh-my-posh"
+          "python3"
+          "syncthing"
+          "telnet"
+          "tmuxinator"
+          "tmuxinator-completion"
+        ];
+        # Install Brew Casks
+        casks = [
+          "arc"
+          "alacritty"
+          "balenaetcher"
+          "betterdisplay"
+          "citrix-workspace"
+          "goland"
+          "iglance"
+          "iterm2"
+          "jetbrains-toolbox"
+          "krita"
+          "librewolf"
+          "microsoft-outlook"
+          "microsoft-teams"
+          "obsidian"
+          "plex"
+          "plexamp"
+          "remote-desktop-manager-free"
+          "shottr"
+          "slack"
+          "sublime-text"
+          "the-unarchiver"
+          "vanilla"
+          "via"
+          "vial"
+          "vlc"
+        ];
+        # Install App Store Apps, search for ID with "mas search "
+        # You must be logged into the Apps Store, and you must have purchased the app
+        masApps = {
+          "VMware Remote Console" = 1230249825;
+          "Xcode" = 497799835;
+        };
+        # This Setting will REMOVE apps that are installed by homebrew outside of this config
+        onActivation.cleanup = "zap";
+        # These Settings will perform "brew update" & "brew upgrade" when services-rebuild is run
+        onActivation.autoUpdate = true;
+        onActivation.upgrade = true;
+      };
+    };
+
     macosConfigModule_work = { pkgs, config, ... }: {
       system.activationScripts.applications.text = let
         env = pkgs.buildEnv {
@@ -268,9 +317,9 @@
       '';
         system.activationScripts.script.text = ''
           echo "Stowing dotfiles..."
-          cd /Users/jrollet@perfectserve.net/nix-darwin || { echo "Failed to cd into ~/nix-darwin/dotfiles"; exit 1; }
+          cd /Users/havoc/nix-darwin || { echo "Failed to cd into ~/nix-darwin/dotfiles"; exit 1; }
           echo "Stowing $dir..."
-          /run/current-system/sw/bin/stow -R . || { echo "Failed to stow ."; exit 1; }
+          ${pkgs.stow}/bin/stow -R . || { echo "Failed to stow ."; exit 1; }
         '';
       # System Settings for macOS
       # Documentation at: mynixos.com and look for nix-services
@@ -294,10 +343,9 @@
           "/Applications/GoLand.app"
           "/Applications/Arc.app"
           "/Applications/Slack.app"
-          "/Applications/Outlook.app"
-          "/Applications/Passwords.app"
-          "/Applications/Sublime.app"
-          "/Applications/OpenConnect-GUI.app"
+          "/Applications/Microsoft Outlook.app"
+          "/System/Applications/Passwords.app"
+          "/Applications/Sublime Text.app"
           "/Applications/Remote Desktop Manager Free.app"
         ];
         dock.persistent-others =
@@ -365,7 +413,7 @@
       modules = [
         globalConfigModule
         globalPackagesModule
-        macosPackagesModule
+        macosPackagesModule_personal
         macosConfigModule_personal
         nix-homebrew.darwinModules.nix-homebrew
         ./services/yabai.nix
@@ -377,7 +425,7 @@
       modules = [
         globalConfigModule
         globalPackagesModule
-        macosPackagesModule
+        macosPackagesModule_work
         macosConfigModule_work
         nix-homebrew.darwinModules.nix-homebrew
         ./services/yabai.nix
