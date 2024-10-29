@@ -274,6 +274,7 @@
           "remote-desktop-manager-free"
           "shottr"
           "slack"
+          "stats"
           "sublime-text"
           "the-unarchiver"
           "vanilla"
