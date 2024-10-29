@@ -339,12 +339,12 @@
           "/Applications/Alacritty.app"
           "/Applications/GoLand.app"
           "/Applications/Arc.app"
+          "/Applications/Sublime Text.app"
+          "/Applications/Remote Desktop Manager Free.app"
           "/Applications/Slack.app"
           "/Applications/Microsoft Outlook.app"
-          "/Applications/Sublime Text.app"
           "/System/Applications/Passwords.app"
           "/Applications/Cisco AnyConnect Secure Mobility Client.app"
-          "/Applications/Remote Desktop Manager Free.app"
         ];
         dock.persistent-others =
                 [
