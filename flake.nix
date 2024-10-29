@@ -168,14 +168,14 @@
           "/Applications/Alacritty.app"
           "/Applications/GoLand.app"
           "/System/Cryptexes/App/System/Applications/Safari.app"
+          "/System/Applications/Music.app"
           "/Applications/Obsidian.app"
           "/System/Applications/Freeform.app"
-          "/Applications/Proton Pass.app"
-          "/Applications/Proton Mail.app"
           "/Applications/Discord.app"
           "/System/Applications/Messages.app"
           "/Applications/Telegram Desktop.app"
-          "/System/Applications/Music.app"
+          "/Applications/Proton Mail.app"
+          "/Applications/Proton Pass.app"
         ];
         dock.persistent-others =
                 [
