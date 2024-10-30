@@ -61,9 +61,9 @@
       yabai -m rule --add app="^Dictionary$" manage=off
       yabai -m rule --add label="Software Update" title="Software Update" manage=off
       yabai -m rule --add app="System Information" manage=off
-      yabai -m rule --add app="Cisco AnyConnect Secure Mobility Client" manage=off
       yabai -m rule --add app="Passwords" manage=off
-      yabai -m rule --add label="Vanilla" manage=off
+      yabai -m rule --add app="^Vanilla$" title="^Preferences$" manage=off
+      yabai -m rule --add app="^Cisco AnyConnect Secure Mobility Client$" manage=off
     '';
   };
 }
