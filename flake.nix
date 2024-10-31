@@ -416,6 +416,7 @@
         nix-homebrew.darwinModules.nix-homebrew
         ./services/yabai.nix
         ./services/skhd.nix
+        ./services/syncthing_macos.nix
       ];
     };
 
@@ -428,6 +429,7 @@
         nix-homebrew.darwinModules.nix-homebrew
         ./services/yabai.nix
         ./services/skhd.nix
+        ./services/syncthing_macos.nix
       ];
     };
 
