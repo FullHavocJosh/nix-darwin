@@ -122,11 +122,10 @@ alias tree="find . -print | sed -e 's;[^/]*/;|____;g;s;____|; |;g'"
 alias tfs="tfswitch"
 alias tfi="terraform init"
 alias tfp="terraform plan"
-alias tft="rm -rf .terraform* ; tfswitch ; terraform init ; terraform validate ; terraform plan"
 alias tfa="terraform apply"
 
-# alias tft="rm -rf .terraform* ; tfswitch ; terraform init ; terraform validate ; terraform test"
-# alias tfp="rm -rf .terraform* ; tfswitch ; terraform init ; terraform validate ; terraform plan"
+alias tft="rm -rf .terraform* ; tfswitch ; terraform init ; terraform validate ; terraform test"
+alias tfp="rm -rf .terraform* ; tfswitch ; terraform init ; terraform validate ; terraform plan"
 
 alias ssm="aws ssm start-session --target"
 alias sso='function awslogin() { aws sso login --profile "$1" && export AWS_PROFILE="$1"; }; awslogin' #this allows you to login to the aws sso session
