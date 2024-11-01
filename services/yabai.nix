@@ -64,6 +64,7 @@
       yabai -m rule --add app="Passwords" manage=off
       yabai -m rule --add app="^Vanilla$" title="^Preferences$" manage=off
       yabai -m rule --add app="^Cisco AnyConnect Secure Mobility Client$" manage=off
+      yabai -m rule --add app="^Shottr$" manage=off
     '';
   };
 }
