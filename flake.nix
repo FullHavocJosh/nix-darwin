@@ -148,15 +148,6 @@
         ${pkgs.stow}/bin/stow -R . || { echo "Failed to stow ."; exit 1; }
       '';
 
-      services.launchd.syncthing = {
-        enable = true;
-        program = "/opt/homebrew/bin/syncthing"; # Adjust if using Intel Homebrew path
-        keepAlive = true;
-        runAtLoad = true;
-        environmentVariables = { SYNCTHING_HOME = "$HOME/.config/syncthing"; };
-        startInterval = 600; # Restart interval in seconds, adjust as needed
-      };
-
       # System Settings for macOS
       # Documentation at: mynixos.com and look for nix-services
       system.defaults = {
