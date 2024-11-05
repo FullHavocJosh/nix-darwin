@@ -321,8 +321,8 @@
       # System Settings for macOS
       # Documentation at: mynixos.com and look for nix-services
       system.defaults = {
-        dock.autohide = false;
-        dock.tilesize = 24;
+        dock.autohide = true;
+        dock.tilesize = 32;
         dock.largesize = 64;
         dock.mineffect = "genie";
         dock.mru-spaces = false;
@@ -332,6 +332,8 @@
         dock.static-only = false;
         dock.show-recents = false;
         dock.magnification = true;
+        dock.autohide-delay = 0.05;
+        dock.autohide-time-modifier = 0.05;
         # Apps installed via nix package must include ${pkgs.APPNAME}
         dock.persistent-apps = [
           "/Applications/Alacritty.app"
