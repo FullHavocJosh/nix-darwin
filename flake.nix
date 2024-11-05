@@ -268,14 +268,9 @@
           "iterm2"
           "jetbrains-toolbox"
           "krita"
-          "microsoft-outlook"
-          "microsoft-teams"
-          "obsidian"
-          "plex"
           "plexamp"
           "remote-desktop-manager-free"
           "shottr"
-          "slack"
           "stats"
           "sublime-text"
           "the-unarchiver"
@@ -318,7 +313,7 @@
       '';
         system.activationScripts.script.text = ''
           echo "Stowing dotfiles..."
-          cd /Users/havoc/nix-darwin || { echo "Failed to cd into ~/nix-darwin/dotfiles"; exit 1; }
+          cd /Users/jrollet/nix-darwin || { echo "Failed to cd into ~/nix-darwin/dotfiles"; exit 1; }
           echo "Stowing $dir..."
           ${pkgs.stow}/bin/stow -R . || { echo "Failed to stow ."; exit 1; }
         '';
