@@ -269,6 +269,7 @@
           "jetbrains-toolbox"
           "krita"
           "plexamp"
+          "proton-pass"
           "remote-desktop-manager-free"
           "shottr"
           "stats"

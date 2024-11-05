@@ -37,7 +37,7 @@ sh <(curl -L https://nixos.org/nix/install)
 ```
 ## Execute Nix Config:
 ```
-nix run nix-darwin --extra-experimental-features "nix-command flakes" --switch --flake ~/nix-darwin#macos_personal
+nix run nix-darwin --extra-experimental-features "nix-command flakes" -- switch --flake ~/nix-darwin#macos_personal
 ```
 ## Check if Darwin Tools are Installed:
 ```
