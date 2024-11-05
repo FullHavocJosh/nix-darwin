@@ -342,7 +342,7 @@
           "/Applications/Slack.app"
           "/Applications/Microsoft Outlook.app"
           "/Applications/Proton Pass.app"
-          "/Applications/Cisco AnyConnect Secure Mobility Client.app"
+          "/Applications/Cisco/Cisco AnyConnect Secure Mobility Client.app"
         ];
         dock.persistent-others =
                 [
