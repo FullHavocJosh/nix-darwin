@@ -341,7 +341,7 @@
           "/Applications/Remote Desktop Manager Free.app"
           "/Applications/Slack.app"
           "/Applications/Microsoft Outlook.app"
-          "/System/Applications/Passwords.app"
+          "/Applications/Proton Pass.app"
           "/Applications/Cisco AnyConnect Secure Mobility Client.app"
         ];
         dock.persistent-others =
