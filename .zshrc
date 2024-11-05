@@ -1,11 +1,3 @@
-# Set the GPG_TTY to be the same as the TTY, either via the env var
-# or via the tty command.
-# if [ -n "$TTY" ]; then
-#   export GPG_TTY=$(tty)
-# else
-#   export GPG_TTY="$TTY"
-# fi
-
 # Nix
 if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
   . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
@@ -35,14 +27,6 @@ export PATH=$PATH:/opt/homebrew/bin/ovftool
 # Environmental Variables:
 source ~/.zshenv_vars
 
-# if [ Darwin = `uname` ]; then
-#   source $HOME/.profile-macos
-# fi
-
-# SSH_AUTH_SOCK set to GPG to enable using gpgagent as the ssh agent.
-# export SSH_AUTH_SOCK=$(gpgconf --list-dirs agent-ssh-socket)
-# gpgconf --launch gpg-agent
-
 autoload -Uz compinit && compinit
 
 ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
@@ -70,26 +54,13 @@ zinit light zsh-users/zsh-syntax-highlighting
 export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 
-# source $HOME/.profile
-# source $HOME/.config/tmuxinator/tmuxinator.zsh
-
 if [ Linux = `uname` ]; then
   source $HOME/.profile-linux
 fi
 
 setopt auto_cd
 
-#export PATH="/usr/local/opt/curl/bin:$PATH"
-# export PATH="$PATH:$HOME/Library/flutter/bin"
-
 export PATH=$PATH:/opt/homebrew/bin
-
-# alias sudo='sudo '
-# export LD_LIBRARY_PATH=/usr/local/lib
-
-# Completions
-# source <(doctl completion zsh)
-# source <(kubectl completion zsh)
 
 # Fix for password store
 export PASSWORD_STORE_GPG_OPTS='--no-throw-keyids'
@@ -103,9 +74,6 @@ bindkey "^N" down-line-or-beginning-search
 
 [ -s "$HOME/.svm/svm.sh" ] && source "$HOME/.svm/svm.sh"
 
-# Capslock command
-# alias capslock="sudo killall -USR1 caps2esc"
-
 if [ "$XDG_SESSION_TYPE" = "wayland" ]; then
     export MOZ_ENABLE_WAYLAND=1
 fi
@@ -115,7 +83,7 @@ zle_highlight=('paste:none')
 # Aliases.
 alias clear="clear ; clear ; clear"
 
-alias eza="eza -lh"
+alias eza="eza -la"
 
 alias tree="find . -print | sed -e 's;[^/]*/;|____;g;s;____|; |;g'"
 
