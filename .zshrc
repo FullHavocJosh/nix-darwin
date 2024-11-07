@@ -99,6 +99,8 @@ alias ssm="aws ssm start-session --target"
 alias sso='function awslogin() { aws sso login --profile "$1" && export AWS_PROFILE="$1"; }; awslogin' #this allows you to login to the aws sso session
 alias ssoswitch='function awsswitch() { export AWS_PROFILE="$1"; } ; awsswitch' #this allows you to switch to another profile you have configured re-using the same session token
 
+alias pip="pip3"
+
 # Enable atuin.
 eval "$(atuin init zsh)"
 

@@ -38,8 +38,11 @@
         fzf
         mkalias
         powershell
+        python3
+        # python3Packages.pypsrp # Broken Package
         skhd
         speedtest-cli
+        sshpass
         stow
         tfswitch
         terraform
@@ -64,7 +67,6 @@
           "mas"
           "oh-my-posh"
           "prettier"
-          "python3"
           "syncthing"
           "telnet"
           "tmuxinator"
@@ -250,7 +252,6 @@
           "mas"
           "oh-my-posh"
           "prettier"
-          "python3"
           "syncthing"
           "telnet"
           "tmuxinator"
