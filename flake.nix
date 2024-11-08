@@ -36,6 +36,7 @@
         btop
         eza
         fzf
+        # kanata # Broken Package
         mkalias
         powershell
         python3
@@ -64,6 +65,7 @@
           "ansible"
           "ansible-lint"
           "go"
+          "kanata"
           "mas"
           "oh-my-posh"
           "prettier"
@@ -249,6 +251,7 @@
           "ansible"
           "ansible-lint"
           "go"
+          "kanata"
           "mas"
           "oh-my-posh"
           "prettier"
@@ -417,6 +420,7 @@
         nix-homebrew.darwinModules.nix-homebrew
         ./services/yabai.nix
         ./services/skhd.nix
+        # ./services/kanata.nix
       ];
     };
 
@@ -429,6 +433,7 @@
         nix-homebrew.darwinModules.nix-homebrew
         ./services/yabai.nix
         ./services/skhd.nix
+        # ./services/kanata.nix
       ];
     };
 
