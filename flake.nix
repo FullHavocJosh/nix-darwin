@@ -89,6 +89,7 @@
           "stats"
           "iterm2"
           "jetbrains-toolbox"
+          "karabiner-elements"
           "krita"
           "obsidian"
           "plex"

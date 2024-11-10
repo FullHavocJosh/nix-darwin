@@ -8,7 +8,7 @@
       # ############################################################### #
 
       # opens Alacritty
-      alt - return : $HOME/.config/yabai/scripts/open_alacritty.sh
+      alt - return : $HOME/.config/yabai/.scripts/open_alacritty.sh
 
       # Navigation
       alt - h : yabai -m window --focus west

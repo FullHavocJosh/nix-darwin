@@ -1,50 +1,44 @@
-{ conig, pkgs, ... }: {
-  # Ensure Homebrew is enabled for this package if it's not in nixpkgs
-  homebrew = {
-    enable = true;
-  };
+{ config, pkgs, ... }: {
+  # Enable Homebrew for packages outside of nixpkgs
+  homebrew.enable = true;
 
-  # Ensure that Karabiner DriverKiet is installed
-  system.activationScripts.kanataInstall = {
+  # Single kanataSetup activation script with detailed logging
+  system.activationScripts.kanataSetup = {
     text = ''
-      echo "Installing Karabiner DriverKit for Kanata..."
-      brew install kanata || true
-      brew install --cask karabiner-elements || true
-      echo "Activating Karabiner VirtualHID Driver..."
-      sudo /Applications/.Karabiner-VirtualHIDDevice-Manager.app/Contents/MacOS/Karabiner-VirtualHIDDevice-Manager activate
+      echo "Starting kanataSetup activation script..." | tee -a /Users/havoc/.config/kanata/scripts/setup.log
+      if [ -x /Users/havoc/.config/kanata/scripts/setup_kanata.sh ]; then
+        echo "setup_kanata.sh exists and is executable." | tee -a /Users/havoc/.config/kanata/scripts/setup.log
+        /Users/havoc/.config/kanata/scripts/setup_kanata.sh >> /Users/havoc/.config/kanata/scripts/setup.log 2>&1
+        echo "setup_kanata.sh completed." | tee -a /Users/havoc/.config/kanata/scripts/setup.log
+      else
+        echo "setup_kanata.sh is missing or not executable." | tee -a /Users/havoc/.config/kanata/scripts/setup.log
+      fi
     '';
     enable = true;
   };
 
-  # launchctl load ~/Library/LaunchAgents/local.kanata.plist
-  # cp /etc/local.kanata.plist ~/Library/LaunchAgents/
-  # launchctl load ~/Library/LaunchAgents/local.kanata.plist
-  environment.etc."local.kanata.plist".text = ''
+  # LaunchAgent plist configuration for Kanata
+  environment.etc."local_kanata_plist".text = ''
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
     <plist version="1.0">
     <dict>
         <key>Label</key>
         <string>io.havoc.kanata</string>
-
         <key>ProgramArguments</key>
         <array>
             <string>/Users/havoc/.cargo/bin/kanata</string>
             <string>-c</string>
             <string>/Users/havoc/.config/kanata/config.kdb</string>
         </array>
-
         <key>RunAtLoad</key>
         <true/>
-
         <key>KeepAlive</key>
         <true/>
-
         <key>StandardOutPath</key>
-        <string>/Library/Logs/Kanata/kanata.out.log</string>
-
+        <string>~/Library/Logs/Kanata/kanata.out.log</string>
         <key>StandardErrorPath</key>
-        <string>/Library/Logs/Kanata/kanata.err.log</string>
+        <string>~/Library/Logs/Kanata/kanata.err.log</string>
     </dict>
     </plist>
   '';
