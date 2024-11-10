@@ -124,6 +124,7 @@
         onActivation.autoUpdate = true;
         onActivation.upgrade = true;
       };
+
     };
 
     macosConfigModule_personal = { pkgs, config, ... }: {
@@ -420,7 +421,7 @@
         nix-homebrew.darwinModules.nix-homebrew
         ./services/yabai.nix
         ./services/skhd.nix
-        # ./services/kanata.nix
+        ./services/kanata.nix
       ];
     };
 
