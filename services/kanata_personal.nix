@@ -25,13 +25,13 @@
     <plist version="1.0">
     <dict>
         <key>Label</key>
-        <string>io.dreamsofcode.kanata</string>
+        <string>io.havoc.kanata</string>
 
         <key>ProgramArguments</key>
         <array>
             <string>/Users/havoc/.cargo/bin/kanata</string>
             <string>-c</string>
-            <string>/Users/elliott/.dotfiles/.config/kanata/kanata.kdb</string>
+            <string>/Users/havoc/.config/kanata/config.kdb</string>
         </array>
 
         <key>RunAtLoad</key>
