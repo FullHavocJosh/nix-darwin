@@ -421,7 +421,7 @@
         nix-homebrew.darwinModules.nix-homebrew
         ./services/yabai.nix
         ./services/skhd.nix
-        ./services/kanata.nix
+        ./services/kanata_personal.nix
       ];
     };
 
@@ -434,7 +434,7 @@
         nix-homebrew.darwinModules.nix-homebrew
         ./services/yabai.nix
         ./services/skhd.nix
-        # ./services/kanata.nix
+        # ./services/kanata_work.nix
       ];
     };
 
