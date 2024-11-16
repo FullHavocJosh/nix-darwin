@@ -4,8 +4,9 @@ if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
 fi
 # End Nix
 
-# Path to brew
+# Paths to brew
 export PATH="/usr/local/bin:/usr/bin:$PATH"
+export PATH=$PATH:/opt/homebrew/bin
 
 # Path to your terraform installations.
 export PATH="$HOME/bin:$PATH"
@@ -60,7 +61,9 @@ fi
 
 setopt auto_cd
 
-export PATH=$PATH:/opt/homebrew/bin
+# Vim, always Vim.
+export EDITOR=vim
+export VISUAL=vim
 
 # Fix for password store
 export PASSWORD_STORE_GPG_OPTS='--no-throw-keyids'
