@@ -6,9 +6,6 @@
 *.swp
 *.swo
 
-# Ignore git clutter
-*.gitconfig
-
 # Ignore sensitive or machine-specific configurations
 **/secrets/
 private/

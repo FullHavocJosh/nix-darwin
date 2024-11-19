@@ -64,6 +64,7 @@
         brews = [
           "ansible"
           "ansible-lint"
+          "fastfetch"
           "go"
           "kanata"
           "mas"
@@ -73,6 +74,7 @@
           "telnet"
           "tmuxinator"
           "tmuxinator-completion"
+          "watch"
           "wireguard-go"
         ];
         # Install Brew Casks
@@ -252,6 +254,7 @@
         brews = [
           "ansible"
           "ansible-lint"
+          "fastfetch"
           "go"
           "kanata"
           "mas"
@@ -261,6 +264,7 @@
           "telnet"
           "tmuxinator"
           "tmuxinator-completion"
+          "watch"
         ];
         # Install Brew Casks
         casks = [

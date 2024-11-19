@@ -1,0 +1,16 @@
+# This is Git's per-user configuration file.
+[user]
+	name = FullHavocJosh
+	email = josh@rollet.family
+
+[push]
+	# Automatically pushes the current branch by default.
+	default = current
+
+[core]
+	# Sets Vim as the default editor for Git commands.
+	editor = vim
+
+[branch]
+	# Automatically sets the upstream branch for newly created branches.
+	autoSetupMerge = always
