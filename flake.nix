@@ -79,14 +79,13 @@
         ];
         # Install Brew Casks
         casks = [
-          "arc"
           "alacritty"
           "battle-net"
           "balenaetcher"
           "betterdisplay"
           "curseforge"
           "discord"
-          "firefox"
+          "google-chrome"
           "goland"
           "stats"
           "iterm2"
@@ -111,7 +110,7 @@
           "vial"
           "vlc"
           "whisky"
-          "google-chrome"
+          "zen-browser"
         ];
         # Install App Store Apps, search for ID with "mas search "
         # You must be logged into the Apps Store, and you must have purchased the app
@@ -268,12 +267,10 @@
         ];
         # Install Brew Casks
         casks = [
-          "arc"
           "alacritty"
           "balenaetcher"
           "betterdisplay"
           "citrix-workspace"
-          "firefox"
           "goland"
           "iterm2"
           "jetbrains-toolbox"
@@ -289,6 +286,7 @@
           "via"
           "vial"
           "vlc"
+          "zen-browser"
         ];
         # Install App Store Apps, search for ID with "mas search "
         # You must be logged into the Apps Store, and you must have purchased the app
