@@ -1,5 +1,5 @@
 general.import = [
-  "~/.config/alacritty/themes/themes/tokyo-night.toml"
+  "~/.config/alacritty/catppuccin-mocha.toml"
 ]
 
 general.live_config_reload = true
@@ -17,7 +17,7 @@ blink_timeout = 5
 unfocused_hollow = false
 
 [cursor.style]
-blinking = "Off"
+blinking = "On"
 shape = "Block"
 
 [env]
@@ -59,11 +59,11 @@ semantic_escape_chars = ",│`|:\"' ()[]{}<>"
 program = "/bin/zsh"
 
 [window]
-decorations = "transparent"
+decorations = "Transparent"
 dynamic_title = true
-dynamic_padding = true
-opacity = 0.9
-blur = true
+dynamic_padding = false
+opacity = 1
+blur = false
 
 [window.dimensions]
 columns = 160
