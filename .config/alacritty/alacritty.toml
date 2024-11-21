@@ -59,7 +59,7 @@ semantic_escape_chars = ",│`|:\"' ()[]{}<>"
 program = "/bin/zsh"
 
 [window]
-decorations = "Transparent"
+decorations = "Full"
 dynamic_title = true
 dynamic_padding = false
 opacity = 1
