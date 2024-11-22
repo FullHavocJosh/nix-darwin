@@ -4,12 +4,11 @@ if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
 fi
 # End Nix
 
-# Paths to brew
-export PATH="/usr/local/bin:/usr/bin:$PATH"
-export PATH=$PATH:/opt/homebrew/bin
+# Path to Nix binaries.
+export PATH="/run/current-system/sw/bin:$PATH"
 
-# Path to your terraform installations.
-export PATH="$HOME/bin:$PATH"
+# Path to HomeBrew.
+export PATH="/opt/homebrew/bin:/usr/bin:$PATH"
 
 # Path to python and pip.
 export PATH="$HOME/Library/Python/3.9/bin:$PATH"
@@ -39,7 +38,6 @@ fi
 
 source "${ZINIT_HOME}/zinit.zsh"
 
-zinit light ohmyzsh/ohmyzsh
 zinit snippet OMZP::git
 zinit snippet OMZP::sudo
 zinit snippet OMZP::aws
@@ -87,6 +85,7 @@ zle_highlight=('paste:none')
 alias clear="clear ; clear ; clear"
 
 alias eza="eza -la"
+alias ls="eza"
 
 alias tree="find . -print | sed -e 's;[^/]*/;|____;g;s;____|; |;g'"
 

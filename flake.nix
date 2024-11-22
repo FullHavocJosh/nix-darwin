@@ -45,11 +45,6 @@
         speedtest-cli
         sshpass
         stow
-        tfswitch
-        terraform
-        terraformer
-        terraforming
-        terraform-inventory
         tldr
         tmux
         yabai
@@ -60,6 +55,9 @@
     macosPackagesModule_personal = { pkgs, config, ... }: {
       homebrew = {
         enable = true;
+        taps = [
+          "warrensbox/tap"
+        ];
         # Install Brew Formulas
         brews = [
           "ansible"
@@ -74,6 +72,10 @@
           "prettier"
           "syncthing"
           "telnet"
+          "terraform"
+          "terraform-inventory"
+          "terraformer"
+          "tfswitch"
           "tmuxinator"
           "tmuxinator-completion"
           "watch"
@@ -251,6 +253,9 @@
     macosPackagesModule_work = { pkgs, config, ... }: {
       homebrew = {
         enable = true;
+        taps = [
+          "warrensbox/tap"
+        ];
         # Install Brew Formulas
         brews = [
           "ansible"
@@ -265,6 +270,10 @@
           "prettier"
           "syncthing"
           "telnet"
+          "terraform"
+          "terraform-inventory"
+          "terraformer"
+          "tfswitch"
           "tmuxinator"
           "tmuxinator-completion"
           "watch"

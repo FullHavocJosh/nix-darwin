@@ -65,6 +65,8 @@
       yabai -m rule --add app="^Vanilla$" title="^Preferences$" manage=off
       yabai -m rule --add app="^Cisco AnyConnect Secure Mobility Client$" manage=off
       yabai -m rule --add app="^Shottr$" manage=off
+      yabai -m rule --add app="GoLand" title="Settings" manage=off
+      yabai -m rule --add app="Remote Desktop Manager" role="AXWindow" manage=off
     '';
   };
 }
