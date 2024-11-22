@@ -92,7 +92,6 @@ alias tree="find . -print | sed -e 's;[^/]*/;|____;g;s;____|; |;g'"
 
 alias tfs="tfswitch"
 alias tfi="terraform init"
-alias tfp="terraform plan"
 alias tfa="terraform apply"
 
 alias tft="rm -rf .terraform* ; tfswitch ; terraform init ; terraform validate ; terraform test"
