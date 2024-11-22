@@ -1,5 +1,6 @@
 general.import = [
-  "~/.config/alacritty/catppuccin-mocha.toml"
+  "~/.config/alacritty/catppuccin-mocha.toml",
+  "~/.config/alacritty/key-bindings.toml"
 ]
 
 general.live_config_reload = true
@@ -14,7 +15,7 @@ draw_bold_text_with_bright_colors = true
 [cursor]
 blink_interval = 500
 blink_timeout = 5
-unfocused_hollow = false
+unfocused_hollow = true
 
 [cursor.style]
 blinking = "On"
@@ -70,8 +71,9 @@ columns = 160
 lines = 80
 
 [window.padding]
-x = 7
-y = 7
+x = 0
+y = 0
 
 [scrolling]
 history = 100000
+
