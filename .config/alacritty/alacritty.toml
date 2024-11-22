@@ -1,6 +1,5 @@
 general.import = [
   "~/.config/alacritty/catppuccin-mocha.toml",
-  "~/.config/alacritty/key-bindings.toml"
 ]
 
 general.live_config_reload = true
