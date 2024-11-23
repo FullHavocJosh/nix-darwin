@@ -78,6 +78,7 @@
           "tmux"
           "tmuxinator"
           "tmuxinator-completion"
+          "tpm"
           "watch"
           "wireguard-go"
         ];
