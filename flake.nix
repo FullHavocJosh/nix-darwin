@@ -46,7 +46,6 @@
         sshpass
         stow
         tldr
-        tmux
         yabai
         zplug
       ];
@@ -76,6 +75,7 @@
           "terraform-inventory"
           "terraformer"
           "tfswitch"
+          "tmux"
           "tmuxinator"
           "tmuxinator-completion"
           "watch"
