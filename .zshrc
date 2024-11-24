@@ -82,6 +82,9 @@ fi
 zle_highlight=('paste:none')
 
 # Aliases.
+alias idenix="cd ~/nix-darwin/ ; nvim"
+alias ideps="cd ~/pscloudops/ ; nvim"
+
 alias clear="clear ; clear ; clear"
 
 alias eza="eza -la"

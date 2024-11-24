@@ -5,12 +5,23 @@
 ---@type ChadrcConfig
 local M = {}
 
+-- Include your custom config
+M.ui = {
+  theme = "default",
+  nvimtree = {
+    -- Include your NvimTree settings directly here
+    git = {
+      enable = true,
+    },
+    view = {
+      width = 30,
+    },
+  },
+}
+
 M.base46 = {
 	theme = "catppuccin",
-
-	-- hl_override = {
-	-- 	Comment = { italic = true },
-	-- 	["@comment"] = { italic = true },
-	-- },
 }
+
 return M
+
