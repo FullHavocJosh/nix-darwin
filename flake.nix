@@ -275,8 +275,10 @@
           "terraform-inventory"
           "terraformer"
           "tfswitch"
+          "tmux"
           "tmuxinator"
           "tmuxinator-completion"
+          "tpm"
           "watch"
         ];
         # Install Brew Casks
