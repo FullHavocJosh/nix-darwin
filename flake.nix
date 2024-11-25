@@ -81,6 +81,9 @@
           "tpm"
           "watch"
           "wireguard-go"
+          "bash-language-server"
+          "lua-language-server"
+          "yaml-language-server"
         ];
         # Install Brew Casks
         casks = [
