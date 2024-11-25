@@ -7,7 +7,7 @@ require("nvim-tree").setup({
   },
   view = {
     adaptive_size = true, -- Adjusts the size of the tree dynamically
-    width = 30, -- Set the file tree width
+    width = 40, -- Set the file tree width
   },
   actions = {
     change_dir = {
