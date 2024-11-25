@@ -3,11 +3,11 @@
 -- nvim-tree configuration
 require("nvim-tree").setup({
   git = {
-    enable = true, -- Enable git integration
+    enable = true,
   },
   view = {
-    adaptive_size = true, -- Adjusts the size of the tree dynamically
-    width = 40, -- Set the file tree width
+    adaptive_size = false,
+    width = 50,
   },
   actions = {
     change_dir = {

@@ -283,6 +283,9 @@
           "tmuxinator-completion"
           "tpm"
           "watch"
+          "bash-language-server"
+          "lua-language-server"
+          "yaml-language-server"
         ];
         # Install Brew Casks
         casks = [
@@ -305,7 +308,7 @@
           "via"
           "vial"
           "vlc"
-          "zen-browser"
+          "zen-browser" 
         ];
         # Install App Store Apps, search for ID with "mas search "
         # You must be logged into the Apps Store, and you must have purchased the app

@@ -6,17 +6,10 @@
 local M = {}
 
 -- Include your custom config
+require("custom.config")
+
 M.ui = {
   theme = "default",
-  nvimtree = {
-    -- Include your NvimTree settings directly here
-    git = {
-      enable = true,
-    },
-    view = {
-      width = 30,
-    },
-  },
 }
 
 M.base46 = {

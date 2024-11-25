@@ -60,7 +60,7 @@ program = "/bin/zsh"
 
 [window]
 decorations = "Full"
-dynamic_title = true
+dynamic_title = false
 dynamic_padding = false
 opacity = 1
 blur = false
