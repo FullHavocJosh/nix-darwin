@@ -37,6 +37,14 @@ vim.schedule(function()
   require "mappings"
 end)
 
+-- TFLint on write
+vim.api.nvim_create_autocmd("BufWritePost", {
+  pattern = "*.tf",
+  callback = function()
+    vim.cmd("lua vim.lsp.buf.format()") -- Auto-format using LSP
+  end,
+})
+
 -- determine sizing
 local function set_custom_layout()
   local total_width = vim.o.columns
