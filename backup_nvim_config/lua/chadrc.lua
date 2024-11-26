@@ -5,8 +5,16 @@
 ---@type ChadrcConfig
 local M = {}
 
+-- Include your custom config
+require("custom.config")
+
+M.ui = {
+  theme = "default",
+}
+
 M.base46 = {
 	theme = "catppuccin",
 }
 
 return M
+

@@ -10,6 +10,7 @@ if not vim.uv.fs_stat(lazypath) then
 end
 
 vim.opt.rtp:prepend(lazypath)
+vim.opt.clipboard:append("unnamedplus")
 
 local lazy_config = require "configs.lazy"
 
@@ -52,3 +53,15 @@ vim.api.nvim_create_autocmd({"BufEnter", "TermOpen"}, {
     vim.wo.relativenumber = false  -- Disable relative line numbers
   end,
 })
+
+vim.api.nvim_create_autocmd("BufWritePost", {
+    pattern = "*.yml,*.yaml",
+    callback = function()
+        if vim.fn.executable("ansible-lint") == 1 then
+            vim.cmd("silent !ansible-lint " .. vim.fn.expand("%"))
+        else
+            print("ansible-lint not installed.")
+        end
+    end,
+})
+
