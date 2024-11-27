@@ -1,54 +1,127 @@
-vim.g.base46_cache = vim.fn.stdpath "data" .. "/base46/"
-vim.g.mapleader = " "
+local cmd = vim.cmd -- cleaner configs
+local g = vim.g -- cleaner configs
 
--- bootstrap lazy and all plugins
-local lazypath = vim.fn.stdpath "data" .. "/lazy/lazy.nvim"
+require("config.lazy")
+require("config.options")
+require("config.keymaps")
 
-if not vim.uv.fs_stat(lazypath) then
-  local repo = "https://github.com/folke/lazy.nvim.git"
-  vim.fn.system { "git", "clone", "--filter=blob:none", repo, "--branch=stable", lazypath }
-end
+cmd.colorscheme "catppuccin"
 
-vim.opt.rtp:prepend(lazypath)
+-- disable netrw at the very start of your init.lua
+g.loaded_netrw = 1
+g.loaded_netrwPlugin = 1
 
-local lazy_config = require "configs.lazy"
+-- empty setup using defaults
+require("nvim-tree").setup()
 
--- load plugins
-require("lazy").setup({
-  {
-    "NvChad/NvChad",
-    lazy = false,
-    branch = "v2.5",
-    import = "nvchad.plugins",
-  },
+-- OR setup with some options
+require("nvim-tree").setup({
+    sort = {
+        sorter = "case_sensitive",
+    },
+    view = {
+        width = 50,
+    },
+    renderer = {
+        group_empty = true,
+    },
+    filters = {
+        dotfiles = false,
+    },
+    actions = {
+        open_file = {
+            window_picker  = {
+                enable = false,
+            }
+        }
+    }
+})
+ 
+require('lualine').setup {
+    options = {
+        icons_enabled = true,
+        theme = 'auto',
+        component_separators = { left = '', right = ''},
+        section_separators = { left = '', right = ''},
+        disabled_filetypes = {
+            statusline = {},
+            winbar = {},
+        },
+        ignore_focus = {},
+        always_divide_middle = true,
+        always_show_tabline = true,
+        globalstatus = false,
+        refresh = {
+            statusline = 100,
+            tabline = 100,
+            winbar = 100,
+        }
+    },
+    sections = {
+        lualine_a = {'mode'},
+        lualine_b = {'branch', 'diff', 'diagnostics'},
+        lualine_c = {'filename'},
+        lualine_x = {'encoding', 'fileformat', 'filetype'},
+        lualine_y = {'progress'},
+        lualine_z = {'location'}
+    },
+    inactive_sections = {
+        lualine_a = {},
+        lualine_b = {},
+        lualine_c = {'filename'},
+        lualine_x = {'location'},
+        lualine_y = {},
+        lualine_z = {}
+    },
+    tabline = {},
+    winbar = {},
+    inactive_winbar = {},
+    extensions = {}
+}
 
-  { import = "plugins" },
-}, lazy_config)
+local actions = require("telescope.actions") -- Import Telescope actions
+require('telescope').setup{
+    defaults = {
+        mappings = {
+            i = {
+                ["<C-k>"] = actions.move_selection_previous,
+                ["<C-j>"] = actions.move_selection_next,
+                ["<C-q>"] = actions.send_selected_to_qflist + actions.open_qflist,
+            }
+        }
+    },
+    pickers = {
+    },
+    extensions = {
+        fzf = {
+            fuzzy = true,                    -- false will only do exact matching
+            override_generic_sorter = true,  -- override the generic sorter
+            override_file_sorter = true,     -- override the file sorter
+            case_mode = "smart_case",        -- or "ignore_case" or "respect_case"
+        }
+    }
+}
 
--- load theme
-dofile(vim.g.base46_cache .. "defaults")
-dofile(vim.g.base46_cache .. "statusline")
-
-require "options"
-require "nvchad.autocmds"
-
-vim.schedule(function()
-  require "mappings"
-end)
-
-vim.api.nvim_create_autocmd("VimEnter", {
-  callback = function()
-    -- Open NvimTree only if no file or directory is provided as an argument
-    if #vim.fn.argv() == 0 then
-      vim.cmd("NvimTreeToggle")
-    end
-  end,
+local cmp = require("cmp")
+cmp.setup({
+    snippet = {
+        expand = function(args)
+            require("luasnip").lsp_expand(args.body) -- Use LuaSnip for snippet expansion
+        end,
+    },
+    mapping = {
+        ["<C-k>"] = cmp.mapping.select_prev_item(),
+        ["<C-j>"] = cmp.mapping.select_next_item(),
+        ["<C-b>"] = cmp.mapping.scroll_docs(-4),
+        ["<C-f>"] = cmp.mapping.scroll_docs(4),
+        ["<C-Space>"] = cmp.mapping.complete(),
+        ["<C-e>"] = cmp.mapping.abort(),
+        ["<CR>"] = cmp.mapping.confirm({ select = true }),
+    },
+    sources = cmp.config.sources({
+        { name = "luasnip" }, -- Enable LuaSnip snippets in completion
+        { name = "buffer" },
+        { name = "path" },
+    }),
 })
 
-vim.api.nvim_create_autocmd({"BufEnter", "TermOpen"}, {
-  pattern = "term://*",
-  callback = function()
-    vim.wo.number = false          -- Disable absolute line numbers
-    vim.wo.relativenumber = false  -- Disable relative line numbers
-  end,
-})
