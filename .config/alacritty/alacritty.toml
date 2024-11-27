@@ -61,16 +61,12 @@ program = "/bin/zsh"
 [window]
 decorations = "Full"
 dynamic_title = false
-dynamic_padding = false
+dynamic_padding = true
 opacity = 1
 blur = false
 
-[window.dimensions]
-columns = 160
-lines = 80
-
 [window.padding]
-x = 0
+x = 5
 y = 0
 
 [scrolling]
