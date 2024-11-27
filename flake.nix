@@ -17,7 +17,7 @@
         # Auto upgrade nix package and the daemon service
         services.nix-daemon.enable = true;
         # Necessary for using flakes on this system
-        nix.settings.expercental-features = "nix-command flakes";
+        nix.settings.experimental-features = "nix-command flakes";
         # Create /etc/zshrc that loads the nix-services environment
         programs.zsh.enable = true;
         system.stateVersion = 5;
