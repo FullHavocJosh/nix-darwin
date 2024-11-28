@@ -70,6 +70,7 @@
             "oh-my-posh"
             "prettier"
             "syncthing"
+            "rust"
             "telnet"
             "terraform"
             "terraform-inventory"
