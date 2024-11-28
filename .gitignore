@@ -45,3 +45,7 @@ stow-uninstall-local-ignore
 
 # Ignore stow conflicts (e.g., files/folders already in the target location)
 *~
+
+# Ignore lazy plugin lock files
+/.config/nvim/lazy-lock.json
+
