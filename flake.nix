@@ -61,6 +61,7 @@
           brews = [
             "ansible"
             "ansible-lint"
+            "cmake"
             "fastfetch"
             "go"
             "kanata"
