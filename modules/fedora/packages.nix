@@ -84,13 +84,18 @@
     home.activation.dnfPackages = lib.mkAfter ''
       echo "Setting up DNF packages..."
 
-      # Update DNF cache
+      # Use absolute path to sudo to ensure it's available
+      if ! command -v /usr/bin/sudo &> /dev/null; then
+        echo "sudo is required but not found. Please install sudo."
+        exit 1
+      fi
+
       echo "Updating DNF cache..."
-      sudo dnf makecache -y
+      /usr/bin/sudo dnf makecache -y
 
       ${installPackages {
         manager = "dnf";
-        installCmd = "sudo dnf install -y";
+        installCmd = "/usr/bin/sudo dnf install -y";
         listCmd = "rpm -q";
         checkCmd = "";
         packages = dnfPackages;
@@ -102,22 +107,23 @@
     # Flatpak activation script
     home.activation.flatpakPackages = lib.mkAfter ''
       echo "Setting up Flatpak..."
+
       # Ensure Flatpak is installed
-      if ! command -v flatpak &> /dev/null; then
+      if ! command -v /usr/bin/flatpak &> /dev/null; then
         echo "Flatpak is not installed. Installing it..."
-        sudo dnf install -y flatpak
+        /usr/bin/sudo dnf install -y flatpak
       fi
 
       # Add Flathub repository if not already added
-      if ! flatpak remotes | grep -q "flathub"; then
+      if ! /usr/bin/flatpak remotes | grep -q "flathub"; then
         echo "Adding Flathub repository..."
-        flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+        /usr/bin/flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
       fi
 
       ${installPackages {
         manager = "flatpak";
-        installCmd = "flatpak install -y flathub";
-        listCmd = "flatpak list";
+        installCmd = "/usr/bin/flatpak install -y flathub";
+        listCmd = "/usr/bin/flatpak list";
         checkCmd = "grep -q";
         packages = flatpakApps;
       }}
