@@ -50,4 +50,4 @@ stow-uninstall-local-ignore
 lazy-lock.json
 
 # Ignore btop.log, because why wouldn't you
-btop.log
+.config/btop/btop.log
