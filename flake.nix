@@ -3,73 +3,20 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    home-manager.url = "github:nix-community/home-manager/release-24.11";
     nix-darwin.url = "github:LnL7/nix-darwin";
-    # nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
     # Adds homebrew support into nix
     nix-homebrew.url = "github:zhaofengli-wip/nix-homebrew";
   };
 
-  outputs = inputs@{ self, nix-darwin, nixpkgs, nix-homebrew }:
+  outputs = inputs@{ self, nixpkgs, home-manager, nix-darwin, nix-homebrew }:
     let
 
-      ############################################
-      ### MacOS Settings Shared Across Devices ###
-      ############################################
+      ###############################################
+      ### Brew Applications Shared Across Devices ###
+      ###############################################
 
-      macosConfigModule_shared = { pkgs, config, lib, ... }: {
-        nixpkgs.config.allowUnfree = true;
-        nixpkgs.hostPlatform = "aarch64-darwin";
-        # Auto upgrade nix package and the daemon service
-        services.nix-daemon.enable = true;
-        # Necessary for using flakes on this system
-        nix.settings.experimental-features = "nix-command flakes";
-        # Create /etc/zshrc that loads the nix-services environment
-        programs.zsh.enable = true;
-        system.stateVersion = 5;
-
-        fonts.packages = [
-          (pkgs.nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
-        ];
-        system.activationScripts.applications.text =
-          let
-            env = pkgs.buildEnv {
-              name = "system-applications";
-              paths = config.environment.systemPackages;
-              pathsToLink = "/Applications";
-            };
-          in
-          pkgs.lib.mkForce ''
-            echo "setting up /Applications..." >&2
-            rm -rf /Applications/Nix\ Apps
-            mkdir -p /Applications/Nix\ Apps
-            find ${env}/Applications -maxdepth 1 -type l -exec readlink '{}' + |
-            while read src; do
-              app_name=$(basename "$src")
-              echo "copying $src" >&2
-              ${pkgs.mkalias}/bin/mkalias "$src" "/Applications/Nix Apps/$app_name"
-            done
-          '';
-      };
-      # List packages installed in system profile. To search by name, run:
-      # $ nix-env -qaP | grep wget
-      # or search.nixos.org
-      macosPackagesModule_shared = { pkgs, config, ... }: {
-        environment.systemPackages = with pkgs; [
-          atuin
-          btop
-          eza
-          fzf
-          mkalias
-          powershell
-          python3
-          skhd
-          speedtest-cli
-          sshpass
-          stow
-          tldr
-          yabai
-          zplug
-        ];
+      brewPackagesModule_shared = { pkgs, config, ... }: {
         homebrew = {
           enable = true;
           taps = [
@@ -131,18 +78,156 @@
             "vlc"
             "zen-browser"
           ];
-          # Install App Store Apps, search for ID with "mas search "
-          # You must be logged into the Apps Store, and you must have purchased the app
-          masApps = {
-            "Noir for Safari" = 1592917505;
-            "Xcode" = 497799835;
-          };
           # This Setting will REMOVE apps that are installed by homebrew outside of this config
           onActivation.cleanup = "zap";
           # These Settings will perform "brew update" & "brew upgrade" when services-rebuild is run
           onActivation.autoUpdate = true;
           onActivation.upgrade = true;
         };
+      };
+
+      ############################################
+      ### MacOS Settings Shared Across Devices ###
+      ############################################
+
+      macosPackagesModule_shared = { pkgs, config, ... }: {
+        environment.systemPackages = with pkgs; [
+          atuin
+          btop
+          eza
+          fzf
+          mkalias
+          powershell
+          python3
+          skhd
+          speedtest-cli
+          sshpass
+          stow
+          tldr
+          yabai
+          zplug
+        ];
+        homebrew = {
+          enable = true;
+          # Install App Store Apps, search for ID with "mas search "
+          # You must be logged into the Apps Store, and you must have purchased the app
+          masApps = {
+            "Noir for Safari" = 1592917505;
+            "Xcode" = 497799835;
+          };
+          # These Settings will perform "brew update" & "brew upgrade" when services-rebuild is run
+          onActivation.autoUpdate = true;
+          onActivation.upgrade = true;
+        };
+      };
+
+      macosConfigModule_shared = { pkgs, config, lib, ... }: {
+        nixpkgs.config.allowUnfree = true;
+        nixpkgs.hostPlatform = "aarch64-darwin";
+        # Auto upgrade nix package and the daemon service
+        services.nix-daemon.enable = true;
+        # Necessary for using flakes on this system
+        nix.settings.experimental-features = "nix-command flakes";
+        # Create /etc/zshrc that loads the nix-services environment
+        programs.zsh.enable = true;
+        system.stateVersion = 5;
+        # System Settings for macOS
+        # Documentation at: mynixos.com and look for nix-services
+        system.defaults = {
+          dock.autohide = true;
+          dock.tilesize = 32;
+          dock.largesize = 64;
+          dock.mineffect = "genie";
+          dock.mru-spaces = false;
+          dock.showhidden = true;
+          dock.launchanim = true;
+          dock.orientation = "bottom";
+          dock.static-only = false;
+          dock.show-recents = false;
+          dock.magnification = true;
+          dock.autohide-delay = 0.05;
+          dock.autohide-time-modifier = 0.05;
+          dock.persistent-others =
+          [
+            "/Applications"
+          ];
+          dock.wvous-bl-corner = 1;
+          dock.wvous-br-corner = 1;
+          dock.wvous-tl-corner = 2;
+          dock.wvous-tr-corner = 1;
+          dock.slow-motion-allowed = false;
+          dock.dashboard-in-overlay = true;
+          dock.expose-group-by-app = false;
+          dock.expose-animation-duration = 0.05;
+          dock.minimize-to-application = false;
+          menuExtraClock.IsAnalog = false;
+          menuExtraClock.ShowAMPM = false;
+          menuExtraClock.ShowDate = 0;
+          menuExtraClock.Show24Hour = false;
+          menuExtraClock.ShowSeconds = false;
+          menuExtraClock.ShowDayOfWeek = false;
+          finder.ShowPathbar = true;
+          finder.QuitMenuItem = false;
+          finder.CreateDesktop = false;
+          finder.ShowStatusBar = true;
+          finder.AppleShowAllFiles = true;
+          finder.FXPreferredViewStyle = "clmv";
+          finder._FXSortFoldersFirst = true;
+          finder.AppleShowAllExtensions = true;
+          finder._FXShowPosixPathInTitle = true;
+          finder.FXDefaultSearchScope = "SCcf";
+          finder.FXEnableExtensionChangeWarning = false;
+          loginwindow.GuestEnabled = false;
+          trackpad.TrackpadThreeFingerDrag = true;
+          trackpad.TrackpadThreeFingerTapGesture = 0;
+          WindowManager.AutoHide = true;
+          WindowManager.StandardHideDesktopIcons = true;
+          WindowManager.HideDesktop = true;
+          WindowManager.EnableStandardClickToShowDesktop = false;
+          WindowManager.GloballyEnabled = false;
+          WindowManager.AppWindowGroupingBehavior = false;
+          NSGlobalDomain.AppleInterfaceStyle = "Dark";
+          NSGlobalDomain.KeyRepeat = 2;
+          NSGlobalDomain.InitialKeyRepeat = 10;
+          NSGlobalDomain.AppleShowAllFiles = true;
+          NSGlobalDomain.NSWindowResizeTime = 0.05;
+          NSGlobalDomain.AppleShowAllExtensions = true;
+          NSGlobalDomain.ApplePressAndHoldEnabled = false;
+          NSGlobalDomain.NSScrollAnimationEnabled = true;
+          NSGlobalDomain.NSDocumentSaveNewDocumentsToCloud = true;
+          NSGlobalDomain.NSAutomaticInlinePredictionEnabled = false;
+          NSGlobalDomain.NSAutomaticSpellingCorrectionEnabled = false;
+          NSGlobalDomain.NSAutomaticPeriodSubstitutionEnabled = false;
+          NSGlobalDomain.NSAutomaticCapitalizationEnabled = false;
+          NSGlobalDomain.NSAutomaticDashSubstitutionEnabled = false;
+          NSGlobalDomain.NSAutomaticQuoteSubstitutionEnabled = false;
+          NSGlobalDomain.NSWindowShouldDragOnGesture = true;
+          NSGlobalDomain.AppleScrollerPagingBehavior = true;
+          NSGlobalDomain."com.apple.keyboard.fnState" = true;
+          universalaccess.mouseDriverCursorSize = 1.25;
+        };
+        fonts.packages = [
+          (pkgs.nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
+        ];
+        system.activationScripts.applications.text =
+          let
+            env = pkgs.buildEnv {
+              name = "system-applications";
+              paths = config.environment.systemPackages;
+              pathsToLink = "/Applications";
+            };
+          in
+          pkgs.lib.mkForce ''
+            echo "setting up /Applications..." >&2
+            rm -rf /Applications/Nix\ Apps
+            mkdir -p /Applications/Nix\ Apps
+            find ${env}/Applications -maxdepth 1 -type l -exec readlink '{}' + |
+            while read src; do
+              app_name=$(basename "$src")
+              echo "copying $src" >&2
+              ${pkgs.mkalias}/bin/mkalias "$src" "/Applications/Nix Apps/$app_name"
+            done
+          '';
       };
 
       ###########################################
@@ -173,8 +258,6 @@
             "/Applications/Proton Pass.app"
           ];
         };
-      };
-      macosPackagesModule_personal = { pkgs, config, ... }: {
         homebrew = {
           enable = true;
           taps = [
@@ -241,8 +324,6 @@
             "/Applications/Cisco/Cisco AnyConnect Secure Mobility Client.app"
           ];
         };
-      };
-      macosPackagesModule_work = { pkgs, config, ... }: {
         homebrew = {
           enable = true;
           taps = [
@@ -269,52 +350,147 @@
         };
       };
 
-      ############################################
-      ### Fedora Settings for Personal Devices ###
-      ############################################
+      #########################################
+      ### Fedora Home-Manager Configuration ###
+      #########################################
 
-      fedoraConfigModule = { pkgs, config, ... }: {
-        system.stateVersion = "23.05"; # Set to your NixOS stable release version
-        nixpkgs.config = {
-          allowUnfree = true; # Globally allow unfree packages
-          allowUnfreePredicate = pkg:
-            builtins.elem (pkgs.lib.getName pkg) [ "terraform" "terraform-ls" ];
-        };
-        fileSystems."/" = {
-          device = "/dev/disk/by-uuid/9a09856b-679d-4e98-89d8-90ca8892a3da";
-          fsType = "ext4";
-        };
-        boot.loader = {
-          systemd-boot.enable = false;
-          grub.enable = false;
-        };
-        environment.systemPackages = with pkgs; [
-          atuin
-          btop
-          eza
-          fzf
-          python3
-          stow
-          tmux
-          zplug
-          neovim
-          terraform
-          lua-language-server
-          vlc
+      fedoraConfigModule = { pkgs, lib, ... }: {
+        home.stateVersion = "23.05"; # Set to your Nixpkgs stable release version
+        home.username = "havoc";    # Set the username
+        home.homeDirectory = "/home/havoc"; # Set the home directory
+
+        # List of Linuxbrew packages to install
+        brewPackages = [
+          "ansible"
+          "ansible-lint"
+          "cmake"
+          "fastfetch"
+          "go"
+          "luarocks"
+          "neovim"
+          "oh-my-posh"
+          "prettier"
+          "syncthing"
+          "rust"
+          "telnet"
+          "tmux"
+          "tmuxinator"
+          "tmuxinator-completion"
+          "tpm"
+          "watch"
+          "bash-language-server"
+          "lua-language-server"
+          "yaml-language-server"
+          "atuin"
+          "zplug"
         ];
-        system.activationScripts.stow.text = ''
-          echo "Stowing dotfiles for Fedora..."
-          /run/current-system/sw/bin/stow -t /home/havoc -d /home/havoc/nix-darwin
-          echo "Stow applied successfully."
+        # List of DNF packages to install
+        dnfPackages = [
+          "alacritty"
+          "btop"
+          "git"
+          "neovim"
+          "vlc"
+        ];
+        # List of Flatpaks to install
+        flatpakApps = [
+          "com.discordapp.Discord"
+          "com.jetbrains.GoLand"
+        ];
+
+        # Custom activation script for Linuxbrew packages
+        home.activation.linuxbrewPackages = lib.mkAfter ''
+          echo "Installing Linuxbrew packages..."
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew update
+
+          # Install formulas (brews)
+          echo "Installing Brew packages..."
+          ${lib.concatStringsSep "\n" (map (pkg: ''
+            if ! brew list --formula | grep -q "^${pkg}$"; then
+              echo "Installing ${pkg}..."
+              brew install ${pkg}
+            else
+              echo "${pkg} is already installed."
+            fi
+          '') brewPackages)}
+
+          echo "Linuxbrew packages installed successfully."
         '';
+
+        # Add a custom activation script for DNF packages
+        home.activation.dnfPackages = lib.mkAfter ''
+          echo "Setting up DNF packages..."
+
+          # Update DNF cache
+          echo "Updating DNF cache..."
+          sudo dnf makecache -y
+
+          # Install DNF packages
+          echo "Installing DNF packages..."
+          ${lib.concatStringsSep "\n" (map (pkg: ''
+            if ! rpm -q ${pkg} &> /dev/null; then
+              echo "Installing ${pkg}..."
+              sudo dnf install -y ${pkg}
+            else
+              echo "${pkg} is already installed."
+            fi
+          '') dnfPackages)}
+
+          echo "DNF package setup complete."
+        '';
+
+        # Add a custom activation script for Flatpak
+        home.activation.flatpakPackages = lib.mkAfter ''
+          echo "Setting up Flatpak..."
+          # Ensure Flatpak is installed
+          if ! command -v flatpak &> /dev/null; then
+            echo "Flatpak is not installed. Installing it..."
+            sudo dnf install -y flatpak
+          fi
+
+          # Add Flathub repository if not already added
+          if ! flatpak remotes | grep -q "flathub"; then
+            echo "Adding Flathub repository..."
+            flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          fi
+
+          # Install Flatpak applications
+          echo "Installing Flatpak applications..."
+          ${lib.concatStringsSep "\n" (map (app: ''
+            if ! flatpak list | grep -q "${app}"; then
+              echo "Installing ${app}..."
+             flatpak install -y flathub ${app}
+            fi
+          '') flatpakApps)}
+
+          echo "Flatpak setup complete."
+        '';
+
+        programs.home-manager.enable = true;
+        programs.zsh = {
+          enable = true;
+          oh-my-zsh = {
+            enable = true;
+            theme = "agnoster";
+          };
+        };
+        services.syncthing.enable = false;
+        # Activation script to run stow.sh
+        home.activation = {
+          text = ''
+            echo "Running stow.sh for Fedora configuration..."
+            /home/havoc/nix-darwin/.scripts/stow.sh
+          '';
+        };
       };
     in
     {
       darwinConfigurations."macos_personal" = nix-darwin.lib.darwinSystem {
         modules = [
+          brewPackagesModule_shared
           macosConfigModule_shared
           macosPackagesModule_shared
-          macosPackagesModule_personal
           macosConfigModule_personal
           nix-homebrew.darwinModules.nix-homebrew
           ./services/yabai.nix
@@ -323,17 +499,17 @@
       };
       darwinConfigurations."macos_work" = nix-darwin.lib.darwinSystem {
         modules = [
+          brewPackagesModule_shared
           macosConfigModule_shared
           macosPackagesModule_shared
-          macosPackagesModule_work
           macosConfigModule_work
           nix-homebrew.darwinModules.nix-homebrew
           ./services/yabai.nix
           ./services/skhd.nix
         ];
       };
-      nixosConfigurations."fedora_personal" = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
+      homeConfigurations."fedora_personal" = home-manager.lib.homeManagerConfiguration {
+        pkgs = inputs.nixpkgs.legacyPackages."x86_64-linux";
         modules = [
           fedoraConfigModule
         ];
@@ -344,7 +520,6 @@
           personal = self.darwinConfigurations."macos_personal".config.system.build.toplevel;
           work = self.darwinConfigurations."macos_work".config.system.build.toplevel;
         };
-
         # Linux packages for x86_64-linux
         x86_64-linux = {
           personal = self.nixosConfigurations."fedora_personal".config.system.build.toplevel;

@@ -49,3 +49,5 @@ stow-uninstall-local-ignore
 # Ignore lazy plugin lock files
 lazy-lock.json
 
+# Ignore btop.log, because why wouldn't you
+btop.log
