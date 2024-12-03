@@ -47,7 +47,7 @@ stow-uninstall-local-ignore
 *~
 
 # Ignore lazy plugin lock files
-lazy-lock.json
+.config/nvim/lua/lazy-lock.json
 
 # Ignore btop.log, because why wouldn't you
 .config/btop/btop.log
