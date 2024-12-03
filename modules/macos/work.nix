@@ -31,9 +31,10 @@
       "warrensbox/tap"
     ];
     # Install Brew Formulas
-    brews = [];
+    brews = [ ];
     # Install Brew Casks
     casks = [
+      "bettermouse"
       "citrix-workspace"
       "remote-desktop-manager-free"
     ];

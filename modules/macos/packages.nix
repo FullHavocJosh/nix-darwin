@@ -1,4 +1,4 @@
-{ pkgs, config, ... }:{
+{ pkgs, config, ... }: {
 
   ################################################
   ### Applications Shared Across MacOS Devices ###
@@ -33,7 +33,6 @@
       "cmake"
       "fastfetch"
       "go"
-      "kanata"
       "luarocks"
       "neovim"
       "mas"
@@ -63,14 +62,11 @@
       "alacritty"
       "balenaetcher"
       "betterdisplay"
-      "google-chrome"
       "goland"
       "iterm2"
       "jetbrains-toolbox"
-      "karabiner-elements"
       "krita"
       "plexamp"
-      "proton-drive"
       "proton-pass"
       "shottr"
       "stats"
@@ -85,7 +81,6 @@
     # Install App Store Apps, search for ID with "mas search "
     # You must be logged into the Apps Store, and you must have purchased the app
     masApps = {
-      "Noir for Safari" = 1592917505;
       "Xcode" = 497799835;
     };
     # This Setting will REMOVE apps that are installed by homebrew outside of this config

@@ -43,6 +43,7 @@
       "curseforge"
       "discord"
       "google-chrome"
+      "karabiner-elements"
       "obsidian"
       "plex"
       "proton-drive"
@@ -56,6 +57,7 @@
     # Install App Store Apps, search for ID with "mas search "
     # You must be logged into the Apps Store, and you must have purchased the app
     masApps = {
+      "Noir for Safari" = 1592917505;
       "Proton Pass for Safari" = 6502835663;
       "SponsorBlock for Safari" = 1573461917;
     };
