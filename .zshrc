@@ -82,8 +82,8 @@ fi
 zle_highlight=('paste:none')
 
 # Aliases.
-alias idenix="cd ~/nix-darwin/ ; nvim"
-alias ideps="cd ~/pscloudops/ ; nvim"
+alias nxvim="cd ~/nix-darwin && tmux new-session -A -s nix-darwin"
+alias psvim="cd ~/pscloudops/ && tmux new-session -A -s pscloudops"
 
 alias clear="clear ; clear ; clear"
 

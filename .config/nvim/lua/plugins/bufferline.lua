@@ -47,7 +47,7 @@ return {
 
 					-- Underline the selected buffer
 					buffer_selected = {
-						fg = catppuccin.mantle, -- Text for selected buffer
+						fg = catppuccin.text, -- Text for selected buffer
 						bg = catppuccin.mantle, -- Background for selected buffer
 						bold = true,
 						underline = true, -- Add underline
@@ -55,17 +55,17 @@ return {
 
 					-- Ensure inactive buffers are styled correctly
 					background = {
-						fg = catppuccin.mantle, -- Dimmed text for inactive buffers
+						fg = catppuccin.overlay1, -- Dimmed text for inactive buffers
 						bg = catppuccin.mantle, -- Match the inactive tab background
 					},
 					fill = {
-						fg = catppuccin.mantle, -- Dimmed text for unused area
+						fg = catppuccin.overlay0, -- Dimmed text for unused area
 						bg = catppuccin.mantle, -- Match the bar background
 					},
 
 					-- Indicator for active buffer (optional highlight tweak)
 					indicator_selected = {
-						fg = catppuccin.mantle, -- Optional: matches active buffer text
+						fg = catppuccin.text, -- Optional: matches active buffer text
 						bg = catppuccin.mantle, -- Matches active buffer background
 					},
 				}),
