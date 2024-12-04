@@ -6,6 +6,14 @@ vim.g.mapleader = " "
 -- General Keymaps
 ---------------------
 
+-- Use Cmd+Z for undo
+vim.api.nvim_set_keymap("n", "<D-z>", "u", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("i", "<D-z>", "<C-o>u", { noremap = true, silent = true })
+
+-- Use Cmd+R for redo
+vim.api.nvim_set_keymap("n", "<D-r>", "<C-r>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("i", "<D-r>", "<C-o><C-r>", { noremap = true, silent = true })
+
 -- use jk to exit insert mode
 keymap.set("i", "jk", "<ESC>")
 

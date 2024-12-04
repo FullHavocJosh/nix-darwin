@@ -30,15 +30,30 @@ return {
 						luasnip.lsp_expand(args.body) -- Use LuaSnip as the snippet engine
 					end,
 				},
-				mapping = cmp.mapping.preset.insert({
-					["<C-k>"] = cmp.mapping.select_prev_item(), -- Previous suggestion
-					["<C-j>"] = cmp.mapping.select_next_item(), -- Next suggestion
+				mapping = {
+					-- Manual completion trigger
+					["<C-Space>"] = cmp.mapping.complete(), -- Trigger completion manually
+
+					-- Arrow key navigation
+					["<Down>"] = cmp.mapping.select_next_item(), -- Next suggestion (Down arrow)
+					["<Up>"] = cmp.mapping.select_prev_item(), -- Previous suggestion (Up arrow)
+
 					["<C-b>"] = cmp.mapping.scroll_docs(-4), -- Scroll up in documentation
 					["<C-f>"] = cmp.mapping.scroll_docs(4), -- Scroll down in documentation
-					["<C-Space>"] = cmp.mapping.complete(), -- Show completion suggestions
 					["<C-e>"] = cmp.mapping.abort(), -- Close the completion window
-					["<Tab>"] = cmp.mapping.confirm({ select = false }), -- Confirm selection
-				}),
+
+					-- Confirm selection with Tab
+					["<Tab>"] = cmp.mapping.confirm({ select = true }),
+
+					-- Close the completion window with Enter
+					["<CR>"] = cmp.mapping(function(fallback)
+						if cmp.visible() then
+							cmp.close() -- Close completion window
+						else
+							fallback() -- Proceed with Enter as usual if no completion window is visible
+						end
+					end, { "i", "s" }),
+				},
 				sources = cmp.config.sources({
 					{ name = "nvim_lsp" }, -- LSP completion
 					{ name = "luasnip" }, -- Snippets completion
@@ -51,6 +66,10 @@ return {
 						maxwidth = 50, -- Limit completion item width
 						ellipsis_char = "...", -- Ellipsis for long completion items
 					}),
+				},
+				-- Don't automatically trigger completion
+				completion = {
+					autocomplete = false, -- Disable auto-triggering of the completion window
 				},
 			})
 		end,
