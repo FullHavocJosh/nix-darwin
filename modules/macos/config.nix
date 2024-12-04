@@ -30,9 +30,9 @@
     dock.autohide-delay = 0.05;
     dock.autohide-time-modifier = 0.05;
     dock.persistent-others =
-    [
-      "/Applications"
-    ];
+      [
+        "/Applications"
+      ];
     dock.wvous-bl-corner = 1;
     dock.wvous-br-corner = 1;
     dock.wvous-tl-corner = 2;
@@ -70,7 +70,7 @@
     WindowManager.AppWindowGroupingBehavior = false;
     NSGlobalDomain.AppleInterfaceStyle = "Dark";
     NSGlobalDomain.KeyRepeat = 2;
-    NSGlobalDomain.InitialKeyRepeat = 10;
+    NSGlobalDomain.InitialKeyRepeat = 15;
     NSGlobalDomain.AppleShowAllFiles = true;
     NSGlobalDomain.NSWindowResizeTime = 0.05;
     NSGlobalDomain.AppleShowAllExtensions = true;
