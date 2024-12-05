@@ -65,3 +65,17 @@ keymap.set("n", "<leader>gs", "<cmd>Telescope git_status<cr>") -- list current c
 keymap.set("n", "<Tab>", ":BufferLineCycleNext<CR>", { noremap = true, silent = true }) -- Go to next buffer
 keymap.set("n", "<S-Tab>", ":BufferLineCyclePrev<CR>", { noremap = true, silent = true }) -- Go to previous buffer
 keymap.set("n", "<leader>bc", ":bdelete<CR>", { noremap = true, silent = true }) -- Close current buffers
+
+-- comment
+keymap.set(
+	"n",
+	"<D-/>",
+	'<cmd>lua require("Comment.api").toggle.linewise.current()<CR>',
+	{ desc = "Toggle comment for the current line" }
+)
+keymap.set(
+	"v",
+	"<D-/>",
+	'<ESC><cmd>lua require("Comment.api").toggle.linewise(vim.fn.visualmode())<CR>',
+	{ desc = "Toggle comment for selected lines" }
+)

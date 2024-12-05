@@ -1,7 +1,7 @@
 local opt = vim.opt -- cleaner configs
 
 -- line numbering
-opt.relativenumber = true
+opt.relativenumber = false
 opt.number = true
 
 -- tabs and indents
