@@ -15,7 +15,7 @@
   # Documentation at: mynixos.com and look for nix-services
   system.defaults = {
     dock.persistent-apps = [
-      "/Applications/Alacritty.app"
+      "/Applications/Kitty.app"
       "/System/Cryptexes/App/System/Applications/Safari.app"
       "/System/Applications/Music.app"
       "/Applications/Obsidian.app"
