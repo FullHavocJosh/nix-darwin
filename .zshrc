@@ -4,6 +4,9 @@ if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
 fi
 # End Nix
 
+# Start Kitty Socket
+export KITTY_LISTEN_ON="unix:/tmp/kitty.socket"
+
 # Path to Nix binaries.
 export PATH="/run/current-system/sw/bin:$PATH"
 

@@ -41,6 +41,7 @@
       "oh-my-posh"
       "prettier"
       "syncthing"
+      "reattach-to-user-namespace"
       "rust"
       "telnet"
       "terraform"

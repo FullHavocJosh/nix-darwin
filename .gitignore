@@ -51,3 +51,7 @@ stow-uninstall-local-ignore
 
 # Ignore btop.log, because why wouldn't you
 **/btop.log
+
+# Ignore iTerm folders
+/.config/iterm2/AppSupport
+
