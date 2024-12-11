@@ -4,6 +4,11 @@ module.exports = {
         fontSize: 14,
         fontFamily: 'JetBrainsMono Nerd Font, monospace',
 
+        env: {
+            TERM: 'xterm-256color'
+        },
+        webGLRenderer: true,
+
         // Catppuccin Mocha theme
         catppuccinTheme: 'Mocha',
 

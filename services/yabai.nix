@@ -8,10 +8,8 @@
       auto_balance = "off";
 
       mouse_modifier = "alt";
-      # set modifier + right-click drag to resize window (default: resize)
-      mouse_action2 = "resize";
-      # set modifier + left-click drag to resize window (default: move)
       mouse_action1 = "move";
+      mouse_action2 = "resize";
 
       # gaps
       top_padding = 4;
@@ -24,8 +22,6 @@
       yabai -m signal --add event=dock_did_restart action="sudo yabai --load-sa"
 
       # ===== Tiling setting =========================
-
-      yabai -m config layout                      bsp
 
       yabai -m config mouse_follows_focus         off
       yabai -m config focus_follows_mouse         off
@@ -43,12 +39,6 @@
       yabai -m config active_window_opacity       1.0
       yabai -m config normal_window_opacity       0.90
       yabai -m config split_ratio                 0.50
-
-      yabai -m config auto_balance                off
-
-      yabai -m config mouse_modifier              fn
-      yabai -m config mouse_action1               move
-      yabai -m config mouse_action2               resize
 
       # ===== Rules ==================================
 

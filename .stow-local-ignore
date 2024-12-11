@@ -4,6 +4,7 @@
 \.gitignore
 \.gitmodules
 \.idea
+\.themes
 modules
 flake.*
 services
