@@ -35,6 +35,6 @@ module.exports = {
     // Local plugins
     localPlugins: [],
 
-    // Uncomment below if you want to use Hyper in debug mode
+    // Un-comment below if you want to use Hyper in debug mode
     // development: true
 };

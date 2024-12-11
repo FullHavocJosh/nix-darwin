@@ -1,3 +1,13 @@
+# Dynamic Titles
+preexec() {
+    # Set the title to the command being run
+    echo -ne "\033]0;$1\007"
+}
+precmd() {
+    # Set the title to the user@host and path after the command finishes
+    echo -ne "\033]0;${USER}@${HOST}:${PWD}\007"
+}
+
 # Nix
 if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
   . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
