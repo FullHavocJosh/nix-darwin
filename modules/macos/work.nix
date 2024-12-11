@@ -15,7 +15,7 @@
   system.defaults = {
     # Apps installed via nix package must include ${pkgs.APPNAME}
     dock.persistent-apps = [
-      "/Applications/Kitty.app"
+      "/Applications/Hyper.app"
       "/Applications/GoLand.app"
       "/Applications/Zen Browser.app"
       "/Applications/Sublime Text.app"
