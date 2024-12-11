@@ -10,7 +10,6 @@
     eza
     fzf
     mkalias
-    powershell
     python3
     skhd
     speedtest-cli
@@ -35,10 +34,12 @@
       "go"
       "golangci-lint"
       "golangci-lint-langserver"
+      "hyper"
       "luarocks"
       "neovim"
       "mas"
       "oh-my-posh"
+      "opentofu"
       "prettier"
       "syncthing"
       "reattach-to-user-namespace"
@@ -52,8 +53,6 @@
       "tflint"
       "tfswitch"
       "tmux"
-      "tmuxinator"
-      "tmuxinator-completion"
       "tpm"
       "watch"
       "bash-language-server"

@@ -37,6 +37,7 @@
     casks = [
       "bettermouse"
       "citrix-workspace"
+      "powershell"
       "remote-desktop-manager-free"
     ];
     # Install App Store Apps, search for ID with "mas search "
