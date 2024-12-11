@@ -42,7 +42,7 @@
       "battle-net"
       "curseforge"
       "discord"
-      "google-chrome"
+      "chromium"
       "karabiner-elements"
       "obsidian"
       "plex"
