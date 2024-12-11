@@ -7,6 +7,9 @@ module.exports = {
         // Catppuccin Mocha theme
         catppuccinTheme: 'Mocha',
 
+        // Padding
+        padding: '5px',
+
         // Cursor settings
         cursorBlink: true,
         cursorShape: 'BLOCK',
