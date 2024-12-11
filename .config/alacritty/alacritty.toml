@@ -60,7 +60,7 @@ program = "/bin/zsh"
 
 [window]
 decorations = "Full"
-dynamic_title = false
+dynamic_title = true
 dynamic_padding = true
 opacity = 1
 blur = false
@@ -71,4 +71,3 @@ y = 0
 
 [scrolling]
 history = 100000
-

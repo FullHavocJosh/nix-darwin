@@ -40,6 +40,7 @@
       "oh-my-posh"
       "opentofu"
       "prettier"
+      "starship"
       "syncthing"
       "reattach-to-user-namespace"
       "rust"
