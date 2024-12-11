@@ -8,28 +8,19 @@
       # ############################################################### #
 
       # opens Alacritty
-      alt - return : $HOME/.config/yabai/.scripts/open_alacritty.sh
+      lctrl - return : $HOME/.config/yabai/.scripts/open_alacritty.sh
 
       # Navigation
-      alt - h : yabai -m window --focus west
-      alt - j : yabai -m window --focus south
-      alt - k : yabai -m window --focus north
-      alt - l : yabai -m window --focus east
+      lctrl - h : yabai -m window --focus west
+      lctrl - j : yabai -m window --focus south
+      lctrl - k : yabai -m window --focus north
+      lctrl - l : yabai -m window --focus east
 
       # Moving windows
-      shift + alt - h : yabai -m window --warp west
-      shift + alt - j : yabai -m window --warp south
-      shift + alt - k : yabai -m window --warp north
-      shift + alt - l : yabai -m window --warp east
-
-      # Move focus container to workspace
-      shift + alt - m : yabai -m window --space last; yabai -m space --focus last
-      shift + alt - p : yabai -m window --space prev; yabai -m space --focus prev
-      shift + alt - n : yabai -m window --space next; yabai -m space --focus next
-      shift + alt - 1 : yabai -m window --space 1; yabai -m space --focus 1
-      shift + alt - 2 : yabai -m window --space 2; yabai -m space --focus 2
-      shift + alt - 3 : yabai -m window --space 3; yabai -m space --focus 3
-      shift + alt - 4 : yabai -m window --space 4; yabai -m space --focus 4
+      lctrl + shift - h : yabai -m window --warp west
+      lctrl + shift - j : yabai -m window --warp south
+      lctrl + shift - k : yabai -m window --warp north
+      lctrl + shift - l : yabai -m window --warp east
 
       # Resize windows
       lctrl + alt - h : yabai -m window --resize left:-50:0; \
@@ -62,13 +53,12 @@
       shift + lctrl + alt - l : yabai -m window --insert east
 
       # Float / Unfloat window
-      shift + alt - space : \
+      lctrl + shift - space : \
           yabai -m window --toggle float; \
           yabai -m window --toggle border
 
       # Make window native fullscreen
-      alt - f         : yabai -m window --toggle zoom-fullscreen
-      shift + alt - f : yabai -m window --toggle native-fullscreen
+      lctrl - f         : yabai -m window --toggle zoom-fullscreen
     '';
   };
 }

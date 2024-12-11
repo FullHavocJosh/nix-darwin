@@ -4,10 +4,16 @@ module.exports = {
         fontSize: 14,
         fontFamily: 'JetBrainsMono Nerd Font, monospace',
 
+        css: `
+            .xterm {
+                font-family: 'JetBrainsMono Nerd Font', monospace !important;
+            }
+        `,
+
         env: {
             TERM: 'xterm-256color'
         },
-        webGLRenderer: true,
+        webGLRenderer: false,
 
         // Catppuccin Mocha theme
         catppuccinTheme: 'Mocha',
@@ -28,17 +34,12 @@ module.exports = {
         // Bell configuration
         bell: false,
 
-        // Keymaps (similar to Kitty shortcuts)
-        keymaps: {
-            'window:devtools': 'cmd+alt+o', // Example Hyper default keymaps
-            'editor:copy': 'cmd+c',
-            'editor:paste': 'cmd+v',
-            'search:find': 'cmd+f',
-        },
+        // Disable keymaps
+        keymaps: {},
     },
 
     // Plugins (can install plugins for themes or other features if needed)
-    plugins: ["hyper-search", "hypercwd", "hypurr"],
+    plugins: ["hyper-search", "hypercwd", "hypurr", "hyper-font-ligatures"],
 
     // Local plugins
     localPlugins: [],

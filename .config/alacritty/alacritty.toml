@@ -30,18 +30,19 @@ size = 14
 family = "JetBrainsMono Nerd Font"
 style = "Bold"
 
-[font.glyph_offset]
-x = 0
-y = 0
-
 [font.italic]
 family = "JetBrainsMono Nerd Font"
+style = "Italic"
 
 [font.normal]
 family = "JetBrainsMono Nerd Font"
 style = "Regular"
 
 [font.offset]
+x = 0
+y = 0
+
+[font.glyph_offset]
 x = 0
 y = 0
 
@@ -59,7 +60,7 @@ semantic_escape_chars = ",│`|:\"' ()[]{}<>"
 program = "/bin/zsh"
 
 [window]
-decorations = "Full"
+decorations = "Buttonless"
 dynamic_title = true
 dynamic_padding = true
 opacity = 1
@@ -67,7 +68,7 @@ blur = false
 
 [window.padding]
 x = 5
-y = 0
+y = 5
 
 [scrolling]
 history = 100000
