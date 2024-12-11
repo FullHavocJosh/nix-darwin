@@ -56,7 +56,7 @@ stow-uninstall-local-ignore
 /.config/iterm2/AppSupport
 
 # Ignore Jetbrains folder
-/.config/jgit
+/.config/jgit/config
 /.idea
 
 # Ignore NuGet
