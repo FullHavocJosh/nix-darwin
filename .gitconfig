@@ -10,9 +10,3 @@
 [core]
 	# Sets Vim as the default editor for Git commands.
 	editor = vim
-
-[branch]
-	# Automatically sets the upstream branch for newly created branches.
-	autoSetupMerge = always
-	# Automatically sets the remote tracking branch for new branches.
-	autoSetupRemote = always
