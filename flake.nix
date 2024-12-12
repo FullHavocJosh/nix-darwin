@@ -27,7 +27,8 @@
         modules = [
           ./modules/macos/packages.nix
           ./modules/macos/config.nix
-          ./modules/macos/work.nix          nix-homebrew.darwinModules.nix-homebrew
+          ./modules/macos/work.nix
+          nix-homebrew.darwinModules.nix-homebrew
           ./services/yabai.nix
           ./services/skhd.nix
         ];

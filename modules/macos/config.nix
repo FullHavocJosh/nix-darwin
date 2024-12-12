@@ -29,10 +29,6 @@
     dock.magnification = true;
     dock.autohide-delay = 0.05;
     dock.autohide-time-modifier = 0.05;
-    dock.persistent-others =
-      [
-        "/Applications"
-      ];
     dock.wvous-bl-corner = 1;
     dock.wvous-br-corner = 1;
     dock.wvous-tl-corner = 2;
