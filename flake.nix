@@ -34,15 +34,7 @@
           ./nix-modules/services/yabai.nix
         ];
       };
-      homeConfigurations."fedora_personal" = home-manager.lib.homeManagerConfiguration {
-        pkgs = inputs.nixpkgs.legacyPackages."x86_64-linux";
-        modules = [
-          ./nix-modules/fedora/packages.nix
-          ./nix-modules/fedora/config.nix
-        ];
-      };
     darwinPackagesPersonal = self.darwinConfigurations."macos_personal".config.system.build.toplevel;
     darwinPackagesWork = self.darwinConfigurations."macos_work".config.system.build.toplevel;
-    x86_64-linux = self.homeConfigurations."fedora_personal".activationPackage;
     };
 }
