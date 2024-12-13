@@ -38,8 +38,6 @@ opt/
 Library/Taps/
 
 # Stow ignores
-stow-local-ignore
-**/.stow-local-ignore
 stow-uninstall-local-ignore
 **/.stow-uninstall-local-ignore
 
