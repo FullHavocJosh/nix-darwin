@@ -85,7 +85,7 @@
     universalaccess.mouseDriverCursorSize = 1.25;
   };
   fonts.packages = [
-    (pkgs.nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
+    pkgs.nerd-fonts.jetbrains-mono
   ];
   system.activationScripts.applications.text =
     let
