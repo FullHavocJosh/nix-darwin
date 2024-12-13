@@ -43,7 +43,6 @@
     ];
     # Install Brew Formulas
     brews = [
-      "kanata"
       "wireguard-go"
     ];
     # Install Brew Casks
@@ -52,7 +51,6 @@
       "curseforge"
       "discord"
       "chromium"
-      "karabiner-elements"
       "obsidian"
       "plex"
       "proton-drive"
