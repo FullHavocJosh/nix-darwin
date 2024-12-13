@@ -34,8 +34,11 @@ export GOROOT=/opt/homebrew/Cellar/go/1.23.2/libexec
 export PATH=$PATH:$GOPATH/bin
 export PATH=$PATH:$GOROOT/bin
 
-# Path to ovftool.
-export PATH=$PATH:/opt/homebrew/bin/ovftool
+# Path to tfswitch.
+export PATH="$HOME/opt/homebrew/bin/tfswitch:$PATH"
+
+# Path to terraform.
+export PATH="$HOME/bin:$PATH"
 
 # Environmental Variables:
 source ~/.zshenv_vars

@@ -7,6 +7,5 @@
 \.themes
 ^/README.md
 flake.*
-modules
-services
+nix-modules
 result

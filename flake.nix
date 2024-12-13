@@ -15,30 +15,31 @@
     {
       darwinConfigurations."macos_personal" = nix-darwin.lib.darwinSystem {
         modules = [
-          ./modules/macos/packages.nix
-          ./modules/macos/config.nix
-          ./modules/macos/personal.nix
+          ./nix-modules/macos/packages.nix
+          ./nix-modules/macos/config.nix
+          ./nix-modules/macos/personal.nix
           nix-homebrew.darwinModules.nix-homebrew
-          ./services/stats.nix
-          ./services/skhd.nix
-          ./services/yabai.nix
+          #./nix-modules/services/stats.nix
+          ./nix-modules/services/skhd.nix
+          ./nix-modules/services/yabai.nix
         ];
       };
       darwinConfigurations."macos_work" = nix-darwin.lib.darwinSystem {
         modules = [
-          ./modules/macos/packages.nix
-          ./modules/macos/config.nix
-          ./modules/macos/work.nix
+          ./nix-modules/macos/packages.nix
+          ./nix-modules/macos/config.nix
+          ./nix-modules/macos/work.nix
           nix-homebrew.darwinModules.nix-homebrew
-          ./services/yabai.nix
-          ./services/skhd.nix
+          #./nix-modules/services/stats.nix
+          ./nix-modules/services/skhd.nix
+          ./nix-modules/services/yabai.nix
         ];
       };
       homeConfigurations."fedora_personal" = home-manager.lib.homeManagerConfiguration {
         pkgs = inputs.nixpkgs.legacyPackages."x86_64-linux";
         modules = [
-          ./modules/fedora/packages.nix
-          ./modules/fedora/config.nix
+          ./nix-modules/fedora/packages.nix
+          ./nix-modules/fedora/config.nix
         ];
       };
     darwinPackagesPersonal = self.darwinConfigurations."macos_personal".config.system.build.toplevel;
