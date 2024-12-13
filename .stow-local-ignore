@@ -5,8 +5,8 @@
 \.gitmodules
 \.idea
 \.themes
-modules
+^/README.md
 flake.*
+modules
 services
 result
-^/README.md
