@@ -18,6 +18,7 @@
           nix-homebrew.darwinModules.nix-homebrew
           ./nix-modules/services/skhd.nix
           ./nix-modules/services/yabai.nix
+          ./nix-modules/macos/cleanup.nix
         ];
       };
       darwinConfigurations."macos_work" = nix-darwin.lib.darwinSystem {
@@ -28,6 +29,7 @@
           nix-homebrew.darwinModules.nix-homebrew
           ./nix-modules/services/skhd.nix
           ./nix-modules/services/yabai.nix
+          ./nix-modules/macos/cleanup.nix
         ];
       };
     };
