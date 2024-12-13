@@ -35,7 +35,7 @@
     dock.wvous-tr-corner = 1;
     dock.slow-motion-allowed = false;
     dock.dashboard-in-overlay = true;
-    dock.expose-group-by-app = false;
+    dock.expose-group-apps = false;
     dock.expose-animation-duration = 0.05;
     dock.minimize-to-application = false;
     menuExtraClock.IsAnalog = false;
