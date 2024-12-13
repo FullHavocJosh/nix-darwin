@@ -5,10 +5,16 @@
   #######################################
 
   system.activationScripts.script.text = ''
+    #!/usr/bin/env bash
     echo "Stowing dotfiles..."
-    cd /Users/jrollet/nix-darwin || { echo "Failed to cd into ~/nix-darwin/dotfiles"; exit 1; }
-    echo "Stowing $dir..."
-    ${pkgs.stow}/bin/stow -R . || { echo "Failed to stow ."; exit 1; }
+    cd "/Users/jrollet/nix-darwin" || { echo "Failed to cd into /Users/jrollet/nix-darwin"; exit 1; }
+    ${pkgs.stow}/bin/stow -R . || { echo "Failed to stow dotfiles"; exit 1; }
+    echo "Finished Stowing dotfiles..."
+  '';
+  system.activationScripts.setWallpaper = ''
+    #!/usr/bin/env bash
+    echo "Setting wallpaper..."
+    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/jrollet/.wallpapers/wallhaven-gj6xwq.jpg"'
   '';
   # System Settings for macOS
   # Documentation at: mynixos.com and look for nix-services

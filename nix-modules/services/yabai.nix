@@ -20,8 +20,8 @@
       window_opacity = "on";
       window_shadow = "float";
       active_window_opacity = 1.0;
-      normal_window_opacity = 0.50;
-      split_ratio = 0.50;
+      normal_window_opacity = 0.9;
+      split_ratio = 0.5;
       mouse_modifier = "alt";
       mouse_action1 = "move";
       focus_follows_mouse = "off";
