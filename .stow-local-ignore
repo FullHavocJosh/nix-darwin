@@ -1,0 +1,13 @@
+\~$
+\.bak$
+\.DS_Store$
+\.git$
+\.gitconfig$
+\.gitignore$
+\.gitmodules$
+\.idea$
+\.themes$
+README\.md$
+flake\..*
+nix-modules$
+result$
