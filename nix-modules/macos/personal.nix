@@ -15,12 +15,16 @@
     echo "Restarting skhd..."
     pkill skhd || true
     echo "Restarted skhd..."
+    echo "Restaring yabai..."
+    pkill yabai || true
+    echo "Restarted yabai..."
   '';
   # System Settings for macOS
   # Documentation at: mynixos.com and look for nix-services
   system.defaults = {
     dock.persistent-apps = [
       "/Applications/Hyper.app"
+      "/Applications/GoLand.app"
       "/System/Cryptexes/App/System/Applications/Safari.app"
       "/System/Applications/Music.app"
       "/Applications/Obsidian.app"
