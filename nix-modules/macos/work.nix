@@ -16,6 +16,12 @@
     echo "Setting wallpaper..."
     osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/jrollet/.wallpapers/wallhaven-gj6xwq.jpg"'
   '';
+  system.activationScripts.restartSkhd = ''
+    #!/usr/bin/env bash
+    echo "Restarting skhd..."
+    pkill skhd || true
+    echo "Restarted skhd..."
+  '';
   # System Settings for macOS
   # Documentation at: mynixos.com and look for nix-services
   system.defaults = {

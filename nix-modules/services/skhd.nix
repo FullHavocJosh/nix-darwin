@@ -21,7 +21,7 @@
           yabai -m window --toggle border
 
       # Make window fullscreen
-      alt - f : yabai -m window --toggle zoom-fullscreen
+      lcrtl - f : yabai -m window --toggle zoom-fullscreen
     '';
   };
 }
