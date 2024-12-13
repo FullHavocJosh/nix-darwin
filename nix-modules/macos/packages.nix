@@ -78,7 +78,6 @@
       "sublime-text"
       "the-unarchiver"
       "vanilla"
-      "via"
       "vial"
       "vlc"
       "zen-browser"
