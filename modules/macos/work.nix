@@ -35,7 +35,6 @@
     brews = [ ];
     # Install Brew Casks
     casks = [
-      "bettermouse"
       "citrix-workspace"
       "powershell"
       "remote-desktop-manager-free"

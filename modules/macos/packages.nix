@@ -64,6 +64,7 @@
       "alacritty"
       "balenaetcher"
       "betterdisplay"
+      "bettermouse"
       "goland"
       "hyper"
       "iterm2"
