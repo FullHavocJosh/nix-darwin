@@ -17,8 +17,8 @@
 
       # Float / Unfloat window
       lctrl + shift - space : \
-          yabai -m window --toggle float; \
-          yabai -m window --toggle border
+        yabai -m window --toggle float; \
+        yabai -m window --toggle border
 
       # Make window fullscreen
       lcrtl - f : yabai -m window --toggle zoom-fullscreen
