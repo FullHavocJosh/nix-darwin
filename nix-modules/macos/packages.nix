@@ -73,12 +73,12 @@
       "krita"
       "plexamp"
       "proton-pass"
+      "qmk-toolbox"
       "shottr"
       "stats"
       "sublime-text"
       "the-unarchiver"
       "vanilla"
-      "vial"
       "vlc"
       "zen-browser"
     ];
