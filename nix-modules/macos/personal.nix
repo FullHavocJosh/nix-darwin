@@ -50,7 +50,7 @@
       "battle-net"
       "curseforge"
       "discord"
-      "chromium"
+      "google-chrome"
       "obsidian"
       "plex"
       "proton-drive"
