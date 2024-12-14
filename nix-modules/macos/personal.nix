@@ -11,7 +11,7 @@
     ${pkgs.stow}/bin/stow -R . || { echo "Failed to stow dotfiles"; exit 1; }
     echo "Finished Stowing dotfiles..."
     echo "Setting wallpaper..."
-    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/havoc/.wallpapers/wallhaven-859o6o.jpg"'
+    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/havoc/.wallpapers/wallhaven-v9zlxp.jpg"'
     echo "Restarting skhd..."
     pkill skhd || true
     echo "Restarted skhd..."
