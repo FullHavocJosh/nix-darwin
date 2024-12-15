@@ -16,8 +16,8 @@
           ./nix-modules/macos/config.nix
           ./nix-modules/macos/personal.nix
           nix-homebrew.darwinModules.nix-homebrew
-          ./nix-modules/services/skhd.nix
-          ./nix-modules/services/yabai.nix
+#          ./nix-modules/services/skhd.nix
+#          ./nix-modules/services/yabai.nix
         ];
       };
       darwinConfigurations."macos_work" = nix-darwin.lib.darwinSystem {

@@ -6,15 +6,15 @@
 
   environment.systemPackages = with pkgs; [
     # kanata #Package is marked as broken
-    mkalias
-    skhd
-    yabai
+    # skhd
+    # yabai
   ];
 
   homebrew = {
     enable = true;
     taps = [
       "warrensbox/tap"
+      "nikitabobko/tap"
     ];
     # Install Brew Formulas
     brews = [
@@ -76,6 +76,7 @@
       "plexamp"
       "proton-pass"
       "qmk-toolbox"
+      "raycast"
       "shottr"
       "stats"
       "sublime-text"

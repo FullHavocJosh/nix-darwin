@@ -11,11 +11,7 @@
       left_padding = 5;
       right_padding = 5;
       window_gap = 5;
-      window_border = "on";
-      window_border_width = 5;
-      active_window_border_color = "0xFFFFFFFF";
-      normal_window_border_color = "0x00000000";
-      insert_feedback_color = "0xE02d74da";
+      insert_feedback_color = "0xFFFFFFFF";
       window_topmost = "on";
       window_opacity = "on";
       window_shadow = "float";

@@ -39,13 +39,14 @@
   homebrew = {
     enable = true;
     taps = [
-      "warrensbox/tap"
     ];
     # Install Brew Formulas
     brews = [
+      "borders"
     ];
     # Install Brew Casks
     casks = [
+      "aerospace"
       "battle-net"
       "curseforge"
       "discord"
