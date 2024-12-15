@@ -5,19 +5,10 @@
   ################################################
 
   environment.systemPackages = with pkgs; [
-    atuin
-    btop
-    eza
-    fzf
+    kanata
     mkalias
-    python3
     skhd
-    speedtest-cli
-    sshpass
-    stow
-    tldr
     yabai
-    zplug
   ];
 
   homebrew = {
@@ -29,8 +20,12 @@
     brews = [
       "ansible"
       "ansible-lint"
+      "atuin"
+      "btop"
       "cmake"
+      "eza"
       "fastfetch"
+      "fzf"
       "go"
       "golangci-lint"
       "golangci-lint-langserver"
@@ -40,7 +35,10 @@
       "oh-my-posh"
       "opentofu"
       "prettier"
-      "starship"
+      "python3"
+      "speedtest-cli"
+      "sshpass"
+      "stow"
       "syncthing"
       "reattach-to-user-namespace"
       "rust"
@@ -52,9 +50,11 @@
       "terraformer"
       "tflint"
       "tfswitch"
+      "tldr"
       "tmux"
       "tpm"
       "watch"
+      "zplug"
       "bash-language-server"
       "lua-language-server"
       "yaml-language-server"
