@@ -81,6 +81,7 @@
       "sublime-text"
       "the-unarchiver"
       "vanilla"
+      "via"
       "vlc"
       "zen-browser"
     ];
