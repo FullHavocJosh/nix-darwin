@@ -15,7 +15,7 @@ after-login-command = []
 after-startup-command = [
     # JankyBorders has a built-in detection of already running process,
     # so it won't be run twice on AeroSpace restart
-    'exec-and-forget borders active_color=0xffe1e3e4 inactive_color=0xff494d64 width=5.0'
+    'exec-and-forget borders',
 ]
 
 # Start AeroSpace at login
@@ -28,7 +28,7 @@ enable-normalization-opposite-orientation-for-nested-containers = true
 # See: https://nikitabobko.github.io/AeroSpace/guide#layouts
 # The 'accordion-padding' specifies the size of accordion padding
 # You can set 0 to disable the padding feature
-accordion-padding = 30
+accordion-padding = 90
 
 # Possible values: tiles|accordion
 default-root-container-layout = 'tiles'
@@ -46,8 +46,13 @@ key-mapping.preset = 'qwerty'
 # Drop it from your config, if you don't like this behavior
 # See https://nikitabobko.github.io/AeroSpace/guide#on-focus-changed-callbacks
 # See https://nikitabobko.github.io/AeroSpace/commands#move-mouse
-on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
-on-focus-changed = "move-mouse window-lazy-center"
+# on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
+# on-focus-changed = "move-mouse window-lazy-center"
+
+[workspace-to-monitor-force-assignment]
+"Primary" = "27GN950"    # Monitor name for the primary display
+"Secondary" = "Display"  # Monitor name for the secondary display
+
 
 # Gaps between windows (inner-*) and between monitor edges (outer-*).
 # Possible values:
@@ -57,12 +62,12 @@ on-focus-changed = "move-mouse window-lazy-center"
 #                 Monitor pattern is the same as for 'workspace-to-monitor-force-assignment'.
 #                 See: https://nikitabobko.github.io/AeroSpace/guide#assign-workspaces-to-monitors
 [gaps]
-inner.horizontal = 6
-inner.vertical =   6
-outer.left =       6
-outer.bottom =     6
-outer.top =        6
-outer.right =      6
+inner.horizontal = 9
+inner.vertical =   9
+outer.left =       9
+outer.bottom =     9
+outer.top =        9
+outer.right =      9
 
 # 'main' binding mode declaration
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
@@ -86,17 +91,18 @@ outer.right =      6
 
 # You can uncomment this line to open up terminal with alt + enter shortcut
 # See: https://nikitabobko.github.io/AeroSpace/commands#exec-and-forget
-# alt-enter = 'exec-and-forget open -n /System/Applications/Utilities/Terminal.app'
+alt-enter = 'exec-and-forget open -na /Applications/hyper.app'
 
 # See: https://nikitabobko.github.io/AeroSpace/commands#layout
 alt-slash = 'layout tiles horizontal vertical'
 alt-comma = 'layout accordion horizontal vertical'
 
 # See: https://nikitabobko.github.io/AeroSpace/commands#focus
-alt-h = 'focus left'
-alt-j = 'focus down'
-alt-k = 'focus up'
-alt-l = 'focus right'
+# i3-like wraps focus by default with nvim bindings
+alt-h = 'focus --boundaries-action wrap-around-the-workspace left'
+alt-j = 'focus --boundaries-action wrap-around-the-workspace down'
+alt-k = 'focus --boundaries-action wrap-around-the-workspace up'
+alt-l = 'focus --boundaries-action wrap-around-the-workspace right'
 
 # See: https://nikitabobko.github.io/AeroSpace/commands#move
 alt-shift-h = 'move left'
@@ -106,26 +112,32 @@ alt-shift-l = 'move right'
 
 
 # See: https://nikitabobko.github.io/AeroSpace/commands#workspace
-alt-1 = 'workspace 1'
-alt-2 = 'workspace 2'
-alt-3 = 'workspace 3'
-alt-4 = 'workspace 4'
-alt-5 = 'workspace 5'
-alt-6 = 'workspace 6'
-alt-7 = 'workspace 7'
-alt-8 = 'workspace 8'
-alt-9 = 'workspace 9'
+alt-c = 'workspace "Communication"'
+alt-d = 'workspace "Development"'
+alt-n = 'workspace "Nix-Darwin"'
+alt-1 = 'workspace "Primary"'
+alt-2 = 'workspace "Secondary"'
+#alt-4 = 'workspace 4'
+#alt-5 = 'workspace 5'
+#alt-6 = 'workspace 6'
+#alt-7 = 'workspace 7'
+#alt-8 = 'workspace 8'
+#alt-9 = 'workspace 9'
+#alt-0 = 'workspace 10'
 
 # See: https://nikitabobko.github.io/AeroSpace/commands#move-node-to-workspace
-alt-shift-1 = 'move-node-to-workspace 1'
-alt-shift-2 = 'move-node-to-workspace 2'
-alt-shift-3 = 'move-node-to-workspace 3'
-alt-shift-4 = 'move-node-to-workspace 4'
-alt-shift-5 = 'move-node-to-workspace 5'
-alt-shift-6 = 'move-node-to-workspace 6'
-alt-shift-7 = 'move-node-to-workspace 7'
-alt-shift-8 = 'move-node-to-workspace 8'
-alt-shift-9 = 'move-node-to-workspace 9'
+alt-shift-c = 'move-node-to-workspace "Communication"'
+alt-shift-d = 'move-node-to-workspace "Development"'
+alt-shift-n = 'move-node-to-workspace "Nix-Darwin"'
+alt-shift-1 = 'move-node-to-workspace "Primary"'
+alt-shift-2 = 'move-node-to-workspace "Secondary"'
+#alt-shift-4 = 'move-node-to-workspace 4'
+#alt-shift-5 = 'move-node-to-workspace 5'
+#alt-shift-6 = 'move-node-to-workspace 6'
+#alt-shift-7 = 'move-node-to-workspace 7'
+#alt-shift-8 = 'move-node-to-workspace 8'
+#alt-shift-9 = 'move-node-to-workspace 9'
+#alt-shift-0 = 'move-node-to-workspace 10'
 
 alt-shift-f = 'fullscreen'
 

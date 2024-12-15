@@ -39,7 +39,7 @@ module.exports = {
     },
 
     // Plugins (can install plugins for themes or other features if needed)
-    plugins: ["hyper-search", "hypercwd", "hypurr", "hyper-font-ligatures"],
+    plugins: ["hyper-search", "hypercwd", "hypurr", "hyper-font-ligatures", "hyper-quit"],
 
     // Local plugins
     localPlugins: [],
