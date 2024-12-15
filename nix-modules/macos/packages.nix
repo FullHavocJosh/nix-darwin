@@ -5,7 +5,7 @@
   ################################################
 
   environment.systemPackages = with pkgs; [
-    kanata
+    # kanata #Package is marked as broken
     mkalias
     skhd
     yabai
@@ -65,6 +65,8 @@
       "balenaetcher"
       "betterdisplay"
       "bettermouse"
+      "font-jetbrains-mono"
+      "font-jetbrains-mono-nerd-font"
       "goland"
       "hyper"
       "iterm2"

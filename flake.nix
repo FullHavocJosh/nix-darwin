@@ -2,7 +2,7 @@
   description = "Nix Configuration";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/release-24.11";
     nix-darwin.url = "github:LnL7/nix-darwin";
     nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
     nix-homebrew.url = "github:zhaofengli-wip/nix-homebrew";
@@ -18,7 +18,6 @@
           nix-homebrew.darwinModules.nix-homebrew
           ./nix-modules/services/skhd.nix
           ./nix-modules/services/yabai.nix
-          #./nix-modules/services/kanata.nix
         ];
       };
       darwinConfigurations."macos_work" = nix-darwin.lib.darwinSystem {

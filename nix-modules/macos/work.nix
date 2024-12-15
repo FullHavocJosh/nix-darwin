@@ -10,14 +10,8 @@
     cd "/Users/jrollet/nix-darwin" || { echo "Failed to cd into /Users/jrollet/nix-darwin"; exit 1; }
     ${pkgs.stow}/bin/stow -R . || { echo "Failed to stow dotfiles"; exit 1; }
     echo "Finished Stowing dotfiles..."
-  '';
-  system.activationScripts.setWallpaper = ''
-    #!/usr/bin/env bash
     echo "Setting wallpaper..."
     osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/jrollet/.wallpapers/wallhaven-gj6xwq.jpg"'
-  '';
-  system.activationScripts.restartSkhd = ''
-    #!/usr/bin/env bash
     echo "Restarting skhd..."
     pkill skhd || true
     echo "Restarted skhd..."

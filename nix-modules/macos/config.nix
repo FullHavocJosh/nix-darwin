@@ -84,7 +84,7 @@
     NSGlobalDomain."com.apple.keyboard.fnState" = true;
     universalaccess.mouseDriverCursorSize = 1.25;
   };
-  fonts.packages = [
-    pkgs.nerd-fonts.jetbrains-mono
-  ];
+#  fonts.packages = [
+#    pkgs.nerdfonts.nerdfont-jetbrains-mono
+#  ];
 }

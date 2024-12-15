@@ -6,19 +6,19 @@
 
   system.activationScripts.script.text = ''
     #!/usr/bin/env bash
-    echo "Stowing dotfiles..."
+    echo "Stowing dotfiles as user $(whoami)..."
     cd "/Users/havoc/nix-darwin" || { echo "Failed to cd into /Users/havoc/nix-darwin"; exit 1; }
     ${pkgs.stow}/bin/stow -R . || { echo "Failed to stow dotfiles"; exit 1; }
     echo "Finished Stowing dotfiles..."
+
     echo "Setting wallpaper..."
     osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/havoc/.wallpapers/wallhaven-v9zlxp.jpg"'
+
     echo "Restarting skhd..."
     pkill skhd || true
     echo "Restarted skhd..."
-    echo "Restaring yabai..."
-    pkill yabai || true
-    echo "Restarted yabai..."
   '';
+
   # System Settings for macOS
   # Documentation at: mynixos.com and look for nix-services
   system.defaults = {
@@ -43,7 +43,6 @@
     ];
     # Install Brew Formulas
     brews = [
-      "wireguard-go"
     ];
     # Install Brew Casks
     casks = [
