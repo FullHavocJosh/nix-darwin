@@ -4,11 +4,9 @@
   ### Applications Shared Across MacOS Devices ###
   ################################################
 
-  environment.systemPackages = with pkgs; [
-    # kanata #Package is marked as broken
-    # skhd
-    # yabai
-  ];
+  environment.systemPackages = with pkgs; [];
+
+  # brew tap FelixKratz/formulae
 
   homebrew = {
     enable = true;
@@ -21,6 +19,7 @@
       "ansible"
       "ansible-lint"
       "atuin"
+      "borders"
       "btop"
       "cmake"
       "eza"
@@ -61,6 +60,7 @@
     ];
     # Install Brew Casks
     casks = [
+      "aerospace"
       "alacritty"
       "balenaetcher"
       "betterdisplay"

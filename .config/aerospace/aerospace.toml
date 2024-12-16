@@ -151,6 +151,9 @@ alt-shift-semicolon = 'mode service'
 
 alt-shift-r = 'mode resize'
 
+
+
+# 'resize' binding mode declaration.
 [mode.resize.binding]
 h = 'resize width -50'
 j = 'resize height +50'
@@ -164,6 +167,8 @@ equal = 'resize smart +50'
 
 enter = 'mode main'
 esc = 'mode main'
+
+
 
 # 'service' binding mode declaration.
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes

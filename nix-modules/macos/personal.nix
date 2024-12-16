@@ -13,10 +13,6 @@
 
     echo "Setting wallpaper..."
     osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/havoc/.wallpapers/wallhaven-v9zlxp.jpg"'
-
-    echo "Restarting skhd..."
-    pkill skhd || true
-    echo "Restarted skhd..."
   '';
 
   # System Settings for macOS
@@ -42,11 +38,9 @@
     ];
     # Install Brew Formulas
     brews = [
-      "borders"
     ];
     # Install Brew Casks
     casks = [
-      "aerospace"
       "battle-net"
       "curseforge"
       "discord"

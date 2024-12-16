@@ -16,9 +16,18 @@
   # System Settings for macOS
   # Documentation at: mynixos.com and look for nix-services
   system.defaults = {
+    # Interface Settings
+    NSGlobalDomain.AppleInterfaceStyle = "Dark";
+    NSGlobalDomain.NSScrollAnimationEnabled = true;
+    NSGlobalDomain.NSWindowResizeTime = 0.05;
+
+    # Dock Settings
     dock.autohide = true;
+    dock.autohide-delay = 0.05;
+    dock.autohide-time-modifier = 0.05;
     dock.tilesize = 32;
     dock.largesize = 64;
+    dock.magnification = true;
     dock.mineffect = "genie";
     dock.mru-spaces = false;
     dock.showhidden = true;
@@ -26,52 +35,66 @@
     dock.orientation = "bottom";
     dock.static-only = false;
     dock.show-recents = false;
-    dock.magnification = true;
-    dock.autohide-delay = 0.05;
-    dock.autohide-time-modifier = 0.05;
-    dock.wvous-bl-corner = 1;
-    dock.wvous-br-corner = 1;
-    dock.wvous-tl-corner = 2;
-    dock.wvous-tr-corner = 1;
     dock.slow-motion-allowed = false;
     dock.dashboard-in-overlay = true;
     dock.expose-group-apps = false;
     dock.expose-animation-duration = 0.05;
     dock.minimize-to-application = false;
+    dock.wvous-bl-corner = 1;
+    dock.wvous-br-corner = 1;
+    dock.wvous-tl-corner = 2;
+    dock.wvous-tr-corner = 1;
+
+    # Menu Bar Settings
     menuExtraClock.IsAnalog = false;
     menuExtraClock.ShowAMPM = false;
     menuExtraClock.ShowDate = 0;
     menuExtraClock.Show24Hour = false;
     menuExtraClock.ShowSeconds = false;
     menuExtraClock.ShowDayOfWeek = false;
+
+    # Finder Settings
     finder.ShowPathbar = true;
-    finder.QuitMenuItem = false;
-    finder.CreateDesktop = false;
     finder.ShowStatusBar = true;
     finder.AppleShowAllFiles = true;
-    finder.FXPreferredViewStyle = "clmv";
-    finder._FXSortFoldersFirst = true;
     finder.AppleShowAllExtensions = true;
-    finder._FXShowPosixPathInTitle = true;
+    finder.FXPreferredViewStyle = "clmv"; # Column view
     finder.FXDefaultSearchScope = "SCcf";
     finder.FXEnableExtensionChangeWarning = false;
+    finder._FXSortFoldersFirst = true;
+    finder._FXShowPosixPathInTitle = true;
+    finder.QuitMenuItem = false;
+    finder.CreateDesktop = false;
+    NSGlobalDomain.AppleShowAllFiles = true;
+    NSGlobalDomain.AppleShowAllExtensions = true;
+
+    # Login Window Settings
     loginwindow.GuestEnabled = false;
-    trackpad.TrackpadThreeFingerDrag = true;
-    trackpad.TrackpadThreeFingerTapGesture = 0;
+
+    # Trackpad Settings
+    trackpad.TrackpadThreeFingerDrag = false;
+    trackpad.Dragging = false;
+    NSGlobalDomain.AppleEnableSwipeNavigateWithScrolls = false;
+    NSGlobalDomain.NSWindowShouldDragOnGesture = false;
+
+    # Keyboard Settings
+    NSGlobalDomain."com.apple.keyboard.fnState" = true;
+    NSGlobalDomain.KeyRepeat = 2;
+    NSGlobalDomain.InitialKeyRepeat = 15;
+
+    # Windows Manager Settings
     WindowManager.AutoHide = true;
     WindowManager.StandardHideDesktopIcons = true;
     WindowManager.HideDesktop = true;
     WindowManager.EnableStandardClickToShowDesktop = false;
     WindowManager.GloballyEnabled = false;
     WindowManager.AppWindowGroupingBehavior = false;
-    NSGlobalDomain.AppleInterfaceStyle = "Dark";
-    NSGlobalDomain.KeyRepeat = 2;
-    NSGlobalDomain.InitialKeyRepeat = 15;
-    NSGlobalDomain.AppleShowAllFiles = true;
-    NSGlobalDomain.NSWindowResizeTime = 0.05;
-    NSGlobalDomain.AppleShowAllExtensions = true;
+
+    # Accessibility Settings
+    universalaccess.mouseDriverCursorSize = 1.25;
+
+    # Global Settings
     NSGlobalDomain.ApplePressAndHoldEnabled = false;
-    NSGlobalDomain.NSScrollAnimationEnabled = true;
     NSGlobalDomain.NSDocumentSaveNewDocumentsToCloud = true;
     NSGlobalDomain.NSAutomaticInlinePredictionEnabled = false;
     NSGlobalDomain.NSAutomaticSpellingCorrectionEnabled = false;
@@ -79,12 +102,6 @@
     NSGlobalDomain.NSAutomaticCapitalizationEnabled = false;
     NSGlobalDomain.NSAutomaticDashSubstitutionEnabled = false;
     NSGlobalDomain.NSAutomaticQuoteSubstitutionEnabled = false;
-    NSGlobalDomain.NSWindowShouldDragOnGesture = true;
     NSGlobalDomain.AppleScrollerPagingBehavior = true;
-    NSGlobalDomain."com.apple.keyboard.fnState" = true;
-    universalaccess.mouseDriverCursorSize = 1.25;
   };
-#  fonts.packages = [
-#    pkgs.nerdfonts.nerdfont-jetbrains-mono
-#  ];
 }
