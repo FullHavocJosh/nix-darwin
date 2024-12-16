@@ -183,3 +183,45 @@ alt-shift-h = ['join-with left', 'mode main']
 alt-shift-j = ['join-with down', 'mode main']
 alt-shift-k = ['join-with up', 'mode main']
 alt-shift-l = ['join-with right', 'mode main']
+
+
+
+# Application-specific exceptions
+# Rules to exclude or set specific applications to floating
+# This syntax doesn't seem to work currently. Keeping here as a list for later usage if implimented. 
+#[[on-window-detected]]
+#if.app = "Finder"
+#run = "layout floating"
+#[[on-window-detected]]
+#if.app = "Safari"
+#run = "layout floating"
+#[[on-window-detected]]
+#if.app = "System Settings"
+#run = "layout floating"
+#[[on-window-detected]]
+#if.app = "App Store"
+#run = "layout floating"
+#[[on-window-detected]]
+#if.app = "Activity Monitor"
+#run = "layout floating"
+#[[on-window-detected]]
+#if.app = "Calculator"
+#run = "layout floating"
+#[[on-window-detected]]
+#if.app = "Dictionary"
+#run = "layout floating"
+#[[on-window-detected]]
+#if.app = "System Information"
+#run = "layout floating"
+#[[on-window-detected]]
+#if.app = "Proton Pass"
+#run = "layout floating"
+#[[on-window-detected]]
+#if.app = "Vanilla"
+#run = "layout floating"
+#[[on-window-detected]]
+#if.app = "Cisco AnyConnect Secure Mobility Client"
+#run = "layout floating"
+#[[on-window-detected]]
+#if.app = "Shottr"
+#run = "layout floating"
