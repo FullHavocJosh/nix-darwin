@@ -188,7 +188,7 @@ alt-shift-l = ['join-with right', 'mode main']
 
 # Application-specific exceptions
 # Rules to exclude or set specific applications to floating
-# This syntax doesn't seem to work currently. Keeping here as a list for later usage if implimented. 
+# This syntax doesn't seem to work currently. Keeping here as a list for later usage if implimented.
 #[[on-window-detected]]
 #if.app = "Finder"
 #run = "layout floating"
