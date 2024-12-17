@@ -26,6 +26,7 @@
       "/Applications/Remote Desktop Manager Free.app"
       "/Applications/Slack.app"
       "/Applications/Microsoft Outlook.app"
+      "/Applications/LastPass.app"
       "/Applications/Proton Pass.app"
       "/Applications/Cisco/Cisco AnyConnect Secure Mobility Client.app"
     ];
@@ -39,6 +40,7 @@
     # Install Brew Casks
     casks = [
       "citrix-workspace"
+      "lastpass"
       "powershell"
       "remote-desktop-manager-free"
     ];
