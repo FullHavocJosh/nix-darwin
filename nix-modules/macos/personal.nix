@@ -19,7 +19,7 @@
   # Documentation at: mynixos.com and look for nix-services
   system.defaults = {
     dock.persistent-apps = [
-      "/Applications/Hyper.app"
+      "/Applications/alacritty.app"
       "/Applications/GoLand.app"
       "/System/Cryptexes/App/System/Applications/Safari.app"
       "/System/Applications/Music.app"

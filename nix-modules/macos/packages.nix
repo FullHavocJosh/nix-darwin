@@ -4,7 +4,7 @@
   ### Applications Shared Across MacOS Devices ###
   ################################################
 
-  environment.systemPackages = with pkgs; [];
+  environment.systemPackages = with pkgs; [ ];
 
   # brew tap FelixKratz/formulae
 
@@ -69,9 +69,7 @@
       "font-jetbrains-mono-nerd-font"
       "goland"
       "hyper"
-      "iterm2"
       "jetbrains-toolbox"
-      "kitty"
       "krita"
       "plexamp"
       "proton-pass"
