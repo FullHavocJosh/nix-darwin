@@ -62,12 +62,12 @@ key-mapping.preset = 'qwerty'
 #                 Monitor pattern is the same as for 'workspace-to-monitor-force-assignment'.
 #                 See: https://nikitabobko.github.io/AeroSpace/guide#assign-workspaces-to-monitors
 [gaps]
-inner.horizontal = 9
-inner.vertical =   9
-outer.left =       9
-outer.bottom =     9
-outer.top =        9
-outer.right =      9
+inner.horizontal = 16
+inner.vertical =   16
+outer.left =       16
+outer.bottom =     16
+outer.top =        16
+outer.right =      16
 
 # 'main' binding mode declaration
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
@@ -125,7 +125,7 @@ alt-2 = 'workspace "Secondary"'
 #alt-9 = 'workspace 9'
 #alt-0 = 'workspace 10'
 
-# See: https://nikitabobko.github.io/AeroSpace/commands#move-node-to-workspace
+# See: https://nikitabobkogithub.io/AeroSpace/commands#move-node-to-workspace
 alt-shift-c = 'move-node-to-workspace "Communication"'
 alt-shift-d = 'move-node-to-workspace "Development"'
 alt-shift-n = 'move-node-to-workspace "Nix-Darwin"'
