@@ -45,14 +45,6 @@ return {
 						bg = catppuccin.mantle, -- Matches inactive tab background
 					},
 
-					-- Underline the selected buffer
-					buffer_selected = {
-						fg = catppuccin.text, -- Text for selected buffer
-						bg = catppuccin.mantle, -- Background for selected buffer
-						bold = true,
-						underline = true, -- Add underline
-					},
-
 					-- Ensure inactive buffers are styled correctly
 					background = {
 						fg = catppuccin.overlay1, -- Dimmed text for inactive buffers
