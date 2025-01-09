@@ -122,7 +122,9 @@ alias ssoswitch='function awsswitch() { export AWS_PROFILE="$1"; } ; awsswitch' 
 alias pip="pip3"
 
 # Enable atuin.
+export ATUIN_NOBIND="true"
 eval "$(atuin init zsh)"
+bindkey '^a' atuin-search
 
 # Enable fzf.
 eval "$(fzf --zsh)"
