@@ -28,7 +28,6 @@
       "/Applications/Microsoft Outlook.app"
       "/Applications/LastPass.app"
       "/Applications/Proton Pass.app"
-      "/Applications/Cisco/Cisco AnyConnect Secure Mobility Client.app"
     ];
   };
   homebrew = {
