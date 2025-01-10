@@ -42,7 +42,7 @@
     dock.minimize-to-application = false;
     dock.wvous-bl-corner = 1;
     dock.wvous-br-corner = 1;
-    dock.wvous-tl-corner = 2;
+    dock.wvous-tl-corner = 1;
     dock.wvous-tr-corner = 1;
 
     # Menu Bar Settings
