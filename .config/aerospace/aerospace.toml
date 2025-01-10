@@ -50,9 +50,7 @@ key-mapping.preset = 'qwerty'
 # on-focus-changed = "move-mouse window-lazy-center"
 
 [workspace-to-monitor-force-assignment]
-"Primary" = "27GN950"    # Monitor name for the primary display
-"Secondary" = "Display"  # Monitor name for the secondary display
-
+"1st-Workspace" = "27GN950"    # Monitor name for the primary display
 
 # Gaps between windows (inner-*) and between monitor edges (outer-*).
 # Possible values:
@@ -113,13 +111,14 @@ alt-shift-l = 'move right'
 
 # See: https://nikitabobko.github.io/AeroSpace/commands#workspace
 alt-c = 'workspace "Communication"'
-alt-d = 'workspace "Development"'
-alt-n = 'workspace "Nix-Darwin"'
-alt-1 = 'workspace "Primary"'
-alt-2 = 'workspace "Secondary"'
-#alt-4 = 'workspace 4'
-#alt-5 = 'workspace 5'
-#alt-6 = 'workspace 6'
+alt-d = 'workspace "Dev-Workspace"'
+alt-n = 'workspace "Nix-Darwin-DE"'
+alt-1 = 'workspace "1st-Workspace"'
+alt-2 = 'workspace "2nd-Workspace"'
+alt-3 = 'workspace "3rd-Workspace"'
+alt-4 = 'workspace "4th-Workspace"'
+alt-5 = 'workspace "5th-Workspace"'
+alt-6 = 'workspace "6th-Workspace"'
 #alt-7 = 'workspace 7'
 #alt-8 = 'workspace 8'
 #alt-9 = 'workspace 9'
@@ -127,13 +126,14 @@ alt-2 = 'workspace "Secondary"'
 
 # See: https://nikitabobkogithub.io/AeroSpace/commands#move-node-to-workspace
 alt-shift-c = 'move-node-to-workspace "Communication"'
-alt-shift-d = 'move-node-to-workspace "Development"'
-alt-shift-n = 'move-node-to-workspace "Nix-Darwin"'
-alt-shift-1 = 'move-node-to-workspace "Primary"'
-alt-shift-2 = 'move-node-to-workspace "Secondary"'
-#alt-shift-4 = 'move-node-to-workspace 4'
-#alt-shift-5 = 'move-node-to-workspace 5'
-#alt-shift-6 = 'move-node-to-workspace 6'
+alt-shift-d = 'move-node-to-workspace "Dev-Workspace"'
+alt-shift-n = 'move-node-to-workspace "Nix-Darwin-DE"'
+alt-shift-1 = 'move-node-to-workspace "1st-Workspace"'
+alt-shift-2 = 'move-node-to-workspace "2nd-Workspace"'
+alt-shift-3 = 'move-node-to-workspace "3rd-Workspace"'
+alt-shift-4 = 'move-node-to-workspace "4th-Workspace"'
+alt-shift-5 = 'move-node-to-workspace "5th-Workspace"'
+alt-shift-6 = 'move-node-to-workspace "6th-Workspace"'
 #alt-shift-7 = 'move-node-to-workspace 7'
 #alt-shift-8 = 'move-node-to-workspace 8'
 #alt-shift-9 = 'move-node-to-workspace 9'
