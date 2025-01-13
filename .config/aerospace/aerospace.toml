@@ -111,6 +111,7 @@ alt-shift-l = 'move right'
 
 # See: https://nikitabobko.github.io/AeroSpace/commands#workspace
 alt-c = 'workspace "Communication"'
+alt-p = 'workspace "Passwords-Cli"'
 alt-d = 'workspace "Dev-Workspace"'
 alt-n = 'workspace "Nix-Darwin-DE"'
 alt-1 = 'workspace "1st-Workspace"'
@@ -126,6 +127,7 @@ alt-6 = 'workspace "6th-Workspace"'
 
 # See: https://nikitabobkogithub.io/AeroSpace/commands#move-node-to-workspace
 alt-shift-c = 'move-node-to-workspace "Communication"'
+alt-shift-p = 'move-node-to-workspace "Passwords-Cli"'
 alt-shift-d = 'move-node-to-workspace "Dev-Workspace"'
 alt-shift-n = 'move-node-to-workspace "Nix-Darwin-DE"'
 alt-shift-1 = 'move-node-to-workspace "1st-Workspace"'
