@@ -119,11 +119,6 @@ alt-2 = 'workspace "2nd-Workspace"'
 alt-3 = 'workspace "3rd-Workspace"'
 alt-4 = 'workspace "4th-Workspace"'
 alt-5 = 'workspace "5th-Workspace"'
-alt-6 = 'workspace "6th-Workspace"'
-#alt-7 = 'workspace 7'
-#alt-8 = 'workspace 8'
-#alt-9 = 'workspace 9'
-#alt-0 = 'workspace 10'
 
 # See: https://nikitabobkogithub.io/AeroSpace/commands#move-node-to-workspace
 alt-shift-c = 'move-node-to-workspace "Communication"'
@@ -135,11 +130,6 @@ alt-shift-2 = 'move-node-to-workspace "2nd-Workspace"'
 alt-shift-3 = 'move-node-to-workspace "3rd-Workspace"'
 alt-shift-4 = 'move-node-to-workspace "4th-Workspace"'
 alt-shift-5 = 'move-node-to-workspace "5th-Workspace"'
-alt-shift-6 = 'move-node-to-workspace "6th-Workspace"'
-#alt-shift-7 = 'move-node-to-workspace 7'
-#alt-shift-8 = 'move-node-to-workspace 8'
-#alt-shift-9 = 'move-node-to-workspace 9'
-#alt-shift-0 = 'move-node-to-workspace 10'
 
 alt-shift-f = 'fullscreen'
 
