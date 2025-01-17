@@ -17,7 +17,7 @@ blink_timeout = 5
 unfocused_hollow = true
 
 [cursor.style]
-blinking = "On"
+blinking = "Always"
 shape = "Block"
 
 [env]
