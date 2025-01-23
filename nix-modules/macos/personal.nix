@@ -38,7 +38,6 @@
     ];
     # Install Brew Formulas
     brews = [
-      "syncthing"
     ];
     # Install Brew Casks
     casks = [
@@ -65,3 +64,4 @@
     };
   };
 }
+
