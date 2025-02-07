@@ -36,7 +36,7 @@ default-root-container-layout = 'tiles'
 # Possible values: horizontal|vertical|auto
 # 'auto' means: wide monitor (anything wider than high) gets horizontal orientation,
 #               tall monitor (anything higher than wide) gets vertical orientation
-default-root-container-orientation = 'auto'
+default-root-container-orientation = 'horizontal'
 
 # Possible values: (qwerty|dvorak)
 # See https://nikitabobko.github.io/AeroSpace/guide#key-mapping
@@ -48,9 +48,6 @@ key-mapping.preset = 'qwerty'
 # See https://nikitabobko.github.io/AeroSpace/commands#move-mouse
 # on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 # on-focus-changed = "move-mouse window-lazy-center"
-
-[workspace-to-monitor-force-assignment]
-"1st-Workspace" = "27GN950"    # Monitor name for the primary display
 
 # Gaps between windows (inner-*) and between monitor edges (outer-*).
 # Possible values:
@@ -108,12 +105,14 @@ alt-shift-j = 'move down'
 alt-shift-k = 'move up'
 alt-shift-l = 'move right'
 
-
 # See: https://nikitabobko.github.io/AeroSpace/commands#workspace
+alt-t = 'workspace "Terminal"'
+alt-s = 'workspace "Passwords"'
+alt-d = 'workspace "Development"'
+alt-x = 'workspace "Nix-Darwin"'
 alt-c = 'workspace "Communication"'
-alt-s = 'workspace "Passwords-Cli"'
-alt-d = 'workspace "Dev-Workspace"'
-alt-x = 'workspace "Nix-Darwin-DE"'
+alt-b = 'workspace "Browser"'
+
 alt-1 = 'workspace "1st-Workspace"'
 alt-2 = 'workspace "2nd-Workspace"'
 alt-3 = 'workspace "3rd-Workspace"'
@@ -121,10 +120,13 @@ alt-4 = 'workspace "4th-Workspace"'
 alt-5 = 'workspace "5th-Workspace"'
 
 # See: https://nikitabobkogithub.io/AeroSpace/commands#move-node-to-workspace
+alt-shift-t = 'move-node-to-workspace "Terminal"'
+alt-shift-s = 'move-node-to-workspace "Passwords"'
+alt-shift-d = 'move-node-to-workspace "Development"'
+alt-shift-x = 'move-node-to-workspace "Nix-Darwin"'
 alt-shift-c = 'move-node-to-workspace "Communication"'
-alt-shift-s = 'move-node-to-workspace "Passwords-Cli"'
-alt-shift-d = 'move-node-to-workspace "Dev-Workspace"'
-alt-shift-x = 'move-node-to-workspace "Nix-Darwin-DE"'
+alt-shift-b = 'move-node-to-workspace "Browser"'
+
 alt-shift-1 = 'move-node-to-workspace "1st-Workspace"'
 alt-shift-2 = 'move-node-to-workspace "2nd-Workspace"'
 alt-shift-3 = 'move-node-to-workspace "3rd-Workspace"'

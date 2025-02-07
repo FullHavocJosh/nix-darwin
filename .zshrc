@@ -27,6 +27,10 @@ export PATH="/opt/homebrew/bin:/usr/bin:$PATH"
 export PATH="$HOME/Library/Python/3.9/bin:$PATH"
 export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 export no_proxy="*"
+export PATH="/opt/homebrew/opt/openssl@3/bin:$PATH"
+export LDFLAGS="-L/opt/homebrew/opt/openssl@3/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/openssl@3/include"
+export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
 
 # Path to go.
 export GOPATH=/opt/homebrew/Cellar/go/1.23.2
@@ -112,8 +116,8 @@ alias tfs="tfswitch"
 alias tfi="terraform init"
 alias tfa="terraform apply"
 
-alias tft="rm -rf .terraform* ; tfswitch ; terraform init ; terraform validate ; terraform test"
-alias tfp="rm -rf .terraform* ; tfswitch ; terraform init ; terraform validate ; terraform plan"
+alias tft="rm -rf .terraform* ; tfswitch ; terraform init -upgrade ; terraform validate ; terraform test"
+alias tfp="rm -rf .terraform* ; tfswitch ; terraform init -upgrade ; terraform validate ; terraform plan"
 
 alias ssm="aws ssm start-session --target"
 alias sso='function awslogin() { aws sso login --profile "$1" && export AWS_PROFILE="$1"; }; awslogin' #this allows you to login to the aws sso session
@@ -137,3 +141,14 @@ if [ "$TERM_PROGRAM" != "Apple_Terminal" ]; then
 fi
 
 eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/zen.toml)"
+
+# Automatically activate Ansible virtual environment
+if [ -d "$HOME/ansible-venv" ]; then
+    source "$HOME/ansible-venv/bin/activate"
+else
+    echo "Creating Ansible virtual environment..."
+    python3 -m venv ~/ansible-venv
+    source "$HOME/ansible-venv/bin/activate"
+    echo "Virtual environment created and activated."
+fi
+
