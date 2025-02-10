@@ -70,6 +70,8 @@ if [[ "$(uname)" == "Linux" ]]; then
   # Prepend Homebrew's bin directory to your PATH
   export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
 
+  . "$HOME/.atuin/bin/env"
+
   if [ "$XDG_SESSION_TYPE" = "wayland" ]; then
       export MOZ_ENABLE_WAYLAND=1
   fi
@@ -146,8 +148,6 @@ alias sso='function awslogin() { aws sso login --profile "$1" && export AWS_PROF
 alias ssoswitch='function awsswitch() { export AWS_PROFILE="$1"; } ; awsswitch' #this allows you to switch to another profile you have configured re-using the same session token
 
 alias pip="pip3"
-
-. "$HOME/.atuin/bin/env"
 
 # Enable atuin.
 export ATUIN_NOBIND="true"
