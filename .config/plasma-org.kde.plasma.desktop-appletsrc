@@ -4,28 +4,6 @@ RightButton;NoModifier=org.kde.contextmenu
 [ActionPlugins][1]
 RightButton;NoModifier=org.kde.contextmenu
 
-[Containments][1]
-ItemGeometries-1280x800=
-ItemGeometries-2194x1234=
-ItemGeometries-2560x1440=
-ItemGeometries-3072x1728=
-ItemGeometriesHorizontal=
-activityId=18c475ac-0a3b-487f-89cf-dbf2b027e0c0
-formfactor=0
-immutability=1
-lastScreen=0
-location=0
-plugin=org.kde.plasma.folder
-wallpaperplugin=org.kde.image
-
-[Containments][1][ConfigDialog]
-DialogHeight=540
-DialogWidth=720
-
-[Containments][1][Wallpaper][org.kde.image][General]
-Image=/usr/share/wallpapers/MilkyWay/
-SlidePaths=/usr/share/wallpapers/
-
 [Containments][2]
 activityId=
 formfactor=2
@@ -66,8 +44,8 @@ plugin=org.kde.plasma.kicker
 
 [Containments][2][Applets][35][Configuration]
 PreloadWeight=100
-popupHeight=302
-popupWidth=380
+popupHeight=353
+popupWidth=298
 
 [Containments][2][Applets][35][Configuration][ConfigDialog]
 DialogHeight=540
@@ -125,10 +103,39 @@ immutability=1
 plugin=org.kde.plasma.icontasks
 
 [Containments][27][Applets][29][Configuration][General]
-launchers=preferred://filemanager,applications:Alacritty.desktop,applications:com.jetbrains.GoLand.desktop,preferred://browser
+launchers=preferred://filemanager,applications:Alacritty.desktop,applications:com.jetbrains.GoLand.desktop,applications:steam.desktop,applications:com.discordapp.DiscordCanary.desktop,applications:Cider.desktop,preferred://browser
 
 [Containments][27][General]
 AppletOrder=29
+
+[Containments][29][Applets][83][Configuration]
+popupWidth=300
+
+[Containments][35][Applets][50][Configuration]
+PreloadWeight=33
+
+[Containments][35][Applets][51][Configuration]
+PreloadWeight=78
+
+[Containments][38]
+ItemGeometries-3072x1728=
+ItemGeometriesHorizontal=
+activityId=81c497ef-a040-4488-be8d-e5736a179dd3
+formfactor=0
+immutability=1
+lastScreen=0
+location=0
+plugin=org.kde.plasma.folder
+wallpaperplugin=org.kde.image
+
+[Containments][38][ConfigDialog]
+DialogHeight=540
+DialogWidth=720
+
+[Containments][38][Wallpaper][org.kde.image][General]
+Image=/home/havoc/.wallpapers/wallhaven-1k9m9w.jpg
+PreviewImage=/home/havoc/.wallpapers/wallhaven-1k9m9w.jpg
+SlidePaths=/home/havoc/.local/share/wallpapers/,/usr/share/wallpapers/
 
 [Containments][8]
 activityId=
