@@ -28,6 +28,7 @@
       "go"
       "golangci-lint"
       "golangci-lint-langserver"
+      "lm-studio"
       "luarocks"
       "neovim"
       "mas"

@@ -50,6 +50,9 @@ if [[ "$(uname)" == "Darwin" ]]; then
   # Path to tfswitch.
   export PATH="$HOME/opt/homebrew/bin/tfswitch:$PATH"
 
+  # Added by LM Studio CLI (lms)
+  export PATH="$PATH:/Users/jrollet/.lmstudio/bin"
+
   # Automatically activate Ansible virtual environment
   if [ -d "$HOME/ansible-venv" ]; then
       source "$HOME/ansible-venv/bin/activate"
@@ -164,3 +167,4 @@ if [ "$TERM_PROGRAM" != "Apple_Terminal" ]; then
   eval "$(oh-my-posh init zsh)"
 fi
 eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/zen.toml)"
+

@@ -27,6 +27,7 @@
       "/Applications/Microsoft Outlook.app"
       "/Applications/Proton Pass.app"
       "/Applications/LastPass.app"
+      "/Applications/LM-Studio.app"
     ];
   };
   homebrew = {
@@ -37,6 +38,7 @@
     brews = [ ];
     # Install Brew Casks
     casks = [
+      "firefox"
       "citrix-workspace"
       "lastpass"
       "mqtt-explorer"
