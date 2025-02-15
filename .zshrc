@@ -24,34 +24,34 @@ if [[ "$(uname)" == "Darwin" ]]; then
   # End Nix
 
   # Path to Nix binaries.
-  export PATH="/run/current-system/sw/bin:$PATH"
+  export PATH=$PATH:"/run/current-system/sw/bin"
 
   # Path to HomeBrew.
-  export PATH="/opt/homebrew/bin:/usr/bin:$PATH"
+  export PATH=$PATH:"/opt/homebrew/bin:/usr/bin"
 
   # Path to python and pip.
-  export PATH="$HOME/Library/Python/3.9/bin:$PATH"
+  export PATH=$PATH:"$HOME/Library/Python/3.9/bin"
   export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
   export no_proxy="*"
-  export PATH="/opt/homebrew/opt/openssl@3/bin:$PATH"
+  export PATH=$PATH:"/opt/homebrew/opt/openssl@3/bin"
   export LDFLAGS="-L/opt/homebrew/opt/openssl@3/lib"
   export CPPFLAGS="-I/opt/homebrew/opt/openssl@3/include"
   export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
 
   # Path to terraform.
-  export PATH="$HOME/bin:$PATH"
+  export PATH=$PATH:"$HOME/bin"
 
   # Path to go.
-  export PATH=$PATH:$GOPATH/bin
+  export GOPATH=/bin
   export PATH=$PATH:$GOROOT/bin
   export GOPATH=/opt/homebrew/Cellar/go/1.23.2
   export GOROOT=/opt/homebrew/Cellar/go/1.23.2/libexec
 
   # Path to tfswitch.
-  export PATH="$HOME/opt/homebrew/bin/tfswitch:$PATH"
+  export PATH=$PATH:"$HOME/opt/homebrew/bin/tfswitch"
 
   # Added by LM Studio CLI (lms)
-  export PATH="$PATH:/Users/jrollet/.lmstudio/bin"
+  export PATH=$PATH:"/Users/jrollet/.lmstudio/bin"
 
   # Automatically activate Ansible virtual environment
   if [ -d "$HOME/ansible-venv" ]; then
@@ -128,29 +128,34 @@ bindkey "^N" down-line-or-beginning-search
 
 zle_highlight=('paste:none')
 
-# Aliases.
+# Aliases - SSH Targets.
+alias sshmini='sshpass -p "$SSH_PASS" ssh havoc@mac-mini -o PreferredAuthentications=password -o PubkeyAuthentication=no'
+alias ssh705='sshpass -p "$SSH_PASS" ssh havoc@705-65 -o PreferredAuthentications=password -o PubkeyAuthentication=no'
+
+# Aliases - NeoVIM Development.
 alias nxvim="cd ~/nix-darwin && tmux new-session -A -s nix-darwin"
 alias psvim="cd ~/pscloudops/ && tmux new-session -A -s pscloudops"
 
+# Aliases - Common Shortcuts.
 alias clear="clear ; clear ; clear"
-
 alias eza="eza -la"
 alias ls="eza"
-
 alias tree="find . -print | sed -e 's;[^/]*/;|____;g;s;____|; |;g'"
+alias pip="pip3"
+alias python="/usr/bin/python3"
 
+
+# Aliases - Terraform.
 alias tfs="tfswitch"
 alias tfi="terraform init"
 alias tfa="terraform apply"
-
 alias tft="rm -rf .terraform* ; tfswitch ; terraform init -upgrade ; terraform validate ; terraform test"
 alias tfp="rm -rf .terraform* ; tfswitch ; terraform init -upgrade ; terraform validate ; terraform plan"
 
-alias ssm="aws ssm start-session --target"
-alias sso='function awslogin() { aws sso login --profile "$1" && export AWS_PROFILE="$1"; }; awslogin' #this allows you to login to the aws sso session
-alias ssoswitch='function awsswitch() { export AWS_PROFILE="$1"; } ; awsswitch' #this allows you to switch to another profile you have configured re-using the same session token
-
-alias pip="pip3"
+# Aliases - Unused/Old.
+# alias ssm="aws ssm start-session --target"
+# alias sso='function awslogin() { aws sso login --profile "$1" && export AWS_PROFILE="$1"; }; awslogin' #this allows you to login to the aws sso session
+# alias ssoswitch='function awsswitch() { export AWS_PROFILE="$1"; } ; awsswitch' #this allows you to switch to another profile you have configured re-using the same session token
 
 # Enable atuin.
 export ATUIN_NOBIND="true"
@@ -160,7 +165,6 @@ bindkey '^a' atuin-search
 # Enable fzf.
 eval "$(fzf --zsh)"
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-alias python=/usr/bin/python3
 
 # Enable oh-my-posh.
 if [ "$TERM_PROGRAM" != "Apple_Terminal" ]; then
