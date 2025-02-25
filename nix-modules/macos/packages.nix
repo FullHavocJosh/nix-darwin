@@ -42,7 +42,6 @@
       "reattach-to-user-namespace"
       "rust"
       "telnet"
-      "terraform"
       "terraform-inventory"
       "terraform-ls"
       "terraform-lsp"
