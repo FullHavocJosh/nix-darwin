@@ -24,7 +24,7 @@
       "/Applications/Zen Browser.app"
       "/Applications/Remote Desktop Manager Free.app"
       "/Applications/Slack.app"
-      "/Apllications/Microsoft Teams.app"
+      "/Applications/Microsoft Teams.app"
       "/Applications/Microsoft Outlook.app"
       "/Applications/Proton Pass.app"
       "/Applications/LastPass.app"
