@@ -7,6 +7,7 @@ RightButton;NoModifier=org.kde.contextmenu
 [Containments][1]
 ItemGeometries-1463x914=
 ItemGeometries-1707x1067=
+ItemGeometries-2048x1280=
 ItemGeometries-2259x1271=
 ItemGeometries-3072x1728=
 ItemGeometriesHorizontal=
@@ -45,7 +46,7 @@ DialogHeight=540
 DialogWidth=720
 
 [Containments][1][General]
-positions={"1463x914":[],"1707x1067":[],"3072x1728":[]}
+positions={"1463x914":[],"1707x1067":[],"2048x1280":[],"3072x1728":[]}
 
 [Containments][1][Wallpaper][org.kde.image][General]
 Image=/home/havoc/.wallpapers/wallhaven-1k9m9w.jpg
@@ -68,7 +69,7 @@ plugin=org.kde.plasma.kicker
 [Containments][92][Applets][118][Configuration]
 PreloadWeight=100
 popupHeight=405
-popupWidth=300
+popupWidth=586
 
 [Containments][92][Applets][118][Configuration][ConfigDialog]
 DialogHeight=540
@@ -95,7 +96,7 @@ DialogWidth=720
 
 [Containments][92][Applets][119][Configuration][General]
 iconSpacing=0
-launchers=preferred://filemanager,applications:org.kde.konsole.desktop,applications:Alacritty.desktop,preferred://browser,applications:steam.desktop,applications:com.discordapp.DiscordCanary.desktop
+launchers=preferred://filemanager,applications:Alacritty.desktop,preferred://browser,applications:steam.desktop,applications:com.discordapp.DiscordCanary.desktop
 
 [Containments][92][Applets][120]
 immutability=1
@@ -105,18 +106,221 @@ plugin=org.kde.plasma.marginsseparator
 immutability=1
 plugin=org.kde.plasma.marginsseparator
 
-[Containments][92][Applets][122]
+[Containments][92][Applets][124]
 immutability=1
-plugin=org.kde.plasma.analogclock
+plugin=org.kde.plasma.systemmonitor.diskusage
+transient=true
 
-[Containments][92][Applets][122][Configuration]
-PreloadWeight=60
-popupHeight=400
-popupWidth=560
+[Containments][92][Applets][124][Configuration]
+CurrentPreset=org.kde.plasma.systemmonitor
+PreloadWeight=100
+popupHeight=335
+popupWidth=277
+
+[Containments][92][Applets][124][Configuration][Appearance]
+chartFace=org.kde.ksysguard.piechart
+title=Disk Usage
+
+[Containments][92][Applets][124][Configuration][ConfigDialog]
+DialogHeight=540
+DialogWidth=720
+
+[Containments][92][Applets][124][Configuration][SensorColors]
+disk/.*/usedPercent=197,14,210
+disk/26dfcf0b-a43d-44a0-8da3-9639b19afcdb/usedPercent=14,210,197
+disk/all/usedPercent=210,197,14
+disk/de215a89-1fa9-43b5-bc66-9d573089b387/usedPercent=197,14,210
+disk/nvme0n1/read=27,210,14
+disk/nvme0n1/write=14,210,197
+
+[Containments][92][Applets][124][Configuration][Sensors]
+highPrioritySensorIds=["disk/26dfcf0b-a43d-44a0-8da3-9639b19afcdb/usedPercent"]
+lowPrioritySensorIds=["disk/nvme0n1/read","disk/nvme0n1/write"]
+totalSensors=["disk/26dfcf0b-a43d-44a0-8da3-9639b19afcdb/usedPercent"]
+
+[Containments][92][Applets][125]
+immutability=1
+plugin=org.kde.plasma.systemmonitor.cpucore
+transient=true
+
+[Containments][92][Applets][125][Configuration]
+CurrentPreset=org.kde.plasma.systemmonitor
+PreloadWeight=100
+popupHeight=391
+popupWidth=275
+
+[Containments][92][Applets][125][Configuration][Appearance]
+chartFace=org.kde.ksysguard.piechart
+title=Individual Core Usage
+
+[Containments][92][Applets][125][Configuration][ConfigDialog]
+DialogHeight=540
+DialogWidth=720
+
+[Containments][92][Applets][125][Configuration][FaceGrid][Appearance]
+chartFace=org.kde.ksysguard.linechart
+showTitle=false
+
+[Containments][92][Applets][125][Configuration][FaceGrid][SensorColors]
+cpu/cpu0/usage=197,14,210
+cpu/cpu1/usage=210,14,150
+cpu/cpu10/usage=14,210,148
+cpu/cpu11/usage=14,199,210
+cpu/cpu12/usage=14,125,210
+cpu/cpu13/usage=14,52,210
+cpu/cpu14/usage=50,14,210
+cpu/cpu15/usage=123,14,210
+cpu/cpu2/usage=210,14,76
+cpu/cpu3/usage=210,25,14
+cpu/cpu4/usage=210,99,14
+cpu/cpu5/usage=210,172,14
+cpu/cpu6/usage=174,210,14
+cpu/cpu7/usage=101,210,14
+cpu/cpu8/usage=27,210,14
+cpu/cpu9/usage=14,210,74
+
+[Containments][92][Applets][125][Configuration][FaceGrid][Sensors]
+highPrioritySensorIds=["cpu/cpu15/usage"]
+
+[Containments][92][Applets][125][Configuration][SensorColors]
+cpu/all/usage=197,14,210
+cpu/cpu0/usage=197,14,210
+cpu/cpu1/usage=210,14,150
+cpu/cpu10/usage=14,210,148
+cpu/cpu11/usage=14,199,210
+cpu/cpu12/usage=14,125,210
+cpu/cpu13/usage=14,52,210
+cpu/cpu14/usage=50,14,210
+cpu/cpu15/usage=123,14,210
+cpu/cpu2/usage=210,14,76
+cpu/cpu3/usage=210,25,14
+cpu/cpu4/usage=210,99,14
+cpu/cpu5/usage=210,172,14
+cpu/cpu6/usage=174,210,14
+cpu/cpu7/usage=101,210,14
+cpu/cpu8/usage=27,210,14
+cpu/cpu9/usage=14,210,74
+gpu/gpu0/usage=170,0,0
+gpu/gpu1/usage=0,170,0
+
+[Containments][92][Applets][125][Configuration][SensorLabels]
+cpu/all/averageTemperature=CPU Temperature
+cpu/all/usage=CPU
+gpu/gpu0/usage=iGPU
+gpu/gpu1/usage=dGPU
+lmsensors/spd5118-i2c-21-51/temp1=GPU Temperature
+
+[Containments][92][Applets][125][Configuration][Sensors]
+highPrioritySensorIds=["cpu/all/usage","gpu/gpu0/usage","gpu/gpu1/usage"]
+lowPrioritySensorIds=["cpu/all/averageTemperature","lmsensors/spd5118-i2c-21-51/temp1"]
+totalSensors=["cpu/all/usage"]
+
+[Containments][92][Applets][126]
+immutability=1
+plugin=org.kde.plasma.systemmonitor.memory
+transient=true
+
+[Containments][92][Applets][126][Configuration]
+CurrentPreset=org.kde.plasma.systemmonitor
+PreloadWeight=100
+popupHeight=297
+popupWidth=283
+
+[Containments][92][Applets][126][Configuration][Appearance]
+chartFace=org.kde.ksysguard.piechart
+title=Memory Usage
+
+[Containments][92][Applets][126][Configuration][ConfigDialog]
+DialogHeight=540
+DialogWidth=720
+
+[Containments][92][Applets][126][Configuration][SensorColors]
+memory/physical/used=197,14,210
+
+[Containments][92][Applets][126][Configuration][Sensors]
+highPrioritySensorIds=["memory/physical/used"]
+lowPrioritySensorIds=[]
+totalSensors=["memory/physical/usedPercent"]
+
+[Containments][92][Applets][129]
+immutability=1
+plugin=org.kde.plasma.weather
+
+[Containments][92][Applets][129][Configuration]
+PreloadWeight=42
+
+[Containments][92][Applets][129][Configuration][Units]
+pressureUnit=5028
+speedUnit=9002
+temperatureUnit=6002
+visibilityUnit=2024
+
+[Containments][92][Applets][130]
+immutability=1
+plugin=org.kde.plasma.systemmonitor
+
+[Containments][92][Applets][130][Configuration]
+CurrentPreset=org.kde.plasma.systemmonitor
+PreloadWeight=100
+popupHeight=308
+popupWidth=209
+
+[Containments][92][Applets][130][Configuration][Appearance]
+chartFace=org.kde.ksysguard.horizontalbars
+
+[Containments][92][Applets][130][Configuration][ConfigDialog]
+DialogHeight=540
+DialogWidth=720
+
+[Containments][92][Applets][130][Configuration][FaceGrid][Appearance]
+chartFace=org.kde.ksysguard.linechart
+showTitle=false
+
+[Containments][92][Applets][130][Configuration][FaceGrid][SensorColors]
+cpu/all/usage=170,0,255
+gpu/gpu0/usage=170,0,0
+gpu/gpu1/usage=0,170,0
+
+[Containments][92][Applets][130][Configuration][FaceGrid][SensorLabels]
+cpu/all/averageTemperature=CPU Temp
+cpu/all/usage=CPU
+disk/26dfcf0b-a43d-44a0-8da3-9639b19afcdb/usedPercent=Storage
+gpu/gpu0/usage=iGPU
+gpu/gpu1/usage=dGPU
+lmsensors/acpitz-acpi-0/temp1=Temp
+lmsensors/mt7921_phy0-pci-0200/temp1=GPU Temp
+memory/physical/usedPercent=Memory
+
+[Containments][92][Applets][130][Configuration][FaceGrid][Sensors]
+highPrioritySensorIds=["gpu/gpu1/usage"]
+
+[Containments][92][Applets][130][Configuration][SensorColors]
+cpu/all/usage=170,85,255
+gpu/gpu0/usage=170,0,0
+gpu/gpu1/usage=0,170,0
+
+[Containments][92][Applets][130][Configuration][SensorLabels]
+cpu/all/averageTemperature=CPU Temp
+cpu/all/usage=CPU
+disk/26dfcf0b-a43d-44a0-8da3-9639b19afcdb/usedPercent=Storage
+gpu/gpu0/usage=iGPU
+gpu/gpu1/usage=dGPU
+lmsensors/acpitz-acpi-0/temp1=Temp
+lmsensors/mt7921_phy0-pci-0200/temp1=GPU Temp
+memory/physical/usedPercent=Memory
+
+[Containments][92][Applets][130][Configuration][Sensors]
+highPrioritySensorIds=["cpu/all/usage","gpu/gpu0/usage","gpu/gpu1/usage"]
+lowPrioritySensorIds=["memory/physical/usedPercent","disk/26dfcf0b-a43d-44a0-8da3-9639b19afcdb/usedPercent","cpu/all/averageTemperature","lmsensors/mt7921_phy0-pci-0200/temp1"]
+
+[Containments][92][Applets][130][Configuration][org.kde.ksysguard.barchart][General]
+horizontalBars=true
+showYAxisLabels=false
 
 [Containments][92][Applets][65]
 immutability=1
 plugin=org.kde.plasma.systemmonitor
+transient=true
 
 [Containments][92][Applets][65][Configuration]
 CurrentPreset=org.kde.plasma.systemmonitor
@@ -125,9 +329,9 @@ popupHeight=328
 popupWidth=471
 
 [Containments][92][Applets][65][Configuration][Appearance]
-chartFace=org.kde.ksysguard.facegrid
-showTitle=false
-title=System Stats
+chartFace=org.kde.ksysguard.piechart
+showTitle=true
+title=GPU Stats
 updateRateLimit=1000
 
 [Containments][92][Applets][65][Configuration][ConfigDialog]
@@ -142,7 +346,7 @@ updateRateLimit=1000
 [Containments][92][Applets][65][Configuration][FaceGrid][SensorColors]
 cpu/all/usage=255,0,0
 gpu/all/usage=210,18,14
-gpu/gpu0/usage=85,0,0
+gpu/gpu0/usage=170,0,0
 gpu/gpu1/usage=0,170,0
 lmsensors/nvme-pci-0400/temp1=0,163,247
 memory/physical/usedPercent=0,85,127
@@ -169,7 +373,7 @@ showYAxisLabels=false
 [Containments][92][Applets][65][Configuration][SensorColors]
 cpu/all/usage=255,0,0
 gpu/all/usage=210,18,14
-gpu/gpu0/usage=85,0,0
+gpu/gpu0/usage=170,0,0
 gpu/gpu1/usage=0,170,0
 lmsensors/nvme-pci-0400/temp1=0,163,247
 memory/physical/usedPercent=0,85,127
@@ -184,24 +388,20 @@ lmsensors/spd5118-i2c-21-51/temp1=Temperature i2c
 memory/physical/usedPercent=RAM
 
 [Containments][92][Applets][65][Configuration][Sensors]
-highPrioritySensorIds=["cpu/all/usage","gpu/gpu0/usage","memory/physical/usedPercent","gpu/gpu1/usage"]
-lowPrioritySensorIds=["lmsensors/nvme-pci-0400/temp1","cpu/all/averageTemperature","lmsensors/spd5118-i2c-21-51/temp1"]
-totalSensors=["cpu/all/usage","memory/physical/usedPercent"]
-
-[Containments][92][Applets][96]
-immutability=1
-plugin=org.kde.plasma.marginsseparator
+highPrioritySensorIds=["gpu/gpu0/usage","gpu/gpu1/usage"]
+lowPrioritySensorIds=[]
+totalSensors=["gpu/all/usage"]
 
 [Containments][92][Applets][98]
 immutability=1
 plugin=org.kde.plasma.systemtray
 
 [Containments][92][Applets][98][Configuration]
-PreloadWeight=70
+PreloadWeight=80
 SystrayContainmentId=99
 
 [Containments][92][General]
-AppletOrder=118;119;120;65;96;98;121;122
+AppletOrder=118;119;120;130;121;98
 
 [Containments][99]
 activityId=
@@ -223,6 +423,13 @@ PreloadWeight=42
 [Containments][99][Applets][102]
 immutability=1
 plugin=org.kde.plasma.cameraindicator
+
+[Containments][99][Applets][102][Configuration]
+PreloadWeight=55
+
+[Containments][99][Applets][102][Configuration][ConfigDialog]
+DialogHeight=540
+DialogWidth=720
 
 [Containments][99][Applets][103][Configuration]
 PreloadWeight=42
@@ -263,7 +470,7 @@ immutability=1
 plugin=org.kde.plasma.battery
 
 [Containments][99][Applets][114][Configuration]
-PreloadWeight=69
+PreloadWeight=73
 
 [Containments][99][Applets][114][Configuration][General]
 showPercentage=true
@@ -273,11 +480,10 @@ immutability=1
 plugin=org.kde.plasma.brightness
 
 [Containments][99][Applets][115][Configuration]
-PreloadWeight=34
+PreloadWeight=23
 
-[Containments][99][Applets][116]
-immutability=1
-plugin=org.kde.plasma.bluetooth
+[Containments][99][Applets][116][Configuration]
+PreloadWeight=42
 
 [Containments][99][Applets][117]
 immutability=1
@@ -288,9 +494,9 @@ DialogHeight=540
 DialogWidth=720
 
 [Containments][99][General]
-extraItems=org.kde.plasma.battery,org.kde.plasma.bluetooth,org.kde.plasma.brightness,org.kde.plasma.cameraindicator,org.kde.plasma.networkmanagement,org.kde.plasma.volume
-hiddenItems=steam,Xwayland Video Bridge_pipewireToXProxy
+extraItems=org.kde.plasma.battery,org.kde.plasma.brightness,org.kde.plasma.cameraindicator,org.kde.plasma.networkmanagement,org.kde.plasma.volume,Xwayland Video Bridge_pipewireToXProxy,steam
 knownItems=org.kde.kdeconnect,org.kde.kscreen,org.kde.plasma.battery,org.kde.plasma.bluetooth,org.kde.plasma.brightness,org.kde.plasma.cameraindicator,org.kde.plasma.clipboard,org.kde.plasma.devicenotifier,org.kde.plasma.keyboardindicator,org.kde.plasma.keyboardlayout,org.kde.plasma.manage-inputmethod,org.kde.plasma.mediacontroller,org.kde.plasma.networkmanagement,org.kde.plasma.notifications,org.kde.plasma.printmanager,org.kde.plasma.vault,org.kde.plasma.volume
+shownItems=org.kde.plasma.battery,org.kde.plasma.networkmanagement,org.kde.plasma.cameraindicator,org.kde.plasma.brightness,org.kde.plasma.volume,Xwayland Video Bridge_pipewireToXProxy,steam
 
 [Containments28Appletsts][40][Configuration][Appearance]
 boldText=true

@@ -1,3 +1,23 @@
+[Applets][129]
+immutability=1
+plugin=org.kde.plasma.weather
+transient=true
+
+[Applets][129][Configuration]
+PreloadWeight=55
+popupHeight=247
+popupWidth=268
+
+[Applets][129][Configuration][Units]
+pressureUnit=5028
+speedUnit=9002
+temperatureUnit=6002
+visibilityUnit=2024
+
+[PlasmaTransientsConfig][ConfigDialog]
+DialogHeight=540
+DialogWidth=720
+
 [PlasmaViews][Panel 2]
 floating=1
 
