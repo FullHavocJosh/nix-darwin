@@ -41,14 +41,15 @@ gpu/gpu1/usage=0,170,0
 memory/physical/usedPercent=85,0,255
 
 [Containments][1][ConfigDialog]
-DialogHeight=1039
-DialogWidth=1707
+DialogHeight=540
+DialogWidth=720
 
 [Containments][1][General]
 positions={"1463x914":[],"1707x1067":[],"3072x1728":[]}
 
 [Containments][1][Wallpaper][org.kde.image][General]
-Image=/home/havoc/.local/share/wallpapers/Sweet-Wallpapers/Sweet-space.png
+Image=/home/havoc/.wallpapers/wallhaven-1k9m9w.jpg
+PreviewImage=/home/havoc/.wallpapers/wallhaven-1k9m9w.jpg
 SlidePaths=/home/havoc/.local/share/wallpapers/,/usr/share/wallpapers/
 
 [Containments][92]
@@ -66,8 +67,8 @@ plugin=org.kde.plasma.kicker
 
 [Containments][92][Applets][118][Configuration]
 PreloadWeight=100
-popupHeight=353
-popupWidth=298
+popupHeight=405
+popupWidth=300
 
 [Containments][92][Applets][118][Configuration][ConfigDialog]
 DialogHeight=540
@@ -75,7 +76,7 @@ DialogWidth=720
 
 [Containments][92][Applets][118][Configuration][General]
 alphaSort=true
-customButtonImage=distributor-logo-fedora
+customButtonImage=fedora-logo-icon
 favoriteSystemActions=
 favoritesPortedToKAstats=true
 limitDepth=true
@@ -120,8 +121,8 @@ plugin=org.kde.plasma.systemmonitor
 [Containments][92][Applets][65][Configuration]
 CurrentPreset=org.kde.plasma.systemmonitor
 PreloadWeight=100
-popupHeight=317
-popupWidth=460
+popupHeight=328
+popupWidth=471
 
 [Containments][92][Applets][65][Configuration][Appearance]
 chartFace=org.kde.ksysguard.facegrid
@@ -141,7 +142,7 @@ updateRateLimit=1000
 [Containments][92][Applets][65][Configuration][FaceGrid][SensorColors]
 cpu/all/usage=255,0,0
 gpu/all/usage=210,18,14
-gpu/gpu0/usage=170,0,0
+gpu/gpu0/usage=85,0,0
 gpu/gpu1/usage=0,170,0
 lmsensors/nvme-pci-0400/temp1=0,163,247
 memory/physical/usedPercent=0,85,127
@@ -168,7 +169,7 @@ showYAxisLabels=false
 [Containments][92][Applets][65][Configuration][SensorColors]
 cpu/all/usage=255,0,0
 gpu/all/usage=210,18,14
-gpu/gpu0/usage=170,0,0
+gpu/gpu0/usage=85,0,0
 gpu/gpu1/usage=0,170,0
 lmsensors/nvme-pci-0400/temp1=0,163,247
 memory/physical/usedPercent=0,85,127
@@ -209,8 +210,8 @@ immutability=1
 lastScreen=0
 location=4
 plugin=org.kde.plasma.private.systemtray
-popupHeight=432
-popupWidth=432
+popupHeight=443
+popupWidth=443
 wallpaperplugin=org.kde.image
 
 [Containments][99][Applets][100][Configuration]
@@ -262,7 +263,10 @@ immutability=1
 plugin=org.kde.plasma.battery
 
 [Containments][99][Applets][114][Configuration]
-PreloadWeight=54
+PreloadWeight=69
+
+[Containments][99][Applets][114][Configuration][General]
+showPercentage=true
 
 [Containments][99][Applets][115]
 immutability=1
