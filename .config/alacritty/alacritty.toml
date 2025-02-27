@@ -27,15 +27,15 @@ TERM = "xterm-256color"
 size = 14
 
 [font.bold]
-family = "JetBrains Mono"
+family = "LiterationMono Nerd Font"
 style = "Bold"
 
 [font.italic]
-family = "JetBrains Mono"
+family = "LiterationMono Nerd Font"
 style = "Italic"
 
 [font.normal]
-family = "JetBrains Mono"
+family = "LiterationMono Nerd Font"
 style = "Regular"
 
 [font.offset]

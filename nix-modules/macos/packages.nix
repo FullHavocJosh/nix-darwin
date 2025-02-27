@@ -64,6 +64,7 @@
       "balenaetcher"
       "betterdisplay"
       "bettermouse"
+      "brew install font-hack-nerd-font"
       "font-jetbrains-mono"
       "font-jetbrains-mono-nerd-font"
       "goland"
