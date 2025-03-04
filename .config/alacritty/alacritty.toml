@@ -63,6 +63,10 @@ dynamic_padding = true
 opacity = 1
 blur = false
 
+[window.dimensions]
+columns = 120
+lines = 40
+
 [window.padding]
 x = 5
 y = 5

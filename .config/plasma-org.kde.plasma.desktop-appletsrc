@@ -53,6 +53,22 @@ Image=/home/havoc/.wallpapers/wallhaven-1k9m9w.jpg
 PreviewImage=/home/havoc/.wallpapers/wallhaven-1k9m9w.jpg
 SlidePaths=/home/havoc/.local/share/wallpapers/,/usr/share/wallpapers/
 
+[Containments][141]
+activityId=
+formfactor=2
+immutability=1
+lastScreen=0
+location=3
+plugin=org.kde.panel
+wallpaperplugin=org.kde.image
+
+[Containments][141][Applets][142]
+immutability=1
+plugin=org.kde.plasma.appmenu
+
+[Containments][141][General]
+AppletOrder=142
+
 [Containments][92]
 activityId=
 formfactor=2
@@ -96,7 +112,7 @@ DialogWidth=720
 
 [Containments][92][Applets][119][Configuration][General]
 iconSpacing=0
-launchers=preferred://filemanager,applications:Alacritty.desktop,preferred://browser,applications:steam.desktop,applications:com.discordapp.DiscordCanary.desktop
+launchers=preferred://filemanager,applications:Alacritty.desktop,preferred://browser,applications:com.discordapp.DiscordCanary.desktop,applications:steam.desktop
 
 [Containments][92][Applets][130]
 immutability=1
@@ -105,11 +121,11 @@ plugin=org.kde.plasma.systemmonitor
 [Containments][92][Applets][130][Configuration]
 CurrentPreset=org.kde.plasma.systemmonitor
 PreloadWeight=100
-popupHeight=308
-popupWidth=209
+popupHeight=441
+popupWidth=278
 
 [Containments][92][Applets][130][Configuration][Appearance]
-chartFace=org.kde.ksysguard.horizontalbars
+chartFace=org.kde.ksysguard.linechart
 
 [Containments][92][Applets][130][Configuration][ConfigDialog]
 DialogHeight=540
@@ -138,27 +154,32 @@ memory/physical/usedPercent=Memory
 highPrioritySensorIds=["gpu/gpu1/usage"]
 
 [Containments][92][Applets][130][Configuration][SensorColors]
-cpu/all/usage=170,85,255
-gpu/gpu0/usage=170,0,0
-gpu/gpu1/usage=0,170,0
+cpu/all/usage=170,0,255
+gpu/gpu0/usage=0,170,0
+gpu/gpu1/usage=170,0,0
 
 [Containments][92][Applets][130][Configuration][SensorLabels]
 cpu/all/averageTemperature=CPU Temp
 cpu/all/usage=CPU
 disk/26dfcf0b-a43d-44a0-8da3-9639b19afcdb/usedPercent=Storage
-gpu/gpu0/usage=iGPU
-gpu/gpu1/usage=dGPU
-lmsensors/acpitz-acpi-0/temp1=Temp
-lmsensors/mt7921_phy0-pci-0200/temp1=GPU Temp
+gpu/gpu0/usage=dGPU
+gpu/gpu1/usage=iGPU
+lmsensors/acpitz-acpi-0/temp1=iGPU Temp
+lmsensors/mt7921_phy0-pci-0200/temp1=dGPU Temp
 memory/physical/usedPercent=Memory
 
 [Containments][92][Applets][130][Configuration][Sensors]
-highPrioritySensorIds=["cpu/all/usage","gpu/gpu0/usage","gpu/gpu1/usage"]
-lowPrioritySensorIds=["memory/physical/usedPercent","disk/26dfcf0b-a43d-44a0-8da3-9639b19afcdb/usedPercent","cpu/all/averageTemperature","lmsensors/mt7921_phy0-pci-0200/temp1"]
+highPrioritySensorIds=["cpu/all/usage","gpu/gpu1/usage","gpu/gpu0/usage"]
+lowPrioritySensorIds=["memory/physical/usedPercent","disk/26dfcf0b-a43d-44a0-8da3-9639b19afcdb/usedPercent","cpu/all/averageTemperature","lmsensors/acpitz-acpi-0/temp1","lmsensors/mt7921_phy0-pci-0200/temp1"]
 
 [Containments][92][Applets][130][Configuration][org.kde.ksysguard.barchart][General]
 horizontalBars=true
 showYAxisLabels=false
+
+[Containments][92][Applets][130][Configuration][org.kde.ksysguard.linechart][General]
+historyAmount=300
+lineChartStacked=true
+rangeAutoY=false
 
 [Containments][92][Applets][135]
 immutability=1
@@ -173,14 +194,14 @@ fontBold=true
 fontFamily=Hack Nerd Font Mono
 fontSize=18
 updateInterval=6000
-wattageThreshold=30
+wattageThreshold=18
 
 [Containments][92][Applets][136]
 immutability=1
 plugin=org.kde.plasma.battery
 
 [Containments][92][Applets][136][Configuration]
-PreloadWeight=85
+PreloadWeight=100
 popupHeight=269
 popupWidth=360
 
@@ -224,7 +245,7 @@ immutability=1
 plugin=org.kde.plasma.systemtray
 
 [Containments][92][Applets][98][Configuration]
-PreloadWeight=95
+PreloadWeight=100
 SystrayContainmentId=99
 
 [Containments][92][General]
@@ -287,9 +308,10 @@ immutability=1
 plugin=org.kde.plasma.volume
 
 [Containments][99][Applets][111][Configuration]
-PreloadWeight=65
+PreloadWeight=95
 
 [Containments][99][Applets][111][Configuration][General]
+currentTab=streams
 migrated=true
 
 [Containments][99][Applets][114][Configuration]
@@ -300,7 +322,7 @@ immutability=1
 plugin=org.kde.plasma.brightness
 
 [Containments][99][Applets][115][Configuration]
-PreloadWeight=12
+PreloadWeight=0
 
 [Containments][99][Applets][116][Configuration]
 PreloadWeight=42
@@ -308,6 +330,9 @@ PreloadWeight=42
 [Containments][99][Applets][117]
 immutability=1
 plugin=org.kde.plasma.networkmanagement
+
+[Containments][99][Applets][117][Configuration]
+PreloadWeight=80
 
 [Containments][99][ConfigDialog]
 DialogHeight=540
