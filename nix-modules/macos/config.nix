@@ -6,8 +6,6 @@
 
   nixpkgs.config.allowUnfree = true;
   nixpkgs.hostPlatform = "aarch64-darwin";
-  # Auto upgrade nix package and the daemon service
-  services.nix-daemon.enable = true;
   # Necessary for using flakes on this system
   nix.settings.experimental-features = "nix-command flakes";
   # Create /etc/zshrc that loads the nix-services environment
