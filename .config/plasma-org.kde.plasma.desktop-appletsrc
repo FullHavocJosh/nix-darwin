@@ -66,8 +66,28 @@ wallpaperplugin=org.kde.image
 immutability=1
 plugin=org.kde.plasma.appmenu
 
+[Containments][141][Applets][98]
+immutability=1
+plugin=org.kde.plasma.systemtray
+
+[Containments][141][Applets][98][Configuration]
+PreloadWeight=100
+SystrayContainmentId=99
+
 [Containments][141][General]
-AppletOrder=142
+AppletOrder=142;98
+
+[Containments][143]
+activityId=37701787-3e15-44aa-9974-6732068163e1
+formfactor=0
+immutability=1
+lastScreen=1
+location=0
+plugin=org.kde.plasma.folder
+wallpaperplugin=org.kde.image
+
+[Containments][143][General]
+positions={"2048x1280":[]}
 
 [Containments][92]
 activityId=
@@ -112,7 +132,7 @@ DialogWidth=720
 
 [Containments][92][Applets][119][Configuration][General]
 iconSpacing=0
-launchers=preferred://filemanager,applications:Alacritty.desktop,preferred://browser,applications:com.discordapp.DiscordCanary.desktop,applications:steam.desktop
+launchers=preferred://filemanager,applications:Alacritty.desktop,applications:app.zen_browser.zen.desktop,applications:com.discordapp.DiscordCanary.desktop,applications:steam.desktop
 
 [Containments][92][Applets][130]
 immutability=1
@@ -224,14 +244,6 @@ plugin=org.kde.plasma.panelspacer
 expanding=false
 length=10
 
-[Containments][92][Applets][139]
-immutability=1
-plugin=org.kde.plasma.panelspacer
-
-[Containments][92][Applets][139][Configuration][General]
-expanding=false
-length=10
-
 [Containments][92][Applets][140]
 immutability=1
 plugin=org.kde.plasma.panelspacer
@@ -240,23 +252,15 @@ plugin=org.kde.plasma.panelspacer
 expanding=false
 length=15
 
-[Containments][92][Applets][98]
-immutability=1
-plugin=org.kde.plasma.systemtray
-
-[Containments][92][Applets][98][Configuration]
-PreloadWeight=100
-SystrayContainmentId=99
-
 [Containments][92][General]
-AppletOrder=118;119;138;130;137;135;140;136;139;98
+AppletOrder=118;119;138;130;137;135;140;136
 
 [Containments][99]
 activityId=
 formfactor=2
 immutability=1
 lastScreen=0
-location=4
+location=3
 plugin=org.kde.plasma.private.systemtray
 popupHeight=443
 popupWidth=443
@@ -273,7 +277,7 @@ immutability=1
 plugin=org.kde.plasma.cameraindicator
 
 [Containments][99][Applets][102][Configuration]
-PreloadWeight=55
+PreloadWeight=60
 
 [Containments][99][Applets][102][Configuration][ConfigDialog]
 DialogHeight=540
@@ -308,10 +312,9 @@ immutability=1
 plugin=org.kde.plasma.volume
 
 [Containments][99][Applets][111][Configuration]
-PreloadWeight=95
+PreloadWeight=100
 
 [Containments][99][Applets][111][Configuration][General]
-currentTab=streams
 migrated=true
 
 [Containments][99][Applets][114][Configuration]
@@ -332,7 +335,7 @@ immutability=1
 plugin=org.kde.plasma.networkmanagement
 
 [Containments][99][Applets][117][Configuration]
-PreloadWeight=80
+PreloadWeight=100
 
 [Containments][99][ConfigDialog]
 DialogHeight=540
