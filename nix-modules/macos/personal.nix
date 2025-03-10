@@ -29,7 +29,6 @@
       "/System/Applications/Messages.app"
       "/Applications/Telegram Desktop.app"
       "/Applications/Proton Mail.app"
-      "/Applications/Proton Pass.app"
       "/Applications/LM Studio.app"
     ];
   };

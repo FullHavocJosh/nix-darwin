@@ -26,7 +26,6 @@
       "/Applications/Slack.app"
       "/Applications/Microsoft Teams.app"
       "/Applications/Microsoft Outlook.app"
-      "/Applications/Proton Pass.app"
       "/Applications/LM Studio.app"
     ];
   };
