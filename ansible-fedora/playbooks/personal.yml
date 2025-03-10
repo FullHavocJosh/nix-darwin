@@ -1,0 +1,8 @@
+---
+- name: Apply personal configurations
+  hosts: all
+  gather_facts: yes
+  become: yes
+
+  roles:
+    - { role: personal, tags: ['personal'] }

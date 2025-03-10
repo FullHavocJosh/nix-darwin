@@ -1,0 +1,70 @@
+---
+- name: Install development tools
+  dnf:
+    name:
+      - cmake
+      - golang
+      - neovim
+      - python3-devel
+    state: present
+  tags: ['packages']
+
+- name: Install CLI tools
+  dnf:
+    name:
+      - fzf
+      - tmux
+      - tree
+    state: present
+  tags: ['packages']
+
+- name: Check if Homebrew is installed
+  command: brew help
+  changed_when: false
+  ignore_errors: yes
+  register: brew_installed
+
+- name: Install Homebrew if not installed
+  block:
+    - name: Add the Homebrew repository (Fedora only)
+      shell: curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | /bin/bash -s -- -q
+      when: ansible_os_family == 'RedHat' and not brew_installed.changed
+
+    - name: Add Homebrew to PATH (Fedora only)
+      lineinfile:
+        path: ~/.bashrc
+        line: 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
+      when: ansible_os_family == 'RedHat' and not brew_installed.changed
+
+    - name: Source the updated .bashrc
+      shell: source ~/.bashrc
+      when: ansible_os_family == 'RedHat' and not brew_installed.changed
+
+  when: not brew_installed.changed
+
+- name: Install Brew Packages
+  homebrew:
+    state: present
+    name: "{{ item }}"
+  with_lines: cat ~/.brew_packages
+
+- name: Install Platform-Specific Packages
+  block:
+    - name: Install macOS-specific packages
+      homebrew:
+        state: present
+        name: "{{ item }}"
+      with_items:
+        - iterm2
+      when: ansible_os_family == 'Darwin'
+
+    - name: Install Fedora-specific packages
+      homebrew:
+        state: present
+        name: "{{ item }}"
+      with_items:
+        - proton-ge
+      when: ansible_os_family == 'RedHat'
+
+- name: Ensure Brew is up-to-date
+  shell: brew update && brew upgrade --all

@@ -1,0 +1,8 @@
+---
+- name: Install system packages
+  hosts: all
+  gather_facts: yes
+  become: yes
+
+  roles:
+    - { role: packages, tags: ['packages'] }

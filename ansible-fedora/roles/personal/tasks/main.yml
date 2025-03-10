@@ -1,0 +1,10 @@
+---
+- name: Stow dotfiles
+  shell: |
+    cd /home/{{ ansible_user }}/dotfiles && stow -R .
+  tags: ['personal']
+
+- name: Set wallpaper
+  shell: |
+    gsettings set org.gnome.desktop.background picture-uri 'file:///home/{{ ansible_user }}/.wallpapers/wallhaven-v9zlxp.jpg'
+  tags: ['personal']

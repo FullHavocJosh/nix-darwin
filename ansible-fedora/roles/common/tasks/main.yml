@@ -1,0 +1,20 @@
+---
+- name: Update system packages and install necessary packages
+  dnf:
+    name: "{{ packages }}"
+    state: present
+  vars:
+    packages:
+      - ansible
+      - python3
+      - git
+      - stow
+  tags: ['common']
+
+- name: Set system-wide settings
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+  with_dict: "{{ common_system_settings | default({}) }}"
+  tags: ['common']
