@@ -132,7 +132,7 @@ DialogWidth=720
 
 [Containments][92][Applets][119][Configuration][General]
 iconSpacing=0
-launchers=preferred://filemanager,applications:Alacritty.desktop,applications:app.zen_browser.zen.desktop,applications:com.discordapp.DiscordCanary.desktop,applications:steam.desktop
+launchers=preferred://filemanager,applications:com.mitchellh.ghostty.desktop,applications:Alacritty.desktop,applications:app.zen_browser.zen.desktop,applications:com.discordapp.DiscordCanary.desktop,applications:steam.desktop
 
 [Containments][92][Applets][130]
 immutability=1

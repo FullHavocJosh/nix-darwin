@@ -1,13 +1,6 @@
 # This is the configuration file for Ghostty.
 #
-# This template file has been automatically created at the following
-# path since Ghostty couldn't find any existing config files on your system:
-#
 #   /home/havoc/.config/ghostty/config
-#
-# The template does not set any default options, since Ghostty ships
-# with sensible defaults for all options. Users should only need to set
-# options that they want to change from the default.
 #
 # Run `ghostty +show-config --default --docs` to view a list of
 # all available config options and their default values.
@@ -55,12 +48,16 @@ font-family = Hack Nerd Font
 cursor-style = block
 theme = catppuccin-mocha.conf
 
+background-opacity = .8
+background-blur = true
+
 window-vsync = true
 window-padding-balance = true
+
 window-save-state = always
 quit-after-last-window-closed = true
+confirm-close-surface = false
 
 clipboard-read = allow
 clipboard-write = allow
-
 
