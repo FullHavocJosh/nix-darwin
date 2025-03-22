@@ -3,6 +3,7 @@ return {
 		"akinsho/bufferline.nvim",
 		version = "*",
 		dependencies = { "nvim-tree/nvim-web-devicons", "catppuccin/nvim" },
+		transparent = true,
 		config = function()
 			local catppuccin = require("catppuccin.palettes").get_palette("mocha") -- Replace "mocha" with your preferred flavor
 			local catppuccin_highlights = require("catppuccin.groups.integrations.bufferline").get()

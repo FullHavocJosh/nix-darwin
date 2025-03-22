@@ -11,6 +11,13 @@ cmd.colorscheme("catppuccin")
 g.loaded_netrw = 1
 g.loaded_netrwPlugin = 1
 
+vim.cmd([[
+  highlight Normal guibg=none
+  highlight NonText guibg=none
+  highlight Normal ctermbg=none
+  highlight NonText ctermbg=none
+]])
+
 -- empty setup using defaults
 require("nvim-tree").setup()
 

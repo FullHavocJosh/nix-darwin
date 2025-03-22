@@ -4,7 +4,7 @@
 #
 
 # Import theme from catppuccin-mocha (assumes the file exists in Ghostty's themes directory)
-theme = catppuccin-mocha.conf
+theme = catppuccin-mocha
 
 # General settings
 auto-update = download
