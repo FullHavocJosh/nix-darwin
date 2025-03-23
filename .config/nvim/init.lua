@@ -11,16 +11,6 @@ cmd.colorscheme("catppuccin")
 g.loaded_netrw = 1
 g.loaded_netrwPlugin = 1
 
-vim.cmd([[
-  hi NvimTreeNormal guibg=none ctermbg=none
-  hi Normal guibg=none ctermbg=none
-  hi NonText guibg=none ctermbg=none
-]])
-
--- empty setup using defaults
-require("nvim-tree").setup()
-
--- OR setup with some options
 require("nvim-tree").setup({
 	sort = {
 		sorter = "case_sensitive",
@@ -129,3 +119,10 @@ cmp.setup({
 		{ name = "path" },
 	}),
 })
+
+g.transparent_groups = vim.list_extend(
+	g.transparent_groups or {},
+	vim.tbl_map(function(v)
+		return v.hl_group
+	end, vim.tbl_values(require("bufferline.config").highlights))
+)
