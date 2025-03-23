@@ -44,7 +44,6 @@
       "battle-net"
       "curseforge"
       "discord"
-      "google-chrome"
       "obsidian"
       "plex"
       "proton-drive"
