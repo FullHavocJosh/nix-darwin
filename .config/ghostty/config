@@ -10,6 +10,9 @@ theme = catppuccin-mocha
 auto-update = download
 auto-update-channel = stable
 
+# On launch trigger zsh
+initial-command = zsh
+
 shell-integration = zsh
 shell-integration-features = sudo,title
 
