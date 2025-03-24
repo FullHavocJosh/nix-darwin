@@ -19,9 +19,9 @@
   system.defaults = {
     # Apps installed via nix package must include ${pkgs.APPNAME}
     dock.persistent-apps = [
-      "/Applications/Alacritty.app"
+      "/Applications/Ghostty.app"
       "/Applications/GoLand.app"
-      "/Applications/Zen Browser.app"
+      "/Applications/Zen browser.app"
       "/Applications/Remote Desktop Manager Free.app"
       "/Applications/Slack.app"
       "/Applications/Microsoft Teams.app"

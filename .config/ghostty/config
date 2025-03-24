@@ -24,7 +24,8 @@ font-size = 14
 cursor-style = block
 
 # Window settings
-window-decoration = none
+window-decoration = auto
+macos-titlebar-style = hidden
 window-padding-balance = true
 background-opacity = 0.8
 background-blur = true
