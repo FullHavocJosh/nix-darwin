@@ -8,7 +8,7 @@ auto-update-channel = stable
 initial-command = zsh
 
 shell-integration = zsh
-shell-integration-features = sudo,title
+shell-integration-features = sudo,title,cursor
 
 # Font settings
 font-family = Hack Nerd Font
@@ -20,14 +20,21 @@ cursor-style = block
 # Window settings
 window-decoration = auto
 macos-titlebar-style = hidden
+window-subtitle = working-directory
 window-padding-balance = true
 background-opacity = 0.8
 background-blur = true
 window-save-state = always
 quit-after-last-window-closed = true
 confirm-close-surface = false
+window-height = 120
+window-width = 40
 
 # Mouse settings
 clipboard-read = allow
 clipboard-write = allow
+copy-on-select = clipboard
+
+# Pretty Nonsense
+custom-shader = ~/.config/ghostty/crt-shader-with-chromatic-aberration-glow-scanlines-dot-matrix.glsl
 
