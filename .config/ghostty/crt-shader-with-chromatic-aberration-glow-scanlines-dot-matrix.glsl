@@ -21,12 +21,12 @@ const float BRIGHT_GLOW = 0.10;          // Glow intensity for bright pixels (de
 const float COLOR_GLOW = 0.25;           // Color bleeding intensity (default: 0.3)
 
 // Scanline Settings
-const float SCANLINE_INTENSITY = 0;    // Overall intensity of scanlines (default: 1.0)
-const float SCANLINE_DENSITY = 0;     // Density/thickness of scanlines (default: 0.25)
+const float SCANLINE_INTENSITY = 0.75;    // Overall intensity of scanlines (default: 1.0)
+const float SCANLINE_DENSITY = 0.25;      // Density/thickness of scanlines (default: 0.25)
 
 // Dot Matrix Settings
 const float MASK_INTENSITY = 0;          // Strength of the dot pattern (default: 0.3)
-const float MASK_SIZE = 0;             // Size of the dots (default: 1.0)
+const float MASK_SIZE = 0;               // Size of the dots (default: 1.0)
 
 //-----------------------------------------------------------------------------
 // Color Space Conversion Functions
