@@ -13,7 +13,7 @@ return {
 			},
 			view = {
 				side = "left",
-				width = 60,
+				adaptive_size = true,
 			},
 			sort = {
 				sorter = "case_sensitive",
