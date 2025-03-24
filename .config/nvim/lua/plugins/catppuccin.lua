@@ -5,11 +5,9 @@ return {
 	lazy = false,
 	transparent = true,
 	config = function()
-		-- Enable transparent background
 		require("catppuccin").setup({
-			style = "mocha", -- Optional: Choose your preferred color scheme style (e.g., 'frappe', 'mocha')
+			style = "mocha",
 		})
-		-- Load the theme
 		require("catppuccin")
 	end,
 }

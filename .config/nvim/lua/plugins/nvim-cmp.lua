@@ -31,28 +31,13 @@ return {
 					end,
 				},
 				mapping = {
-					-- Manual completion trigger
-					["<C-Space>"] = cmp.mapping.complete(), -- Trigger completion manually
-
-					-- Arrow key navigation
-					["<Down>"] = cmp.mapping.select_next_item(), -- Next suggestion (Down arrow)
-					["<Up>"] = cmp.mapping.select_prev_item(), -- Previous suggestion (Up arrow)
-
-					["<C-b>"] = cmp.mapping.scroll_docs(-4), -- Scroll up in documentation
-					["<C-f>"] = cmp.mapping.scroll_docs(4), -- Scroll down in documentation
-					["<C-e>"] = cmp.mapping.abort(), -- Close the completion window
-
-					-- Confirm selection with Tab
-					["<Tab>"] = cmp.mapping.confirm({ select = true }),
-
-					-- Close the completion window with Enter
-					["<CR>"] = cmp.mapping(function(fallback)
-						if cmp.visible() then
-							cmp.close() -- Close completion window
-						else
-							fallback() -- Proceed with Enter as usual if no completion window is visible
-						end
-					end, { "i", "s" }),
+					["<C-k>"] = cmp.mapping.select_prev_item(),
+					["<C-j>"] = cmp.mapping.select_next_item(),
+					["<C-b>"] = cmp.mapping.scroll_docs(-4),
+					["<C-f>"] = cmp.mapping.scroll_docs(4),
+					["<C-Space>"] = cmp.mapping.complete(),
+					["<C-e>"] = cmp.mapping.abort(),
+					["<CR>"] = cmp.mapping.confirm({ select = true }),
 				},
 				sources = cmp.config.sources({
 					{ name = "nvim_lsp" }, -- LSP completion

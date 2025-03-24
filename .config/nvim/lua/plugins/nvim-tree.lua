@@ -8,10 +8,26 @@ return {
 	},
 	config = function()
 		require("nvim-tree").setup({
+			git = {
+				enable = true,
+			},
 			view = {
 				side = "left",
 				width = 30,
-				preserve_window_proportions = true,
+			},
+			sort = {
+				sorter = "case_sensitive",
+			},
+			renderer = {
+				group_empty = true,
+			},
+			filters = {
+				dotfiles = false,
+			},
+			actions = {
+				open_file = {
+					quit_on_open = true,
+				},
 			},
 		})
 	end,

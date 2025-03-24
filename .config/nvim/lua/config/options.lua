@@ -1,41 +1,40 @@
-local opt = vim.opt -- cleaner configs
+local opt = vim.opt
 
--- line numbering
+-- Line numbering
 opt.relativenumber = false
 opt.number = true
 
--- tabs and indents
+-- Tabs and indents
 opt.tabstop = 2
 opt.shiftwidth = 2
 opt.expandtab = true
 opt.autoindent = true
 
--- line wrap
+-- Line wrap
 opt.wrap = true
 
--- searching
+-- Searching
 opt.ignorecase = true
 opt.smartcase = true
 
--- cursor
+-- Cursor
 opt.cursorline = true
 
--- appearance
+-- Appearance
 opt.termguicolors = true
--- opt.background = "dark"
 opt.signcolumn = "yes"
 
--- backspace
+-- Backspace
 opt.backspace = "indent,eol,start"
 
--- clipboard
+-- Clipboard
 opt.clipboard:append("unnamedplus")
 
--- spliting windows
+-- Splitting windows
 opt.splitright = true
 opt.splitbelow = true
 
 opt.iskeyword:append("-")
 
--- optionally enable 24-bit colour
+-- Optionally enable 24-bit color
 opt.termguicolors = true
