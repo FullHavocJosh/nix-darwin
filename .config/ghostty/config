@@ -1,9 +1,3 @@
-# This is the configuration file for Ghostty.
-#
-#   /home/havoc/.config/ghostty/config
-#
-
-# Import theme from catppuccin-mocha (assumes the file exists in Ghostty's themes directory)
 theme = catppuccin-mocha
 
 # General settings
@@ -29,14 +23,11 @@ macos-titlebar-style = hidden
 window-padding-balance = true
 background-opacity = 0.8
 background-blur = true
-
 window-save-state = always
 quit-after-last-window-closed = true
 confirm-close-surface = false
 
-# Mouse settings (Ghostty doesn't support custom mouse bindings)
+# Mouse settings
 clipboard-read = allow
 clipboard-write = allow
-
-# Additional settings
 
