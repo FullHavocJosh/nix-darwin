@@ -7,6 +7,19 @@ return {
 	config = function()
 		require("catppuccin").setup({
 			style = "mocha",
+			dim_inactive = {
+				enabled = true,
+			},
+			transparent_backgroundansparent_backgrond = true,
+			cmp = true,
+			telescope = true,
+			nvimtree = {
+				enabled = true,
+				transparent_panel = true,
+			},
+			bufferline = {
+				enabled = true,
+			},
 		})
 		require("catppuccin")
 	end,

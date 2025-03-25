@@ -27,8 +27,8 @@ background-blur = true
 window-save-state = always
 quit-after-last-window-closed = true
 confirm-close-surface = false
-window-height = 120
-window-width = 40
+window-height = 40
+window-width = 120
 
 # Mouse settings
 clipboard-read = allow
