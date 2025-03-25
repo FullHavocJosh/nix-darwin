@@ -1,40 +1,32 @@
-theme = catppuccin-mocha
-
-# General settings
-auto-update = download
-auto-update-channel = stable
-
-# On launch trigger zsh
-initial-command = zsh
-
-shell-integration = zsh
-shell-integration-features = sudo,title,cursor
-
-# Font settings
 font-family = Hack Nerd Font
 font-size = 14
-
-# Cursor style
+theme = catppuccin-mocha
+alpha-blending = native
 cursor-style = block
-
-# Window settings
-window-decoration = auto
-macos-titlebar-style = hidden
-window-subtitle = working-directory
-window-padding-balance = true
 background-opacity = 1
 background-blur = true
-window-save-state = always
-quit-after-last-window-closed = true
-confirm-close-surface = false
+initial-command = zsh
+scrollback-limit = 100000
+window-padding-balance = true
+window-vsync = true
+window-inherit-working-directory = true
+window-decoration = auto
+window-subtitle = working-directory
 window-height = 40
 window-width = 120
-
-# Mouse settings
+window-save-state = always
 clipboard-read = allow
 clipboard-write = allow
+clipboard-trim-trailing-spaces = true
 copy-on-select = clipboard
-
-# Pretty Nonsense
+confirm-close-surface = false
+quit-after-last-window-closed = true
+shell-integration = zsh
+shell-integration-features = sudo,title,cursor
 custom-shader = ~/.config/ghostty/crt-glow.glsl
+macos-titlebar-style = hidden
+macos-secure-input-indication = true
+bold-is-bright = true
+auto-update = download
+auto-update-channel = stable
 
