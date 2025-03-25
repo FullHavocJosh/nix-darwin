@@ -54,8 +54,8 @@ mouse = "Middle"
 decorations = "Buttonless"
 dynamic_title = true
 dynamic_padding = true
-opacity = 1
-blur = false
+opacity = 0.8
+blur = true
 
 [window.dimensions]
 columns = 120

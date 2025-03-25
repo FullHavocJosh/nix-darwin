@@ -17,9 +17,6 @@ return {
 				enabled = true,
 				transparent_panel = true,
 			},
-			bufferline = {
-				enabled = true,
-			},
 		})
 		require("catppuccin")
 	end,
