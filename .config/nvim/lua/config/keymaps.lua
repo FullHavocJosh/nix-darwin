@@ -61,11 +61,6 @@ keymap.set("n", "<leader>gfc", "<cmd>Telescope git_bcommits<cr>") -- List git co
 keymap.set("n", "<leader>gb", "<cmd>Telescope git_branches<cr>") -- List git branches (use <cr> to checkout) ["gb" for git branch]
 keymap.set("n", "<leader>gs", "<cmd>Telescope git_status<cr>") -- List current changes per file with diff preview ["gs" for git status]
 
--- Bufferline
-keymap.set("n", "<Tab>", ":BufferLineCycleNext<CR>", { noremap = true, silent = true }) -- Go to next buffer
-keymap.set("n", "<S-Tab>", ":BufferLineCyclePrev<CR>", { noremap = true, silent = true }) -- Go to previous buffer
-keymap.set("n", "<leader>bc", ":bdelete<CR>", { noremap = true, silent = true }) -- Close current buffers
-
 -- Comment
 keymap.set(
 	"n",

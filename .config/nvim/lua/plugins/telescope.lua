@@ -4,15 +4,7 @@ return {
 	dependencies = { "nvim-lua/plenary.nvim" },
 
 	require("telescope").setup({
-		defaults = {
-			mappings = {
-				i = {
-					["<C-k>"] = require("telescope.actions").move_selection_previous,
-					["<C-j>"] = require("telescope.actions").move_selection_next,
-					["<C-q>"] = require("telescope.actions").send_selected_to_qflist + require("telescope.actions").open_qflist,
-				},
-			},
-		},
+		defaults = {},
 		pickers = {},
 		extensions = {
 			fzf = {
