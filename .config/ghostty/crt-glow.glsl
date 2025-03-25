@@ -10,15 +10,15 @@
 const float GLOBAL_OPACITY = 1;        // Overall transparency (1.0 = fully opaque, 0.0 = fully transparent)
 
 // Chromatic Aberration Settings
-const float ABBERATION_FACTOR = 0.025;   // Strength of color splitting effect (default: 0.05)
+const float ABBERATION_FACTOR = 0;   // Strength of color splitting effect (default: 0.05)
 
 // Glow/Bloom Settings
 const float DIM_CUTOFF = 0.35;           // Threshold for what's considered a dim pixel (default: 0.35)
 const float BRIGHT_CUTOFF = 0.65;        // Threshold for what's considered a bright pixel
-const float BRIGHT_BOOST = 1;            // Brightness multiplier for bright pixels (default: 1.2)
+const float BRIGHT_BOOST = 1.25;            // Brightness multiplier for bright pixels (default: 1.2)
 const float DIM_GLOW = 0.05;             // Glow intensity for dim pixels (default: 0.05)
 const float BRIGHT_GLOW = 0.1;          // Glow intensity for bright pixels (default: 0.10)
-const float COLOR_GLOW = 0.25;           // Color bleeding intensity (default: 0.3)
+const float COLOR_GLOW = 1.25;           // Color bleeding intensity (default: 0.3)
 
 // Scanline Settings
 const float SCANLINE_INTENSITY = 0;    // Overall intensity of scanlines (default: 1.0)
