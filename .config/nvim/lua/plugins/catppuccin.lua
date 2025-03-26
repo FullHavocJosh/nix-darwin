@@ -11,7 +11,6 @@ return {
 				enabled = true,
 			},
 			transparent_backgroundansparent_backgrond = true,
-			cmp = true,
 			telescope = true,
 			nvimtree = {
 				enabled = true,
