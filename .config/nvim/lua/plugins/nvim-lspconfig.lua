@@ -7,19 +7,15 @@ return {
 			local capabilities = require("cmp_nvim_lsp").default_capabilities()
 			local keymap = vim.keymap
 
-			-- Diagnostic symbols in the sign column (gutter)
 			local signs = { Error = " ", Warn = " ", Hint = "ﴞ ", Info = " " }
 			for type, icon in pairs(signs) do
 				local hl = "DiagnosticSign" .. type
 				vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = "" })
 			end
 
-			-- Format on save setup
 			local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
 
-			-- Enable keybinds only when LSP server is available
 			local on_attach = function(client, bufnr)
-				-- Keybind options
 				local opts = { noremap = true, silent = true, buffer = bufnr }
 				keymap.set("n", "gf", "<cmd>Lspsaga lsp_finder<CR>", opts)
 				keymap.set("n", "gD", "<Cmd>lua vim.lsp.buf.declaration()<CR>", opts)
@@ -34,14 +30,12 @@ return {
 				keymap.set("n", "K", "<cmd>Lspsaga hover_doc<CR>", opts)
 				keymap.set("n", "<leader>o", "<cmd>LSoutlineToggle<CR>", opts)
 
-				-- TypeScript-specific keybinds
 				if client.name == "tsserver" then
 					keymap.set("n", "<leader>rf", ":TypescriptRenameFile<CR>", opts)
 					keymap.set("n", "<leader>oi", ":TypescriptOrganizeImports<CR>", opts)
 					keymap.set("n", "<leader>ru", ":TypescriptRemoveUnused<CR>", opts)
 				end
 
-				-- Terraform-specific format on save
 				if client.name == "terraformls" then
 					vim.api.nvim_create_autocmd("BufWritePre", {
 						group = vim.api.nvim_create_augroup("TerraformFmt", { clear = true }),
@@ -52,7 +46,6 @@ return {
 					})
 				end
 
-				-- Configure format on save
 				if client.supports_method("textDocument/formatting") then
 					vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
 					vim.api.nvim_create_autocmd("BufWritePre", {
@@ -61,7 +54,6 @@ return {
 						callback = function()
 							vim.lsp.buf.format({
 								filter = function(fmt_client)
-									-- Use only the preferred formatter
 									return fmt_client.name == client.name
 								end,
 								bufnr = bufnr,
@@ -71,13 +63,10 @@ return {
 				end
 			end
 
-			-- Configure language servers
 			local servers = {
-				ansiblels = {}, -- Ansible
-				bashls = {}, -- Bash
-				harper_ls = {}, -- HarperDB
-				dockerls = {}, -- Docker
-				jsonls = { -- JSON
+				ansiblels = {},
+				bashls = {},
+				jsonls = {
 					settings = {
 						json = {
 							schemas = {
@@ -93,7 +82,7 @@ return {
 						},
 					},
 				},
-				lua_ls = { -- Lua
+				lua_ls = {
 					settings = {
 						Lua = {
 							format = { enable = true },
@@ -103,10 +92,10 @@ return {
 						},
 					},
 				},
-				rnix = {}, -- Nix
-				powershell_es = {}, -- PowerShell
-				tflint = {}, -- Terraform Linter
-				yamlls = { -- YAML
+				rnix = {},
+				powershell_es = {},
+				tflint = {},
+				yamlls = {
 					settings = {
 						yaml = {
 							schemas = {
@@ -116,7 +105,7 @@ return {
 						},
 					},
 				},
-				terraformls = {}, -- Terraform
+				terraformls = {},
 			}
 
 			for server, config in pairs(servers) do
