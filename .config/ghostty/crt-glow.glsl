@@ -1,4 +1,6 @@
 //-----------------------------------------------------------------------------
+// Original: https://github.com/luiscarlospando/crt-shader-with-chromatic-aberration-glow-scanlines-dot-matrix 
+//-----------------------------------------------------------------------------
 // CRT Shader with Chromatic Aberration, Glow, Scanlines, Dot Matrix and Transparency
 //-----------------------------------------------------------------------------
 // Original File Name: crt-shader-with-chromatic-aberration-glow-scanlines-dot-matrix.glsl
