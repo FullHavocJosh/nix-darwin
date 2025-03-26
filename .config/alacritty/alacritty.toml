@@ -67,3 +67,5 @@ y = 0
 
 [scrolling]
 history = 100000
+multiplier = 1
+
