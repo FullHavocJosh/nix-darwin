@@ -7,7 +7,6 @@ mouse-scroll-multiplier = 0.1
 background-opacity = 1
 background-blur = true
 initial-command = zsh
-scrollback-limit = 100000
 window-padding-balance = true
 window-vsync = true
 window-inherit-working-directory = true
