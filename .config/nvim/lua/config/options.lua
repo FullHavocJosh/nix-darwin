@@ -1,40 +1,42 @@
-local opt = vim.opt
-
 -- Line numbering
-opt.relativenumber = false
-opt.number = true
+vim.opt.relativenumber = false
+vim.opt.number = true
 
 -- Tabs and indents
-opt.tabstop = 2
-opt.shiftwidth = 2
-opt.expandtab = true
-opt.autoindent = true
+vim.opt.tabstop = 2
+vim.opt.shiftwidth = 2
+vim.opt.expandtab = true
+vim.opt.autoindent = true
 
 -- Line wrap
-opt.wrap = true
+vim.opt.wrap = true
 
 -- Searching
-opt.ignorecase = true
-opt.smartcase = true
-
--- Cursor
-opt.cursorline = true
+vim.opt.ignorecase = true
+vim.opt.smartcase = true
 
 -- Appearance
-opt.termguicolors = true
-opt.signcolumn = "yes"
+vim.opt.termguicolors = true
+vim.opt.signcolumn = "yes"
+
+-- Cursor
+vim.opt.guicursor = {
+	"n:block-nCursor",
+	"i:ver25-iCursor",
+	"v:block-vCursor",
+}
 
 -- Backspace
-opt.backspace = "indent,eol,start"
+vim.opt.backspace = "indent,eol,start"
 
 -- Clipboard
-opt.clipboard:append("unnamedplus")
+vim.opt.clipboard:append("unnamedplus")
 
 -- Splitting windows
-opt.splitright = true
-opt.splitbelow = true
+vim.opt.splitright = true
+vim.opt.splitbelow = true
 
-opt.iskeyword:append("-")
+vim.opt.iskeyword:append("-")
 
--- Optionally enable 24-bit color
-opt.termguicolors = true
+-- optionally enable 24-bit color
+vim.opt.termguicolors = true

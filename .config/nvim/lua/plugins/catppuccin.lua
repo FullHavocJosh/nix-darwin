@@ -7,15 +7,20 @@ return {
 	config = function()
 		require("catppuccin").setup({
 			style = "mocha",
-			dim_inactive = {
-				enabled = true,
-			},
 			transparent_backgroundansparent_backgrond = true,
 			telescope = true,
 			nvimtree = {
 				enabled = true,
 				transparent_panel = true,
 			},
+			overrides = function(catppuccin)
+				return {
+					nCursor = { bg = catppuccin.blue },
+					vCursor = { bg = catppuccin.green },
+					iCursor = { bg = catppuccin.red },
+				}
+			end,
+
 		})
 		require("catppuccin")
 	end,

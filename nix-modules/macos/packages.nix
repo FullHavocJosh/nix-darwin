@@ -25,6 +25,7 @@
       "eza"
       "fastfetch"
       "fzf"
+      "gh"
       "go"
       "golangci-lint"
       "golangci-lint-langserver"
