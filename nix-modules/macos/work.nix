@@ -37,7 +37,6 @@
     brews = [ ];
     # Install Brew Casks
     casks = [
-      "firefox"
       "citrix-workspace"
       "lastpass"
       "mqtt-explorer"
