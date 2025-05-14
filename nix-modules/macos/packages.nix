@@ -87,7 +87,7 @@
       "vanilla"
       "via"
       "vlc"
-      "zen-browser"
+      "zen"
     ];
     # Install App Store Apps, search for ID with "mas search "
     # You must be logged into the Apps Store, and you must have purchased the app

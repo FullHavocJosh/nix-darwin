@@ -21,7 +21,7 @@
     dock.persistent-apps = [
       "/Applications/Alacritty.app"
       "/Applications/GoLand.app"
-      "/Applications/Zen browser.app"
+      "/Applications/Zen.app"
       "/Applications/Remote Desktop Manager Free.app"
       "/Applications/Slack.app"
       "/Applications/Microsoft Teams.app"
