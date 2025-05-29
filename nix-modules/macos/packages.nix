@@ -86,6 +86,7 @@
       "the-unarchiver"
       "vanilla"
       "via"
+      "vial"
       "vlc"
       "zen"
     ];
