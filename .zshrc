@@ -152,10 +152,8 @@ alias tfa="terraform apply"
 alias tft="rm -rf .terraform* ; tfswitch ; terraform init -upgrade ; terraform validate ; terraform test"
 alias tfp="rm -rf .terraform* ; tfswitch ; terraform init -upgrade ; terraform validate ; terraform plan"
 
-# Aliases - Unused/Old.
-# alias ssm="aws ssm start-session --target"
-# alias sso='function awslogin() { aws sso login --profile "$1" && export AWS_PROFILE="$1"; }; awslogin' #this allows you to login to the aws sso session
-# alias ssoswitch='function awsswitch() { export AWS_PROFILE="$1"; } ; awsswitch' #this allows you to switch to another profile you have configured re-using the same session token
+# Aliases - AWS.
+alias asl='aws sso login --sso-session aws'
 
 # Enable atuin.
 export ATUIN_NOBIND="true"
@@ -172,8 +170,18 @@ if [ "$TERM_PROGRAM" != "Apple_Terminal" ]; then
 fi
 eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/zen.toml)"
 
-
 # Added by LM Studio CLI (lms)
 export PATH="$PATH:/Users/havoc/.lmstudio/bin"
 # End of LM Studio CLI section
 
+# Set environmental variables for AWS
+function asc() {
+  if [ "$1" = "clear" ]; then
+    unset -m "AWS_*"
+    echo "AWS environment variables unset"
+  else
+    eval "$(aws configure export-credentials --profile $1 --format env)"
+    export AWS_PROFILE=$1
+    echo "AWS environment variables set"
+  fi
+}

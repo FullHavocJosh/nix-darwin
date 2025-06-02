@@ -34,7 +34,9 @@
     taps = [
     ];
     # Install Brew Formulas
-    brews = [ ];
+    brews = [
+      "awscli"
+    ];
     # Install Brew Casks
     casks = [
       "citrix-workspace"
