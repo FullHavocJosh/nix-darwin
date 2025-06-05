@@ -154,6 +154,9 @@ alias tfp="rm -rf .terraform* ; tfswitch ; terraform init -upgrade ; terraform v
 
 # Aliases - AWS.
 alias asl='aws sso login --sso-session aws'
+alias sso='function awslogin() { aws sso login --profile "$1" && export AWS_PROFILE="$1"; }; awslogin' #this allows you to login to the aws sso session
+alias ssoswitch='function awsswitch() { export AWS_PROFILE="$1"; unset AWS_ACCESS_KEY_ID; unset AWS_SECRET_ACCESS_KEY; }; awsswitch' #this allows you to switch to another profile you have configured re-using the same session token
+alias ssoexport='eval "$(aws configure export-credentials --profile $AWS_PROFILE --format env)"'
 
 # Enable atuin.
 export ATUIN_NOBIND="true"

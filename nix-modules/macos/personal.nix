@@ -27,7 +27,6 @@
       "/System/Applications/Freeform.app"
       "/Applications/Discord.app"
       "/System/Applications/Messages.app"
-      "/Applications/Telegram Desktop.app"
       "/Applications/Proton Mail.app"
       "/Applications/LM Studio.app"
     ];
@@ -51,8 +50,6 @@
       "protonvpn"
       "proton-mail"
       "steam"
-      "telegram-desktop"
-      "ultimaker-cura"
       "whisky"
     ];
     # Install App Store Apps, search for ID with "mas search "
