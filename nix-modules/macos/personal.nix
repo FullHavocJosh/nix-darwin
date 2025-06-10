@@ -21,7 +21,7 @@
     dock.persistent-apps = [
       "/Applications/Alacritty.app"
       "/Applications/GoLand.app"
-      "/Applications/Orion.app"
+      "/System/Applications/Safari.app"
       "/System/Applications/Music.app"
       "/Applications/Obsidian.app"
       "/System/Applications/Freeform.app"
