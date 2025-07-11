@@ -66,6 +66,11 @@ wallpaperplugin=org.kde.image
 immutability=1
 plugin=org.kde.plasma.appmenu
 
+[Containments][141][Applets][154][Configuration]
+PreloadWeight=100
+popupHeight=536
+popupWidth=683
+
 [Containments][141][Applets][98]
 activityId=
 formfactor=2

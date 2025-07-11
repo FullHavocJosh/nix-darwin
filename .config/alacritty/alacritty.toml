@@ -52,14 +52,15 @@ mouse = "Middle"
 
 [window]
 decorations = "Buttonless"
+startup_mode = "Maximized"
 dynamic_title = true
 dynamic_padding = true
 opacity = 0.75
 blur = true
 
-[window.dimensions]
-columns = 120
-lines = 40
+#[window.dimensions]
+#columns = 120
+#lines = 40
 
 [window.padding]
 x = 0
