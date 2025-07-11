@@ -336,8 +336,16 @@ primaryActions=3
 showActionButtonCaptions=false
 systemFavorites=lock-screen\\,logout\\,save-session\\,switch-user\\,suspend\\,hibernate\\,reboot\\,shutdown
 
+[Containments][92][Applets][180]
+immutability=1
+plugin=org.kde.plasma.panelspacer
+
+[Containments][92][Applets][180][Configuration][General]
+expanding=false
+length=10
+
 [Containments][92][General]
-AppletOrder=177;119;138;158;176;135;137;130;157
+AppletOrder=177;119;138;130;180;158;176;135;137;157
 
 [Containments28Appletsts][40][Configuration][Appearance]
 boldText=true
