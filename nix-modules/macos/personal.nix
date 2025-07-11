@@ -59,6 +59,7 @@
       "SponsorBlock for Safari" = 1573461917;
       "AdBlock Pro for Safari" = 1018301773;
       "Dark Reader for Safari" = 1438243180;
+      "WireGuard" = 1451685025;
     };
   };
 }
