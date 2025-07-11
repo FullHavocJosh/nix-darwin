@@ -156,6 +156,7 @@ rangeAutoY=false
 [Containments][92][Applets][135]
 immutability=1
 plugin=org.kde.plasma.powerusage
+transient=true
 
 [Containments][92][Applets][135][Configuration][ConfigDialog]
 DialogHeight=540
@@ -184,6 +185,7 @@ showPercentage=true
 [Containments][92][Applets][137]
 immutability=1
 plugin=org.kde.plasma.panelspacer
+transient=true
 
 [Containments][92][Applets][137][Configuration][General]
 expanding=false
@@ -345,7 +347,7 @@ expanding=false
 length=10
 
 [Containments][92][General]
-AppletOrder=177;119;138;130;180;158;176;135;137;157
+AppletOrder=177;119;138;130;180;158;176;157
 
 [Containments28Appletsts][40][Configuration][Appearance]
 boldText=true
