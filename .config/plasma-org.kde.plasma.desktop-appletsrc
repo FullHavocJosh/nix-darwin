@@ -173,8 +173,8 @@ immutability=1
 plugin=org.kde.plasma.digitalclock
 
 [Containments][92][Applets][157][Configuration]
-popupHeight=424
-popupWidth=592
+popupHeight=427
+popupWidth=596
 
 [Containments][92][Applets][157][Configuration][Appearance]
 enabledCalendarPlugins=astronomicalevents,holidaysevents
@@ -191,8 +191,8 @@ immutability=1
 lastScreen=-1
 location=0
 plugin=org.kde.plasma.systemtray
-popupHeight=456
-popupWidth=464
+popupHeight=459
+popupWidth=468
 wallpaperplugin=org.kde.image
 
 [Containments][92][Applets][158][Applets][159][Configuration]
@@ -251,7 +251,7 @@ immutability=1
 plugin=org.kde.plasma.brightness
 
 [Containments][92][Applets][158][Applets][172][Configuration]
-PreloadWeight=7
+PreloadWeight=0
 
 [Containments][92][Applets][158][Applets][173][Configuration]
 PreloadWeight=42
@@ -261,7 +261,7 @@ immutability=1
 plugin=org.kde.plasma.bluetooth
 
 [Containments][92][Applets][158][Applets][174][Configuration]
-PreloadWeight=2
+PreloadWeight=0
 
 [Containments][92][Applets][158][Applets][175]
 immutability=1
@@ -313,8 +313,8 @@ plugin=org.kde.plasma.kickoff
 
 [Containments][92][Applets][177][Configuration]
 PreloadWeight=100
-popupHeight=566
-popupWidth=845
+popupHeight=569
+popupWidth=849
 
 [Containments][92][Applets][177][Configuration][ConfigDialog]
 DialogHeight=540

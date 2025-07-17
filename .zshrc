@@ -135,6 +135,8 @@ bindkey "^N" down-line-or-beginning-search
 zle_highlight=('paste:none')
 
 # Aliases - SSH Targets.
+alias sshazeroth='sshpass -p "$SSH_PASS_AZEROTH" ssh root@azerothcore.rollet.family -o PreferredAuthentications=password -o PubkeyAuthentication=no'
+alias sshtestazeroth='sshpass -p "$SSH_PASS_AZEROTH" ssh root@testing-azerothcore.rollet.family -o PreferredAuthentications=password -o PubkeyAuthentication=no'
 alias sshmini='sshpass -p "$SSH_PASS" ssh havoc@mac-mini -o PreferredAuthentications=password -o PubkeyAuthentication=no'
 alias ssh705='sshpass -p "$SSH_PASS" ssh havoc@705-65 -o PreferredAuthentications=password -o PubkeyAuthentication=no'
 
