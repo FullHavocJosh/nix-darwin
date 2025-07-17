@@ -9,6 +9,7 @@ ItemGeometries-1463x914=
 ItemGeometries-1707x1067=
 ItemGeometries-2048x1280=
 ItemGeometries-2259x1271=
+ItemGeometries-2560x1600=
 ItemGeometries-3072x1728=
 ItemGeometriesHorizontal=
 activityId=37701787-3e15-44aa-9974-6732068163e1
@@ -46,7 +47,7 @@ DialogHeight=540
 DialogWidth=720
 
 [Containments][1][General]
-positions={"1463x914":[],"1707x1067":[],"2048x1280":[],"3072x1728":[]}
+positions={"1463x914":[],"1707x1067":[],"2048x1280":[],"2560x1600":[],"3072x1728":[]}
 
 [Containments][1][Wallpaper][org.kde.image][General]
 Image=/home/havoc/.wallpapers/wallhaven-1k9m9w.jpg
@@ -83,8 +84,12 @@ DialogHeight=540
 DialogWidth=720
 
 [Containments][92][Applets][119][Configuration][General]
+groupingStrategy=0
 iconSpacing=0
+indicateAudioStreams=false
 launchers=
+showToolTips=false
+tooltipControls=false
 
 [Containments][92][Applets][130]
 immutability=1
@@ -127,6 +132,7 @@ highPrioritySensorIds=["gpu/gpu1/usage"]
 
 [Containments][92][Applets][130][Configuration][SensorColors]
 cpu/all/usage=170,0,255
+gpu/all/usage=84,170,93
 gpu/gpu0/usage=0,170,0
 gpu/gpu1/usage=170,0,0
 
@@ -134,6 +140,7 @@ gpu/gpu1/usage=170,0,0
 cpu/all/averageTemperature=CPU Temp
 cpu/all/usage=CPU
 disk/26dfcf0b-a43d-44a0-8da3-9639b19afcdb/usedPercent=Storage
+gpu/all/usage=GPU
 gpu/gpu0/usage=dGPU
 gpu/gpu1/usage=iGPU
 lmsensors/acpitz-acpi-0/temp1=iGPU Temp
@@ -141,7 +148,7 @@ lmsensors/mt7921_phy0-pci-0200/temp1=dGPU Temp
 memory/physical/usedPercent=Memory
 
 [Containments][92][Applets][130][Configuration][Sensors]
-highPrioritySensorIds=["cpu/all/usage","gpu/gpu1/usage","gpu/gpu0/usage"]
+highPrioritySensorIds=["cpu/all/usage","gpu/all/usage"]
 lowPrioritySensorIds=["memory/physical/usedPercent","disk/26dfcf0b-a43d-44a0-8da3-9639b19afcdb/usedPercent","cpu/all/averageTemperature","lmsensors/acpitz-acpi-0/temp1","lmsensors/mt7921_phy0-pci-0200/temp1"]
 
 [Containments][92][Applets][130][Configuration][org.kde.ksysguard.barchart][General]
@@ -166,8 +173,8 @@ immutability=1
 plugin=org.kde.plasma.digitalclock
 
 [Containments][92][Applets][157][Configuration]
-popupHeight=406
-popupWidth=568
+popupHeight=424
+popupWidth=592
 
 [Containments][92][Applets][157][Configuration][Appearance]
 enabledCalendarPlugins=astronomicalevents,holidaysevents
@@ -184,8 +191,8 @@ immutability=1
 lastScreen=-1
 location=0
 plugin=org.kde.plasma.systemtray
-popupHeight=438
-popupWidth=440
+popupHeight=456
+popupWidth=464
 wallpaperplugin=org.kde.image
 
 [Containments][92][Applets][158][Applets][159][Configuration]
@@ -201,6 +208,9 @@ PreloadWeight=42
 [Containments][92][Applets][158][Applets][162]
 immutability=1
 plugin=org.kde.plasma.devicenotifier
+
+[Containments][92][Applets][158][Applets][162][Configuration]
+PreloadWeight=55
 
 [Containments][92][Applets][158][Applets][163][Configuration]
 PreloadWeight=42
@@ -231,7 +241,7 @@ immutability=1
 plugin=org.kde.plasma.volume
 
 [Containments][92][Applets][158][Applets][171][Configuration]
-PreloadWeight=55
+PreloadWeight=100
 
 [Containments][92][Applets][158][Applets][171][Configuration][General]
 migrated=true
@@ -241,7 +251,7 @@ immutability=1
 plugin=org.kde.plasma.brightness
 
 [Containments][92][Applets][158][Applets][172][Configuration]
-PreloadWeight=42
+PreloadWeight=7
 
 [Containments][92][Applets][158][Applets][173][Configuration]
 PreloadWeight=42
@@ -251,11 +261,14 @@ immutability=1
 plugin=org.kde.plasma.bluetooth
 
 [Containments][92][Applets][158][Applets][174][Configuration]
-PreloadWeight=42
+PreloadWeight=2
 
 [Containments][92][Applets][158][Applets][175]
 immutability=1
 plugin=org.kde.plasma.networkmanagement
+
+[Containments][92][Applets][158][Applets][175][Configuration]
+PreloadWeight=100
 
 [Containments][92][Applets][158][Applets][178]
 immutability=1
@@ -266,7 +279,14 @@ immutability=1
 plugin=org.kde.plasma.battery
 
 [Containments][92][Applets][158][Applets][179][Configuration]
-PreloadWeight=10
+PreloadWeight=0
+
+[Containments][92][Applets][158][Applets][181]
+immutability=1
+plugin=org.kde.plasma.mediacontroller
+
+[Containments][92][Applets][158][Applets][181][Configuration]
+PreloadWeight=34
 
 [Containments][92][Applets][158][ConfigDialog]
 DialogHeight=540
@@ -293,8 +313,8 @@ plugin=org.kde.plasma.kickoff
 
 [Containments][92][Applets][177][Configuration]
 PreloadWeight=100
-popupHeight=551
-popupWidth=825
+popupHeight=566
+popupWidth=845
 
 [Containments][92][Applets][177][Configuration][ConfigDialog]
 DialogHeight=540

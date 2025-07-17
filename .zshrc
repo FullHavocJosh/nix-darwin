@@ -78,6 +78,12 @@ if [[ "$(uname)" == "Linux" ]]; then
   if [ "$XDG_SESSION_TYPE" = "wayland" ]; then
       export MOZ_ENABLE_WAYLAND=1
   fi
+
+  HISTFILE=~/.zsh_history
+  HISTSIZE=10000
+  SAVEHIST=1000
+  setopt SHARE_HISTORY
+
 fi
 
 ############################################################################
