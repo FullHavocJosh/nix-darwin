@@ -137,8 +137,8 @@ zle_highlight=('paste:none')
 # Aliases - SSH Targets.
 alias sshazeroth='ssh -i ~/.ssh/id_ed25519 root@azerothcore.rollet.family'
 alias sshtestazeroth='ssh -i ~/.ssh/id_ed25519 root@testing-azerothcore.rollet.family'
-alias sshmini='sshpass -p "$SSH_PASS" ssh havoc@mac-mini -o PreferredAuthentications=password -o PubkeyAuthentication=no'
-alias ssh705='sshpass -p "$SSH_PASS" ssh havoc@705-65 -o PreferredAuthentications=password -o PubkeyAuthentication=no'
+alias sshmini='ssh -i ~/.ssh/id_ed25519 havoc@mac-mini.rollet.family'
+alias ssh705='ssh -i ~/.ssh/id_ed25519 havoc@705-65.rollet.family'
 
 # Aliases - NeoVIM Development.
 alias nxvim="cd ~/nix-darwin && tmux new-session -A -s nix-darwin"
