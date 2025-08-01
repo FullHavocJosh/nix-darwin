@@ -135,10 +135,13 @@ bindkey "^N" down-line-or-beginning-search
 zle_highlight=('paste:none')
 
 # Aliases - SSH Targets.
+alias sshmacbook='ssh -i ~/.ssh/id_ed25519 havoc@Joshs-MacBook-Pro.rollet.family'
+alias sshg14='ssh -i ~/.ssh/id_ed25519 root@Joshs-G14.rollet.family' 
 alias sshazeroth='ssh -i ~/.ssh/id_ed25519 root@azerothcore.rollet.family'
 alias sshtestazeroth='ssh -i ~/.ssh/id_ed25519 root@testing-azerothcore.rollet.family'
-alias sshmini='ssh -i ~/.ssh/id_ed25519 havoc@mac-mini.rollet.family'
-alias ssh705='ssh -i ~/.ssh/id_ed25519 havoc@705-65.rollet.family'
+alias sshmini='ssh -i ~/.ssh/id_ed25519 havoc@macOS-Mac-mini.rollet.family'
+alias ssh705='ssh -i ~/.ssh/id_ed25519 havoc@705-G4-Fedora.rollet.family'
+alias sshdeck='ssh -i ~/.ssh/id_ed25519 havoc@Joshs-SteamDeck.rollet.family'
 
 # Aliases - NeoVIM Development.
 alias nxvim="cd ~/nix-darwin && tmux new-session -A -s nix-darwin"
