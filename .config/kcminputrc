@@ -94,4 +94,4 @@ NaturalScroll=true
 PointerAcceleration=-0.800
 
 [Mouse]
-cursorSize=22
+X11LibInputXAccelProfileFlat=true
