@@ -138,7 +138,7 @@ History Items[$e]=file:$HOME/Applications/WoW_WotLK_3_3_5a_Patched,smb://truenas
 Splitter State=\x00\x00\x00\xff\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x9d\x00\x00\x03\xc6\x00\xff\xff\xff\xff\x01\x00\x00\x00\x01\x00
 
 [General]
-ColorSchemeHash=8ff306d9a93379c74540e00506966df24df1798b
+ColorSchemeHash=43c05a93da8f1967d2659e3c00d09a3a4787cafd
 TerminalApplication=alacritty
 TerminalService=Alacritty.desktop
 UseSystemBell=true
