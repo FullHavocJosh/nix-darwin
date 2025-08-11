@@ -66,18 +66,18 @@ outer.right =      16
 
 # See:  https://nikitabobko.github.io/AeroSpace/guide#assign-workspaces-to-monitors
 [workspace-to-monitor-force-assignment]
-    "Communication" = ['main']
-    "AI-LM-Studio" = ['main']
+    "Communication" = ['secondary']
+    "AI-LM-Studio" = ['secondary']
     "Terminal" = ['main']
-    "Passwords" = ['main']
+    "Passwords" = ['secondary']
     "Development" = ['main']
     "Nix-Darwin" = ['main']
-    "Browser" = ['main']
-    "1st-Workspace" = ['secondary']
-    "2nd-Workspace" = ['secondary']
-    "3rd-Workspace" = ['secondary']
-    "4th-Workspace" = ['secondary']
-    "5th-Workspace" = ['secondary']
+    "Browser" = ['secondary']
+    "1st-Workspace" = ['main']
+    "2nd-Workspace" = ['main']
+    "3rd-Workspace" = ['main']
+    "4th-Workspace" = ['main']
+    "5th-Workspace" = ['main']
 
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
 # 'main' binding mode must be always presented
