@@ -58,6 +58,12 @@ tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"wi
 [Tiling][c61ea0e4-06fe-41a2-895c-2879a29e3a06][a85a1670-1b89-425b-9730-896e69d24e72]
 tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
 
+[Tiling][c61ea0e4-06fe-41a2-895c-2879a29e3a06][c16a890e-91ab-453e-8d4d-d36a54a664b3]
+tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
+
+[Tiling][c61ea0e4-06fe-41a2-895c-2879a29e3a06][c854987b-9996-44d2-93ae-7670135bab8f]
+tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
+
 [Tiling][cf2acd93-954d-5542-89b1-478189857254]
 tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
 
@@ -80,3 +86,4 @@ Scale=1
 [org.kde.kdecoration2]
 ButtonsOnLeft=M
 ButtonsOnRight=IAX
+theme=__aurorae__svg__Scratchy

@@ -19,6 +19,11 @@ PointerAcceleration=-0.800
 [Libinput][1133][16507][Logitech MX Vertical]
 NaturalScroll=true
 
+[Libinput][1133][45088][Logitech MX Vertical Advanced Ergonomic Mouse]
+NaturalScroll=true
+PointerAcceleration=-0.200
+ScrollMethod=4
+
 [Libinput][1133][50503][Logitech USB Receiver]
 NaturalScroll=true
 PointerAcceleration=-0.800
@@ -95,3 +100,4 @@ PointerAcceleration=-0.800
 
 [Mouse]
 X11LibInputXAccelProfileFlat=true
+cursorTheme=Sweet-cursors
