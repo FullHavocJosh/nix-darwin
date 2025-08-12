@@ -12,14 +12,14 @@
     echo "Finished Stowing dotfiles..."
 
     echo "Setting wallpaper..."
-    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/havoc/.wallpapers/wallhaven-1k9m9w.jpg"'
+    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/havoc/.wallpapers/wallhaven-7pw1we.jpg"'
   '';
 
   # System Settings for macOS
   # Documentation at: mynixos.com and look for nix-services
   system.defaults = {
     dock.persistent-apps = [
-      "/Applications/Alacritty.app"
+      "/Applications/Ghostty.app"
       "/Applications/GoLand.app"
       "/Applications/Zen.app"
       "/System/Applications/Music.app"
