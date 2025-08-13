@@ -81,7 +81,7 @@ ActivationDesktopPolicy=BringToCurrentDesktop
 Placement=Smart
 
 [Xwayland]
-Scale=1
+Scale=1.25
 
 [org.kde.kdecoration2]
 ButtonsOnLeft=M
