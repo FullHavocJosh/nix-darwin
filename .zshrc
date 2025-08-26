@@ -184,6 +184,9 @@ if [ "$TERM_PROGRAM" != "Apple_Terminal" ]; then
 fi
 eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/zen.toml)"
 
+# Enable zoxide.
+eval "$(zoxide init zsh)"
+
 # Added by LM Studio CLI (lms)
 export PATH="$PATH:/Users/havoc/.lmstudio/bin"
 # End of LM Studio CLI section
