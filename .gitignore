@@ -12,6 +12,9 @@ private/
 *bak
 *.backup
 
+# Ignore coplit configs
+/.config/github-copilot
+
 # Ignore logs and temporary files
 *.log
 *.tmp
