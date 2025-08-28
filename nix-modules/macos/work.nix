@@ -40,6 +40,8 @@
     ];
     # Install Brew Casks
     casks = [
+      "claude"
+      "claude-code"
       "citrix-workspace"
       "lastpass"
       "mqtt-explorer"
