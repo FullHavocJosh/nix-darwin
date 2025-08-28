@@ -150,12 +150,12 @@ alias sshg14='ssh -i ~/.ssh/id_ed25519 root@Joshs-G14.rollet.family'
 alias sshazeroth='ssh -i ~/.ssh/id_ed25519 root@azerothcore.rollet.family'
 alias sshtestazeroth='ssh -i ~/.ssh/id_ed25519 root@testing-azerothcore.rollet.family'
 alias sshmini='ssh -i ~/.ssh/id_ed25519 havoc@macOS-Mac-mini.rollet.family'
-alias ssh705='ssh -i ~/.ssh/id_ed25519 havoc@705-G4-Fedora.rollet.family'
 alias sshdeck='ssh -i ~/.ssh/id_ed25519 havoc@Joshs-SteamDeck.rollet.family'
 
 # Aliases - NeoVIM Development.
-alias nxvim="cd ~/nix-darwin && tmux new-session -A -s nix-darwin"
-alias psvim="cd ~/pscloudops/ && tmux new-session -A -s pscloudops"
+alias nxvim="cd ~/nix-darwin && (tmux has-session -t nix-darwin 2>/dev/null && tmux attach -t nix-darwin || (tmux new-session -s nix-darwin -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys 'nvim' Enter \; select-pane -t 1 \; send-keys 'if ! lms ps | grep -q \"Gemma-3\"; then lms load --gpu=max google/gemma-3-12b --identifier=\"Gemma-3\"; fi && crush' Enter \; select-pane -t 2 \; send-keys 'git status' Enter \; select-pane -t 0 \; attach))"
+alias devim='asl && (tmux has-session -t dev-$(basename $(pwd)) 2>/dev/null && tmux attach -t dev-$(basename $(pwd)) || (tmux new-session -s dev-$(basename $(pwd)) -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys "nvim" Enter \; select-pane -t 1 \; send-keys "claude" Enter \; select-pane -t 2 \; send-keys "git status" Enter \; select-pane -t 0 \; attach))'
+alias psvim="asl && cd ~/pscloudops/ && (tmux has-session -t pscloudops 2>/dev/null && tmux attach -t pscloudops || (tmux new-session -s pscloudops -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys 'nvim' Enter \; select-pane -t 1 \; send-keys 'claude' Enter \; select-pane -t 2 \; send-keys 'git status' Enter \; select-pane -t 0 \; attach))"
 
 # Aliases - Common Shortcuts.
 alias clear="clear ; clear ; clear"

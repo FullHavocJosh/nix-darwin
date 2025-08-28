@@ -1,0 +1,19 @@
+{
+  "providers": {
+    "lmstudio": {
+      "name": "LM Studio",
+      "base_url": "http://localhost:1234/v1/",
+      "type": "openai",
+      "models": [
+        {
+          "name": "Gemma-3 12B",
+          "id": "Gemma-3",
+          "context_window": 8192,
+          "default_max_tokens": 4096
+        }
+      ]
+    }
+  },
+  "default_provider": "lmstudio",
+  "default_model": "Gemma-3 12B"
+}

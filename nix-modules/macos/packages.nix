@@ -13,6 +13,7 @@
     taps = [
       "warrensbox/tap"
       "nikitabobko/tap"
+      "charmbracelet/tap"
     ];
     # Install Brew Formulas
     brews = [
@@ -30,6 +31,7 @@
       "go"
       "golangci-lint"
       "golangci-lint-langserver"
+      "graphviz"
       "luarocks"
       "neovim"
       "mas"
@@ -54,12 +56,14 @@
       "tldr"
       "tmux"
       "tpm"
+      "uv"
       "watch"
       "zplug"
       "zoxide"
       "bash-language-server"
       "lua-language-server"
       "yaml-language-server"
+      "crush"
     ];
     # Install Brew Casks
     casks = [

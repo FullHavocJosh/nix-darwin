@@ -35,6 +35,8 @@
     # Install Brew Formulas
     brews = [
       "awscli"
+      "graphviz"
+      "uv"
     ];
     # Install Brew Casks
     casks = [

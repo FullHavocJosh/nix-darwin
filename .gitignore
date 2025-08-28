@@ -66,3 +66,7 @@ stow-uninstall-local-ignore
 
 # Ignore Raycast
 /.config/raycast
+
+# Ignore Git
+/.git
+

@@ -30,5 +30,15 @@ return {
 				},
 			},
 		})
+		
+		-- Auto-open NvimTree on startup
+		vim.api.nvim_create_autocmd("VimEnter", {
+			pattern = "*",
+			callback = function()
+				vim.defer_fn(function()
+					vim.cmd("NvimTreeToggle")
+				end, 100)
+			end,
+		})
 	end,
 }
