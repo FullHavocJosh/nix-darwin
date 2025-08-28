@@ -15,6 +15,9 @@ private/
 # Ignore coplit configs
 /.config/github-copilot
 
+# Ignore claude configs
+/.claude
+
 # Ignore logs and temporary files
 *.log
 *.tmp
