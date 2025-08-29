@@ -10,17 +10,8 @@ return {
         dependencies = { "williamboman/mason.nvim" },
         config = function()
             require("mason-lspconfig").setup({
-                ensure_installed = {
-                    "bashls",        -- Bash
-                    "yamlls",        -- Ansible YAML
-                    "jsonls",        -- JSON
-                    "lua_ls",        -- Lua
-                    "terraformls",   -- Terraform
-                    "tflint",        -- Terraform Linter
-                    "rnix",          -- Nix
-                    "powershell_es", -- PowerShell
-                }, -- List of servers to install
-                automatic_installation = true,
+                ensure_installed = {}, -- LSP servers managed by brew
+                automatic_installation = false,
             })
         end,
     },

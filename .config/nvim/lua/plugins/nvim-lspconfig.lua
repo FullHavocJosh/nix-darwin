@@ -30,7 +30,7 @@ return {
 				keymap.set("n", "K", "<cmd>Lspsaga hover_doc<CR>", opts)
 				keymap.set("n", "<leader>o", "<cmd>LSoutlineToggle<CR>", opts)
 
-				if client.name == "tsserver" then
+				if client.name == "ts_ls" or client.name == "tsserver" then
 					keymap.set("n", "<leader>rf", ":TypescriptRenameFile<CR>", opts)
 					keymap.set("n", "<leader>oi", ":TypescriptOrganizeImports<CR>", opts)
 					keymap.set("n", "<leader>ru", ":TypescriptRemoveUnused<CR>", opts)
@@ -66,22 +66,7 @@ return {
 			local servers = {
 				ansiblels = {},
 				bashls = {},
-				jsonls = {
-					settings = {
-						json = {
-							schemas = {
-								{
-									fileMatch = { "package.json" },
-									url = "https://json.schemastore.org/package.json",
-								},
-								{
-									fileMatch = { "tsconfig*.json" },
-									url = "https://json.schemastore.org/tsconfig.json",
-								},
-							},
-						},
-					},
-				},
+				dockerls = {},
 				lua_ls = {
 					settings = {
 						Lua = {
@@ -92,15 +77,31 @@ return {
 						},
 					},
 				},
-				rnix = {},
-				powershell_es = {},
+				pylsp = {
+					settings = {
+						pylsp = {
+							plugins = {
+								pycodestyle = { enabled = false },
+								mccabe = { enabled = false },
+								pyflakes = { enabled = false },
+								flake8 = { enabled = true },
+								autopep8 = { enabled = false },
+								yapf = { enabled = false },
+								black = { enabled = true },
+							},
+						},
+					},
+				},
 				tflint = {},
+				ts_ls = {},
 				yamlls = {
 					settings = {
 						yaml = {
 							schemas = {
 								kubernetes = "/*.k8s.yaml",
 								["https://json.schemastore.org/ansible-playbook"] = "/ansible/*.{yaml,yml}",
+								["https://raw.githubusercontent.com/aws/aws-cloudformation-templates/main/aws-cfn-template-2010-09-09.json"] = "/*cloudformation*.{yaml,yml}",
+								["https://raw.githubusercontent.com/aws/aws-cloudformation-templates/main/aws-cfn-template-2010-09-09.json"] = "/*cfn*.{yaml,yml}",
 							},
 						},
 					},

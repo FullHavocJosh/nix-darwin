@@ -34,9 +34,15 @@ require("lazy").setup({
 	checker = { enabled = true },
 })
 
--- vim.api.nvim_create_autocmd("VimEnter", {
--- 	pattern = "*",
--- 	callback = function()
--- 		require("lazy").update()
--- 	end,
--- })
+vim.api.nvim_create_autocmd("VimEnter", {
+	pattern = "*",
+	callback = function()
+		-- Delay the update to let nvim fully load first
+		vim.defer_fn(function()
+			require("lazy").update({
+				wait = true,
+				show = false,
+			})
+		end, 100)
+	end,
+})

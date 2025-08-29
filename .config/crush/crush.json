@@ -1,19 +1,52 @@
 {
   "providers": {
-    "lmstudio": {
-      "name": "LM Studio",
-      "base_url": "http://localhost:1234/v1/",
+    "openrouter": {
+      "name": "OpenRouter",
+      "base_url": "https://openrouter.ai/api/v1/",
       "type": "openai",
+      "api_key_env": "OPENROUTER_API_KEY",
       "models": [
         {
-          "name": "Gemma-3 12B",
-          "id": "Gemma-3",
-          "context_window": 8192,
-          "default_max_tokens": 4096
+          "name": "Claude Sonnet 4",
+          "id": "anthropic/claude-3.5-sonnet",
+          "context_window": 200000,
+          "default_max_tokens": 16384
         }
       ]
     }
   },
-  "default_provider": "lmstudio",
-  "default_model": "Gemma-3 12B"
+  "default_provider": "openrouter",
+  "default_model": "Claude Sonnet 4",
+  "lsp": {
+    "ansible": {
+      "command": "ansible-language-server",
+      "args": ["--stdio"]
+    },
+    "bash": {
+      "command": "bash-language-server",
+      "args": ["start"]
+    },
+    "dockerfile": {
+      "command": "docker-langserver",
+      "args": ["--stdio"]
+    },
+    "lua": {
+      "command": "lua-language-server"
+    },
+    "python": {
+      "command": "pylsp"
+    },
+    "terraform": {
+      "command": "terraform-ls",
+      "args": ["serve"]
+    },
+    "typescript": {
+      "command": "typescript-language-server",
+      "args": ["--stdio"]
+    },
+    "yaml": {
+      "command": "yaml-language-server",
+      "args": ["--stdio"]
+    }
+  }
 }

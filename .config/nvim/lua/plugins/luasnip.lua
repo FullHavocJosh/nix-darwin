@@ -29,9 +29,6 @@ return {
     -- Autocompletion source for LuaSnip
     {
         "saadparwaiz1/cmp_luasnip",
-        dependencies = {
-            "hrsh7th/nvim-cmp", -- Ensure `nvim-cmp` is already installed
-        },
     },
 
     -- Predefined snippets
