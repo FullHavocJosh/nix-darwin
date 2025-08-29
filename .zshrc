@@ -212,3 +212,4 @@ function asc() {
     echo "AWS environment variables set"
   fi
 }
+
