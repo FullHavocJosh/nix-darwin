@@ -1,0 +1,11 @@
+# Set environmental variables for AWS
+function asc() {
+  if [ "$1" = "clear" ]; then
+    unset -m "AWS_*"
+    echo "AWS environment variables unset"
+  else
+    eval "$(aws configure export-credentials --profile $1 --format env)"
+    export AWS_PROFILE=$1
+    echo "AWS environment variables set"
+  fi
+}

@@ -1,0 +1,61 @@
+# MacOS-Specific Settings #####################################################
+if [[ "$(uname)" == "Darwin" ]]; then
+  echo "ZSH Configuration for MacOS..."
+
+  # Nix
+  if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
+    . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+  fi
+  # End Nix
+
+  # Path to Nix binaries.
+  export PATH=$PATH:"/run/current-system/sw/bin"
+
+  # Path to HomeBrew.
+  export PATH=$PATH:"/opt/homebrew/bin:/usr/bin"
+
+  # Path to python and pip.
+  export PATH=$PATH:"$HOME/Library/Python/3.9/bin"
+  export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+  export no_proxy="*"
+  export PATH=$PATH:"/opt/homebrew/opt/openssl@3/bin"
+  export LDFLAGS="-L/opt/homebrew/opt/openssl@3/lib"
+  export CPPFLAGS="-I/opt/homebrew/opt/openssl@3/include"
+  export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
+
+  # Path to terraform.
+  export PATH=$PATH:"$HOME/bin"
+
+  # Path to go.
+  export GOPATH=/bin
+  export PATH=$PATH:$GOROOT/bin
+  export GOPATH=/opt/homebrew/Cellar/go/1.23.2
+  export GOROOT=/opt/homebrew/Cellar/go/1.23.2/libexec
+
+  # Path to tfswitch.
+  export PATH=$PATH:"$HOME/opt/homebrew/bin/tfswitch"
+
+  # Added by LM Studio CLI (lms)
+  export PATH=$PATH:"/Users/jrollet/.lmstudio/bin"
+
+  # Claud via Bedrock.
+  export CLAUDE_CODE_USE_BEDROCK=1
+  export ANTHROPIC_MODEL='us.anthropic.claude-sonnet-4-20250514-v1:0'
+  export ANTHROPIC_SMALL_FAST_MODEL='us.anthropic.claude-3-5-haiku-20241022-v1:0'
+  export CLAUDE_CODE_MAX_OUTPUT_TOKENS=16384
+  export MAX_THINKING_TOKENS=4096
+
+  export AWS_PROFILE="services" # Whatever is ops-services
+  export AWS_REGION="us-east-1"
+
+  # Automatically activate Ansible virtual environment
+  if [ -d "$HOME/ansible-venv" ]; then
+      source "$HOME/ansible-venv/bin/activate"
+  else
+      echo "Creating Ansible virtual environment..."
+      python3 -m venv ~/ansible-venv
+      source "$HOME/ansible-venv/bin/activate"
+      echo "Virtual environment created and activated."
+  fi
+fi
+
