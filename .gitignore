@@ -16,7 +16,10 @@ private/
 /.config/github-copilot
 
 # Ignore claude configs
-/.claude
+/.claude/projects/
+/.claude/shell-snapshots/
+/.claude/statsig/
+/.claude/todos/
 
 # Ignore logs and temporary files
 *.log
