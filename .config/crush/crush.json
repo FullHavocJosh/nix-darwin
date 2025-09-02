@@ -1,22 +1,136 @@
 {
-  "providers": {
-    "openrouter": {
-      "name": "OpenRouter",
-      "base_url": "https://openrouter.ai/api/v1/",
-      "type": "openai",
-      "api_key_env": "OPENROUTER_API_KEY",
-      "models": [
-        {
-          "name": "Claude Sonnet 4",
-          "id": "anthropic/claude-3.5-sonnet",
-          "context_window": 200000,
-          "default_max_tokens": 16384
-        }
-      ]
+  "provider": "bedrock",
+  "permissions": {
+    "allow": [
+      "Bash(npm run lint)",
+      "Bash(npm run test:*)",
+      "Bash(git: *)",
+      "Bash(cat *)",
+      "Bash(brew search *)",
+      "Bash(brew list *)",
+      "Bash(nix *)",
+      "Bash(darwin-rebuild *)",
+      "Bash(ansible --version)",
+      "Bash(ansible-playbook --check *)",
+      "Bash(ansible-playbook --syntax-check *)",
+      "Bash(ansible-lint *)",
+      "Bash(ansible-inventory *)",
+      "Bash(terraform init)",
+      "Bash(terraform validate)",
+      "Bash(terraform plan *)",
+      "Bash(terraform fmt *)",
+      "Bash(terraform show *)",
+      "Bash(terraform state list)",
+      "Bash(terraform state show *)",
+      "Bash(terraform version)",
+      "Bash(go build *)",
+      "Bash(go test *)",
+      "Bash(go mod *)",
+      "Bash(go version)",
+      "Bash(python -m py_compile *)",
+      "Bash(python -m pytest *)",
+      "Bash(python --version)",
+      "Bash(cargo build)",
+      "Bash(cargo test *)",
+      "Bash(cargo check *)",
+      "Bash(cargo --version)",
+      "Read(~/pscloudops)",
+      "Read(~/nix-darwin)"
+    ],
+    "deny": [
+      "Bash(curl:*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)"
+    ]
+  },
+  "includeCoAuthoredBy": false,
+  "mcp": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/jrollet/nix-darwin"
+      ],
+      "type": "stdio"
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-memory"],
+      "type": "stdio"
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-sequential-thinking"],
+      "type": "stdio"
+    },
+    "github": {
+      "command": "npx",
+      "args": ["@edjl/github-mcp"],
+      "type": "stdio"
+    },
+    "terraform": {
+      "command": "npx",
+      "args": ["terraform-mcp-server"],
+      "type": "stdio"
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "type": "stdio"
+    },
+    "aws-core-mcp-server": {
+      "command": "uvx",
+      "args": ["awslabs.core-mcp-server@latest"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "type": "stdio"
+    },
+    "aws-documentation-mcp": {
+      "command": "uvx",
+      "args": ["awslabs.aws-documentation-mcp-server@latest"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR",
+        "AWS_DOCUMENTATION_PARTITION": "aws"
+      },
+      "type": "stdio"
+    },
+    "aws-eks-mcp-server": {
+      "command": "uvx",
+      "args": ["awslabs.eks-mcp-server@latest"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "type": "stdio"
+    },
+    "aws-diagram-mcp-server": {
+      "command": "uvx",
+      "args": ["awslabs.aws-diagram-mcp-server@latest"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "type": "stdio"
+    },
+    "aws-terraform-mcp": {
+      "command": "uvx",
+      "args": ["awslabs.terraform-mcp-server@latest"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "type": "stdio"
+    },
+    "mcp-server-chart": {
+      "command": "npx",
+      "args": ["-y", "@antv/mcp-server-chart"],
+      "type": "stdio"
+    },
+    "iterm-mcp": {
+      "command": "npx",
+      "args": ["-y", "iterm-mcp"],
+      "type": "stdio"
     }
   },
-  "default_provider": "openrouter",
-  "default_model": "Claude Sonnet 4",
   "lsp": {
     "ansible": {
       "command": "ansible-language-server",
@@ -47,6 +161,9 @@
     "yaml": {
       "command": "yaml-language-server",
       "args": ["--stdio"]
+    },
+    "go": {
+      "command": "gopls"
     }
   }
 }

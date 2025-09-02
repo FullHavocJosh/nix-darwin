@@ -69,6 +69,7 @@
       "python-lsp-server"
       "typescript-language-server"
       "yaml-language-server"
+      "gopls"
       "crush"
     ];
     # Install Brew Casks
