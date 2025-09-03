@@ -71,6 +71,7 @@
       "yaml-language-server"
       "gopls"
       "crush"
+      "awscli"
     ];
     # Install Brew Casks
     casks = [
@@ -78,6 +79,8 @@
       "alacritty"
       "balenaetcher"
       "betterdisplay"
+      "claude"
+      "claude-code"
       "font-jetbrains-mono-nerd-font"
       "font-hack-nerd-font"
       "ghostty"

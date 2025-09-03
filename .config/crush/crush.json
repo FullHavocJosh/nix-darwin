@@ -48,10 +48,7 @@
   "mcp": {
     "filesystem": {
       "command": "npx",
-      "args": [
-        "@modelcontextprotocol/server-filesystem",
-        "/Users/jrollet/nix-darwin"
-      ],
+      "args": ["@modelcontextprotocol/server-filesystem", "~/nix-darwin"],
       "type": "stdio"
     },
     "memory": {
@@ -139,6 +136,9 @@
       "command": "docker-langserver",
       "args": ["--stdio"]
     },
+    "go": {
+      "command": "gopls"
+    },
     "lua": {
       "command": "lua-language-server"
     },
@@ -158,7 +158,8 @@
       "args": ["--stdio"]
     },
     "go": {
-      "command": "gopls"
+      "command": "gopls",
+      "args": ["-mode=stdio"]
     }
   }
 }

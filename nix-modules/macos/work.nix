@@ -34,14 +34,9 @@
     ];
     # Install Brew Formulas
     brews = [
-      "awscli"
-      "graphviz"
-      "uv"
     ];
     # Install Brew Casks
     casks = [
-      "claude"
-      "claude-code"
       "citrix-workspace"
       "lastpass"
       "mqtt-explorer"
