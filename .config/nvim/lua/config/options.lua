@@ -32,6 +32,9 @@ vim.opt.backspace = "indent,eol,start"
 -- Clipboard
 vim.opt.clipboard:append("unnamedplus")
 
+-- Autoreload files
+vim.opt.autoread = true
+
 -- Splitting windows
 vim.opt.splitright = true
 vim.opt.splitbelow = true
