@@ -24,9 +24,28 @@ precmd() {
 # Aliases (SSH, development shortcuts, common commands)
 [ -f ~/.zshrc_aliases ] && source ~/.zshrc_aliases
 
-# External tools integration (atuin, fzf, oh-my-posh, zoxide)
-[ -f ~/.zshrc_tools ] && source ~/.zshrc_tools
-
 # Custom functions
 [ -f ~/.zshrc_functions ] && source ~/.zshrc_functions
+
+# Enable atuin.
+export ATUIN_NOBIND="true"
+eval "$(atuin init zsh)"
+bindkey '^a' atuin-search
+
+# Enable fzf.
+eval "$(fzf --zsh)"
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+# Enable oh-my-posh.
+if [ "$TERM_PROGRAM" != "Apple_Terminal" ]; then
+  eval "$(oh-my-posh init zsh)"
+fi
+eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/zen.toml)"
+
+# Enable zoxide.
+eval "$(zoxide init zsh)"
+
+# Added by LM Studio CLI (lms)
+export PATH="$PATH:/Users/havoc/.lmstudio/bin"
+# End of LM Studio CLI section
 

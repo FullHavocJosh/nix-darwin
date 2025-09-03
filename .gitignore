@@ -12,14 +12,18 @@ private/
 *bak
 *.backup
 
-# Ignore coplit configs
+# Ignore coplit folders
 /.config/github-copilot
 
-# Ignore claude configs
+# Ignore claude folders
 /.claude/projects/
 /.claude/shell-snapshots/
 /.claude/statsig/
 /.claude/todos/
+/.claude/idle/
+
+# Ignore crush folders
+/.config/crush/commands/
 
 # Ignore logs and temporary files
 *.log
