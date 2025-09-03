@@ -26,6 +26,9 @@ if [[ "$(uname)" == "Darwin" ]]; then
   # Path to terraform.
   export PATH=$PATH:"$HOME/bin"
 
+  # Path to local binaries.
+  export PATH=$PATH:"$HOME/.local/bin"
+
   # Path to go.
   export GOPATH=/bin
   export PATH=$PATH:$GOROOT/bin

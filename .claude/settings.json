@@ -3,7 +3,7 @@
     "allow": [
       "Bash(npm run lint)",
       "Bash(npm run test:*)",
-      "Bash(git: *)",
+      "Bash(git *)",
       "Bash(cat *)",
       "Bash(brew search *)",
       "Bash(brew list *)",
@@ -35,128 +35,12 @@
       "Read(~/nix-darwin)"
     ],
     "deny": [
-      "Bash(curl:*)",
+      "Bash(curl *)",
       "Read(./.env)",
       "Read(./.env.*)",
       "Read(./secrets/**)"
     ]
   },
   "includeCoAuthoredBy": false,
-  "installMethod": "brew",
-  "mcp": {
-    "filesystem": {
-      "command": "npx",
-      "args": [
-        "@modelcontextprotocol/server-filesystem",
-        "/Users/jrollet/nix-darwin"
-      ],
-      "type": "stdio"
-    },
-    "memory": {
-      "command": "npx",
-      "args": ["@modelcontextprotocol/server-memory"],
-      "type": "stdio"
-    },
-    "sequential-thinking": {
-      "command": "npx",
-      "args": ["@modelcontextprotocol/server-sequential-thinking"],
-      "type": "stdio"
-    },
-    "github": {
-      "command": "npx",
-      "args": ["@edjl/github-mcp"],
-      "type": "stdio"
-    },
-    "terraform": {
-      "command": "npx",
-      "args": ["terraform-mcp-server"],
-      "type": "stdio"
-    },
-    "context7": {
-      "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp"],
-      "type": "stdio"
-    },
-    "aws-core-mcp-server": {
-      "command": "uvx",
-      "args": ["awslabs.core-mcp-server@latest"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      },
-      "type": "stdio"
-    },
-    "aws-documentation-mcp": {
-      "command": "uvx",
-      "args": ["awslabs.aws-documentation-mcp-server@latest"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR",
-        "AWS_DOCUMENTATION_PARTITION": "aws"
-      },
-      "type": "stdio"
-    },
-    "aws-eks-mcp-server": {
-      "command": "uvx",
-      "args": ["awslabs.eks-mcp-server@latest"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      },
-      "type": "stdio"
-    },
-    "aws-diagram-mcp-server": {
-      "command": "uvx",
-      "args": ["awslabs.aws-diagram-mcp-server@latest"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      },
-      "type": "stdio"
-    },
-    "aws-terraform-mcp": {
-      "command": "uvx",
-      "args": ["awslabs.terraform-mcp-server@latest"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      },
-      "type": "stdio"
-    },
-    "mcp-server-chart": {
-      "command": "npx",
-      "args": ["-y", "@antv/mcp-server-chart"],
-      "type": "stdio"
-    }
-  },
-  "lsp": {
-    "ansible": {
-      "command": "ansible-language-server",
-      "args": ["--stdio"]
-    },
-    "bash": {
-      "command": "bash-language-server",
-      "args": ["start"]
-    },
-    "dockerfile": {
-      "command": "docker-langserver",
-      "args": ["--stdio"]
-    },
-    "lua": {
-      "command": "lua-language-server"
-    },
-    "python": {
-      "command": "pylsp"
-    },
-    "terraform": {
-      "command": "terraform-ls",
-      "args": ["serve"]
-    },
-    "typescript": {
-      "command": "typescript-language-server",
-      "args": ["--stdio"]
-    },
-    "yaml": {
-      "command": "yaml-language-server",
-      "args": ["--stdio"]
-    },
-    "go": {
-      "command": "gopls"
-    }
-  }
+  "installMethod": "brew"
 }

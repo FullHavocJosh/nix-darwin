@@ -168,7 +168,11 @@ alt-shift-semicolon = 'mode service'
 
 alt-shift-r = 'mode resize'
 
-
+# Window Sepecific Settings.
+[[on-window-detected]]
+if.app-id = 'app.zen-browser.zen'
+if.window-title-regex-substring = 'Picture-in-Picture'
+run = ['layout floating']
 
 # 'resize' binding mode declaration.
 [mode.resize.binding]

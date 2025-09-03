@@ -6,6 +6,7 @@
       "Bash(npm run test:*)",
       "Bash(git: *)",
       "Bash(cat *)",
+      "Bash(view *)",
       "Bash(brew search *)",
       "Bash(brew list *)",
       "Bash(nix *)",
