@@ -34,6 +34,8 @@
     ];
     # Install Brew Formulas
     brews = [
+      "k9s"
+      "kubectl"
     ];
     # Install Brew Casks
     casks = [

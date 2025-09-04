@@ -38,6 +38,9 @@ if [[ "$(uname)" == "Darwin" ]]; then
   # Path to tfswitch.
   export PATH=$PATH:"$HOME/opt/homebrew/bin/tfswitch"
 
+  # k9s config directory
+  export K9S_CONFIG_DIR="$HOME/.config/k9s"
+
   # Added by LM Studio CLI (lms)
   export PATH=$PATH:"/Users/jrollet/.lmstudio/bin"
 

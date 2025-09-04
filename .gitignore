@@ -25,6 +25,9 @@ private/
 # Ignore crush folders
 /.config/crush/commands/
 
+# Ignore k9s clusters
+/.config/k9s/clusters/
+
 # Ignore logs and temporary files
 *.log
 *.tmp
