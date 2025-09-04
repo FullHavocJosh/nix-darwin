@@ -20,6 +20,20 @@ return {
 			},
 			renderer = {
 				group_empty = true,
+				highlight_opened_files = "all",
+				highlight_modified = "name",
+				icons = {
+					show = {
+						file = true,
+						folder = true,
+						folder_arrow = true,
+						git = true,
+						modified = true,
+					},
+					glyphs = {
+						modified = "●",
+					},
+				},
 			},
 			filters = {
 				dotfiles = false,
@@ -28,6 +42,19 @@ return {
 				open_file = {
 					quit_on_open = false,
 				},
+			},
+			filesystem_watchers = {
+				enable = true,
+				debounce_delay = 50,
+				ignore_dirs = {
+					"node_modules",
+					".git",
+				},
+			},
+			modified = {
+				enable = true,
+				show_on_dirs = true,
+				show_on_open_dirs = true,
 			},
 		})
 		

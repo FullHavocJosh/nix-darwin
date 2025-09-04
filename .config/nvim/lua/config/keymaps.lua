@@ -46,7 +46,8 @@ keymap.set("n", "<leader>-", "<C-x>") -- Decrement
 -- keymap.set("n", "<leader>sm", ":MaximizerToggle<CR>") -- Toggle split window maximization
 
 -- Nvim-tree
-keymap.set("n", "<leader>e", ":NvimTreeToggle<CR>") -- Toggle file explorer
+keymap.set("n", "<leader>e", ":NvimTreeFocus<CR>") -- Focus file explorer (opens if closed)
+keymap.set("n", "<leader>E", ":NvimTreeToggle<CR>") -- Toggle file explorer (open/close)
 
 -- Telescope
 keymap.set("n", "<leader>f", "<cmd>Telescope find_files<cr>") -- Find files within current working directory, respects .gitignore
@@ -61,16 +62,21 @@ keymap.set("n", "<leader>gc", "<cmd>Telescope git_bcommits<cr>") -- List git com
 -- keymap.set("n", "<leader>gb", "<cmd>Telescope git_branches<cr>") -- List git branches (use <cr> to checkout) ["gb" for git branch]
 keymap.set("n", "<leader>gs", "<cmd>Telescope git_status<cr>") -- List current changes per file with diff preview ["gs" for git status]
 
--- Comment
--- keymap.set(
---	"n",
---	"<D-/>",
---	'<cmd>lua require("Comment.api").toggle.linewise.current()<CR>',
---	{ desc = "Toggle comment for the current line" }
--- )
--- keymap.set(
---	"v",
---	"<D-/>",
---	'<ESC><cmd>lua require("Comment.api").toggle.linewise(vim.fn.visualmode())<CR>',
---	{ desc = "Toggle comment for selected lines" }
--- )
+-- LSP Keybinds
+keymap.set("n", "gd", "<cmd>Lspsaga goto_definition<CR>") -- Go to definition
+keymap.set("n", "K", "<cmd>Lspsaga hover_doc<CR>") -- Show hover documentation
+keymap.set("n", "<leader>ca", "<cmd>Lspsaga code_action<CR>") -- Code actions
+keymap.set("n", "<leader>rn", "<cmd>Lspsaga rename<CR>") -- Rename symbol
+keymap.set("n", "<leader>d", "<cmd>Lspsaga show_line_diagnostics<CR>") -- Show line diagnostics
+
+-- Buffer navigation
+keymap.set("n", "<leader>x", ":bdelete<CR>") -- Close current buffer
+keymap.set("n", "<Tab>", ":BufferLineCycleNext<CR>") -- Next buffer
+keymap.set("n", "<S-Tab>", ":BufferLineCyclePrev<CR>") -- Previous buffer
+keymap.set("n", "<leader>1", ":BufferLineGoToBuffer 1<CR>") -- Go to buffer 1
+keymap.set("n", "<leader>2", ":BufferLineGoToBuffer 2<CR>") -- Go to buffer 2
+keymap.set("n", "<leader>3", ":BufferLineGoToBuffer 3<CR>") -- Go to buffer 3
+keymap.set("n", "<leader>4", ":BufferLineGoToBuffer 4<CR>") -- Go to buffer 4
+keymap.set("n", "<leader>5", ":BufferLineGoToBuffer 5<CR>") -- Go to buffer 5
+
+

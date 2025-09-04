@@ -7,11 +7,19 @@ return {
 	config = function()
 		require("catppuccin").setup({
 			style = "mocha",
-			transparent_backgroundansparent_backgrond = true,
-			telescope = true,
-			nvimtree = {
-				enabled = true,
-				transparent_panel = true,
+			transparent_background = true,
+			integrations = {
+				telescope = true,
+				nvimtree = {
+					enabled = true,
+					transparent_panel = true,
+				},
+				bufferline = true,
+				which_key = true,
+				lsp_saga = true,
+				treesitter = true,
+				cmp = true,
+				gitsigns = true,
 			},
 			overrides = function(catppuccin)
 				return {
@@ -20,7 +28,6 @@ return {
 					iCursor = { bg = catppuccin.red },
 				}
 			end,
-
 		})
 		require("catppuccin")
 	end,
