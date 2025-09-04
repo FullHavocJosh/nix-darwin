@@ -1,3 +1,6 @@
+[Keyboard]
+KeyRepeat=nothing
+
 [Libinput][10248][513][ASUF1204:00 2808:0201 Mouse]
 NaturalScroll=true
 PointerAcceleration=-0.800

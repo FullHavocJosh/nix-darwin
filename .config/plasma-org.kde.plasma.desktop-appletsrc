@@ -20,7 +20,7 @@ immutability=1
 lastScreen=0
 location=0
 plugin=org.kde.plasma.folder
-wallpaperplugin=org.kde.image
+wallpaperplugin=a2n.blur
 
 [Containments][1][Applets][65][Configuration][Appearance]
 chartFace=org.kde.ksysguard.textonly
@@ -49,10 +49,15 @@ DialogHeight=540
 DialogWidth=720
 
 [Containments][1][General]
-positions={"1280x800":[],"1463x914":[],"1707x1067":[],"2048x1280":[],"2560x1600":[],"3072x1728":[],"3072x2048":[]}
+positions={"1280x800":[],"1463x914":[],"1707x1067":[],"2048x1280":[],"2259x1506":[],"2560x1600":[],"3072x1728":[],"3072x2048":[]}
+
+[Containments][1][Wallpaper][a2n.blur][General]
+ActiveColorColor=#000000
+Image=/home/havoc/Downloads/wallhaven-kxodv1.jpg
+SlidePaths=/home/havoc/.local/share/wallpapers/,/usr/share/wallpapers/
 
 [Containments][1][Wallpaper][org.kde.image][General]
-Image=/home/havoc/.wallpapers/wallhaven-1k9m9w.jpg
+Image=/home/havoc/Downloads/wallhaven-kxodv1.jpg
 PreviewImage=/home/havoc/.wallpapers/wallhaven-1k9m9w.jpg
 SlidePaths=/home/havoc/.local/share/wallpapers/,/usr/share/wallpapers/
 
@@ -63,13 +68,18 @@ immutability=1
 lastScreen=1
 location=0
 plugin=org.kde.plasma.folder
-wallpaperplugin=org.kde.image
+wallpaperplugin=a2n.blur
 
 [Containments][143][General]
 positions={"2048x1280":[],"2259x1506":[],"3072x2048":[]}
 
+[Containments][143][Wallpaper][a2n.blur][General]
+ActiveColorColor=#000000
+Image=/home/havoc/Downloads/wallhaven-kxodv1.jpg
+SlidePaths=/home/havoc/.local/share/wallpapers/,/usr/share/wallpapers/
+
 [Containments][143][Wallpaper][org.kde.image][General]
-Image=/home/havoc/.wallpapers/wallhaven-1k9m9w.jpg
+Image=/home/havoc/Downloads/wallhaven-kxodv1.jpg
 SlidePaths=/home/havoc/.local/share/wallpapers/,/usr/share/wallpapers/
 
 [Containments][184]
@@ -83,6 +93,9 @@ wallpaperplugin=org.kde.image
 
 [Containments][184][General]
 positions={"2259x1506":[],"3072x2048":[]}
+
+[Containments][184][Wallpaper][org.kde.image][General]
+Image=/home/havoc/Downloads/wallhaven-kxodv1.jpg
 
 [Containments][92]
 activityId=
@@ -191,8 +204,9 @@ immutability=1
 plugin=org.kde.plasma.digitalclock
 
 [Containments][92][Applets][157][Configuration]
-popupHeight=448
-popupWidth=810
+PreloadWeight=55
+popupHeight=549
+popupWidth=909
 
 [Containments][92][Applets][157][Configuration][Appearance]
 enabledCalendarPlugins=astronomicalevents,holidaysevents
@@ -209,16 +223,15 @@ immutability=1
 lastScreen=0
 location=4
 plugin=org.kde.plasma.systemtray
-popupHeight=455
-popupWidth=476
+popupHeight=662
+popupWidth=685
 wallpaperplugin=org.kde.image
 
 [Containments][92][Applets][158][Applets][159][Configuration]
 PreloadWeight=42
 
-[Containments][92][Applets][158][Applets][160]
-immutability=1
-plugin=org.kde.plasma.cameraindicator
+[Containments][92][Applets][158][Applets][160][Configuration]
+PreloadWeight=42
 
 [Containments][92][Applets][158][Applets][161][Configuration]
 PreloadWeight=42
@@ -249,7 +262,7 @@ immutability=1
 plugin=org.kde.plasma.volume
 
 [Containments][92][Applets][158][Applets][169][Configuration]
-PreloadWeight=57
+PreloadWeight=62
 
 [Containments][92][Applets][158][Applets][169][Configuration][General]
 migrated=true
@@ -307,14 +320,14 @@ immutability=1
 plugin=org.kde.plasma.networkmanagement
 
 [Containments][92][Applets][158][Applets][182][Configuration]
-PreloadWeight=60
+PreloadWeight=70
 
 [Containments][92][Applets][158][Applets][183]
 immutability=1
 plugin=org.kde.plasma.brightness
 
 [Containments][92][Applets][158][Applets][183][Configuration]
-PreloadWeight=18
+PreloadWeight=0
 
 [Containments][92][Applets][158][Applets][184]
 immutability=1
@@ -331,8 +344,8 @@ DialogHeight=540
 DialogWidth=720
 
 [Containments][92][Applets][158][General]
-disabledStatusNotifiers=Xwayland Video Bridge_pipewireToXProxy,System Update Monitor
-extraItems=org.kde.plasma.cameraindicator,org.kde.plasma.bluetooth,org.kde.plasma.battery,org.kde.plasma.brightness,org.kde.plasma.networkmanagement,org.kde.plasma.volume
+disabledStatusNotifiers=Xwayland Video Bridge_pipewireToXProxy,System Update Monitor,xdg-desktop-portal-kde,plasmashell_microphone
+extraItems=org.kde.plasma.bluetooth,org.kde.plasma.battery,org.kde.plasma.brightness,org.kde.plasma.networkmanagement,org.kde.plasma.volume
 knownItems=org.kde.plasma.cameraindicator,org.kde.plasma.clipboard,org.kde.plasma.devicenotifier,org.kde.plasma.manage-inputmethod,org.kde.plasma.mediacontroller,org.kde.plasma.notifications,org.kde.kdeconnect,org.kde.plasma.bluetooth,org.kde.plasma.keyboardindicator,org.kde.kscreen,org.kde.plasma.battery,org.kde.plasma.brightness,org.kde.plasma.keyboardlayout,org.kde.plasma.networkmanagement,org.kde.plasma.volume,org.kde.plasma.vault,org.kde.plasma.printmanager,org.kde.plasma.weather
 shownItems=steam
 
@@ -350,18 +363,18 @@ plugin=org.kde.plasma.kickoff
 
 [Containments][92][Applets][177][Configuration]
 PreloadWeight=100
-popupHeight=565
-popupWidth=857
+popupHeight=772
+popupWidth=1066
 
 [Containments][92][Applets][177][Configuration][ConfigDialog]
-DialogHeight=540
+DialogHeight=525
 DialogWidth=720
 
 [Containments][92][Applets][177][Configuration][General]
 alphaSort=true
 appNameFormat=0
 favoritesPortedToKAstats=true
-icon=desktop-environment-kde
+icon=fedora-logo-icon
 primaryActions=3
 showActionButtonCaptions=false
 systemFavorites=lock-screen\\,logout\\,save-session\\,switch-user\\,suspend\\,hibernate\\,reboot\\,shutdown
@@ -382,4 +395,4 @@ boldText=true
 
 [ScreenMapping]
 itemsOnDisabledScreens=
-screenMapping=desktop:/Return.desktop,0,37701787-3e15-44aa-9974-6732068163e1,desktop:/steam.desktop,0,37701787-3e15-44aa-9974-6732068163e1,desktop:/decky_installer.desktop.download,0,37701787-3e15-44aa-9974-6732068163e1
+screenMapping=desktop:/decky_installer.desktop.download,0,37701787-3e15-44aa-9974-6732068163e1,desktop:/Return.desktop,0,37701787-3e15-44aa-9974-6732068163e1,desktop:/steam.desktop,0,37701787-3e15-44aa-9974-6732068163e1
