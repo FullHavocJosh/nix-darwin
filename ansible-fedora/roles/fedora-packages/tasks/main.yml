@@ -1,0 +1,121 @@
+---
+### Development Tools ###
+- name: Install development tools via DNF
+  dnf:
+    name:
+      - ansible
+      - cmake
+      - golang
+      - neovim
+      - python3-devel
+      - python3-pip
+      - python3-setuptools
+      - rust
+      - cargo
+      - nodejs
+      - npm
+      - git
+      - curl
+      - wget
+      - graphviz
+      - make
+      - gcc
+      - gcc-c++
+      - luarocks
+    state: present
+  become: yes
+  tags: ['packages', 'development']
+
+### CLI Tools ###
+- name: Install CLI tools via DNF
+  dnf:
+    name:
+      - fd-find
+      - fzf
+      - ripgrep
+      - btop
+      - fastfetch
+      - tmux
+      - zsh
+      - tree
+      - stow
+      - watch
+      - telnet
+      - tar
+      - gzip
+      - unzip
+      - which
+      - htop
+      - vim
+    state: present
+  become: yes
+  tags: ['packages', 'cli']
+
+### Network Tools ###
+- name: Install network tools
+  dnf:
+    name:
+      - openssh-clients
+      - sshpass
+    state: present
+  become: yes
+  tags: ['packages', 'network']
+
+### Install Flatpak (for GUI apps) ###
+- name: Install Flatpak
+  dnf:
+    name: flatpak
+    state: present
+  become: yes
+  tags: ['packages', 'gui']
+
+- name: Add Flathub repository
+  flatpak_remote:
+    name: flathub
+    state: present
+    flatpakrepo_url: https://flathub.org/repo/flathub.flatpakrepo
+  tags: ['packages', 'gui']
+
+### Language Servers (via pip/npm) ###
+- name: Install Python language server and tools
+  pip:
+    name:
+      - python-lsp-server
+      - ansible-language-server
+    state: present
+  tags: ['packages', 'lsp']
+
+- name: Install Node.js language servers
+  npm:
+    name: "{{ item }}"
+    global: yes
+    state: present
+  loop:
+    - typescript-language-server
+    - bash-language-server
+    - dockerfile-language-server-nodejs
+    - yaml-language-server
+  tags: ['packages', 'lsp']
+
+### Install Go tools ###
+- name: Install Go language server and tools
+  shell: |
+    go install golang.org/x/tools/gopls@latest
+    go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+  environment:
+    GOPATH: "{{ ansible_env.HOME }}/go"
+    PATH: "{{ ansible_env.PATH }}:{{ ansible_env.HOME }}/go/bin"
+  tags: ['packages', 'go']
+
+### Install Rust tools ###
+- name: Install Rust language server
+  shell: rustup component add rust-analyzer
+  tags: ['packages', 'rust']
+
+### Install additional tools via cargo ###
+- name: Install cargo tools
+  shell: cargo install {{ item }}
+  loop:
+    - eza
+    - zoxide
+  tags: ['packages', 'cargo']

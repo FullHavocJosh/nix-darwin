@@ -1,0 +1,11 @@
+---
+- name: Configure Fedora for personal use
+  hosts: all
+  gather_facts: yes
+  become: no
+
+  roles:
+    - { role: fedora-packages, tags: ['packages'] }
+    - { role: system-config, tags: ['system'] }
+    - { role: gui-applications, tags: ['gui'] }
+    - { role: personal-config, tags: ['personal'] }
