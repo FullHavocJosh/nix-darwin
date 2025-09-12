@@ -52,10 +52,13 @@ return {
             },
         })
 
-        -- Format on save
+        -- Format on save (exclude terraform files - handled by LSP)
         vim.api.nvim_create_autocmd("BufWritePre", {
             callback = function()
-                vim.cmd("FormatWrite")
+                local filetype = vim.bo.filetype
+                if filetype ~= "terraform" then
+                    vim.cmd("FormatWrite")
+                end
             end,
         })
     end,

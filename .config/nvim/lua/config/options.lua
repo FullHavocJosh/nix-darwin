@@ -40,6 +40,3 @@ vim.opt.splitright = true
 vim.opt.splitbelow = true
 
 vim.opt.iskeyword:append("-")
-
--- optionally enable 24-bit color
-vim.opt.termguicolors = true

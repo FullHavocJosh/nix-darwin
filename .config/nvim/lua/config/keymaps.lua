@@ -69,6 +69,12 @@ keymap.set("n", "<leader>ca", "<cmd>Lspsaga code_action<CR>") -- Code actions
 keymap.set("n", "<leader>rn", "<cmd>Lspsaga rename<CR>") -- Rename symbol
 keymap.set("n", "<leader>d", "<cmd>Lspsaga show_line_diagnostics<CR>") -- Show line diagnostics
 
+-- Spectre (Find and Replace)
+keymap.set("n", "<leader>s", '<cmd>lua require("spectre").toggle()<CR>') -- Toggle Spectre
+keymap.set("n", "<leader>sw", '<cmd>lua require("spectre").open_visual({select_word=true})<CR>') -- Search current word
+keymap.set("v", "<leader>sw", '<esc><cmd>lua require("spectre").open_visual()<CR>') -- Search current selection
+keymap.set("n", "<leader>sp", '<cmd>lua require("spectre").open_file_search({select_word=true})<CR>') -- Search in current file
+
 -- Buffer navigation
 keymap.set("n", "<leader>x", ":bdelete<CR>") -- Close current buffer
 keymap.set("n", "<Tab>", ":BufferLineCycleNext<CR>") -- Next buffer
