@@ -8,6 +8,9 @@ precmd() {
     echo -ne "\033]0;${USER}@${HOST}:${PWD}\007"
 }
 
+# Enable oh-my-posh.
+eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/nvim-like.toml)"
+
 # Environmental Variables Secure
 [ -f ~/.zshrc_envvars ] && source ~/.zshrc_envvars
 
@@ -35,12 +38,6 @@ bindkey '^a' atuin-search
 # Enable fzf.
 eval "$(fzf --zsh)"
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-
-# Enable oh-my-posh.
-if [ "$TERM_PROGRAM" != "Apple_Terminal" ]; then
-  eval "$(oh-my-posh init zsh)"
-fi
-eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/zen.toml)"
 
 # Enable zoxide.
 eval "$(zoxide init zsh)"
