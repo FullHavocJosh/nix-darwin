@@ -1,9 +1,9 @@
 add_newline = false
 # A minimal left prompt
-format = """$directory$character"""
+format = """$directory$git_branch$git_status $character"""
 palette = "catppuccin_mocha"
 # move the rest of the prompt to the right
-right_format = """$all"""
+right_format = """$aws$golang$python$kubernetes$docker_context$cmd_duration$jobs$battery$time$status$container$shell"""
 command_timeout = 1000
 
 [character]
@@ -11,16 +11,33 @@ vicmd_symbol = "[N] >>>"
 success_symbol = '[➜](bold green)'
 
 [git_branch]
+disabled = false
 format =  '[$symbol$branch(:$remote_branch)]($style)'
 
+[git_status]
+format = '([\[$all_status$ahead_behind\]]($style))'
+style = 'red'
+conflicted = '='
+ahead = '⇡${count}'
+behind = '⇣${count}'
+diverged = '⇕⇡${ahead_count}⇣${behind_count}'
+up_to_date = ''
+untracked = '?'
+stashed = '$'
+modified = '!'
+staged = '+'
+renamed = '»'
+deleted = '✘'
+
 [aws]
-format = '[$symbol$profile:$region]($style)'
+format = '[$symbol(profile: $profile )\[$region\]]($style)'
 disabled = false
 style = 'bold peach'
 symbol = " "
 region_aliases = { "us-east-1" = "ue1", "us-west-2" = "uw2", "eu-west-1" = "ew1" }
 
 [golang]
+disabled = true
 format = '[ ](bold cyan)'
 
 [python]
