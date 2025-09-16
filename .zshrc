@@ -8,8 +8,8 @@ precmd() {
     echo -ne "\033]0;${USER}@${HOST}:${PWD}\007"
 }
 
-# Enable oh-my-posh.
-eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/nvim-like.toml)"
+# Enable starship.
+eval "$(starship init zsh)"
 
 # Environmental Variables Secure
 [ -f ~/.zshrc_envvars ] && source ~/.zshrc_envvars
@@ -29,6 +29,9 @@ eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/nvim-like.toml)"
 
 # Custom functions
 [ -f ~/.zshrc_functions ] && source ~/.zshrc_functions
+
+# File descriptor limits fix for AWS MCP servers
+[ -f ~/.zshrc_ulimit ] && source ~/.zshrc_ulimit
 
 # Enable atuin.
 export ATUIN_NOBIND="true"

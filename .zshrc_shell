@@ -11,7 +11,7 @@ source "${ZINIT_HOME}/zinit.zsh"
 
 zinit snippet OMZP::git
 zinit snippet OMZP::sudo
-zinit snippet OMZP::aws
+# zinit snippet OMZP::aws  # Disabled - using Starship for AWS display
 zinit snippet OMZP::kubectl
 zinit snippet OMZP::kubectx
 zinit snippet OMZP::rust
@@ -32,6 +32,9 @@ export VISUAL=vim
 
 # Fix for password store
 export PASSWORD_STORE_GPG_OPTS='--no-throw-keyids'
+
+# Increase file descriptor limits for AWS MCP servers and other tools
+ulimit -n 4096
 
 export NVM_DIR="$HOME/.nvm"
 export NVM_SOURCE="/usr/share/nvm"

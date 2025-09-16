@@ -8,12 +8,34 @@
 - **Format Nix**: `nixfmt *.nix nix-modules/**/*.nix`
 - **Lint**: `ansible-lint` (for Ansible playbooks)
 
+## Crush CLI Commands
+- **Smart launch**: `crush` - Automatically checks AWS SSO status and only authenticates if needed for Bedrock Claude Sonnet access
+- **Manual AWS SSO**: `asl` - Force AWS SSO login
+- **Profile switch**: `sso <profile>` - Login and switch to specific AWS profile
+- **Profile switch (no login)**: `ssoswitch <profile>` - Switch profile using existing session
+
 ## Ansible Commands (Fedora Linux)
 - **Deploy personal**: `cd ansible-fedora && ansible-playbook -i inventory/fedora playbooks/fedora-personal.yml --ask-become-pass`
 - **Deploy work**: `cd ansible-fedora && ansible-playbook -i inventory/fedora playbooks/fedora-work.yml --ask-become-pass`
 - **Deploy base only**: `cd ansible-fedora && ansible-playbook -i inventory/fedora playbooks/fedora-base.yml --ask-become-pass`
 - **Specific tags**: `cd ansible-fedora && ansible-playbook -i inventory/fedora playbooks/fedora-personal.yml --tags packages --ask-become-pass`
 - **Lint playbooks**: `cd ansible-fedora && ansible-lint playbooks/`
+
+## Troubleshooting
+
+### AWS MCP Transport Errors
+If AWS MCP servers fail with "transport error" or "Too many open files":
+1. **Root cause**: macOS default file descriptor limit (256) is too low for uvx/Python
+2. **Fix applied**: Added `ulimit -n 4096` to `.zshrc_ulimit` (sourced in `.zshrc`)
+3. **Test fix**: `exec zsh -c "ulimit -n 4096; uvx awslabs.core-mcp-server@latest --version"`
+4. **Permanent**: Restart terminal or run `source ~/.zshrc` to apply
+
+### Neovim Terraform Syntax Highlighting
+If `.tf` files don't have syntax highlighting:
+1. **Root cause**: Missing `terraform` treesitter parser and filetype detection
+2. **Fix applied**: Added `terraform` parser to treesitter config + filetype detection
+3. **Restart nvim**: `:TSUpdate terraform` then restart nvim
+4. **Verify**: `:set filetype?` in a .tf file should show `filetype=terraform`
 
 ## Code Style & Conventions
 - **File structure**: Modular approach with separate configs (personal.nix, work.nix, packages.nix)

@@ -36,6 +36,7 @@
       "neovim"
       "mas"
       "oh-my-posh"
+      "starship"
       "opentofu"
       "prettier"
       "python3"

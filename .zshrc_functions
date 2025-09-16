@@ -9,3 +9,44 @@ function asc() {
     echo "AWS environment variables set"
   fi
 }
+
+# Smart AWS authentication for Bedrock Claude Sonnet
+function crush() {
+    local target_profile="services"
+    local needs_sso_login=false
+    local needs_profile_switch=false
+    
+    # Check if SSO session is valid
+    if ! aws sts get-caller-identity --profile "$target_profile" >/dev/null 2>&1; then
+        needs_sso_login=true
+    fi
+    
+    # Check if correct profile is set
+    if [[ "$AWS_PROFILE" != "$target_profile" ]]; then
+        needs_profile_switch=true
+    fi
+    
+    # Only run commands if needed
+    if $needs_sso_login; then
+        echo "🔐 AWS SSO session expired, logging in..."
+        aws sso login --sso-session aws || return 1
+    fi
+    
+    if $needs_profile_switch; then
+        echo "🔄 Switching to $target_profile profile..."
+        export AWS_PROFILE="$target_profile"
+        unset AWS_ACCESS_KEY_ID
+        unset AWS_SECRET_ACCESS_KEY
+    fi
+    
+    # Verify access to Bedrock
+    if aws bedrock list-foundation-models --region us-east-1 >/dev/null 2>&1; then
+        echo "✅ AWS Bedrock access confirmed for Claude Sonnet"
+    else
+        echo "❌ Unable to access AWS Bedrock - check permissions"
+        return 1
+    fi
+    
+    # Launch crush
+    command crush "$@"
+}

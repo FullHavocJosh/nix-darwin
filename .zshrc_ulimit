@@ -1,0 +1,3 @@
+# Increase file descriptor limits for AWS MCP servers and other tools
+# This fixes "Too many open files" errors when running uvx with AWS MCP servers
+ulimit -n 4096
