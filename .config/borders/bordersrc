@@ -1,7 +1,6 @@
 #!/bin/bash
 
 options=(
-  style=round
   width=5.0
   hidpi=on
   active_color=glow\(0xFFCBA6F7\)
