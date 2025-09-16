@@ -52,7 +52,7 @@
   "mcp": {
     "filesystem": {
       "command": "npx",
-      "args": ["@modelcontextprotocol/server-filesystem", "~/nix-darwin"],
+      "args": ["@modelcontextprotocol/server-filesystem", "~/nix-darwin", "~/pscloudops"],
       "type": "stdio"
     },
     "memory": {
@@ -88,26 +88,9 @@
       },
       "type": "stdio"
     },
-    "aws-documentation-mcp": {
-      "command": "uvx",
-      "args": ["awslabs.aws-documentation-mcp-server@latest"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR",
-        "AWS_DOCUMENTATION_PARTITION": "aws"
-      },
-      "type": "stdio"
-    },
     "aws-eks-mcp-server": {
       "command": "uvx",
       "args": ["awslabs.eks-mcp-server@latest"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      },
-      "type": "stdio"
-    },
-    "aws-diagram-mcp-server": {
-      "command": "uvx",
-      "args": ["awslabs.aws-diagram-mcp-server@latest"],
       "env": {
         "FASTMCP_LOG_LEVEL": "ERROR"
       },

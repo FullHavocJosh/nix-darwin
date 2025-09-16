@@ -28,12 +28,12 @@ function crush() {
     
     # Only run commands if needed
     if $needs_sso_login; then
-        echo "🔐 AWS SSO session expired, logging in..."
+        echo "AWS SSO session expired, logging in..."
         aws sso login --sso-session aws || return 1
     fi
     
     if $needs_profile_switch; then
-        echo "🔄 Switching to $target_profile profile..."
+        echo "Switching to $target_profile profile..."
         export AWS_PROFILE="$target_profile"
         unset AWS_ACCESS_KEY_ID
         unset AWS_SECRET_ACCESS_KEY
@@ -41,9 +41,9 @@ function crush() {
     
     # Verify access to Bedrock
     if aws bedrock list-foundation-models --region us-east-1 >/dev/null 2>&1; then
-        echo "✅ AWS Bedrock access confirmed for Claude Sonnet"
+        echo "AWS Bedrock access confirmed for Claude Sonnet"
     else
-        echo "❌ Unable to access AWS Bedrock - check permissions"
+        echo "Unable to access AWS Bedrock - check permissions"
         return 1
     fi
     
