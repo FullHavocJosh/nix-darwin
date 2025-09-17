@@ -12,13 +12,13 @@ return {
             require("luasnip.loaders.from_vscode").lazy_load()
 
             -- Optional: Keybindings for expanding and jumping in snippets
-            vim.keymap.set({ "i", "s" }, "<C-l>", function()
+            vim.keymap.set({ "i", "s" }, "<C-f>", function()
                 if luasnip.expand_or_jumpable() then
                     luasnip.expand_or_jump()
                 end
             end, { silent = true })
 
-            vim.keymap.set({ "i", "s" }, "<C-h>", function()
+            vim.keymap.set({ "i", "s" }, "<C-b>", function()
                 if luasnip.jumpable(-1) then
                     luasnip.jump(-1)
                 end

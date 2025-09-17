@@ -85,4 +85,7 @@ keymap.set("n", "<leader>3", ":BufferLineGoToBuffer 3<CR>") -- Go to buffer 3
 keymap.set("n", "<leader>4", ":BufferLineGoToBuffer 4<CR>") -- Go to buffer 4
 keymap.set("n", "<leader>5", ":BufferLineGoToBuffer 5<CR>") -- Go to buffer 5
 
+-- Tmux integration - pass through Ctrl+t to tmux
+keymap.set("n", "<C-t>", "<C-t>", { noremap = false, silent = true })
+
 

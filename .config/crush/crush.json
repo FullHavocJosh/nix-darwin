@@ -50,11 +50,6 @@
   },
   "includeCoAuthoredBy": false,
   "mcp": {
-    "filesystem": {
-      "command": "npx",
-      "args": ["@modelcontextprotocol/server-filesystem", "~/nix-darwin", "~/pscloudops"],
-      "type": "stdio"
-    },
     "memory": {
       "command": "npx",
       "args": ["@modelcontextprotocol/server-memory"],
