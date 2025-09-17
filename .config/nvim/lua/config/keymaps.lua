@@ -28,10 +28,12 @@ keymap.set("n", "<leader>+", "<C-a>") -- Increment
 keymap.set("n", "<leader>-", "<C-x>") -- Decrement
 
 -- Window management
--- keymap.set("n", "<leader>sv", "<C-w>v") -- Split window vertically
--- keymap.set("n", "<leader>sh", "<C-w>s") -- Split window horizontally
--- keymap.set("n", "<leader>se", "<C-w>=") -- Make split windows equal width & height
--- keymap.set("n", "<leader>sx", ":close<CR>") -- Close current split window
+keymap.set("n", "<leader>-", "<C-w>s") -- Split window horizontally
+keymap.set("n", "<leader>/", "<C-w>v") -- Split window vertically
+keymap.set("n", "<leader>=", "<C-w>=") -- Make split windows equal width & height
+keymap.set("n", "<leader>w", ":close<CR>") -- Close current split window
+keymap.set("n", "<leader>+", "<C-w>+") -- Increase split height
+keymap.set("n", "<leader>_", "<C-w>-") -- Decrease split height
 
 -- keymap.set("n", "<leader>to", ":tabnew<CR>") -- Open new tab
 -- keymap.set("n", "<leader>tx", ":tabclose<CR>") -- Close current tab

@@ -34,9 +34,7 @@ function crush() {
     
     if $needs_profile_switch; then
         echo "Switching to $target_profile profile..."
-        export AWS_PROFILE="$target_profile"
-        unset AWS_ACCESS_KEY_ID
-        unset AWS_SECRET_ACCESS_KEY
+        asc "$target_profile"
     fi
     
     # Verify access to Bedrock

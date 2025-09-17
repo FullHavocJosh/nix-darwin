@@ -37,6 +37,18 @@ If `.tf` files don't have syntax highlighting:
 3. **Restart nvim**: `:TSUpdate terraform` then restart nvim
 4. **Verify**: `:set filetype?` in a .tf file should show `filetype=terraform`
 
+## Tmux Keybindings
+- **Prefix**: `Ctrl-t`
+- **Navigation**: `Ctrl-h/j/k/l` (shared with nvim via vim-tmux-navigator)
+- **Split horizontally**: `Ctrl-t + /`
+- **Split vertically**: `Ctrl-t + -`
+- **Increase pane size**: `Ctrl-t + +`
+- **Decrease pane size**: `Ctrl-t + _`
+- **Balance pane sizes**: `Ctrl-t + =`
+- **Toggle zoom**: `Ctrl-t + z`
+- **SessionX**: `Ctrl-t + o`
+- **Floating window**: `Ctrl-t + p`
+
 ## Code Style & Conventions
 - **File structure**: Modular approach with separate configs (personal.nix, work.nix, packages.nix)
 - **Nix formatting**: Use nixfmt for consistent formatting
