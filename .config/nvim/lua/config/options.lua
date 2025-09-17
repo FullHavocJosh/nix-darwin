@@ -40,3 +40,6 @@ vim.opt.splitright = true
 vim.opt.splitbelow = true
 
 vim.opt.iskeyword:append("-")
+
+-- Command line height
+vim.opt.cmdheight = 0
