@@ -16,11 +16,11 @@ private/
 /.config/github-copilot
 
 # Ignore claude folders
-/.claude/projects/
-/.claude/shell-snapshots/
-/.claude/statsig/
-/.claude/todos/
-/.claude/idle/
+/.claude/projects
+/.claude/shell-snapshots
+/.claude/statsig
+/.claude/todos
+/.claude/idle
 
 # Ignore crush folders
 /.config/crush/commands/
