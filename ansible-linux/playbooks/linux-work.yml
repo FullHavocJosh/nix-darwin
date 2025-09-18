@@ -1,0 +1,11 @@
+---
+- name: Configure Linux for work use
+  hosts: all
+  gather_facts: yes
+  become: no
+
+  roles:
+    - { role: linux-packages, tags: ['packages'] }
+    - { role: system-config, tags: ['system'] }
+    - { role: gui-applications, tags: ['gui'] }
+    - { role: work-config, tags: ['work'] }

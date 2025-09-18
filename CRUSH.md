@@ -14,12 +14,13 @@
 - **Profile switch**: `sso <profile>` - Login and switch to specific AWS profile
 - **Profile switch (no login)**: `ssoswitch <profile>` - Switch profile using existing session
 
-## Ansible Commands (Fedora Linux)
-- **Deploy personal**: `cd ansible-fedora && ansible-playbook -i inventory/fedora playbooks/fedora-personal.yml --ask-become-pass`
-- **Deploy work**: `cd ansible-fedora && ansible-playbook -i inventory/fedora playbooks/fedora-work.yml --ask-become-pass`
-- **Deploy base only**: `cd ansible-fedora && ansible-playbook -i inventory/fedora playbooks/fedora-base.yml --ask-become-pass`
-- **Specific tags**: `cd ansible-fedora && ansible-playbook -i inventory/fedora playbooks/fedora-personal.yml --tags packages --ask-become-pass`
-- **Lint playbooks**: `cd ansible-fedora && ansible-lint playbooks/`
+## Ansible Commands (Linux - Fedora/Ubuntu)
+- **Deploy personal**: `cd ansible-linux && ansible-playbook -i inventory/linux playbooks/linux-personal.yml --ask-become-pass`
+- **Deploy work**: `cd ansible-linux && ansible-playbook -i inventory/linux playbooks/linux-work.yml --ask-become-pass`
+- **Deploy base only**: `cd ansible-linux && ansible-playbook -i inventory/linux playbooks/linux-base.yml --ask-become-pass`
+- **Specific tags**: `cd ansible-linux && ansible-playbook -i inventory/linux playbooks/linux-personal.yml --tags packages --ask-become-pass`
+- **Target specific distro**: `cd ansible-linux && ansible-playbook -i inventory/linux playbooks/linux-base.yml --limit fedora --ask-become-pass`
+- **Lint playbooks**: `cd ansible-linux && ansible-lint playbooks/`
 
 ## Troubleshooting
 

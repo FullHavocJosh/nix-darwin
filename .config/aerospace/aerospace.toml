@@ -154,6 +154,9 @@ alt-shift-5 = 'move-node-to-workspace "5th-Workspace"'
 
 alt-shift-f = 'fullscreen'
 
+# Balance/equalize window sizes
+alt-shift-equal = 'balance-sizes'
+
 # See: https://nikitabobko.github.io/AeroSpace/commands#workspace-back-and-forth
 alt-tab = 'workspace-back-and-forth'
 # See: https://nikitabobko.github.io/AeroSpace/commands#move-workspace-to-monitor

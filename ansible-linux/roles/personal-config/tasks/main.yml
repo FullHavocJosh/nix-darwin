@@ -1,0 +1,49 @@
+---
+### Personal-specific applications ###
+- name: Install personal Flatpak applications
+  flatpak:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - com.discordapp.Discord
+    - md.obsidian.Obsidian
+    - com.valvesoftware.Steam
+    - com.usebottles.bottles  # Wine alternative for running Windows apps
+    - org.signal.Signal
+    - com.plexamp.Plexamp
+  tags: ['personal', 'gui']
+
+### Gaming-specific packages ###
+- name: Install gaming packages
+  dnf:
+    name:
+      - wine
+      - lutris
+      - gamemode
+      - steam
+    state: present
+  become: yes
+  tags: ['personal', 'gaming']
+
+### Personal configurations ###
+- name: Create personal configuration directory
+  file:
+    path: "{{ ansible_env.HOME }}/.config/personal"
+    state: directory
+    mode: '0755'
+  tags: ['personal', 'config']
+
+### Set desktop wallpaper (GNOME) ###
+- name: Set desktop wallpaper
+  dconf:
+    key: "/org/gnome/desktop/background/picture-uri"
+    value: "'file://{{ ansible_env.HOME }}/.wallpapers/wallhaven-7pw1we.jpg'"
+  when: ansible_env.XDG_CURRENT_DESKTOP is defined and 'GNOME' in ansible_env.XDG_CURRENT_DESKTOP
+  tags: ['personal', 'wallpaper']
+
+- name: Set desktop wallpaper for dark mode
+  dconf:
+    key: "/org/gnome/desktop/background/picture-uri-dark"
+    value: "'file://{{ ansible_env.HOME }}/.wallpapers/wallhaven-7pw1we.jpg'"
+  when: ansible_env.XDG_CURRENT_DESKTOP is defined and 'GNOME' in ansible_env.XDG_CURRENT_DESKTOP
+  tags: ['personal', 'wallpaper']

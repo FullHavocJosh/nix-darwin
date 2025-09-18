@@ -1,0 +1,16 @@
+[linux]
+# Fedora/RHEL hosts
+fedora-desktop ansible_host=192.168.1.100 ansible_user=havoc
+fedora-laptop ansible_host=192.168.1.101 ansible_user=havoc
+
+# Ubuntu/Debian hosts  
+ubuntu-desktop ansible_host=192.168.1.200 ansible_user=havoc
+ubuntu-laptop ansible_host=192.168.1.201 ansible_user=havoc
+
+[fedora]
+fedora-desktop
+fedora-laptop
+
+[ubuntu]
+ubuntu-desktop
+ubuntu-laptop

@@ -29,7 +29,26 @@ function crush() {
     # Only run commands if needed
     if $needs_sso_login; then
         echo "AWS SSO session expired, logging in..."
-        aws sso login --sso-session aws || return 1
+        # Use timeout to limit SSO login to 30 seconds
+        if ! timeout 30 aws sso login --sso-session aws; then
+            echo "AWS SSO login timed out or failed"
+            echo ""
+            echo "Would you like to use OpenRouter's Anthropic Sonnet 4 instead? (y/n)"
+            read -r response
+            if [[ "$response" =~ ^[Yy]$ ]]; then
+                echo "Launching Crush with OpenRouter..."
+                # Temporarily unset AWS profile to avoid Bedrock provider
+                local original_profile="$AWS_PROFILE"
+                unset AWS_PROFILE
+                command crush "$@"
+                # Restore original profile
+                export AWS_PROFILE="$original_profile"
+                return 0
+            else
+                echo "Crush launch cancelled"
+                return 1
+            fi
+        fi
     fi
     
     if $needs_profile_switch; then

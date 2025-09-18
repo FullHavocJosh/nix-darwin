@@ -7,7 +7,7 @@
 \.gitmodules$
 \.idea$
 \.themes$
-\ansible-fedora
+\ansible-linux
 README\.md$
 flake\..*
 nix-modules$

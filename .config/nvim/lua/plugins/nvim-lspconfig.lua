@@ -3,7 +3,6 @@ return {
 		"neovim/nvim-lspconfig",
 		dependencies = { "hrsh7th/cmp-nvim-lsp", "williamboman/mason-lspconfig.nvim", "glepnir/lspsaga.nvim" },
 		config = function()
-			local lspconfig = require("lspconfig")
 			local capabilities = require("cmp_nvim_lsp").default_capabilities()
 			local keymap = vim.keymap
 
@@ -101,10 +100,10 @@ return {
 			}
 
 			for server, config in pairs(servers) do
-				lspconfig[server].setup(vim.tbl_deep_extend("force", {
+				vim.lsp.config[server] = vim.tbl_deep_extend("force", {
 					capabilities = capabilities,
 					on_attach = on_attach,
-				}, config))
+				}, config)
 			end
 		end,
 	},

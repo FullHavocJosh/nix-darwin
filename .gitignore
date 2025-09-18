@@ -74,6 +74,10 @@ stow-uninstall-local-ignore
 /.config/jgit
 /.idea
 
+# Ignore Ansible folders
+/.ansible
+**/.ansible
+
 # Ignore NuGet
 /.config/NuGet
 
