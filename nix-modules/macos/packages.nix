@@ -70,6 +70,7 @@
       "python-lsp-server"
       "typescript-language-server"
       "yaml-language-server"
+      "yamllint"
       "gopls"
       "crush"
       "awscli"

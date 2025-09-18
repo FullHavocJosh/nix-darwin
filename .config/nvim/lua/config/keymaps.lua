@@ -47,9 +47,25 @@ keymap.set("n", "<leader>_", "<C-w>-") -- Decrease split height
 -- Vim-maximizer
 -- keymap.set("n", "<leader>sm", ":MaximizerToggle<CR>") -- Toggle split window maximization
 
--- Nvim-tree
-keymap.set("n", "<leader>e", ":NvimTreeFocus<CR>") -- Focus file explorer (opens if closed)
-keymap.set("n", "<leader>E", ":NvimTreeToggle<CR>") -- Toggle file explorer (open/close)
+-- Nvim-tree - Smart toggle behavior
+local function smart_nvim_tree_toggle()
+    local nvim_tree = require("nvim-tree.api")
+    local view = require("nvim-tree.view")
+    
+    -- Check if we're currently in nvim-tree
+    if vim.bo.filetype == 'NvimTree' then
+        -- We're in nvim-tree, close it
+        nvim_tree.tree.close()
+    elseif view.is_visible() then
+        -- nvim-tree is open but we're not in it, focus it
+        nvim_tree.tree.focus()
+    else
+        -- nvim-tree is closed, open and focus it
+        nvim_tree.tree.open()
+    end
+end
+
+keymap.set("n", "<leader>e", smart_nvim_tree_toggle) -- Smart nvim-tree toggle
 
 -- Telescope
 keymap.set("n", "<leader>f", "<cmd>Telescope find_files<cr>") -- Find files within current working directory, respects .gitignore

@@ -10,7 +10,7 @@ function asc() {
   fi
 }
 
-# Smart AWS authentication for Bedrock Claude Sonnet
+# Smart AWS authentication for Bedrock Claude Sonnet with OpenRouter fallback
 function crush() {
     local target_profile="services"
     local needs_sso_login=false
@@ -40,11 +40,24 @@ function crush() {
     # Verify access to Bedrock
     if aws bedrock list-foundation-models --region us-east-1 >/dev/null 2>&1; then
         echo "AWS Bedrock access confirmed for Claude Sonnet"
+        # Launch crush with Bedrock
+        command crush "$@"
     else
         echo "Unable to access AWS Bedrock - check permissions"
-        return 1
+        echo ""
+        echo "Would you like to use OpenRouter's Anthropic Sonnet 4 instead? (y/n)"
+        read -r response
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            echo "Launching Crush with OpenRouter..."
+            # Temporarily unset AWS profile to avoid Bedrock provider
+            local original_profile="$AWS_PROFILE"
+            unset AWS_PROFILE
+            command crush "$@"
+            # Restore original profile
+            export AWS_PROFILE="$original_profile"
+        else
+            echo "Crush launch cancelled"
+            return 1
+        fi
     fi
-    
-    # Launch crush
-    command crush "$@"
 }
