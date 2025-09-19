@@ -22,7 +22,7 @@
       "/Applications/Ghostty.app"
       "/Applications/Orion.app"
       "/System/Applications/Music.app"
-      "/Applications/Notes.app"
+      "/System/Applications/Notes.app"
       "/Applications/Obsidian.app"
       "/System/Applications/Freeform.app"
       "/Applications/Discord.app"
