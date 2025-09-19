@@ -20,12 +20,11 @@
     # Apps installed via nix package must include ${pkgs.APPNAME}
     dock.persistent-apps = [
       "/Applications/Ghostty.app"
-      "/Applications/GoLand.app"
-      "/Applications/Zen.app"
+      "/Applications/Orion.app"
       "/Applications/Remote Desktop Manager Free.app"
       "/Applications/Slack.app"
       "/Applications/Microsoft Outlook.app"
-      "/Applications/LM Studio.app"
+      "/Applications/Teams.app"
     ];
   };
   homebrew = {

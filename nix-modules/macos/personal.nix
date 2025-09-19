@@ -20,15 +20,14 @@
   system.defaults = {
     dock.persistent-apps = [
       "/Applications/Ghostty.app"
-      "/Applications/GoLand.app"
-      "/Applications/Zen.app"
+      "/Applications/Orion.app"
       "/System/Applications/Music.app"
+      "/Applications/Notes.app"
       "/Applications/Obsidian.app"
       "/System/Applications/Freeform.app"
       "/Applications/Discord.app"
       "/System/Applications/Messages.app"
       "/Applications/Proton Mail.app"
-      "/Applications/LM Studio.app"
     ];
   };
   homebrew = {
