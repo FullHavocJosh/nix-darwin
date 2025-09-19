@@ -43,7 +43,6 @@
       "curseforge"
       "discord"
       "obsidian"
-      "orion"
       "plex"
       "proton-drive"
       "protonvpn"
