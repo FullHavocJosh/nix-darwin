@@ -20,7 +20,7 @@
   system.defaults = {
     dock.persistent-apps = [
       "/Applications/Ghostty.app"
-      "/Applications/Orion.app"
+      "/System/Cryptexes/App/System/Applications/Safari.app"
       "/System/Applications/Music.app"
       "/System/Applications/Notes.app"
       "/Applications/Obsidian.app"

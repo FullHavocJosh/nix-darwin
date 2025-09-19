@@ -20,7 +20,7 @@
     # Apps installed via nix package must include ${pkgs.APPNAME}
     dock.persistent-apps = [
       "/Applications/Ghostty.app"
-      "/Applications/Orion.app"
+      "/Applications/Zen.app"
       "/Applications/Remote Desktop Manager Free.app"
       "/Applications/Slack.app"
       "/Applications/Microsoft Outlook.app"
