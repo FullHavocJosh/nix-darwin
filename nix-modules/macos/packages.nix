@@ -93,6 +93,7 @@
       "krita"
       "librewolf"
       "lm-studio"
+      "orion"
       "plexamp"
       "proton-pass"
       "qmk-toolbox"

@@ -24,7 +24,7 @@
       "/Applications/Remote Desktop Manager Free.app"
       "/Applications/Slack.app"
       "/Applications/Microsoft Outlook.app"
-      "/Applications/Teams.app"
+      "/Applications/Microsoft Teams.app"
     ];
   };
   homebrew = {
