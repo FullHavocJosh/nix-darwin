@@ -38,6 +38,15 @@ If `.tf` files don't have syntax highlighting:
 3. **Restart nvim**: `:TSUpdate terraform` then restart nvim
 4. **Verify**: `:set filetype?` in a .tf file should show `filetype=terraform`
 
+### Crush LSP "No Root Markers Found" Errors
+If LSP servers fail with "no root markers found" errors:
+1. **Root cause**: Missing `rootMarkers` configuration in `crush.json` LSP section
+2. **Symptoms**: LSP servers can't detect project root, fail to start properly
+3. **Fix**: Add `rootMarkers` array to each LSP server config in `.config/crush/crush.json`
+4. **Common markers**: `[".git", "flake.nix", "package.json", "go.mod", "*.tf"]`
+5. **Avoid**: Duplicate server entries (e.g., two "go" configs) which cause JSON parsing errors
+6. **Test**: Restart Crush after fixing config - LSP should detect `.git` as project root
+
 ## Tmux Keybindings
 - **Prefix**: `Ctrl-t`
 - **Navigation**: `Ctrl-h/j/k/l` (shared with nvim via vim-tmux-navigator)

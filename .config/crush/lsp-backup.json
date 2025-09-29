@@ -1,0 +1,37 @@
+{
+  "lsp": {
+    "ansible": {
+      "command": "ansible-language-server",
+      "args": ["--stdio"]
+    },
+    "bash": {
+      "command": "bash-language-server",
+      "args": ["start"]
+    },
+    "dockerfile": {
+      "command": "docker-langserver",
+      "args": ["--stdio"]
+    },
+    "go": {
+      "command": "gopls"
+    },
+    "lua": {
+      "command": "lua-language-server"
+    },
+    "python": {
+      "command": "pylsp"
+    },
+    "terraform": {
+      "command": "terraform-ls",
+      "args": ["serve"]
+    },
+    "typescript": {
+      "command": "typescript-language-server",
+      "args": ["--stdio"]
+    },
+    "yaml": {
+      "command": "yaml-language-server",
+      "args": ["--stdio"]
+    }
+  }
+}
