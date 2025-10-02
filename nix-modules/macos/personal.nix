@@ -47,6 +47,7 @@
       "proton-drive"
       "protonvpn"
       "proton-mail"
+      "rustdesk"
       "steam"
       "whisky"
     ];
