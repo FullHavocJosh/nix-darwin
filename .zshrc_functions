@@ -64,19 +64,29 @@ function crush() {
     else
         echo "Unable to access AWS Bedrock - check permissions"
         echo ""
-        echo "Would you like to use OpenRouter's Anthropic Sonnet 4 instead? (y/n)"
+        echo "Would you like to try 'sso services' to fix authentication? (y/n)"
         read -r response
         if [[ "$response" =~ ^[Yy]$ ]]; then
-            echo "Launching Crush with OpenRouter..."
-            # Temporarily unset AWS profile to avoid Bedrock provider
+            echo "Running 'sso services'..."
+            sso services
+            # Retry Bedrock access after SSO
+            if aws bedrock list-foundation-models --region us-east-1 >/dev/null 2>&1; then
+                echo "AWS Bedrock access confirmed for Claude Sonnet"
+                command crush "$@"
+            else
+                echo "Still unable to access AWS Bedrock after SSO"
+                echo "Falling back to OpenRouter..."
+                local original_profile="$AWS_PROFILE"
+                unset AWS_PROFILE
+                command crush "$@"
+                export AWS_PROFILE="$original_profile"
+            fi
+        else
+            echo "Falling back to OpenRouter..."
             local original_profile="$AWS_PROFILE"
             unset AWS_PROFILE
             command crush "$@"
-            # Restore original profile
             export AWS_PROFILE="$original_profile"
-        else
-            echo "Crush launch cancelled"
-            return 1
         fi
     fi
 }

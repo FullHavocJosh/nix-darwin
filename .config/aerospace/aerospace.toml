@@ -152,7 +152,7 @@ alt-shift-3 = 'move-node-to-workspace "3rd-Workspace"'
 alt-shift-4 = 'move-node-to-workspace "4th-Workspace"'
 alt-shift-5 = 'move-node-to-workspace "5th-Workspace"'
 
-alt-shift-f = 'fullscreen'
+alt-shift-f = 'layout floating tiling'
 
 # Balance/equalize window sizes
 alt-shift-equal = 'balance-sizes'
@@ -187,8 +187,6 @@ equal = 'resize smart +50'
 
 enter = 'mode main'
 esc = 'mode main'
-
-
 
 # 'service' binding mode declaration.
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
