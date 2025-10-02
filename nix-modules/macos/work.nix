@@ -12,7 +12,9 @@
     echo "Finished Stowing dotfiles..."
 
     echo "Setting wallpaper..."
-    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/jrollet/.wallpapers/wallhaven-gj6xwq.jpg"'
+    cp "/Users/jrollet/.wallpapers/wallhaven-7pw1we.jpg" "/Users/Shared/Wallpaper.jpg"
+    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/jrollet/.wallpapers/wallhaven-7pw1we.jpg"'
+    killall Dock
   '';
   # System Settings for macOS
   # Documentation at: mynixos.com and look for nix-services
