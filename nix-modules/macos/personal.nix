@@ -56,7 +56,6 @@
     masApps = {
       "Proton Pass for Safari" = 6502835663;
       "SponsorBlock for Safari" = 1573461917;
-      "Kagi for Safari" = 1622835804;
       "uBlock Origin Lite" = 6745342698;
       "Dark Reader for Safari" = 1438243180;
       "WireGuard" = 1451685025;
