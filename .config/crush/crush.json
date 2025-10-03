@@ -9,7 +9,7 @@
     "allow": [
       "Bash(npm run lint)",
       "Bash(npm run test:*)",
-      "Bash(git: *)",
+      "Bash(git *)",
       "Bash(cat *)",
       "Bash(view *)",
       "Bash(grep *)",
@@ -47,7 +47,7 @@
       "Read(~/nix-darwin)"
     ],
     "deny": [
-      "Bash(curl:*)",
+      "Bash(curl *)",
       "Read(./.env)",
       "Read(./.env.*)",
       "Read(./secrets/**)"
@@ -111,5 +111,48 @@
       "type": "stdio"
     }
   },
-  "lsp": {}
+  "lsp": {
+    "ansible": {
+      "command": "ansible-language-server",
+      "args": ["--stdio"],
+      "rootMarkers": [".git", "ansible.cfg", "playbook.yml", "*.yml"]
+    },
+    "bash": {
+      "command": "bash-language-server",
+      "args": ["start"],
+      "rootMarkers": [".git", "*.sh"]
+    },
+    "dockerfile": {
+      "command": "docker-langserver",
+      "args": ["--stdio"],
+      "rootMarkers": [".git", "Dockerfile", "docker-compose.yml"]
+    },
+    "go": {
+      "command": "gopls",
+      "rootMarkers": [".git", "go.mod", "go.sum"]
+    },
+    "lua": {
+      "command": "lua-language-server",
+      "rootMarkers": [".git", "*.lua"]
+    },
+    "python": {
+      "command": "pylsp",
+      "rootMarkers": [".git", "pyproject.toml", "setup.py", "requirements.txt"]
+    },
+    "terraform": {
+      "command": "terraform-ls",
+      "args": ["serve"],
+      "rootMarkers": [".git", "*.tf", "terraform.tfvars"]
+    },
+    "typescript": {
+      "command": "typescript-language-server",
+      "args": ["--stdio"],
+      "rootMarkers": [".git", "package.json", "tsconfig.json"]
+    },
+    "yaml": {
+      "command": "yaml-language-server",
+      "args": ["--stdio"],
+      "rootMarkers": [".git", "*.yml", "*.yaml"]
+    }
+  }
 }
