@@ -12,10 +12,6 @@
   programs.zsh.enable = true;
   system.stateVersion = 5;
 
-  system.activationScripts.postUserActivation.text = ''
-    chmod +x ~/.config/sketchybar/plugins/*.sh
-    chmod +x ~/.config/sketchybar/items/*.sh
-  '';
   # System Settings for macOS
   # Documentation at: mynixos.com and look for nix-services
   system.defaults = {
@@ -49,6 +45,7 @@
     dock.wvous-tr-corner = 1;
 
     # Menu Bar Settings
+    NSGlobalDomain._HIHideMenuBar = true;
     menuExtraClock.IsAnalog = false;
     menuExtraClock.ShowAMPM = false;
     menuExtraClock.ShowDate = 0;

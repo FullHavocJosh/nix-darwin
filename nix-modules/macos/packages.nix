@@ -11,7 +11,6 @@
   homebrew = {
     enable = true;
     taps = [
-      "FelixKratz/formulae"
       "warrensbox/tap"
       "nikitabobko/tap"
       "charmbracelet/tap"
@@ -54,7 +53,6 @@
       "reattach-to-user-namespace"
       "ripgrep"
       "rust"
-      "sketchybar"
       "speedtest-cli"
       "sshpass"
       "starship"

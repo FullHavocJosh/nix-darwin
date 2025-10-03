@@ -13,7 +13,12 @@ after-login-command = []
 # 'after-startup-command' is run after 'after-login-command'
 # Available commands : https://nikitabobko.github.io/AeroSpace/commands
 after-startup-command = [
-    'exec-and-forget sketchybar --trigger aerospace_workspace_change'
+    'exec-and-forget sketchybar'
+]
+
+# Notify Sketchybar about workspace change
+exec-on-workspace-change = ['/bin/bash', '-c',
+    'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE'
 ]
 
 # Start AeroSpace at login
@@ -47,12 +52,8 @@ key-mapping.preset = 'qwerty'
 # on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 # on-focus-changed = "move-mouse window-lazy-center"
 
-on-workspace-changed = [
-    'exec-and-forget sketchybar --trigger aerospace_workspace_change'
-]
-
 on-focus-changed = [
-    'exec-and-forget sketchybar --trigger aerospace_workspace_change'
+    'exec-and-forget sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE'
 ]
 
 # Gaps between windows (inner-*) and between monitor edges (outer-*).
@@ -67,7 +68,7 @@ inner.horizontal = 16
 inner.vertical =   16
 outer.left =       16
 outer.bottom =     16
-outer.top =        56
+outer.top =        16
 outer.right =      16
 
 # See:  https://nikitabobko.github.io/AeroSpace/guide#assign-workspaces-to-monitors
@@ -134,7 +135,6 @@ alt-shift-right = 'move right'
 
 # See: https://nikitabobko.github.io/AeroSpace/commands#workspace
 alt-t = 'workspace "Terminal"'
-alt-s = 'workspace "Passwords"'
 alt-d = 'workspace "Development"'
 alt-x = 'workspace "Nix-Darwin"'
 alt-c = 'workspace "Communication"'
@@ -148,7 +148,6 @@ alt-5 = 'workspace "5th-Workspace"'
 
 # See: https://nikitabobkogithub.io/AeroSpace/commands#move-node-to-workspace
 alt-shift-t = 'move-node-to-workspace "Terminal"'
-alt-shift-s = 'move-node-to-workspace "Passwords"'
 alt-shift-d = 'move-node-to-workspace "Development"'
 alt-shift-x = 'move-node-to-workspace "Nix-Darwin"'
 alt-shift-c = 'move-node-to-workspace "Communication"'

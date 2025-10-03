@@ -1,5 +1,10 @@
 {
   "provider": "bedrock",
+  "bedrock": {
+    "model": "${ANTHROPIC_MODEL}",
+    "region": "${AWS_REGION}",
+    "profile": "${AWS_PROFILE}"
+  },
   "permissions": {
     "allow": [
       "Bash(npm run lint)",

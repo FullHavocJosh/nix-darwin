@@ -21,6 +21,8 @@ private/
 /.claude/statsig
 /.claude/todos
 /.claude/idle
+/.claude/history.jsonl
+**/.claude/settings.local.json
 
 # Ignore crush folders
 /.config/crush/commands/

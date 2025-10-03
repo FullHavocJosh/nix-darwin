@@ -1,7 +1,7 @@
 #!/bin/bash
 
 options=(
-  width=5.0
+  width=8.0
   hidpi=on
   active_color=glow\(0xFFCBA6F7\)
 )
