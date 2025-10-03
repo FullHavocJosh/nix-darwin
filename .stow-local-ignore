@@ -12,3 +12,6 @@ README\.md$
 flake\..*
 nix-modules$
 result$
+CRUSH.md
+ansible-*
+

@@ -12,7 +12,9 @@ after-login-command = []
 # You can use it to add commands that run after AeroSpace startup.
 # 'after-startup-command' is run after 'after-login-command'
 # Available commands : https://nikitabobko.github.io/AeroSpace/commands
-after-startup-command = []
+after-startup-command = [
+    'exec-and-forget sketchybar --trigger aerospace_workspace_change'
+]
 
 # Start AeroSpace at login
 start-at-login = true
@@ -45,6 +47,14 @@ key-mapping.preset = 'qwerty'
 # on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 # on-focus-changed = "move-mouse window-lazy-center"
 
+on-workspace-changed = [
+    'exec-and-forget sketchybar --trigger aerospace_workspace_change'
+]
+
+on-focus-changed = [
+    'exec-and-forget sketchybar --trigger aerospace_workspace_change'
+]
+
 # Gaps between windows (inner-*) and between monitor edges (outer-*).
 # Possible values:
 # - Constant: gaps.outer.top = 8
@@ -57,7 +67,7 @@ inner.horizontal = 16
 inner.vertical =   16
 outer.left =       16
 outer.bottom =     16
-outer.top =        16
+outer.top =        56
 outer.right =      16
 
 # See:  https://nikitabobko.github.io/AeroSpace/guide#assign-workspaces-to-monitors
