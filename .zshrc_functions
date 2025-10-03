@@ -10,7 +10,7 @@ function asc() {
   fi
 }
 
-# Smart AWS authentication for Bedrock Claude Sonnet with OpenRouter fallback
+# Smart AWS authentication for Bedrock or OpenRouter
 function crush() {
     local target_profile="services"
     local needs_sso_login=false
@@ -26,28 +26,25 @@ function crush() {
         needs_profile_switch=true
     fi
     
-    # Only run commands if needed
+    # If SSO login needed, ask user for preference
     if $needs_sso_login; then
-        echo "AWS SSO session expired, logging in..."
-        # Use timeout to limit SSO login to 30 seconds
-        if ! timeout 30 aws sso login --sso-session aws; then
+        echo "AWS SSO session expired. Press Enter to login to AWS or Esc to use OpenRouter..."
+        read -k1 -s response
+        echo
+        
+        if [[ "$response" == $'\e' ]]; then
+            echo "Launching Crush with OpenRouter..."
+            local original_profile="$AWS_PROFILE"
+            unset AWS_PROFILE
+            command crush "$@"
+            export AWS_PROFILE="$original_profile"
+            return 0
+        fi
+        
+        echo "Logging into AWS SSO..."
+        if ! gtimeout 30 aws sso login --sso-session aws; then
             echo "AWS SSO login timed out or failed"
-            echo ""
-            echo "Would you like to use OpenRouter's Anthropic Sonnet 4 instead? (y/n)"
-            read -r response
-            if [[ "$response" =~ ^[Yy]$ ]]; then
-                echo "Launching Crush with OpenRouter..."
-                # Temporarily unset AWS profile to avoid Bedrock provider
-                local original_profile="$AWS_PROFILE"
-                unset AWS_PROFILE
-                command crush "$@"
-                # Restore original profile
-                export AWS_PROFILE="$original_profile"
-                return 0
-            else
-                echo "Crush launch cancelled"
-                return 1
-            fi
+            return 1
         fi
     fi
     
@@ -58,35 +55,10 @@ function crush() {
     
     # Verify access to Bedrock
     if aws bedrock list-foundation-models --region us-east-1 >/dev/null 2>&1; then
-        echo "AWS Bedrock access confirmed for Claude Sonnet"
-        # Launch crush with Bedrock
+        echo "AWS Bedrock access confirmed"
         command crush "$@"
     else
         echo "Unable to access AWS Bedrock - check permissions"
-        echo ""
-        echo "Would you like to try 'sso services' to fix authentication? (y/n)"
-        read -r response
-        if [[ "$response" =~ ^[Yy]$ ]]; then
-            echo "Running 'sso services'..."
-            sso services
-            # Retry Bedrock access after SSO
-            if aws bedrock list-foundation-models --region us-east-1 >/dev/null 2>&1; then
-                echo "AWS Bedrock access confirmed for Claude Sonnet"
-                command crush "$@"
-            else
-                echo "Still unable to access AWS Bedrock after SSO"
-                echo "Falling back to OpenRouter..."
-                local original_profile="$AWS_PROFILE"
-                unset AWS_PROFILE
-                command crush "$@"
-                export AWS_PROFILE="$original_profile"
-            fi
-        else
-            echo "Falling back to OpenRouter..."
-            local original_profile="$AWS_PROFILE"
-            unset AWS_PROFILE
-            command crush "$@"
-            export AWS_PROFILE="$original_profile"
-        fi
+        return 1
     fi
 }

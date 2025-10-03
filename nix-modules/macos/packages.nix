@@ -23,6 +23,7 @@
       "borders"
       "btop"
       "cmake"
+      "coreutils"
       "eza"
       "fastfetch"
       "fd"
