@@ -88,7 +88,6 @@
       "claude-code"
       "font-hack-nerd-font"
       "font-jetbrains-mono-nerd-font"
-      "font-sketchybar-app-font"
       "ghostty"
       "goland"
       "hyper"
