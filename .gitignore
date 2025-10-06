@@ -11,6 +11,22 @@
 private/
 *bak
 *.backup
+*_insecure*
+*_local*
+
+# Ansible inventory with real IPs/hosts  
+ansible-linux/inventory/linux
+ansible-linux/inventory/production
+ansible-linux/inventory/staging
+
+# SSH configurations
+.ssh/
+**/.ssh/
+
+# Local environment files
+.env.local
+.env.production  
+.env.staging
 
 # Ignore coplit folders
 /.config/github-copilot
@@ -21,6 +37,7 @@ private/
 /.claude/statsig
 /.claude/todos
 /.claude/idle
+/.claude/ide
 /.claude/history.jsonl
 **/.claude/settings.local.json
 
