@@ -35,12 +35,14 @@
     ];
     # Install Brew Formulas
     brews = [
+      "act"
       "k9s"
       "kubectl"
     ];
     # Install Brew Casks
     casks = [
       "citrix-workspace"
+      "docker"
       "lastpass"
       "mqtt-explorer"
       "powershell"
