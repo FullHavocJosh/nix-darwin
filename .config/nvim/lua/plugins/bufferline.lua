@@ -4,7 +4,54 @@ return {
 		version = "*",
 		dependencies = { "nvim-tree/nvim-web-devicons", "catppuccin/nvim" },
 		config = function()
+			-- Get catppuccin colors
+			local colors = require("catppuccin.palettes").get_palette("mocha")
+			
 			require("bufferline").setup({
+				highlights = {
+					fill = {
+						bg = "NONE", -- Transparent background
+					},
+					background = {
+						bg = "NONE",
+					},
+					tab = {
+						bg = "NONE",
+					},
+					tab_selected = {
+						bg = "NONE",
+						fg = colors.pink,
+						bold = true,
+					},
+					tab_separator = {
+						bg = "NONE",
+					},
+					tab_separator_selected = {
+						bg = "NONE",
+					},
+					buffer_visible = {
+						bg = "NONE",
+					},
+					buffer_selected = {
+						bg = "NONE",
+						fg = colors.pink,
+						bold = true,
+						italic = false,
+					},
+					separator = {
+						bg = "NONE",
+					},
+					separator_selected = {
+						bg = "NONE",
+					},
+					separator_visible = {
+						bg = "NONE",
+					},
+					indicator_selected = {
+						fg = colors.lavender,
+						bg = "NONE",
+					},
+				},
 				options = {
 					mode = "buffers",
 					numbers = "none",
@@ -34,7 +81,7 @@ return {
 					show_tab_indicators = true,
 					show_duplicate_prefix = true,
 					persist_buffer_sort = true,
-					separator_style = "slant",
+					separator_style = "thin",
 					enforce_regular_tabs = false,
 					always_show_bufferline = true,
 					offsets = {

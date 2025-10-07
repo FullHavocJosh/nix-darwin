@@ -72,6 +72,7 @@
       "tldr"
       "tmux"
       "tpm"
+      "tree-sitter"
       "typescript-language-server"
       "uv"
       "vscode-langservers-extracted"

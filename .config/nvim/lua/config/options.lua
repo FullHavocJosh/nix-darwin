@@ -35,6 +35,17 @@ vim.opt.clipboard:append("unnamedplus")
 -- Autoreload files
 vim.opt.autoread = true
 
+-- Auto-refresh settings for better responsiveness
+vim.opt.updatetime = 250  -- Faster CursorHold events
+vim.opt.timeout = true
+vim.opt.timeoutlen = 300
+
+-- Auto-refresh on focus/buffer enter (skip if in insert mode)
+vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold" }, {
+  pattern = "*",
+  command = "if mode() != 'c' && mode() != 'i' | checktime | endif",
+})
+
 -- Splitting windows
 vim.opt.splitright = true
 vim.opt.splitbelow = true

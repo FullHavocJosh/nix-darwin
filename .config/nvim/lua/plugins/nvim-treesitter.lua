@@ -12,7 +12,8 @@ return {
 				"yaml", -- YAML
 				"json", -- JSON
 				"lua", -- Lua
-				"hcl", -- Terraform (HCL)
+				"hcl", -- HCL
+				"terraform", -- Terraform
 				"nix", -- Nix
 				"toml", -- TOML
 			}, -- List of parsers to install
@@ -20,7 +21,7 @@ return {
 			auto_install = true, -- Automatically install missing parsers
 			highlight = {
 				enable = true, -- Enable syntax highlighting
-				additional_vim_regex_highlighting = false, -- Avoid conflicts with built-in highlighting
+				additional_vim_regex_highlighting = true, -- Enable both treesitter and vim syntax
 			},
 			indent = {
 				enable = true, -- Enable automatic indentation
