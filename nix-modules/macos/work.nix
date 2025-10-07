@@ -42,7 +42,7 @@
     # Install Brew Casks
     casks = [
       "citrix-workspace"
-      "docker"
+      "docker-desktop"
       "lastpass"
       "mqtt-explorer"
       "powershell"
