@@ -4,7 +4,9 @@
   ### Applications Shared Across MacOS Devices ###
   ################################################
 
-  environment.systemPackages = with pkgs; [ ];
+  environment.systemPackages = with pkgs; [ 
+    nil  # Nix LSP server
+  ];
 
   # brew tap FelixKratz/formulae
 
@@ -53,6 +55,7 @@
       "reattach-to-user-namespace"
       "ripgrep"
       "rust"
+      "rust-analyzer"
       "speedtest-cli"
       "sshpass"
       "starship"
@@ -71,6 +74,7 @@
       "tpm"
       "typescript-language-server"
       "uv"
+      "vscode-langservers-extracted"
       "watch"
       "yaml-language-server"
       "yamllint"

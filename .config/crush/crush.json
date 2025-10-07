@@ -203,68 +203,7 @@
       "Read(~/pscloudops)",
       "Read(~/nix-darwin)"
     ],
-    "deny": [
-      "Bash(git add *)",
-      "Bash(git commit *)",
-      "Bash(git push *)",
-      "Bash(git pull *)",
-      "Bash(git merge *)",
-      "Bash(git rebase *)",
-      "Bash(git reset *)",
-      "Bash(git checkout *)",
-      "Bash(git switch *)",
-      "Bash(git rm *)",
-      "Bash(git mv *)",
-      "Bash(rm *)",
-      "Bash(rmdir *)",
-      "Bash(mv *)",
-      "Bash(cp *)",
-      "Bash(mkdir *)",
-      "Bash(touch *)",
-      "Bash(chmod *)",
-      "Bash(chown *)",
-      "Bash(ln *)",
-      "Bash(stow *)",
-      "Bash(nixfmt *)",
-      "Bash(nix flake *)",
-      "Bash(darwin-rebuild *)",
-      "Bash(ansible-playbook *)",
-      "Bash(terraform apply *)",
-      "Bash(terraform destroy *)",
-      "Bash(terraform fmt *)",
-      "Bash(ulimit *)",
-      "Bash(source *)",
-      "Bash(nvim *)",
-      "Bash(neovim *)",
-      "Bash(vim *)",
-      "Bash(nano *)",
-      "Bash(emacs *)",
-      "Bash(xargs *)",
-      "Bash(kill *)",
-      "Bash(killall *)",
-      "Bash(bg *)",
-      "Bash(fg *)",
-      "Bash(nohup *)",
-      "Bash(tmux *)",
-      "Bash(screen *)",
-      "Bash(curl *)",
-      "Bash(wget *)",
-      "Bash(brew install *)",
-      "Bash(brew uninstall *)",
-      "Bash(brew upgrade *)",
-      "Bash(npm install *)",
-      "Bash(npm uninstall *)",
-      "Bash(pip install *)",
-      "Bash(pip uninstall *)",
-      "mcp_github_github_pr_approve",
-      "mcp_github_github_pr_create",
-      "mcp_github_github_pr_suggest_change",
-      "mcp_aws-terraform-mcp_ExecuteTerraformCommand",
-      "mcp_aws-terraform-mcp_ExecuteTerragruntCommand",
-      "Read(./.env)",
-      "Read(./.env.*)",
-      "Read(./secrets/**)"
-    ]
+    "deny": []
   },
   "includeCoAuthoredBy": false,
   "mcp": {
@@ -327,45 +266,46 @@
   "lsp": {
     "ansible": {
       "command": "ansible-language-server",
-      "args": ["--stdio"],
-      "rootMarkers": [".git", "ansible.cfg", "playbook.yml", "*.yml"]
+      "args": ["--stdio"]
     },
     "bash": {
       "command": "bash-language-server",
-      "args": ["start"],
-      "rootMarkers": [".git", "*.sh"]
+      "args": ["start"]
     },
     "dockerfile": {
       "command": "docker-langserver",
-      "args": ["--stdio"],
-      "rootMarkers": [".git", "Dockerfile", "docker-compose.yml"]
+      "args": ["--stdio"]
     },
     "go": {
-      "command": "gopls",
-      "rootMarkers": [".git", "go.mod", "go.sum"]
+      "command": "gopls"
+    },
+    "json": {
+      "command": "vscode-json-language-server",
+      "args": ["--stdio"]
     },
     "lua": {
-      "command": "lua-language-server",
-      "rootMarkers": [".git", "*.lua"]
+      "command": "lua-language-server"
+    },
+    "nix": {
+      "command": "nil"
     },
     "python": {
-      "command": "pylsp",
-      "rootMarkers": [".git", "pyproject.toml", "setup.py", "requirements.txt"]
+      "command": "pylsp"
+    },
+    "rust": {
+      "command": "rust-analyzer"
     },
     "terraform": {
       "command": "terraform-ls",
-      "args": ["serve"],
-      "rootMarkers": [".git", "*.tf", "terraform.tfvars"]
+      "args": ["serve"]
     },
     "typescript": {
       "command": "typescript-language-server",
-      "args": ["--stdio"],
-      "rootMarkers": [".git", "package.json", "tsconfig.json"]
+      "args": ["--stdio"]
     },
     "yaml": {
       "command": "yaml-language-server",
-      "args": ["--stdio"],
-      "rootMarkers": [".git", "*.yml", "*.yaml"]
+      "args": ["--stdio"]
     }
   }
 }
