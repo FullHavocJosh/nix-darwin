@@ -32,18 +32,10 @@ ansible-linux/inventory/staging
 /.config/github-copilot
 
 # Ignore claude folders
-/.claude/projects
-/.claude/shell-snapshots
-/.claude/statsig
-/.claude/todos
-/.claude/idle
-/.claude/ide
-/.claude/debug
-/.claude/file-history
-/.claude/history.jsonl
-**/.claude/settings.local.json
+/.claude
 
 # Ignore crush folders
+/.crush
 /.config/crush/commands/
 
 # Ignore k9s clusters
