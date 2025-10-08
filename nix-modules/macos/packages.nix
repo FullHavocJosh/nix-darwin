@@ -6,6 +6,7 @@
 
   environment.systemPackages = with pkgs; [ 
     nil  # Nix LSP server
+    smassh
   ];
 
   # brew tap FelixKratz/formulae
@@ -30,6 +31,7 @@
       "coreutils"
       "crush"
       "dockerfile-language-server"
+      "exiftool"
       "eza"
       "fastfetch"
       "fd"
@@ -45,6 +47,7 @@
       "lua-language-server"
       "luarocks"
       "mas"
+      "neovide"
       "neovim"
       "nixfmt"
       "oh-my-posh"
@@ -61,7 +64,9 @@
       "starship"
       "stow"
       "switchaudio-osx"
+      "superfile"
       "syncthing"
+      "tealdeer"
       "telnet"
       "terraform-inventory"
       "terraform-ls"
@@ -101,6 +106,7 @@
       "krita"
       "librewolf"
       "lm-studio"
+      "neovide-app"
       "plexamp"
       "proton-pass"
       "qmk-toolbox"

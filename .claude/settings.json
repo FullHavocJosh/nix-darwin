@@ -41,11 +41,30 @@
         "go.sum"
       ]
     },
+    "json": {
+      "command": "vscode-json-language-server",
+      "args": [
+        "--stdio"
+      ],
+      "rootMarkers": [
+        ".git",
+        "package.json",
+        "tsconfig.json"
+      ]
+    },
     "lua": {
       "command": "lua-language-server",
       "rootMarkers": [
         ".git",
         "*.lua"
+      ]
+    },
+    "nix": {
+      "command": "nil",
+      "rootMarkers": [
+        ".git",
+        "flake.nix",
+        "*.nix"
       ]
     },
     "python": {
@@ -55,6 +74,14 @@
         "pyproject.toml",
         "setup.py",
         "requirements.txt"
+      ]
+    },
+    "rust": {
+      "command": "rust-analyzer",
+      "rootMarkers": [
+        ".git",
+        "Cargo.toml",
+        "Cargo.lock"
       ]
     },
     "terraform": {
@@ -354,5 +381,62 @@
   },
   "includeCoAuthoredBy": false,
   "installMethod": "brew",
-  "alwaysThinkingEnabled": true
+  "alwaysThinkingEnabled": true,
+  "mcp": {
+    "memory": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-memory"],
+      "type": "stdio"
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-sequential-thinking"],
+      "type": "stdio"
+    },
+    "github": {
+      "command": "npx",
+      "args": ["@edjl/github-mcp"],
+      "type": "stdio"
+    },
+    "terraform": {
+      "command": "npx",
+      "args": ["terraform-mcp-server"],
+      "type": "stdio"
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "type": "stdio"
+    },
+    "aws-core-mcp-server": {
+      "command": "uvx",
+      "args": ["awslabs.core-mcp-server@latest"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "type": "stdio"
+    },
+    "aws-terraform-mcp": {
+      "command": "uvx",
+      "args": ["awslabs.terraform-mcp-server@latest"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "type": "stdio"
+    },
+    "mcp-server-chart": {
+      "command": "npx",
+      "args": ["-y", "@antv/mcp-server-chart"],
+      "type": "stdio"
+    },
+    "aws-pricing-mcp-server": {
+      "command": "uvx",
+      "args": ["awslabs.aws-pricing-mcp-server@latest"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR",
+        "AWS_PROFILE": "services"
+      },
+      "type": "stdio"
+    }
+  }
 }

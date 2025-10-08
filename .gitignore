@@ -38,6 +38,8 @@ ansible-linux/inventory/staging
 /.claude/todos
 /.claude/idle
 /.claude/ide
+/.claude/debug
+/.claude/file-history
 /.claude/history.jsonl
 **/.claude/settings.local.json
 

@@ -10,55 +10,48 @@ function asc() {
   fi
 }
 
-# Smart AWS authentication for Bedrock or OpenRouter
-function crush() {
-    local target_profile="services"
-    local needs_sso_login=false
-    local needs_profile_switch=false
-    
-    # Check if SSO session is valid
-    if ! aws sts get-caller-identity --profile "$target_profile" >/dev/null 2>&1; then
-        needs_sso_login=true
-    fi
-    
-    # Check if correct profile is set
-    if [[ "$AWS_PROFILE" != "$target_profile" ]]; then
-        needs_profile_switch=true
-    fi
-    
-    # If SSO login needed, ask user for preference
-    if $needs_sso_login; then
-        echo "AWS SSO session expired. Press Enter to login to AWS or Esc to use OpenRouter..."
-        read -k1 -s response
-        echo
-        
-        if [[ "$response" == $'\e' ]]; then
-            echo "Launching Crush with OpenRouter..."
-            local original_profile="$AWS_PROFILE"
-            unset AWS_PROFILE
-            command crush "$@"
-            export AWS_PROFILE="$original_profile"
-            return 0
+# Smart AI dev launcher with AWS Bedrock fallback
+function aidev() {
+  # Check AWS Bedrock access
+  if aws bedrock list-foundation-models --region us-east-1 &>/dev/null; then
+    echo "✓ AWS Bedrock access confirmed. Launching Claude..."
+    command claude "$@"
+  else
+    echo "✗ AWS Bedrock access unavailable."
+    echo ""
+    echo "Choose an option:"
+    echo "  [Enter]  Trigger SSO AWS"
+    echo "  [Esc]    Launch Crush using OpenRouter"
+    echo "  [q]      Exit"
+    echo ""
+    read -k1 -s choice
+    echo
+
+    case $choice in
+      $'\n'|"")
+        echo "Triggering AWS SSO..."
+        aws sso login --sso-session aws
+        if aws bedrock list-foundation-models --region us-east-1 &>/dev/null; then
+          echo "✓ SSO AWS successful. Launching Claude..."
+          command claude "$@"
+        else
+          echo "✗ SSO AWS failed or AWS Bedrock unavailable."
+          echo "Falling back to Crush using OpenRouter..."
+          command crush "$@"
         fi
-        
-        echo "Logging into AWS SSO..."
-        if ! gtimeout 30 aws sso login --sso-session aws; then
-            echo "AWS SSO login timed out or failed"
-            return 1
-        fi
-    fi
-    
-    if $needs_profile_switch; then
-        echo "Switching to $target_profile profile..."
-        asc "$target_profile"
-    fi
-    
-    # Verify access to Bedrock
-    if aws bedrock list-foundation-models --region us-east-1 >/dev/null 2>&1; then
-        echo "AWS Bedrock access confirmed"
+        ;;
+      $'\e')
+        echo "Launching Crush using OpenRouter..."
         command crush "$@"
-    else
-        echo "Unable to access AWS Bedrock - check permissions"
+        ;;
+      q|Q)
+        echo "Exiting..."
+        return 0
+        ;;
+      *)
+        echo "Invalid choice. Exiting..."
         return 1
-    fi
+        ;;
+    esac
+  fi
 }
