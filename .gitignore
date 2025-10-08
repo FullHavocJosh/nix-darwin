@@ -107,5 +107,6 @@ stow-uninstall-local-ignore
 /.git
 
 # Ignore tmux plugins
+/.config/tmux/plugins/tmux*
 /.config/tmux/plugins/tmux-*
 /.config/tmux/plugins/*-tmux-*
