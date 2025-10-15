@@ -6,6 +6,9 @@ vim.g.mapleader = " "
 -- General Keymaps
 ---------------------
 
+-- Fix syntax highlighting issues (for when treesitter stops working)
+keymap.set("n", "<leader>fs", ":TSBufEnable highlight<CR>", { desc = "Fix Syntax highlighting" })
+
 -- Use Cmd+Z for undo
 vim.api.nvim_set_keymap("n", "<D-z>", "u", { noremap = true, silent = true })
 vim.api.nvim_set_keymap("i", "<D-z>", "<C-o>u", { noremap = true, silent = true })
