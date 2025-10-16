@@ -5,7 +5,7 @@
 // Customizable Parameters
 const float GLOBAL_OPACITY = 1.0;
 const float ABBERATION_FACTOR = 0.0;
-const float DIM_CUTOFF = 0.45;
+const float DIM_CUTOFF = 0.35;
 const float BRIGHT_CUTOFF = 0.65;
 const float BRIGHT_BOOST = 1.15;
 const float DIM_GLOW = 0.1;
