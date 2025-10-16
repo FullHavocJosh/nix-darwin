@@ -12,12 +12,6 @@
   programs.zsh.enable = true;
   system.stateVersion = 5;
 
-  # Activation scripts run during system activation
-  system.activationScripts.postUserActivation.text = ''
-    # Enable focus-follows-mouse
-    defaults write -g NSWindowFocusFollowsMouse -bool true
-  '';
-
   # System Settings for macOS
   # Documentation at: mynixos.com and look for nix-services
   system.defaults = {
