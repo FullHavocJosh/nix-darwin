@@ -25,15 +25,7 @@ return {
 					keymap.set("n", "<leader>ru", ":TypescriptRemoveUnused<CR>", opts)
 				end
 
-				if client.name == "terraformls" then
-					vim.api.nvim_create_autocmd("BufWritePre", {
-						group = vim.api.nvim_create_augroup("TerraformFmt", { clear = true }),
-						buffer = bufnr,
-						callback = function()
-							vim.lsp.buf.format({ bufnr = bufnr })
-						end,
-					})
-				end
+				-- Terraform formatting is handled by formatter-nvim using terraform fmt
 
 				-- Only format terraform files via LSP, others use formatter-nvim
 				-- if client.supports_method("textDocument/formatting") then

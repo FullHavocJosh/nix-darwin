@@ -49,16 +49,22 @@ return {
                         }
                     end,
                 },
+                terraform = {
+                    function()
+                        return {
+                            exe = "terraform",
+                            args = { "fmt", "-" },
+                            stdin = true,
+                        }
+                    end,
+                },
             },
         })
 
-        -- Format on save (exclude terraform files - handled by LSP)
+        -- Format on save
         vim.api.nvim_create_autocmd("BufWritePre", {
             callback = function()
-                local filetype = vim.bo.filetype
-                if filetype ~= "terraform" then
-                    vim.cmd("FormatWrite")
-                end
+                vim.cmd("FormatWrite")
             end,
         })
     end,
