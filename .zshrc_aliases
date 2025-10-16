@@ -33,3 +33,24 @@ alias sso='function awslogin() { aws sso login --profile "$1" && export AWS_PROF
 alias ssoswitch='function awsswitch() { export AWS_PROFILE="$1"; unset AWS_ACCESS_KEY_ID; unset AWS_SECRET_ACCESS_KEY; }; awsswitch' #this allows you to switch to another profile you have configured re-using the same session token
 alias ssoexport='eval "$(aws configure export-credentials --profile $AWS_PROFILE --format env)"'
 
+# Aliases - Git/GitHub.
+alias newpr='function create_branch_and_pr() {
+  echo -n "Branch name: "
+  read branch_name
+  if [ -z "$branch_name" ]; then
+    echo "Branch name cannot be empty"
+    return 1
+  fi
+  git checkout -b "$branch_name" && \
+  git commit --allow-empty -m "$branch_name" && \
+  git push -u origin "$branch_name" && \
+  gh pr create --title "feat: $branch_name" --body "$(cat <<EOF
+## Description
+feat: $branch_name
+
+## Tickets
+feat: $branch_name
+EOF
+)"
+}; create_branch_and_pr'
+
