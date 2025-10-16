@@ -34,7 +34,7 @@ alias ssoswitch='function awsswitch() { export AWS_PROFILE="$1"; unset AWS_ACCES
 alias ssoexport='eval "$(aws configure export-credentials --profile $AWS_PROFILE --format env)"'
 
 # Aliases - Git/GitHub.
-alias newpr='function create_branch_and_pr() {
+alias gpr='function create_branch_and_pr() {
   echo -n "Branch name: "
   read branch_name
   if [ -z "$branch_name" ]; then
@@ -44,7 +44,7 @@ alias newpr='function create_branch_and_pr() {
   git checkout -b "$branch_name" && \
   git commit --allow-empty -m "$branch_name" && \
   git push -u origin "$branch_name" && \
-  gh pr create --title "feat: $branch_name" --body "$(cat <<EOF
+  gh pr create --draft --title "feat: $branch_name" --body "$(cat <<EOF
 ## Description
 feat: $branch_name
 

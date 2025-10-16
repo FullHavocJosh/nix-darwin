@@ -5,16 +5,12 @@
 // Customizable Parameters
 const float GLOBAL_OPACITY = 1.0;
 const float ABBERATION_FACTOR = 0.0;
-const float DIM_CUTOFF = 0.35;
+const float DIM_CUTOFF = 0.45;
 const float BRIGHT_CUTOFF = 0.65;
 const float BRIGHT_BOOST = 1.15;
 const float DIM_GLOW = 0.1;
-const float BRIGHT_GLOW = 0.2;
-const float COLOR_GLOW = 1.25;
-const float SCANLINE_INTENSITY = 0.0;
-const float SCANLINE_DENSITY = 0.0;
-const float MASK_INTENSITY = 0.0;
-const float MASK_SIZE = 0.0;
+const float BRIGHT_GLOW = 0.15;
+const float COLOR_GLOW = 1.15;
 
 //-----------------------------------------------------------------------------
 // Original Color Space Functions (kept for accuracy)
@@ -130,8 +126,6 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 
     vec4 processedColor = toRgb(dest);
 
-    // Skip scanlines and dot matrix (disabled in your config)
-    
     // Apply global opacity
     float final_alpha = processedColor.a * GLOBAL_OPACITY;
     fragColor = vec4(processedColor.rgb, final_alpha);
