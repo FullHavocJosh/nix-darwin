@@ -1,26 +1,15 @@
 { pkgs, config, lib, ... }: {
-
-  ##################################################
-  ### Configurations Shared Across MacOS Devices ###
-  ##################################################
-
   nixpkgs.config.allowUnfree = true;
   nixpkgs.hostPlatform = "aarch64-darwin";
-  # Necessary for using flakes on this system
   nix.settings.experimental-features = "nix-command flakes";
-  # Create /etc/zshrc that loads the nix-services environment
   programs.zsh.enable = true;
   system.stateVersion = 5;
 
-  # System Settings for macOS
-  # Documentation at: mynixos.com and look for nix-services
   system.defaults = {
-    # Interface Settings
     NSGlobalDomain.AppleInterfaceStyle = "Dark";
     NSGlobalDomain.NSScrollAnimationEnabled = true;
     NSGlobalDomain.NSWindowResizeTime = 0.05;
 
-    # Dock Settings
     dock.autohide = true;
     dock.autohide-delay = 0.05;
     dock.autohide-time-modifier = 0.05;
@@ -44,7 +33,6 @@
     dock.wvous-tl-corner = 1;
     dock.wvous-tr-corner = 1;
 
-    # Menu Bar Settings
     NSGlobalDomain._HIHideMenuBar = true;
     menuExtraClock.IsAnalog = false;
     menuExtraClock.ShowAMPM = false;
@@ -53,12 +41,11 @@
     menuExtraClock.ShowSeconds = false;
     menuExtraClock.ShowDayOfWeek = false;
 
-    # Finder Settings
     finder.ShowPathbar = true;
     finder.ShowStatusBar = true;
     finder.AppleShowAllFiles = true;
     finder.AppleShowAllExtensions = true;
-    finder.FXPreferredViewStyle = "clmv"; # Column view
+    finder.FXPreferredViewStyle = "clmv";
     finder.FXDefaultSearchScope = "SCcf";
     finder.FXEnableExtensionChangeWarning = false;
     finder._FXSortFoldersFirst = true;
@@ -68,21 +55,17 @@
     NSGlobalDomain.AppleShowAllFiles = true;
     NSGlobalDomain.AppleShowAllExtensions = true;
 
-    # Login Window Settings
     loginwindow.GuestEnabled = false;
 
-    # Trackpad Settings
     trackpad.TrackpadThreeFingerDrag = false;
     trackpad.Dragging = false;
     NSGlobalDomain.AppleEnableSwipeNavigateWithScrolls = false;
     NSGlobalDomain.NSWindowShouldDragOnGesture = false;
 
-    # Keyboard Settings
     NSGlobalDomain."com.apple.keyboard.fnState" = true;
     NSGlobalDomain.KeyRepeat = 2;
     NSGlobalDomain.InitialKeyRepeat = 15;
 
-    # Windows Manager Settings
     WindowManager.AutoHide = true;
     WindowManager.StandardHideDesktopIcons = true;
     WindowManager.HideDesktop = true;
@@ -90,10 +73,8 @@
     WindowManager.GloballyEnabled = false;
     WindowManager.AppWindowGroupingBehavior = false;
 
-    # Accessibility Settings
     universalaccess.mouseDriverCursorSize = 1.25;
 
-    # Global Settings
     NSGlobalDomain.ApplePressAndHoldEnabled = false;
     NSGlobalDomain.NSDocumentSaveNewDocumentsToCloud = true;
     NSGlobalDomain.NSAutomaticInlinePredictionEnabled = false;

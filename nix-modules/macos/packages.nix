@@ -1,15 +1,8 @@
 { pkgs, config, ... }: {
-
-  ################################################
-  ### Applications Shared Across MacOS Devices ###
-  ################################################
-
-  environment.systemPackages = with pkgs; [ 
-    nil  # Nix LSP server
+  environment.systemPackages = with pkgs; [
+    nil
     smassh
   ];
-
-  # brew tap FelixKratz/formulae
 
   homebrew = {
     enable = true;
@@ -18,7 +11,6 @@
       "nikitabobko/tap"
       "charmbracelet/tap"
     ];
-    # Install Brew Formulas
     brews = [
       "ansible"
       "ansible-lint"
@@ -88,7 +80,6 @@
       "zplug"
       "ansible-language-server"
     ];
-    # Install Brew Casks
     casks = [
       "aerospace"
       "alacritty"
@@ -122,14 +113,10 @@
       "vlc"
       "zen"
     ];
-    # Install App Store Apps, search for ID with "mas search "
-    # You must be logged into the Apps Store, and you must have purchased the app
     masApps = {
       "Xcode" = 497799835;
     };
-    # This Setting will REMOVE apps that are installed by homebrew outside of this config
     onActivation.cleanup = "zap";
-    # These Settings will perform "brew update" & "brew upgrade" when services-rebuild is run
     onActivation.autoUpdate = true;
     onActivation.upgrade = true;
   };

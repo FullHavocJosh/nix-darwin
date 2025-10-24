@@ -1,4 +1,3 @@
-# Set environmental variables for AWS
 function asc() {
   if [ "$1" = "clear" ]; then
     unset -m "AWS_*"
@@ -10,9 +9,7 @@ function asc() {
   fi
 }
 
-# Smart AI dev launcher with AWS Bedrock fallback
 function aidev() {
-  # Check AWS Bedrock access
   if aws bedrock list-foundation-models --region us-east-1 &>/dev/null; then
     echo "✓ AWS Bedrock access confirmed. Launching Claude..."
     command claude "$@"

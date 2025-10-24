@@ -1,17 +1,14 @@
-# Aliases - SSH Targets.
 alias sshmacbook='ssh -i ~/.ssh/id_ed25519 havoc@Joshs-MacBook-Pro.rollet.family'
-alias sshg14='ssh -i ~/.ssh/id_ed25519 root@Joshs-G14.rollet.family' 
+alias sshg14='ssh -i ~/.ssh/id_ed25519 root@Joshs-G14.rollet.family'
 alias sshazeroth='ssh -i ~/.ssh/id_ed25519 root@azerothcore.rollet.family'
 alias sshtestazeroth='ssh -i ~/.ssh/id_ed25519 root@testing-azerothcore.rollet.family'
 alias sshmini='ssh -i ~/.ssh/id_ed25519 havoc@macOS-Mac-mini.rollet.family'
 alias sshdeck='ssh -i ~/.ssh/id_ed25519 havoc@Joshs-SteamDeck.rollet.family'
 
-# Aliases - NeoVIM Development.
 alias nxvim="cd ~/nix-darwin && ~/.config/tmux/plugins/tpm/scripts/install_plugins.sh && (tmux has-session -t nix-darwin 2>/dev/null && tmux attach -t nix-darwin || (tmux new-session -s nix-darwin -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys 'nvim' Enter \; select-pane -t 1 \; send-keys 'aidev' Enter \; select-pane -t 2 \; send-keys 'git status' Enter \; select-pane -t 0 \; attach))"
 alias devim='~/.config/tmux/plugins/tpm/scripts/install_plugins.sh && (tmux has-session -t $(basename $(pwd)) 2>/dev/null && tmux attach -t $(basename $(pwd)) || (tmux new-session -s $(basename $(pwd)) -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys "nvim" Enter \; select-pane -t 1 \; send-keys "aidev" Enter \; select-pane -t 2 \; send-keys "git status" Enter \; select-pane -t 0 \; attach))'
 alias psvim="cd ~/pscloudops/ && ~/.config/tmux/plugins/tpm/scripts/install_plugins.sh && (tmux has-session -t pscloudops 2>/dev/null && tmux attach -t pscloudops || (tmux new-session -s pscloudops -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys 'nvim' Enter \; select-pane -t 1 \; send-keys 'aidev' Enter \; select-pane -t 0 \; attach))"
 
-# Aliases - Common Shortcuts.
 alias clear="clear ; clear ; clear"
 alias eza="eza -la"
 alias ls="eza"
@@ -20,20 +17,17 @@ alias pip="pip3"
 alias python="/usr/bin/python3"
 alias spf="spf -c ~/.config/superfile/config.toml"
 
-# Aliases - Terraform.
 alias tfs="tfswitch"
 alias tfi="terraform init"
 alias tfa="terraform apply"
 alias tft="rm -rf .terraform* ; tfswitch ; terraform init -upgrade ; terraform validate ; terraform test"
 alias tfp="rm -rf .terraform* ; tfswitch ; terraform init -upgrade ; terraform validate ; terraform plan"
 
-# Aliases - AWS.
 alias asl='aws sso login --sso-session aws'
-alias sso='function awslogin() { aws sso login --profile "$1" && export AWS_PROFILE="$1"; }; awslogin' #this allows you to login to the aws sso session
-alias ssoswitch='function awsswitch() { export AWS_PROFILE="$1"; unset AWS_ACCESS_KEY_ID; unset AWS_SECRET_ACCESS_KEY; }; awsswitch' #this allows you to switch to another profile you have configured re-using the same session token
+alias sso='function awslogin() { aws sso login --profile "$1" && export AWS_PROFILE="$1"; }; awslogin'
+alias ssoswitch='function awsswitch() { export AWS_PROFILE="$1"; unset AWS_ACCESS_KEY_ID; unset AWS_SECRET_ACCESS_KEY; }; awsswitch'
 alias ssoexport='eval "$(aws configure export-credentials --profile $AWS_PROFILE --format env)"'
 
-# Aliases - Git/GitHub.
 alias gpr='function create_branch_and_pr() {
   echo -n "Branch name: "
   read branch_name
