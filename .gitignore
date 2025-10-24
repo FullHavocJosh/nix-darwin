@@ -104,3 +104,7 @@ stow-uninstall-local-ignore
 /.config/tmux/plugins/tmux*
 /.config/tmux/plugins/tmux-*
 /.config/tmux/plugins/*-tmux-*
+
+# Ignore AWS VPN configs
+/.config/AWS VPN Client*
+/.config/AWSVPNCLient*

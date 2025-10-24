@@ -44,6 +44,7 @@
       "discord"
       "obsidian"
       "plex"
+      "plexamp"
       "proton-drive"
       "protonvpn"
       "proton-mail"

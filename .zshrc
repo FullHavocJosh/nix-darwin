@@ -1,3 +1,8 @@
+# Homebrew path setup (needed before starship)
+if [[ -f "/opt/homebrew/bin/brew" ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
+
 # Dynamic Titles
 preexec() {
     # Set the title to the command being run
@@ -9,7 +14,9 @@ precmd() {
 }
 
 # Enable starship.
-eval "$(starship init zsh)"
+if command -v starship &> /dev/null; then
+    eval "$(starship init zsh)"
+fi
 
 # Environmental Variables Secure
 [ -f ~/.zshrc_envvars ] && source ~/.zshrc_envvars
