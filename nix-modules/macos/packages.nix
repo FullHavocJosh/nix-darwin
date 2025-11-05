@@ -2,6 +2,7 @@
   environment.systemPackages = with pkgs; [
     nil
     smassh
+    python3Packages.fonttools  # For creating font aliases
   ];
 
   homebrew = {
