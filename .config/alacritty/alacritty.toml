@@ -48,7 +48,7 @@ action = "PasteSelection"
 mouse = "Middle"
 
 [window]
-decorations = "Buttonless"
+decorations = "None"
 startup_mode = "Maximized"
 dynamic_title = true
 dynamic_padding = true
