@@ -29,6 +29,19 @@ alias ssoswitch='function awsswitch() { export AWS_PROFILE="$1"; unset AWS_ACCES
 alias ssoexport='eval "$(aws configure export-credentials --profile $AWS_PROFILE --format env)"'
 
 alias gpr='function create_branch_and_pr() {
+  echo "Select type:"
+  echo "  1) feat"
+  echo "  2) fix"
+  echo -n "Enter choice (1 or 2): "
+  read type_choice
+  case "$type_choice" in
+    1) type_prefix="feat" ;;
+    2) type_prefix="fix" ;;
+    *)
+      echo "Invalid choice. Please select 1 or 2"
+      return 1
+      ;;
+  esac
   echo -n "Branch name: "
   read branch_name
   if [ -z "$branch_name" ]; then
@@ -38,12 +51,12 @@ alias gpr='function create_branch_and_pr() {
   git checkout -b "$branch_name" && \
   git commit --allow-empty -m "$branch_name" && \
   git push -u origin "$branch_name" && \
-  gh pr create --draft --title "feat: $branch_name" --body "$(cat <<EOF
+  gh pr create --draft --title "$type_prefix: $branch_name" --body "$(cat <<EOF
 ## Description
-feat: $branch_name
+$type_prefix: $branch_name
 
 ## Tickets
-feat: $branch_name
+$type_prefix: $branch_name
 EOF
 )"
 }; create_branch_and_pr'
