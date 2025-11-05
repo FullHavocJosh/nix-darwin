@@ -205,8 +205,8 @@ plugin=org.kde.plasma.digitalclock
 
 [Containments][92][Applets][157][Configuration]
 PreloadWeight=55
-popupHeight=549
-popupWidth=909
+popupHeight=582
+popupWidth=942
 
 [Containments][92][Applets][157][Configuration][Appearance]
 enabledCalendarPlugins=astronomicalevents,holidaysevents
@@ -223,8 +223,8 @@ immutability=1
 lastScreen=0
 location=4
 plugin=org.kde.plasma.systemtray
-popupHeight=662
-popupWidth=685
+popupHeight=695
+popupWidth=718
 wallpaperplugin=org.kde.image
 
 [Containments][92][Applets][158][Applets][159][Configuration]
@@ -363,8 +363,8 @@ plugin=org.kde.plasma.kickoff
 
 [Containments][92][Applets][177][Configuration]
 PreloadWeight=100
-popupHeight=772
-popupWidth=1066
+popupHeight=805
+popupWidth=1099
 
 [Containments][92][Applets][177][Configuration][ConfigDialog]
 DialogHeight=525
@@ -395,4 +395,4 @@ boldText=true
 
 [ScreenMapping]
 itemsOnDisabledScreens=
-screenMapping=desktop:/decky_installer.desktop.download,0,37701787-3e15-44aa-9974-6732068163e1,desktop:/Return.desktop,0,37701787-3e15-44aa-9974-6732068163e1,desktop:/steam.desktop,0,37701787-3e15-44aa-9974-6732068163e1
+screenMapping=desktop:/steam.desktop,0,37701787-3e15-44aa-9974-6732068163e1,desktop:/Return.desktop,0,37701787-3e15-44aa-9974-6732068163e1,desktop:/decky_installer.desktop.download,0,37701787-3e15-44aa-9974-6732068163e1
