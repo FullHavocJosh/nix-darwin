@@ -25,6 +25,10 @@ fi
 # File descriptor limits fix for AWS MCP servers
 [ -f ~/.zshrc_ulimit ] && source ~/.zshrc_ulimit
 
+# Set default editor to nvim
+export EDITOR="nvim"
+export VISUAL="nvim"
+
 # Enable atuin.
 export ATUIN_NOBIND="true"
 eval "$(atuin init zsh)"
