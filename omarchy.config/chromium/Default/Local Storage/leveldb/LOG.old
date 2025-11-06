@@ -1,0 +1,15 @@
+2025/10/31-21:08:42.822 5 Reusing MANIFEST /home/havoc/.config/chromium/Default/Local Storage/leveldb/MANIFEST-000001
+2025/10/31-21:08:42.828 5 Recovering log #13
+2025/10/31-21:08:42.829 5 Reusing old log /home/havoc/.config/chromium/Default/Local Storage/leveldb/000013.log 
+2025/10/31-21:15:41.592 7 Level-0 table #17: started
+2025/10/31-21:15:41.599 7 Level-0 table #17: 59317 bytes OK
+2025/10/31-21:15:41.603 7 Delete type=0 #13
+2025/10/31-21:15:41.604 7 Compacting 4@0 + 1@1 files
+2025/10/31-21:15:41.610 7 Generated table #18@0: 155 keys, 60623 bytes
+2025/10/31-21:15:41.610 7 Compacted 4@0 + 1@1 files => 60623 bytes
+2025/10/31-21:15:41.612 7 compacted to: files[ 0 1 1 0 0 0 0 ]
+2025/10/31-21:15:41.614 7 Delete type=2 #8
+2025/10/31-21:15:41.614 7 Delete type=2 #10
+2025/10/31-21:15:41.614 7 Delete type=2 #12
+2025/10/31-21:15:41.614 7 Delete type=2 #14
+2025/10/31-21:15:41.614 7 Delete type=2 #17

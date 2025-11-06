@@ -1,0 +1,26 @@
+output "Sharp Corporation 0x14AD Unknown" {
+  mode 3840x2160@60
+  position 0,0
+  scale 2
+  alias $laptop_1
+  }
+output "BNQ BenQ RD280U L8R0035601Q" {
+  mode 3840x2560@49.98
+  position 0,0
+  scale 1
+  alias $desk_2
+}
+output "BNQ BenQ RD280U L8R0035701Q" {
+  mode 3840x2560@49.98
+  position 3840,0
+  scale 1
+  alias $desk_2
+}
+profile laptop_1 {
+  output $laptop_1 enable
+}
+profile desk_2 {
+  output $laptop_1 disable
+  output $desk_2 enable
+}
+

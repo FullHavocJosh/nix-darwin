@@ -1,0 +1,7 @@
+2025/10/30-20:00:34.532 139b Reusing MANIFEST /home/havoc/.config/chromium/Default/WebStorage/2/IndexedDB/indexeddb.leveldb/MANIFEST-000001
+2025/10/30-20:00:34.533 139b Recovering log #3
+2025/10/30-20:00:34.535 139b Reusing old log /home/havoc/.config/chromium/Default/WebStorage/2/IndexedDB/indexeddb.leveldb/000003.log 
+2025/10/30-20:09:11.965 139c Level-0 table #5: started
+2025/10/30-20:09:11.969 139c Level-0 table #5: 71353 bytes OK
+2025/10/30-20:09:11.971 139c Delete type=0 #3
+2025/10/30-20:09:11.972 139c Manual compaction at level-0 from (begin) .. (end); will stop at (end)
