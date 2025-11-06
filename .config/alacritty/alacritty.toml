@@ -52,8 +52,8 @@ decorations = "None"
 startup_mode = "Maximized"
 dynamic_title = true
 dynamic_padding = true
-opacity = 0.8
-blur = true
+opacity = 1.0
+blur = false
 
 [window.padding]
 x = 0

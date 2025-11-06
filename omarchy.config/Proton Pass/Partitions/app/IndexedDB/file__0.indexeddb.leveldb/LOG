@@ -1,7 +1,0 @@
-2025/10/31-08:20:31.071 11d87 Reusing MANIFEST /home/havoc/.config/Proton Pass/Partitions/app/IndexedDB/file__0.indexeddb.leveldb/MANIFEST-000001
-2025/10/31-08:20:31.072 11d87 Recovering log #3
-2025/10/31-08:20:31.075 11d87 Reusing old log /home/havoc/.config/Proton Pass/Partitions/app/IndexedDB/file__0.indexeddb.leveldb/000003.log 
-2025/10/31-08:20:34.059 11d88 Level-0 table #5: started
-2025/10/31-08:20:34.061 11d88 Level-0 table #5: 17460 bytes OK
-2025/10/31-08:20:34.061 11d88 Delete type=0 #3
-2025/10/31-08:20:34.062 11d88 Manual compaction at level-0 from (begin) .. (end); will stop at (end)

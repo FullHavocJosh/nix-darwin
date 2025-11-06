@@ -1,5 +1,6 @@
 return {
 	"xiyaowong/transparent.nvim",
+	enabled = false, -- Disabled in favor of plugin/after/transparency.lua
 	config = function()
 		require("transparent").setup({
 			groups = {

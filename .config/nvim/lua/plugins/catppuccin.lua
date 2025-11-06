@@ -3,16 +3,13 @@ return {
 	name = "catppuccin",
 	priority = 1000,
 	lazy = false,
-	transparent = true,
 	config = function()
 		require("catppuccin").setup({
 			style = "mocha",
-			transparent_background = true,
 			integrations = {
 				telescope = true,
 				nvimtree = {
 					enabled = true,
-					transparent_panel = true,
 				},
 				bufferline = true,
 				which_key = true,

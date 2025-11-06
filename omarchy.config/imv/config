@@ -1,2 +1,0 @@
-[binds]
-<Ctrl+p> = exec lp $imv_current_file

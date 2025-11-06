@@ -20,7 +20,7 @@ return {
 			},
 			renderer = {
 				group_empty = true,
-				highlight_opened_files = "all",
+				highlight_opened_files = "none",
 				highlight_modified = "name",
 				icons = {
 					show = {

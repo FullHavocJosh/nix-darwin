@@ -1,7 +1,5 @@
 local keymap = vim.keymap
 
-vim.g.mapleader = " "
-
 ---------------------
 -- General Keymaps
 ---------------------
@@ -26,17 +24,13 @@ vim.api.nvim_set_keymap("i", "<D-r>", "<C-o><C-r>", { noremap = true, silent = t
 -- Delete single character without copying into register
 -- keymap.set("n", "x", '"_x')
 
--- Increment/decrement numbers
-keymap.set("n", "<leader>+", "<C-a>") -- Increment
-keymap.set("n", "<leader>-", "<C-x>") -- Decrement
-
--- Window management
-keymap.set("n", "<leader>-", "<C-w>s") -- Split window horizontally
-keymap.set("n", "<leader>/", "<C-w>v") -- Split window vertically
-keymap.set("n", "<leader>=", "<C-w>=") -- Make split windows equal width & height
-keymap.set("n", "<leader>w", ":close<CR>") -- Close current split window
-keymap.set("n", "<leader>+", "<C-w>+") -- Increase split height
-keymap.set("n", "<leader>_", "<C-w>-") -- Decrease split height
+-- Window management (moved increment/decrement to avoid conflicts)
+keymap.set("n", "<leader>wv", "<C-w>v") -- Split window vertically
+keymap.set("n", "<leader>wh", "<C-w>s") -- Split window horizontally
+keymap.set("n", "<leader>w=", "<C-w>=") -- Make split windows equal width & height
+keymap.set("n", "<leader>wc", ":close<CR>") -- Close current split window
+keymap.set("n", "<leader>w+", "<C-w>+") -- Increase split height
+keymap.set("n", "<leader>w-", "<C-w>-") -- Decrease split height
 
 -- keymap.set("n", "<leader>to", ":tabnew<CR>") -- Open new tab
 -- keymap.set("n", "<leader>tx", ":tabclose<CR>") -- Close current tab

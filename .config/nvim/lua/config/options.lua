@@ -25,8 +25,6 @@ vim.opt.clipboard:append("unnamedplus")
 
 vim.opt.autoread = true
 vim.opt.updatetime = 250
-vim.opt.timeout = true
-vim.opt.timeoutlen = 300
 
 vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold" }, {
   pattern = "*",

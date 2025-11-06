@@ -30,8 +30,23 @@ require("lazy").setup({
 	-- Configure any other settings here. See the documentation for more details.
 	-- colorscheme that will be used when installing plugins.
 	install = { colorscheme = { "habamax" } },
-	-- automatically check for plugin updates
-	checker = { enabled = true },
+	-- automatically check for plugin updates (notify disabled)
+	checker = {
+		enabled = true,
+		notify = false,
+	},
+	performance = {
+		rtp = {
+			-- disable some rtp plugins for performance
+			disabled_plugins = {
+				"gzip",
+				"tarPlugin",
+				"tohtml",
+				"tutor",
+				"zipPlugin",
+			},
+		},
+	},
 })
 
 vim.api.nvim_create_autocmd("VimEnter", {
