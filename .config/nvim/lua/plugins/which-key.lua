@@ -11,6 +11,18 @@ return {
 			wk.setup({
 				preset = "modern",
 				delay = 300,
+				win = {
+					no_overlap = true,
+					padding = { 1, 2 },
+					title = true,
+					title_pos = "center",
+					zindex = 1000,
+				},
+				layout = {
+					width = { min = 20, max = 50 },
+					spacing = 3,
+					align = "left",
+				},
 				plugins = {
 					marks = true,
 					registers = true,
