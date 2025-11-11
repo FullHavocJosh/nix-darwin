@@ -1,0 +1,19 @@
+# History control
+HISTFILE=~/.zsh_history
+HISTSIZE=32768
+SAVEHIST=32768
+setopt HIST_IGNORE_ALL_DUPS
+setopt HIST_FIND_NO_DUPS
+setopt HIST_REDUCE_BLANKS
+setopt SHARE_HISTORY
+setopt APPEND_HISTORY
+
+# Autocompletion
+autoload -Uz compinit
+compinit
+
+# Case-insensitive completion
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
+
+# Ensure command hashing is off for mise
+setopt NO_HASH_CMDS
