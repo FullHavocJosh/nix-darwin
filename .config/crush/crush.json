@@ -1,9 +1,13 @@
 {
-  "provider": "bedrock",
+  "provider": "openrouter",
   "bedrock": {
     "model": "${ANTHROPIC_MODEL}",
     "region": "${AWS_REGION}",
     "profile": "${AWS_PROFILE}"
+  },
+  "openrouter": {
+    "api_key": "${OPENROUTER_API_KEY}",
+    "base_url": "https://openrouter.ai/api/v1"
   },
   "permissions": {
     "allow": [
@@ -131,7 +135,7 @@
       "Bash(screen -list)",
       "mcp_sequential-thinking_sequentialthinking",
       "mcp_memory_create_entities",
-      "mcp_memory_create_relations", 
+      "mcp_memory_create_relations",
       "mcp_memory_add_observations",
       "mcp_memory_delete_entities",
       "mcp_memory_delete_observations",
