@@ -65,7 +65,6 @@
       "terraformer"
       "tflint"
       "tfswitch"
-      "tldr"
       "tmux"
       "tpm"
       "tree-sitter"
