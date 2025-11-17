@@ -1,18 +1,6 @@
 {
-  "provider": "bedrock",
-  "copilot": {
-    "model": "claude-sonnet-4-5"
-  },
-  "bedrock": {
-    "model": "anthropic.claude-sonnet-4-5-v2",
-    "region": "us-east-1",
-    "profile": "${AWS_PROFILE}"
-  },
-  "openrouter": {
-    "api_key": "${OPENROUTER_API_KEY}",
-    "base_url": "https://openrouter.ai/api/v1",
-    "model": "anthropic/claude-3.5-sonnet"
-  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "GitHub Copilot CLI allowed commands reference. Note: gh copilot does not natively support permission enforcement - this is a reference document for consistency with other AI coding tools.",
   "permissions": {
     "allow": [
       "Bash(npm run lint)",
@@ -211,109 +199,67 @@
       "Read(~/pscloudops)",
       "Read(~/nix-darwin)"
     ],
-    "deny": []
-  },
-  "includeCoAuthoredBy": false,
-  "mcp": {
-    "memory": {
-      "command": "npx",
-      "args": ["@modelcontextprotocol/server-memory"],
-      "type": "stdio"
-    },
-    "sequential-thinking": {
-      "command": "npx",
-      "args": ["@modelcontextprotocol/server-sequential-thinking"],
-      "type": "stdio"
-    },
-    "github": {
-      "command": "npx",
-      "args": ["@edjl/github-mcp"],
-      "type": "stdio"
-    },
-    "terraform": {
-      "command": "npx",
-      "args": ["terraform-mcp-server"],
-      "type": "stdio"
-    },
-    "context7": {
-      "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp"],
-      "type": "stdio"
-    },
-    "aws-core-mcp-server": {
-      "command": "uvx",
-      "args": ["awslabs.core-mcp-server@latest"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      },
-      "type": "stdio"
-    },
-    "aws-terraform-mcp": {
-      "command": "uvx",
-      "args": ["awslabs.terraform-mcp-server@latest"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      },
-      "type": "stdio"
-    },
-    "mcp-server-chart": {
-      "command": "npx",
-      "args": ["-y", "@antv/mcp-server-chart"],
-      "type": "stdio"
-    },
-    "aws-pricing-mcp-server": {
-      "command": "uvx",
-      "args": ["awslabs.aws-pricing-mcp-server@latest"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR",
-        "AWS_PROFILE": "services"
-      },
-      "type": "stdio"
-    }
-  },
-  "lsp": {
-    "ansible": {
-      "command": "ansible-language-server",
-      "args": ["--stdio"]
-    },
-    "bash": {
-      "command": "bash-language-server",
-      "args": ["start"]
-    },
-    "dockerfile": {
-      "command": "docker-langserver",
-      "args": ["--stdio"]
-    },
-    "go": {
-      "command": "gopls"
-    },
-    "json": {
-      "command": "vscode-json-language-server",
-      "args": ["--stdio"]
-    },
-    "lua": {
-      "command": "lua-language-server"
-    },
-    "nix": {
-      "command": "nil"
-    },
-    "python": {
-      "command": "pylsp"
-    },
-    "rust": {
-      "command": "rust-analyzer"
-    },
-    "terraform": {
-      "command": "terraform-ls",
-      "args": ["serve"]
-    },
-    "typescript": {
-      "command": "typescript-language-server",
-      "args": ["--stdio"]
-    },
-    "yaml": {
-      "command": "yaml-language-server",
-      "args": ["--stdio"]
-    }
+    "deny": [
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git pull *)",
+      "Bash(git merge *)",
+      "Bash(git rebase *)",
+      "Bash(git reset *)",
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(git rm *)",
+      "Bash(git mv *)",
+      "Bash(rm *)",
+      "Bash(rmdir *)",
+      "Bash(mv *)",
+      "Bash(cp *)",
+      "Bash(mkdir *)",
+      "Bash(touch *)",
+      "Bash(chmod *)",
+      "Bash(chown *)",
+      "Bash(ln *)",
+      "Bash(stow *)",
+      "Bash(nixfmt *)",
+      "Bash(nix flake *)",
+      "Bash(darwin-rebuild *)",
+      "Bash(ansible-playbook *)",
+      "Bash(terraform apply *)",
+      "Bash(terraform destroy *)",
+      "Bash(terraform fmt *)",
+      "Bash(ulimit *)",
+      "Bash(source *)",
+      "Bash(nvim *)",
+      "Bash(neovim *)",
+      "Bash(vim *)",
+      "Bash(nano *)",
+      "Bash(emacs *)",
+      "Bash(xargs *)",
+      "Bash(kill *)",
+      "Bash(killall *)",
+      "Bash(bg *)",
+      "Bash(fg *)",
+      "Bash(nohup *)",
+      "Bash(tmux *)",
+      "Bash(screen *)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(brew install *)",
+      "Bash(brew uninstall *)",
+      "Bash(brew upgrade *)",
+      "Bash(npm install *)",
+      "Bash(npm uninstall *)",
+      "Bash(pip install *)",
+      "Bash(pip uninstall *)",
+      "mcp_github_github_pr_approve",
+      "mcp_github_github_pr_create",
+      "mcp_github_github_pr_suggest_change",
+      "mcp_aws-terraform-mcp_ExecuteTerraformCommand",
+      "mcp_aws-terraform-mcp_ExecuteTerragruntCommand",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)"
+    ]
   }
 }

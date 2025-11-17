@@ -38,6 +38,10 @@ ansible-linux/inventory/staging
 /.crush
 /.config/crush/commands/
 
+# Ignore opencode folders
+/.opencode
+/.config/opencode/commands/
+
 # Ignore k9s clusters
 /.config/k9s/clusters/
 

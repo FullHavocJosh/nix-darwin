@@ -10,45 +10,105 @@ function asc() {
 }
 
 function aidev() {
-  if aws bedrock list-foundation-models --region us-east-1 &>/dev/null; then
-    echo "✓ AWS Bedrock access confirmed. Launching Claude..."
-    command claude "$@"
-  else
-    echo "✗ AWS Bedrock access unavailable."
-    echo ""
-    echo "Choose an option:"
-    echo "  [Enter]  Trigger SSO AWS"
-    echo "  [Esc]    Launch Crush using OpenRouter"
-    echo "  [q]      Exit"
-    echo ""
-    read -k1 -s choice
-    echo
-
-    case $choice in
-      $'\n'|"")
-        echo "Triggering AWS SSO..."
-        aws sso login --sso-session aws
-        if aws bedrock list-foundation-models --region us-east-1 &>/dev/null; then
-          echo "✓ SSO AWS successful. Launching Claude..."
-          command claude "$@"
+  # Display simplified menu
+  echo "Choose your AI coding assistant:"
+  echo "  [ENTER] OpenCode (CoPilot/OpenCodeZen)"
+  echo "  [c] Crush (Bedrock/OpenRouter)"
+  echo "  [ESC] Quit"
+  echo ""
+  read -k1 -s choice
+  echo
+  case $choice in
+    $'\n'|'')
+      # OpenCode - supports: GitHub Copilot, AWS Bedrock
+      echo "Selected: OpenCode"
+      echo ""
+      
+      # Step 1: Check GitHub Copilot authentication via OpenCode
+      echo "Checking GitHub Copilot authentication..."
+      if opencode auth list 2>/dev/null | grep -q "GitHub Copilot"; then
+        echo "✓ GitHub Copilot authenticated."
+      else
+        echo "✗ GitHub Copilot not authenticated in OpenCode."
+        echo "Starting authentication..."
+        echo ""
+        opencode auth login
+        
+        # Verify authentication succeeded
+        if opencode auth list 2>/dev/null | grep -q "GitHub Copilot"; then
+          echo ""
+          echo "✓ Authentication successful! Continuing..."
         else
-          echo "✗ SSO AWS failed or AWS Bedrock unavailable."
-          echo "Falling back to Crush using OpenRouter..."
-          command crush "$@"
+          echo ""
+          echo "✗ Authentication failed or was cancelled."
+          return 1
         fi
-        ;;
-      $'\e')
-        echo "Launching Crush using OpenRouter..."
-        command crush "$@"
-        ;;
-      q|Q)
-        echo "Exiting..."
-        return 0
-        ;;
-      *)
-        echo "Invalid choice. Exiting..."
+      fi
+      echo ""
+      
+      # Step 2: Check AWS Bedrock access (optional - disabled in OpenCode config)
+      echo "Checking AWS Bedrock access..."
+      if timeout 5 aws bedrock list-foundation-models --region us-east-1 &>/dev/null; then
+        echo "✓ AWS Bedrock access confirmed (but disabled in OpenCode config)."
+      else
+        echo "⚠️  AWS Bedrock access unavailable (continuing with GitHub Copilot only)."
+      fi
+      echo ""
+      
+      # Step 3: Launch OpenCode
+      echo "Launching OpenCode..."
+      command opencode "$@"
+      ;;
+      
+    c|C)
+      # Crush - supports: AWS Bedrock, OpenRouter (NO GitHub Copilot support)
+      echo "Selected: Crush"
+      echo ""
+      
+      # Check if crush is available
+      if ! command -v crush &>/dev/null; then
+        echo "✗ Crush not found. Please install it first."
         return 1
-        ;;
-    esac
-  fi
+      fi
+      
+      # Step 1: Check AWS Bedrock access
+      echo "Checking AWS Bedrock access..."
+      if timeout 5 aws bedrock list-foundation-models --region us-east-1 &>/dev/null; then
+        echo "✓ AWS Bedrock access confirmed."
+        echo "Setting Crush provider to: bedrock"
+        sed -i.bak 's/"provider": "[^"]*"/"provider": "bedrock"/' ~/.config/crush/crush.json
+      else
+        echo "✗ AWS Bedrock access unavailable."
+        echo "Triggering AWS SSO (30s timeout)..."
+        if timeout 30 aws sso login --sso-session aws; then
+          if timeout 5 aws bedrock list-foundation-models --region us-east-1 &>/dev/null; then
+            echo "✓ AWS SSO successful. Bedrock available."
+            echo "Setting Crush provider to: bedrock"
+            sed -i.bak 's/"provider": "[^"]*"/"provider": "bedrock"/' ~/.config/crush/crush.json
+          else
+            echo "⚠️  AWS Bedrock still unavailable. Falling back to OpenRouter."
+            sed -i.bak 's/"provider": "[^"]*"/"provider": "openrouter"/' ~/.config/crush/crush.json
+          fi
+        else
+          echo "⚠️  AWS SSO timed out or failed. Falling back to OpenRouter."
+          sed -i.bak 's/"provider": "[^"]*"/"provider": "openrouter"/' ~/.config/crush/crush.json
+        fi
+      fi
+      echo ""
+      
+      # Step 2: Launch Crush
+      echo "Launching Crush..."
+      command crush "$@"
+      ;;
+      
+    $'\e')
+      echo "Exiting..."
+      return 0
+      ;;
+      
+    *)
+      echo "Invalid choice. Please press [ENTER], [c], or [ESC]."
+      return 1
+      ;;
+  esac
 }

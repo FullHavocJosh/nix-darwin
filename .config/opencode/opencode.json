@@ -1,0 +1,332 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "disabled_providers": ["bedrock", "amazon-bedrock"],
+  "model": "github-copilot/claude-sonnet-4.5",
+  "theme": "catppuccin",
+  "keybinds": {
+    "input_newline": "shift+enter,ctrl+j"
+  },
+  "tools": {
+    "read": true,
+    "grep": true,
+    "glob": true,
+    "list": true,
+    "edit": true,
+    "write": true,
+    "bash": true,
+    "webfetch": true,
+    "todoread": true,
+    "todowrite": true,
+    "patch": true
+  },
+  "formatter": {
+    "prettier": {
+      "command": ["prettier", "--write", "$FILE"],
+      "extensions": [".js", ".jsx", ".ts", ".tsx", ".json", ".yaml", ".yml", ".md", ".html", ".css"]
+    },
+    "nixfmt": {
+      "command": ["nixfmt", "$FILE"],
+      "extensions": [".nix"]
+    },
+    "terraform": {
+      "command": ["terraform", "fmt", "$FILE"],
+      "extensions": [".tf", ".tfvars"]
+    },
+    "shfmt": {
+      "command": ["shfmt", "-w", "$FILE"],
+      "extensions": [".sh", ".bash", ".zsh"]
+    },
+    "stylua": {
+      "command": ["stylua", "$FILE"],
+      "extensions": [".lua"]
+    },
+    "ruff": {
+      "command": ["ruff", "format", "$FILE"],
+      "extensions": [".py", ".pyi"]
+    },
+    "gofmt": {
+      "command": ["gofmt", "-w", "$FILE"],
+      "extensions": [".go"]
+    }
+  },
+  "permission": {
+    "bash": {
+      "npm run lint": "allow",
+      "npm run test:*": "allow",
+      "git status": "allow",
+      "git log *": "allow",
+      "git show *": "allow",
+      "git diff *": "allow",
+      "git branch *": "allow",
+      "git remote *": "allow",
+      "git config --list": "allow",
+      "git config --get *": "allow",
+      "cat *": "allow",
+      "view *": "allow",
+      "grep *": "allow",
+      "ls *": "allow",
+      "find *": "allow",
+      "brew search *": "allow",
+      "brew list *": "allow",
+      "brew info *": "allow",
+      "nix --version": "allow",
+      "nix --help": "allow",
+      "nix search *": "allow",
+      "nix show-config": "allow",
+      "ansible --version": "allow",
+      "ansible --help": "allow",
+      "ansible-config list": "allow",
+      "ansible-config dump": "allow",
+      "ansible-config view": "allow",
+      "ansible-doc *": "allow",
+      "ansible-galaxy list *": "allow",
+      "ansible-galaxy info *": "allow",
+      "ansible-galaxy search *": "allow",
+      "ansible-playbook --check *": "allow",
+      "ansible-playbook --syntax-check *": "allow",
+      "ansible-playbook --list-*": "allow",
+      "ansible-lint *": "allow",
+      "ansible-inventory *": "allow",
+      "terraform init": "allow",
+      "terraform validate": "allow",
+      "terraform plan *": "allow",
+      "terraform show *": "allow",
+      "terraform state list": "allow",
+      "terraform state show *": "allow",
+      "terraform state pull": "allow",
+      "terraform output *": "allow",
+      "terraform workspace list": "allow",
+      "terraform workspace show": "allow",
+      "terraform providers *": "allow",
+      "terraform version": "allow",
+      "go build *": "allow",
+      "go test *": "allow",
+      "go mod tidy": "allow",
+      "go mod download": "allow",
+      "go mod verify": "allow",
+      "go version": "allow",
+      "python -m py_compile *": "allow",
+      "python -m pytest *": "allow",
+      "python --version": "allow",
+      "cargo build": "allow",
+      "cargo test *": "allow",
+      "cargo check *": "allow",
+      "cargo --version": "allow",
+      "aws sts get-caller-identity *": "allow",
+      "aws sts get-session-token *": "allow",
+      "aws sts assume-role *": "allow",
+      "aws configure list *": "allow",
+      "aws configure get *": "allow",
+      "aws iam get-user *": "allow",
+      "aws iam get-role *": "allow",
+      "aws iam list-*": "allow",
+      "aws iam get-*": "allow",
+      "aws ec2 describe-*": "allow",
+      "aws s3 ls *": "allow",
+      "aws s3 head-object *": "allow",
+      "aws s3api list-*": "allow",
+      "aws s3api get-*": "allow",
+      "aws s3api head-*": "allow",
+      "aws lambda list-*": "allow",
+      "aws lambda get-*": "allow",
+      "aws logs describe-*": "allow",
+      "aws logs get-*": "allow",
+      "aws cloudformation list-*": "allow",
+      "aws cloudformation describe-*": "allow",
+      "aws cloudformation get-*": "allow",
+      "aws eks list-*": "allow",
+      "aws eks describe-*": "allow",
+      "aws rds describe-*": "allow",
+      "aws bedrock list-*": "allow",
+      "aws bedrock get-*": "allow",
+      "aws ssm get-parameter *": "allow",
+      "aws ssm get-parameters *": "allow",
+      "aws ssm describe-parameters *": "allow",
+      "aws secretsmanager list-secrets *": "allow",
+      "aws secretsmanager describe-secret *": "allow",
+      "aws secretsmanager get-secret-value *": "allow",
+      "aws --version": "allow",
+      "aws --help": "allow",
+      "env | grep *": "allow",
+      "echo *": "allow",
+      "which *": "allow",
+      "whereis *": "allow",
+      "type *": "allow",
+      "head *": "allow",
+      "tail *": "allow",
+      "wc *": "allow",
+      "sort *": "allow",
+      "uniq *": "allow",
+      "awk *": "allow",
+      "sed *": "allow",
+      "cut *": "allow",
+      "tr *": "allow",
+      "file *": "allow",
+      "stat *": "allow",
+      "du *": "allow",
+      "df *": "allow",
+      "ps *": "allow",
+      "top *": "allow",
+      "htop *": "allow",
+      "jobs *": "allow",
+      "tmux list-sessions": "allow",
+      "tmux list-windows": "allow",
+      "tmux list-panes": "allow",
+      "screen -list": "allow",
+      "git add *": "deny",
+      "git commit *": "deny",
+      "git push *": "deny",
+      "git pull *": "deny",
+      "git merge *": "deny",
+      "git rebase *": "deny",
+      "git reset *": "deny",
+      "git checkout *": "deny",
+      "git switch *": "deny",
+      "git rm *": "deny",
+      "git mv *": "deny",
+      "rm *": "deny",
+      "rmdir *": "deny",
+      "mv *": "deny",
+      "cp *": "deny",
+      "mkdir *": "deny",
+      "touch *": "deny",
+      "chmod *": "deny",
+      "chown *": "deny",
+      "ln *": "deny",
+      "stow *": "deny",
+      "nixfmt *": "deny",
+      "nix flake *": "deny",
+      "darwin-rebuild *": "deny",
+      "ansible-playbook *": "deny",
+      "terraform apply *": "deny",
+      "terraform destroy *": "deny",
+      "terraform fmt *": "deny",
+      "ulimit *": "deny",
+      "source *": "deny",
+      "nvim *": "deny",
+      "neovim *": "deny",
+      "vim *": "deny",
+      "nano *": "deny",
+      "emacs *": "deny",
+      "xargs *": "deny",
+      "kill *": "deny",
+      "killall *": "deny",
+      "bg *": "deny",
+      "fg *": "deny",
+      "nohup *": "deny",
+      "tmux *": "deny",
+      "screen *": "deny",
+      "curl *": "deny",
+      "wget *": "deny",
+      "brew install *": "deny",
+      "brew uninstall *": "deny",
+      "brew upgrade *": "deny",
+      "npm install *": "deny",
+      "npm uninstall *": "deny",
+      "pip install *": "deny",
+      "pip uninstall *": "deny"
+    },
+    "edit": "allow",
+    "webfetch": "allow",
+    "doom_loop": "ask",
+    "external_directory": "ask"
+  },
+  "lsp": {
+    "ansible": {
+      "command": ["ansible-language-server", "--stdio"],
+      "extensions": [".yml", ".yaml"]
+    },
+    "bash": {
+      "command": ["bash-language-server", "start"],
+      "extensions": [".sh", ".bash", ".zsh"]
+    },
+    "dockerfile": {
+      "command": ["docker-langserver", "--stdio"],
+      "extensions": [".dockerfile"]
+    },
+    "go": {
+      "command": ["gopls"],
+      "extensions": [".go"]
+    },
+    "json": {
+      "command": ["vscode-json-language-server", "--stdio"],
+      "extensions": [".json", ".jsonc"]
+    },
+    "lua": {
+      "command": ["lua-language-server"],
+      "extensions": [".lua"]
+    },
+    "nix": {
+      "command": ["nil"],
+      "extensions": [".nix"]
+    },
+    "python": {
+      "command": ["pylsp"],
+      "extensions": [".py", ".pyi"]
+    },
+    "rust": {
+      "command": ["rust-analyzer"],
+      "extensions": [".rs"]
+    },
+    "terraform": {
+      "command": ["terraform-ls", "serve"],
+      "extensions": [".tf", ".tfvars"]
+    },
+    "typescript": {
+      "command": ["typescript-language-server", "--stdio"],
+      "extensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]
+    },
+    "yaml": {
+      "command": ["yaml-language-server", "--stdio"],
+      "extensions": [".yml", ".yaml"]
+    }
+  },
+  "mcp": {
+    "memory": {
+      "type": "local",
+      "command": ["npx", "@modelcontextprotocol/server-memory"]
+    },
+    "sequential-thinking": {
+      "type": "local",
+      "command": ["npx", "@modelcontextprotocol/server-sequential-thinking"]
+    },
+    "github": {
+      "type": "local",
+      "command": ["npx", "@edjl/github-mcp"]
+    },
+    "terraform": {
+      "type": "local",
+      "command": ["npx", "terraform-mcp-server"]
+    },
+    "context7": {
+      "type": "local",
+      "command": ["npx", "-y", "@upstash/context7-mcp"]
+    },
+    "aws-core-mcp-server": {
+      "type": "local",
+      "command": ["uvx", "awslabs.core-mcp-server@latest"],
+      "environment": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    },
+    "aws-terraform-mcp": {
+      "type": "local",
+      "command": ["uvx", "awslabs.terraform-mcp-server@latest"],
+      "environment": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    },
+    "mcp-server-chart": {
+      "type": "local",
+      "command": ["npx", "-y", "@antv/mcp-server-chart"]
+    },
+    "aws-pricing-mcp-server": {
+      "type": "local",
+      "command": ["uvx", "awslabs.aws-pricing-mcp-server@latest"],
+      "environment": {
+        "FASTMCP_LOG_LEVEL": "ERROR",
+        "AWS_PROFILE": "services"
+      }
+    }
+  }
+}

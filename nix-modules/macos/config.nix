@@ -8,6 +8,14 @@
   # Create font aliases by modifying font metadata
   # This allows Core Text to recognize "JetBrains Mono" as an alias for "JetBrainsMono Nerd Font Mono"
   system.activationScripts.postUserActivation.text = ''
+    # Install GitHub Copilot CLI extension if not already installed
+    if command -v gh &>/dev/null; then
+      if ! gh extension list 2>/dev/null | grep -q "gh-copilot"; then
+        echo "Installing GitHub Copilot CLI extension..."
+        gh extension install github/gh-copilot 2>/dev/null || echo "Failed to install gh-copilot extension"
+      fi
+    fi
+
     echo "Creating font aliases for terminal compatibility..."
 
     # Create aliased fonts directory

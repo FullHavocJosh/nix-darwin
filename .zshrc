@@ -45,3 +45,4 @@ eval "$(zoxide init zsh)"
 export PATH="$PATH:/Users/havoc/.lmstudio/bin"
 # End of LM Studio CLI section
 
+export PATH="/opt/homebrew/opt/node@24/bin:$PATH"
