@@ -264,7 +264,7 @@
       "pip install *": "deny",
       "pip uninstall *": "deny"
     },
-    "edit": "allow",
+    "edit": "ask",
     "webfetch": "allow",
     "doom_loop": "ask",
     "external_directory": "ask"
