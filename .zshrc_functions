@@ -32,6 +32,9 @@ function aidev() {
         echo "✗ GitHub Copilot not authenticated in OpenCode."
         echo "Starting authentication..."
         echo ""
+        echo "Opening GitHub device login page..."
+        open "https://github.com/login/device/"
+        echo ""
         opencode auth login
         
         # Verify authentication succeeded
