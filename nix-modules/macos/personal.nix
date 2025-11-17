@@ -20,7 +20,7 @@
   system.defaults = {
     dock.persistent-apps = [
       "/Applications/Ghostty.app"
-      "/System/Cryptexes/App/System/Applications/Safari.app"
+      "/Applications/Zen.app"
       "/System/Applications/Music.app"
       "/System/Applications/Notes.app"
       "/Applications/Obsidian.app"
@@ -55,10 +55,6 @@
     # Install App Store Apps, search for ID with "mas search "
     # You must be logged into the Apps Store, and you must have purchased the app
     masApps = {
-      "Proton Pass for Safari" = 6502835663;
-      "SponsorBlock for Safari" = 1573461917;
-      "uBlock Origin Lite" = 6745342698;
-      "Dark Reader for Safari" = 1438243180;
       "WireGuard" = 1451685025;
     };
   };

@@ -51,8 +51,6 @@
     # Install App Store Apps, search for ID with "mas search "
     # You must be logged into the Apps Store, and you must have purchased the app
     masApps = {
-      "VMware Remote Console" = 1230249825;
-      "Xcode" = 497799835;
     };
   };
 }
