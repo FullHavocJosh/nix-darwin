@@ -1,8 +1,11 @@
-{ pkgs, config, ... }: {
+{ pkgs, config, ... }:
+{
   environment.systemPackages = with pkgs; [
     nil
     smassh
-    python3Packages.fonttools  # For creating font aliases
+    python3Packages.fonttools # For creating font aliases
+    lemminx # XML Language Server
+    rubyPackages.rubocop # Ruby linter/formatter
   ];
 
   homebrew = {
@@ -23,6 +26,7 @@
       "cmake"
       "coreutils"
       "crush"
+      "djlint"
       "dockerfile-language-server"
       "exiftool"
       "eza"
@@ -54,6 +58,7 @@
       "rust"
       "rust-analyzer"
       "shfmt"
+      "solargraph"
       "speedtest-cli"
       "sshpass"
       "starship"
@@ -61,6 +66,7 @@
       "stylua"
       "superfile"
       "syncthing"
+      "taplo"
       "tealdeer"
       "telnet"
       "terraform-inventory"

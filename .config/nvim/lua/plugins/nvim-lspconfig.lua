@@ -89,6 +89,11 @@ return {
 					},
 				},
 				terraformls = {},
+				powershell_es = {},
+
+				solargraph = {},
+				lemminx = {},
+				taplo = {},
 			}
 
 			for server, config in pairs(servers) do

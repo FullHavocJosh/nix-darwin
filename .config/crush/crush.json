@@ -314,6 +314,27 @@
     "yaml": {
       "command": "yaml-language-server",
       "args": ["--stdio"]
+    },
+    "powershell": {
+      "command": "pwsh",
+      "args": [
+        "-NoLogo",
+        "-NoProfile",
+        "-Command",
+        "$PSES_BUNDLE_PATH = (Get-ChildItem -Path ~/.vscode/extensions/ms-vscode.powershell-*/modules/PowerShellEditorServices | Select-Object -First 1).FullName; Import-Module \"$PSES_BUNDLE_PATH/PowerShellEditorServices.psd1\"; Start-EditorServices -HostName 'Crush' -HostProfileId 'Crush' -HostVersion '1.0.0' -BundledModulesPath $PSES_BUNDLE_PATH -LogLevel Normal -LogPath /tmp/pses.log -SessionDetailsPath /tmp/session.json -FeatureFlags @() -AdditionalModules @() -Stdio"
+      ]
+    },
+
+    "ruby": {
+      "command": "solargraph",
+      "args": ["stdio"]
+    },
+    "xml": {
+      "command": "lemminx"
+    },
+    "toml": {
+      "command": "taplo",
+      "args": ["lsp", "stdio"]
     }
   }
 }

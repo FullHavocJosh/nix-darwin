@@ -22,7 +22,18 @@
   "formatter": {
     "prettier": {
       "command": ["prettier", "--write", "$FILE"],
-      "extensions": [".js", ".jsx", ".ts", ".tsx", ".json", ".yaml", ".yml", ".md", ".html", ".css"]
+      "extensions": [
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".md",
+        ".html",
+        ".css"
+      ]
     },
     "nixfmt": {
       "command": ["nixfmt", "$FILE"],
@@ -47,6 +58,33 @@
     "gofmt": {
       "command": ["gofmt", "-w", "$FILE"],
       "extensions": [".go"]
+    },
+    "powershell": {
+      "command": [
+        "pwsh",
+        "-Command",
+        "Invoke-Formatter",
+        "-ScriptDefinition",
+        "$(cat $FILE)"
+      ],
+      "extensions": [".ps1", ".psm1"]
+    },
+
+    "rubocop": {
+      "command": ["rubocop", "-a", "$FILE"],
+      "extensions": [".rb"]
+    },
+    "xmllint": {
+      "command": ["xmllint", "--format", "$FILE"],
+      "extensions": [".xml"]
+    },
+    "taplo": {
+      "command": ["taplo", "format", "$FILE"],
+      "extensions": [".toml"]
+    },
+    "djlint": {
+      "command": ["djlint", "--reformat", "$FILE"],
+      "extensions": [".j2", ".jinja", ".jinja2"]
     }
   },
   "permission": {
@@ -279,6 +317,29 @@
     "yaml": {
       "command": ["yaml-language-server", "--stdio"],
       "extensions": [".yml", ".yaml"]
+    },
+    "powershell": {
+      "command": [
+        "pwsh",
+        "-NoLogo",
+        "-NoProfile",
+        "-Command",
+        "$PSES_BUNDLE_PATH = (Get-ChildItem -Path ~/.vscode/extensions/ms-vscode.powershell-*/modules/PowerShellEditorServices | Select-Object -First 1).FullName; Import-Module \"$PSES_BUNDLE_PATH/PowerShellEditorServices.psd1\"; Start-EditorServices -HostName 'OpenCode' -HostProfileId 'OpenCode' -HostVersion '1.0.0' -BundledModulesPath $PSES_BUNDLE_PATH -LogLevel Normal -LogPath /tmp/pses.log -SessionDetailsPath /tmp/session.json -FeatureFlags @() -AdditionalModules @() -Stdio"
+      ],
+      "extensions": [".ps1", ".psm1", ".psd1"]
+    },
+
+    "ruby": {
+      "command": ["solargraph", "stdio"],
+      "extensions": [".rb"]
+    },
+    "xml": {
+      "command": ["lemminx"],
+      "extensions": [".xml"]
+    },
+    "toml": {
+      "command": ["taplo", "lsp", "stdio"],
+      "extensions": [".toml"]
     }
   },
   "mcp": {
