@@ -44,25 +44,11 @@ keymap.set("n", "<leader>w-", "<C-w>-") -- Decrease split height
 -- Vim-maximizer
 -- keymap.set("n", "<leader>sm", ":MaximizerToggle<CR>") -- Toggle split window maximization
 
--- Nvim-tree - Smart toggle behavior
-local function smart_nvim_tree_toggle()
-    local nvim_tree = require("nvim-tree.api")
-    local view = require("nvim-tree.view")
-    
-    -- Check if we're currently in nvim-tree
-    if vim.bo.filetype == 'NvimTree' then
-        -- We're in nvim-tree, close it
-        nvim_tree.tree.close()
-    elseif view.is_visible() then
-        -- nvim-tree is open but we're not in it, focus it
-        nvim_tree.tree.focus()
-    else
-        -- nvim-tree is closed, open and focus it
-        nvim_tree.tree.open()
-    end
-end
-
-keymap.set("n", "<leader>e", smart_nvim_tree_toggle) -- Smart nvim-tree toggle
+-- Neo-tree keybindings
+keymap.set("n", "<leader>e", ":Neotree toggle<CR>", { desc = "Toggle Neo-tree" })
+keymap.set("n", "<leader>o", ":Neotree filesystem reveal left<CR>", { desc = "Reveal current file in Neo-tree" })
+keymap.set("n", "<leader>bf", ":Neotree buffers reveal float<CR>", { desc = "Show buffers in Neo-tree" })
+keymap.set("n", "<leader>gs", ":Neotree git_status<CR>", { desc = "Show git status in Neo-tree" })
 
 -- Telescope
 keymap.set("n", "<leader>f", "<cmd>Telescope find_files<cr>") -- Find files within current working directory, respects .gitignore
@@ -75,7 +61,6 @@ keymap.set("n", "<leader>h", "<cmd>Telescope help_tags<cr>") -- List available h
 -- keymap.set("n", "<leader>gc", "<cmd>Telescope git_commits<cr>") -- List all git commits (use <cr> to checkout) ["gc" for git commits
 keymap.set("n", "<leader>gc", "<cmd>Telescope git_bcommits<cr>") -- List git commits for current file/buffer (use <cr> to checkout) ["gfc" for git file commits
 -- keymap.set("n", "<leader>gb", "<cmd>Telescope git_branches<cr>") -- List git branches (use <cr> to checkout) ["gb" for git branch]
-keymap.set("n", "<leader>gs", "<cmd>Telescope git_status<cr>") -- List current changes per file with diff preview ["gs" for git status]
 
 -- LSP Keybinds
 keymap.set("n", "gd", "<cmd>Lspsaga goto_definition<CR>") -- Go to definition
@@ -90,17 +75,10 @@ keymap.set("n", "<leader>sw", '<cmd>lua require("spectre").open_visual({select_w
 keymap.set("v", "<leader>sw", '<esc><cmd>lua require("spectre").open_visual()<CR>') -- Search current selection
 keymap.set("n", "<leader>sp", '<cmd>lua require("spectre").open_file_search({select_word=true})<CR>') -- Search in current file
 
--- Buffer navigation
+-- Buffer navigation (simplified without bufferline)
 keymap.set("n", "<leader>x", ":bdelete<CR>") -- Close current buffer
-keymap.set("n", "<Tab>", ":BufferLineCycleNext<CR>") -- Next buffer
-keymap.set("n", "<S-Tab>", ":BufferLineCyclePrev<CR>") -- Previous buffer
-keymap.set("n", "<leader>1", ":BufferLineGoToBuffer 1<CR>") -- Go to buffer 1
-keymap.set("n", "<leader>2", ":BufferLineGoToBuffer 2<CR>") -- Go to buffer 2
-keymap.set("n", "<leader>3", ":BufferLineGoToBuffer 3<CR>") -- Go to buffer 3
-keymap.set("n", "<leader>4", ":BufferLineGoToBuffer 4<CR>") -- Go to buffer 4
-keymap.set("n", "<leader>5", ":BufferLineGoToBuffer 5<CR>") -- Go to buffer 5
+keymap.set("n", "<Tab>", ":bnext<CR>") -- Next buffer
+keymap.set("n", "<S-Tab>", ":bprevious<CR>") -- Previous buffer
 
 -- Tmux integration - pass through Ctrl+t to tmux
 keymap.set("n", "<C-t>", "<C-t>", { noremap = false, silent = true })
-
-
