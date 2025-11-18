@@ -20,6 +20,15 @@ return {
 			enable_diagnostics = true,
 			open_files_do_not_replace_types = { "terminal", "trouble", "qf" },
 			sort_case_insensitive = false,
+			-- Close neo-tree when opening a file
+			event_handlers = {
+				{
+					event = "file_opened",
+					handler = function()
+						require("neo-tree.command").execute({ action = "close" })
+					end,
+				},
+			},
 			default_component_configs = {
 				container = {
 					enable_character_fade = true,
@@ -31,10 +40,7 @@ return {
 					indent_marker = "│",
 					last_indent_marker = "└",
 					highlight = "NeoTreeIndentMarker",
-					with_expanders = nil,
-					expander_collapsed = "",
-					expander_expanded = "",
-					expander_highlight = "NeoTreeExpander",
+					with_expanders = false,
 				},
 				icon = {
 					folder_closed = "",
@@ -68,8 +74,15 @@ return {
 				},
 			},
 			window = {
-				position = "left",
-				width = 35,
+				position = "float",
+				width = 40,
+				popup = {
+					position = { col = "50%", row = "50%" },
+					size = {
+						height = "80%",
+						width = "50%",
+					},
+				},
 				mapping_options = {
 					noremap = true,
 					nowait = true,
@@ -212,7 +225,7 @@ return {
 			pattern = "*",
 			callback = function()
 				vim.defer_fn(function()
-					vim.cmd("Neotree filesystem reveal left")
+					vim.cmd("Neotree filesystem reveal float")
 				end, 100)
 			end,
 		})
