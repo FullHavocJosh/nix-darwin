@@ -27,11 +27,18 @@ vim.opt.autoread = true
 vim.opt.updatetime = 250
 
 vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold" }, {
-  pattern = "*",
-  command = "if mode() != 'c' && mode() != 'i' | checktime | endif",
+	pattern = "*",
+	command = "if mode() != 'c' && mode() != 'i' | checktime | endif",
 })
 
 vim.opt.splitright = true
 vim.opt.splitbelow = true
 vim.opt.iskeyword:append("-")
-vim.opt.cmdheight = 0
+vim.opt.cmdheight = 1
+
+-- Reduce "Press ENTER" prompts
+vim.opt.shortmess:append("c") -- Don't show completion messages
+vim.opt.shortmess:append("I") -- Don't show intro message
+vim.opt.shortmess:append("W") -- Don't show "written" messages
+vim.opt.shortmess:append("F") -- Don't show file info when editing
+vim.opt.shortmess:append("A") -- Don't show "ATTENTION" messages
