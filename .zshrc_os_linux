@@ -2,6 +2,9 @@
 if [[ "$(uname)" == "Linux" ]]; then
   echo "ZSH Configuration for Linux..."
 
+  # Add local bin directories to PATH
+  export PATH="$HOME/.local/bin:$HOME/go/bin:$HOME/.cargo/bin:$HOME/.npm-global/bin:$PATH"
+
   # Prepend Homebrew's bin directory to your PATH
   export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
 

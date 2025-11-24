@@ -19,133 +19,163 @@ softwareupdate --install-rosetta
 
 #### For Fedora Linux
 
-**Quick Start**: If you prefer automated installation, see the [Ansible (Linux)](#ansible-linux) section below. The following manual installation provides the same packages.
+**Quick Start**: If you prefer automated installation, see the [Ansible (Linux)](#ansible-linux) section below.
+
+##### DNF Packages (Core System)
 
 ```bash
-# Essential prerequisites
-sudo dnf install -y git ansible stow
+sudo dnf install -y git ansible stow zsh util-linux-user fzf neovim tmux gh openssl curl wget which htop vim golang python3 python3-pip python3-devel rust cargo nodejs npm ruby ruby-devel cmake make gcc gcc-c++ kernel-devel fd-find ripgrep btop fastfetch tree watch telnet tar gzip unzip jq openssh-clients sshpass graphviz alacritty kitty nerd-fonts 'mozilla-fira*' fira-code-fonts google-noto-emoji-fonts python3-lsp-server ansible-lint yamllint kubectl speedtest-cli syncthing tldr
+```
 
-# Core packages required by .zshrc and configurations
-sudo dnf install -y \
-    zsh \
-    fzf \
-    neovim \
-    tmux \
-    gh \
-    openssl
+##### COPR Repositories
 
-# Note: These tools require special installation:
-# - starship: Install via script: curl -sS https://starship.rs/install.sh | sh
-# - atuin: Install via script: bash <(curl --proto '=https' --tlsv1.2 -sSf https://setup.atuin.sh)
-# - eza, zoxide: Install via cargo (see "Additional cargo-based tools" below)
-# - awscli2: Install from AWS: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
-# - terraform: Install from HashiCorp: https://developer.hashicorp.com/terraform/install
+```bash
+sudo dnf copr enable -y solopasha/hyprland && sudo dnf install -y hyprland hyprlock hypridle hyprpaper waybar
+```
 
-# Development tools referenced in shell configuration
-sudo dnf install -y \
-    golang \
-    python3 \
-    python3-pip \
-    python3-devel \
-    rust \
-    cargo \
-    nodejs \
-    npm \
-    cmake \
-    make \
-    gcc \
-    gcc-c++
+##### Cargo Tools
 
-# CLI tools referenced in aliases and functions
-sudo dnf install -y \
-    fd-find \
-    ripgrep \
-    btop \
-    fastfetch \
-    tree \
-    stow \
-    watch \
-    telnet \
-    tar \
-    gzip \
-    unzip \
-    which \
-    htop \
-    vim \
-    curl \
-    wget \
-    jq
+```bash
+cargo install eza zoxide stylua taplo-cli tealdeer
+```
 
-# Network tools
-sudo dnf install -y \
-    openssh-clients \
-    sshpass
+##### Go Tools
 
-# Kubernetes tools (optional, used by zinit plugins)
-sudo dnf install -y \
-    kubectl \
-    kubectx
+```bash
+# Note: golangci-lint has a dependency issue with asciicheck. Use the official installer instead:
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
 
-# Additional development tools (optional)
-sudo dnf install -y \
-    ansible-lint \
-    golangci-lint \
-    lua-language-server \
-    prettier \
-    speedtest-cli \
-    syncthing \
-    tldr
+# Install remaining Go tools
+go install github.com/derailed/k9s@latest && \
+go install golang.org/x/tools/gopls@latest && \
+go install github.com/nametake/golangci-lint-langserver@latest
 
-# GUI applications (if using desktop environment)
-sudo dnf install -y flatpak
+# Install Go 1.25.0 for superfile (requires Go 1.25.0+)
+go install golang.org/dl/go1.25.0@latest && go1.25.0 download
 
-# Terminal emulators (optional, choose one or more)
-sudo dnf install -y alacritty kitty
+# Install superfile with Go 1.25.0 (note: package renamed from MHNightCat to yorukot)
+go1.25.0 install github.com/yorukot/superfile@latest
+```
 
-# Nerd Fonts for proper icon display in terminals
-sudo dnf install -y \
-    jetbrains-mono-fonts-all \
-    'mozilla-fira*' \
-    fira-code-fonts
+##### NPM Language Servers
 
-# Tools with configs in .config/ that need manual installation:
-# - ghostty: Terminal emulator - https://ghostty.org
-# - k9s: Kubernetes CLI - go install github.com/derailed/k9s@latest
-# - superfile: File manager - go install github.com/MHNightCat/superfile@latest
-# - crush: AI coding assistant - Install from source
-# - opencode: AI coding assistant - Install from source
-# - terraform-ls: Terraform LSP - Download from HashiCorp releases
-# - tflint: Terraform linter - https://github.com/terraform-linters/tflint
-# - tfswitch: Terraform version manager - https://tfswitch.warrensbox.com
+```bash
+# Configure npm to use user directory (avoid permission issues)
+mkdir -p ~/.npm-global
+npm config set prefix '~/.npm-global'
 
-# Hyprland desktop environment (optional, for Wayland)
-sudo dnf install -y \
-    hyprland \
-    hyprlock \
-    hypridle \
-    hyprpaper \
-    waybar
+# Install language servers
+npm install -g typescript-language-server bash-language-server yaml-language-server vscode-langservers-extracted dockerfile-language-server-nodejs prettier pyright
+```
 
-# Additional cargo-based tools (requires rust/cargo from above)
-cargo install eza zoxide
+##### Python Tools
 
-# Add Flathub repository
-flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+```bash
+pip3 install --user python-lsp-server ruff ruff-lsp djlint
+```
 
-# Install starship prompt
+##### Ruby Tools
+
+```bash
+gem install --user-install rubocop solargraph
+```
+
+##### Script Installations
+
+```bash
 curl -sS https://starship.rs/install.sh | sh
+```
 
-# Install atuin shell history
+```bash
 bash <(curl --proto '=https' --tlsv1.2 -sSf https://setup.atuin.sh)
+```
 
-# Install AWS CLI v2 (download and run installer)
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-unzip awscliv2.zip
-sudo ./aws/install
-rm -rf aws awscliv2.zip
+```bash
+# Install JetBrains Mono Nerd Font for proper icon display in tmux/terminal
+mkdir -p ~/.local/share/fonts
+cd ~/.local/share/fonts
+curl -fLO https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
+unzip JetBrainsMono.zip -d JetBrainsMono
+rm JetBrainsMono.zip
+fc-cache -fv
+cd -
+```
 
-# Optional: Install terraform (or use tfenv for version management)
-# See: https://developer.hashicorp.com/terraform/install
+```bash
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && unzip awscliv2.zip && sudo ./aws/install && rm -rf aws awscliv2.zip
+```
+
+```bash
+curl -L https://github.com/serokell/nixfmt/releases/latest/download/nixfmt-x86_64-linux -o ~/.local/bin/nixfmt && chmod +x ~/.local/bin/nixfmt
+```
+
+```bash
+curl -L https://raw.githubusercontent.com/warrensbox/terraform-switcher/release/install.sh | bash
+```
+
+```bash
+go install github.com/hashicorp/terraform-ls@latest
+```
+
+```bash
+curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+```
+
+##### Homebrew on Linux
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" && eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+```
+
+```bash
+brew install borders crush opencode shfmt hadolint tree-sitter opentofu ansible-language-server terraform-ls tflint tfswitch
+```
+
+##### Flatpak GUI Applications
+
+```bash
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+```
+
+```bash
+flatpak install -y flathub org.kde.krita org.videolan.VLC com.plexamp.Plexamp io.gitlab.librewolf-community com.google.Chrome com.sublimetext.three com.github.Eloston.UngoogledChromium
+```
+
+##### Manual Downloads
+
+- **Ghostty**: https://ghostty.org
+- **Neovide**: https://github.com/neovide/neovide/releases
+- **Claude Desktop**: https://claude.ai
+- **LM Studio**: https://lmstudio.ai
+- **QMK Toolbox**: https://github.com/qmk/qmk_toolbox
+- **VIA**: https://www.caniusevia.com
+- **BalenaEtcher**: https://www.balena.io/etcher
+
+##### Notes
+
+- **PATH Setup**: Ensure these are in your `~/.zshrc` or `~/.bashrc`:
+  ```bash
+  export PATH="$HOME/.local/bin:$HOME/go/bin:$HOME/.cargo/bin:$PATH"
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" # If using Homebrew
+  ```
+
+- **Zinit**: Auto-installs on first zsh launch
+- **TPM (Tmux Plugin Manager)**: Auto-installs on first tmux launch
+- **Neovim Plugins**: LazyVim auto-installs on first nvim launch
+- **Language Servers**: Most will be auto-installed by LazyVim when opening relevant files
+- **Nerd Fonts**: Ensure your terminal is configured to use "JetBrainsMono Nerd Font" (not just "JetBrains Mono") for proper icon display in tmux and other applications
+
+##### Post-Installation
+
+```bash
+# Set zsh as default shell
+chsh -s $(which zsh)
+
+# Make Hyprland scripts executable (if using Hyprland)
+chmod +x ~/.config/hypr/scripts/*.sh
+
+# Reload shell
+exec zsh
 ```
 
 ### Setup Process

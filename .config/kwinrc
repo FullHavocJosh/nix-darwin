@@ -8,10 +8,15 @@ blurEnabled=true
 glideEnabled=true
 magiclampEnabled=true
 overviewEnabled=false
+poloniumEnabled=false
 scaleEnabled=false
 shakecursorEnabled=false
 squashEnabled=false
 wobblywindowsEnabled=true
+
+[Script-polonium]
+Borders=2
+MaximizeSingle=true
 
 [Tiling]
 padding=4
@@ -58,6 +63,9 @@ tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"wi
 [Tiling][c61ea0e4-06fe-41a2-895c-2879a29e3a06][a85a1670-1b89-425b-9730-896e69d24e72]
 tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
 
+[Tiling][c61ea0e4-06fe-41a2-895c-2879a29e3a06][bbc77c9a-fd21-46fb-84a1-6a6bd6643d2c]
+tiles={"layoutDirection":"horizontal","tiles":[]}
+
 [Tiling][c61ea0e4-06fe-41a2-895c-2879a29e3a06][c16a890e-91ab-453e-8d4d-d36a54a664b3]
 tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
 
@@ -79,18 +87,13 @@ tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"wi
 [Tiling][f00ba3b4-79e9-567b-8bc9-10f4727a3ab0]
 tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
 
-[Wayland]
-InputMethod[$d]
-
 [Windows]
 ActivationDesktopPolicy=BringToCurrentDesktop
 Placement=Smart
 
 [Xwayland]
-Scale=1.25
+Scale=1.65
 
 [org.kde.kdecoration2]
 ButtonsOnLeft=M
 ButtonsOnRight=IAX
-library=org.kde.kwin.aurorae
-theme=__aurorae__svg__Sweet-Dark

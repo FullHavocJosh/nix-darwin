@@ -3,8 +3,8 @@ _k_friendly_name=Activity Manager
 switch-to-activity-37701787-3e15-44aa-9974-6732068163e1=none,none,Switch to activity "Default"
 
 [KDE Keyboard Layout Switcher]
-Switch to Last-Used Keyboard Layout=none,Meta+Alt+L,Switch to Last-Used Keyboard Layout
-Switch to Next Keyboard Layout=none,Meta+Alt+K,Switch to Next Keyboard Layout
+Switch to Last-Used Keyboard Layout=,Meta+Alt+L,Switch to Last-Used Keyboard Layout
+Switch to Next Keyboard Layout=,Meta+Alt+K,Switch to Next Keyboard Layout
 _k_friendly_name=Keyboard Layout Switcher
 
 [kaccess]
@@ -50,6 +50,26 @@ MoveZoomDown=none,none,Move Zoomed Area Downwards
 MoveZoomLeft=none,none,Move Zoomed Area to Left
 MoveZoomRight=none,none,Move Zoomed Area to Right
 MoveZoomUp=none,none,Move Zoomed Area Upwards
+PoloniumCycleEngine=Meta+|,none,Polonium: Cycle Engine
+PoloniumFocusAbove=Meta+K,none,Polonium: Focus Above
+PoloniumFocusBelow=Meta+J,none,Polonium: Focus Below
+PoloniumFocusLeft=Meta+H,none,Polonium: Focus Left
+PoloniumFocusRight=none,none,Polonium: Focus Right
+PoloniumInsertAbove=Meta+Shift+K,none,Polonium: Insert Above
+PoloniumInsertBelow=Meta+Shift+J,none,Polonium: Insert Below
+PoloniumInsertLeft=Meta+Shift+H,none,Polonium: Insert Left
+PoloniumInsertRight=Meta+Shift+L,none,Polonium: Insert Right
+PoloniumOpenSettings=Meta+\\\\,none,Polonium: Open Settings Dialog
+PoloniumResizeAbove=Meta+Ctrl+K,none,Polonium: Resize Above
+PoloniumResizeBelow=Meta+Ctrl+J,none,Polonium: Resize Below
+PoloniumResizeLeft=Meta+Ctrl+H,none,Polonium: Resize Left
+PoloniumResizeRight=Meta+Ctrl+L,none,Polonium: Resize Right
+PoloniumRetileWindow=Meta+Shift+Space,none,Polonium: Retile Window
+PoloniumSwitchBTree=none,none,Polonium: Use Binary Tree Engine
+PoloniumSwitchHalf=none,none,Polonium: Use Half Engine
+PoloniumSwitchKwin=none,none,Polonium: Use KWin Engine
+PoloniumSwitchMonocle=none,none,Polonium: Use Monocle Engine
+PoloniumSwitchThreeColumn=none,none,Polonium: Use Three Column Engine
 Setup Window Shortcut=none,,Setup Window Shortcut
 Show Desktop=none,Meta+D,Peek at Desktop
 Suspend Compositing=Alt+Shift+F12,Alt+Shift+F12,Suspend Compositing
@@ -134,7 +154,7 @@ Window One Screen Down=none,,Move Window One Screen Down
 Window One Screen Up=none,,Move Window One Screen Up
 Window One Screen to the Left=none,,Move Window One Screen to the Left
 Window One Screen to the Right=none,,Move Window One Screen to the Right
-Window Operations Menu=none,Alt+F3,Window Operations Menu
+Window Operations Menu=none,Alt+F3,Window Menu
 Window Pack Down=none,,Move Window Down
 Window Pack Left=none,,Move Window Left
 Window Pack Right=none,,Move Window Right
@@ -149,7 +169,7 @@ Window Quick Tile Top Left=none,,Quick Tile Window to the Top Left
 Window Quick Tile Top Right=none,,Quick Tile Window to the Top Right
 Window Raise=none,,Raise Window
 Window Resize=none,,Resize Window
-Window Shade=none,,Shade Window
+Window Shade=none,none,Shade Window
 Window Shrink Horizontal=none,,Shrink Window Horizontally
 Window Shrink Vertical=none,,Shrink Window Vertically
 Window to Desktop 1=none,,Window to Desktop 1
@@ -218,6 +238,7 @@ _k_friendly_name=Power Management
 powerProfile=Battery\tMeta+B,Battery\tMeta+B,Switch Power Profile
 
 [plasmashell]
+Slideshow Wallpaper Next Image=none,,Next Wallpaper Image
 _k_friendly_name=plasmashell
 activate application launcher=Meta,Meta\tAlt+F1,Activate Application Launcher
 activate task manager entry 1=none,Meta+1,Activate Task Manager Entry 1
@@ -288,6 +309,9 @@ _launch=none
 
 [services][org.kde.touchpadshortcuts.desktop]
 ToggleTouchpad=Touchpad Toggle\tMeta+Ctrl+Zenkaku Hankaku
+
+[services][org.mozilla.firefox.desktop]
+_launch=
 
 [services][systemsettings.desktop]
 _launch=none

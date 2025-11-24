@@ -1,6 +1,3 @@
-[Keyboard]
-KeyRepeat=nothing
-
 [Libinput][10248][513][ASUF1204:00 2808:0201 Mouse]
 NaturalScroll=true
 PointerAcceleration=-0.800
@@ -79,6 +76,12 @@ ScrollMethod=4
 NaturalScroll=true
 PointerAcceleration=-0.800
 
+[Libinput][1739][30383][CUST0001:00 06CB:76AF Touchpad]
+ClickMethod=2
+DisableWhileTyping=false
+NaturalScroll=true
+TapAndDrag=false
+
 [Libinput][2821][6582][Asus Keyboard]
 NaturalScroll=true
 PointerAcceleration=-0.800
@@ -103,4 +106,3 @@ PointerAcceleration=-0.800
 
 [Mouse]
 X11LibInputXAccelProfileFlat=true
-cursorTheme=Sweet-cursors
