@@ -12,12 +12,7 @@ return {
     vim.g.loaded_netrw = 1
     vim.g.loaded_netrwPlugin = 1
   end,
-  keys = {
-    { "<leader>e", "<cmd>Neotree toggle<cr>", desc = "Toggle Neo-tree" },
-    { "<leader>o", "<cmd>Neotree filesystem reveal left<cr>", desc = "Reveal file in Neo-tree" },
-    { "<leader>bf", "<cmd>Neotree buffers reveal float<cr>", desc = "Show buffers" },
-    { "<leader>gs", "<cmd>Neotree git_status<cr>", desc = "Git status" },
-  },
+  -- Keybindings are managed in lua/config/keymaps.lua for consistency
   opts = {
     close_if_last_window = false,
     popup_border_style = "rounded",
@@ -85,8 +80,8 @@ return {
       },
     },
     window = {
-      position = "left",
-      width = 40,
+      position = "float",
+      width = 80,
       mapping_options = {
         noremap = true,
         nowait = true,

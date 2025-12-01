@@ -1,6 +1,7 @@
 # Linux-Specific Settings #####################################################
 if [[ "$(uname)" == "Linux" ]]; then
-  echo "ZSH Configuration for Linux..."
+  # Only print initialization message in interactive non-tmux shells
+  [[ -z "$TMUX" ]] && [[ $- == *i* ]] && echo "ZSH Configuration for Linux..."
 
   # Add local bin directories to PATH
   export PATH="$HOME/.local/bin:$HOME/go/bin:$HOME/.cargo/bin:$HOME/.npm-global/bin:$PATH"
@@ -22,7 +23,8 @@ if [[ "$(uname)" == "Linux" ]]; then
   # Omarchy-specific configuration ############################################
   # Only load if on Omarchy Linux (detected by presence of omarchy files)
   if [[ -d "$HOME/.local/share/omarchy" ]]; then
-    echo "Loading Omarchy-specific configuration..."
+    # Only print initialization message in interactive non-tmux shells
+    [[ -z "$TMUX" ]] && [[ $- == *i* ]] && echo "Loading Omarchy-specific configuration..."
 
     # Source Omarchy zsh configs
     [ -f ~/.zshrc_os_linux_omarchy_shell ] && source ~/.zshrc_os_linux_omarchy_shell

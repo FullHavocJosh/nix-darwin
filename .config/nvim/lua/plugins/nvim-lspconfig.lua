@@ -1,9 +1,14 @@
 return {
   {
     "neovim/nvim-lspconfig",
-    dependencies = { "hrsh7th/cmp-nvim-lsp", "mason-org/mason-lspconfig.nvim", "glepnir/lspsaga.nvim" },
+    dependencies = {
+      "saghen/blink.cmp",
+      "mason-org/mason-lspconfig.nvim",
+      "glepnir/lspsaga.nvim",
+      "b0o/schemastore.nvim",
+    },
     config = function()
-      local capabilities = require("cmp_nvim_lsp").default_capabilities()
+      local capabilities = require("blink.cmp").get_lsp_capabilities()
       local keymap = vim.keymap
 
       local signs = { Error = " ", Warn = " ", Hint = "ﴞ ", Info = " " }
@@ -46,9 +51,32 @@ return {
       end
 
       local servers = {
-        ansiblels = {},
+        -- Shell scripting
         bashls = {},
+
+        -- Ansible
+        ansiblels = {
+          settings = {
+            ansible = {
+              ansible = {
+                path = "ansible",
+              },
+              ansibleLint = {
+                enabled = true,
+                path = "ansible-lint",
+              },
+              python = {
+                interpreterPath = "python3",
+              },
+            },
+          },
+        },
+
+        -- Docker
         dockerls = {},
+        docker_compose_language_service = {},
+
+        -- Lua
         lua_ls = {
           settings = {
             Lua = {
@@ -59,6 +87,8 @@ return {
             },
           },
         },
+
+        -- Python
         pylsp = {
           settings = {
             pylsp = {
@@ -66,7 +96,7 @@ return {
                 pycodestyle = { enabled = false },
                 mccabe = { enabled = false },
                 pyflakes = { enabled = false },
-                flake8 = { enabled = true },
+                ruff = { enabled = true },
                 autopep8 = { enabled = false },
                 yapf = { enabled = false },
                 black = { enabled = true },
@@ -74,26 +104,92 @@ return {
             },
           },
         },
+
+        -- JavaScript/TypeScript
         ts_ls = {},
+
+        -- YAML with comprehensive schema support
         yamlls = {
           settings = {
             yaml = {
               schemas = {
-                kubernetes = "/*.k8s.yaml",
-                ["https://json.schemastore.org/ansible-playbook"] = "/ansible/*.{yaml,yml}",
+                -- Kubernetes
+                kubernetes = "/*.k8s.{yaml,yml}",
+                ["https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.28.0/all.json"] = "/*k8s*.{yaml,yml}",
+
+                -- Ansible
+                ["https://raw.githubusercontent.com/ansible/ansible-lint/main/src/ansiblelint/schemas/ansible.json"] = "/ansible/**/*.{yaml,yml}",
+                ["https://raw.githubusercontent.com/ansible/ansible-lint/main/src/ansiblelint/schemas/playbook.json"] = "/*playbook*.{yaml,yml}",
+
+                -- AWS CloudFormation
                 ["https://raw.githubusercontent.com/aws/aws-cloudformation-templates/main/aws-cfn-template-2010-09-09.json"] = "/*cloudformation*.{yaml,yml}",
+
+                -- Docker Compose
+                ["https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json"] = "/docker-compose*.{yaml,yml}",
+
+                -- GitHub Actions
+                ["https://json.schemastore.org/github-workflow.json"] = "/.github/workflows/*.{yaml,yml}",
+
+                -- GitLab CI
+                ["https://json.schemastore.org/gitlab-ci.json"] = "/.gitlab-ci.{yaml,yml}",
               },
               validate = true,
               format = { enable = true },
+              hover = true,
+              completion = true,
             },
           },
         },
-        terraformls = {},
-        powershell_es = {},
 
+        -- Terraform/HCL
+        terraformls = {
+          settings = {
+            terraform = {
+              timeout = "30s",
+            },
+          },
+        },
+
+        -- PowerShell
+        powershell_es = {
+          bundle_path = vim.fn.stdpath("data") .. "/mason/packages/powershell-editor-services",
+        },
+
+        -- Ruby
         solargraph = {},
+
+        -- XML
         lemminx = {},
+
+        -- TOML
         taplo = {},
+
+        -- Go
+        gopls = {
+          settings = {
+            gopls = {
+              analyses = {
+                unusedparams = true,
+                shadow = true,
+              },
+              staticcheck = true,
+              gofumpt = true,
+            },
+          },
+        },
+
+        -- JSON
+        jsonls = {
+          settings = {
+            json = {
+              schemas = require("schemastore").json.schemas(),
+              validate = { enable = true },
+            },
+          },
+        },
+
+        -- Markdown
+        marksman = {},
       }
 
       local lspconfig = require("lspconfig")

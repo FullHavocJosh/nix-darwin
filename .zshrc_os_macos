@@ -1,6 +1,7 @@
 # MacOS-Specific Settings #####################################################
 if [[ "$(uname)" == "Darwin" ]]; then
-  echo "ZSH Configuration for MacOS..."
+  # Only print initialization message in interactive non-tmux shells
+  [[ -z "$TMUX" ]] && [[ $- == *i* ]] && echo "ZSH Configuration for MacOS..."
 
   # Nix
   if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
@@ -48,10 +49,11 @@ if [[ "$(uname)" == "Darwin" ]]; then
   if [ -d "$HOME/ansible-venv" ]; then
       source "$HOME/ansible-venv/bin/activate"
   else
-      echo "Creating Ansible virtual environment..."
+      # Only show messages in interactive, non-tmux shells
+      [[ -z "$TMUX" ]] && [[ $- == *i* ]] && echo "Creating Ansible virtual environment..."
       python3 -m venv ~/ansible-venv
       source "$HOME/ansible-venv/bin/activate"
-      echo "Virtual environment created and activated."
+      [[ -z "$TMUX" ]] && [[ $- == *i* ]] && echo "Virtual environment created and activated."
   fi
 fi
 

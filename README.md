@@ -4,49 +4,8 @@ This repository contains a comprehensive system configuration and dotfiles for b
 
 ## Platform-Specific Setup
 
-Choose the guide appropriate for your platform:
-
 - **[macOS Setup Guide](README_MACOS.md)** - nix-darwin installation and configuration
 - **[Linux Setup Guide (Omarchy)](README_LINUX.md)** - Arch Linux with Hyprland desktop environment
-
-## Quick Start
-
-### For macOS
-
-See [README_MACOS.md](README_MACOS.md) for full installation instructions.
-
-```bash
-# Clone repository
-git clone git@github.com:FullHavocJosh/nix-darwin.git ~/nix-darwin
-cd ~/nix-darwin
-
-# Install Nix
-sh <(curl -L https://nixos.org/nix/install)
-
-# Deploy nix-darwin
-nix run nix-darwin --extra-experimental-features "nix-command flakes" -- switch --flake ~/nix-darwin#macos_personal
-
-# Deploy dotfiles
-stow . -t ~
-```
-
-### For Linux (Omarchy)
-
-See [README_LINUX.md](README_LINUX.md) for full installation instructions.
-
-```bash
-# Install Omarchy first (https://omarchy.org)
-
-# Install core packages
-sudo pacman -S --needed git stow zsh neovim tmux github-cli
-
-# Clone repository
-git clone git@github.com:FullHavocJosh/nix-darwin.git ~/nix-darwin
-cd ~/nix-darwin
-
-# Deploy dotfiles
-stow . -t ~
-```
 
 ## Repository Overview
 
@@ -122,8 +81,6 @@ Located at `.config/tmux/tmux.conf`, features include:
 - **Right**: Battery status (orange/peach), date/time (12-hour format)
 - Custom icons for session, host, and time
 
-
-
 ## Shell Aliases
 
 ### SSH Targets
@@ -195,66 +152,67 @@ Intelligent AI dev launcher:
 ### Application Configurations (`.config/`)
 
 - **Terminal & Shell**
-    - `alacritty/` - Alacritty terminal emulator
-    - `ghostty/` - Ghostty terminal with custom CRT glow shader
-    - `kitty/` - Kitty terminal emulator
-    - `tmux/` - Terminal multiplexer
-    - `starship.toml` - Starship prompt configuration
+  - `alacritty/` - Alacritty terminal emulator
+  - `ghostty/` - Ghostty terminal with custom CRT glow shader
+  - `kitty/` - Kitty terminal emulator
+  - `tmux/` - Terminal multiplexer
+  - `starship.toml` - Starship prompt configuration
 
 - **Development Tools**
-    - `nvim/` - Complete Neovim configuration with LazyVim
-        - Lua-based configuration with extensive plugin setup
-        - LSP, completion, formatting, and Git integration
-    - `gh/` - GitHub CLI configuration
-    - `github-copilot/` - GitHub Copilot settings and session data
+  - `nvim/` - Complete Neovim configuration with LazyVim
+    - Lua-based configuration with extensive plugin setup
+    - LSP, completion, formatting, and Git integration
+  - `gh/` - GitHub CLI configuration
+  - `github-copilot/` - GitHub Copilot settings and session data
 
 - **System & Productivity**
-    - `btop/` - System monitor with Catppuccin theme
-    - `atuin/` - Shell history sync configuration
-    - `crush/` - Crush CLI tool configuration
-    - `borders/` - Window borders configuration (macOS)
-    - `raycast/` - Raycast extensions (macOS)
+  - `btop/` - System monitor with Catppuccin theme
+  - `atuin/` - Shell history sync configuration
+  - `crush/` - Crush CLI tool configuration
+  - `borders/` - Window borders configuration (macOS)
+  - `raycast/` - Raycast extensions (macOS)
 
 - **Window Managers & Desktop Environments**
-    - `aerospace/` - AeroSpace window manager configuration (macOS)
-    - `hypr/` - Hyprland configurations (Linux - see [README_LINUX.md](README_LINUX.md))
-    - Various KDE/Plasma configuration files (Linux)
+  - `aerospace/` - AeroSpace window manager configuration (macOS)
+  - `hypr/` - Hyprland configurations (Linux - see [README_LINUX.md](README_LINUX.md))
+  - Various KDE/Plasma configuration files (Linux)
 
 - **Specialized Tools**
-    - `qmk/` - QMK keyboard firmware configurations
-    - `brew/` - Homebrew package lists
-    - `NuGet/` - .NET package manager configuration
+  - `qmk/` - QMK keyboard firmware configurations
+  - `brew/` - Homebrew package lists
+  - `NuGet/` - .NET package manager configuration
 
 ### Shell Configuration
 
 - **`.zshrc`** - Main Zsh configuration with modular sourcing
 - **`.zshrc_*`** - Modular shell configurations:
-    - `_aliases` - SSH targets, development workflows, common shortcuts, Terraform, AWS, and Git aliases
-    - `_envvars_insecure` - Non-sensitive environment variables
-    - `_functions` - AWS credential management (asc) and AI dev launcher (aidev) with Bedrock fallback
-    - `_os_linux` - Linux-specific path and tool configurations
-    - `_os_macos` - macOS-specific settings
-    - `_shell` - General shell environment settings
-    - `_ulimit` - File descriptor limits for AWS MCP servers
+  - `_aliases` - SSH targets, development workflows, common shortcuts, Terraform, AWS, and Git aliases
+  - `_envvars_insecure` - Non-sensitive environment variables
+  - `_functions` - AWS credential management (asc) and AI dev launcher (aidev) with Bedrock fallback
+  - `_os_linux` - Linux-specific path and tool configurations
+  - `_os_macos` - macOS-specific settings
+  - `_shell` - General shell environment settings
+  - `_ulimit` - File descriptor limits for AWS MCP servers
 
 ### Automation & Infrastructure
 
 - **`ansible-linux/`** - Ansible playbooks for Fedora Linux setup (legacy - see [README_LINUX.md](README_LINUX.md))
-    - `playbooks/` - Common, packages, and personal setup playbooks
-    - `roles/` - Reusable Ansible roles
-    - `inventory/` - Host inventory configuration
+  - `playbooks/` - Common, packages, and personal setup playbooks
+  - `roles/` - Reusable Ansible roles
+  - `inventory/` - Host inventory configuration
 
 ### Themes & Assets
 
 - **`.wallpapers/`** - Collection of desktop wallpapers
 - **`.themes/`** - Terminal and application themes
-    - `MacOS Terminal/` - macOS Terminal.app themes
+  - `MacOS Terminal/` - macOS Terminal.app themes
 
 ## Troubleshooting
 
 ### Shell and Plugin Issues
 
 **Zinit not loading**:
+
 ```bash
 # Zinit auto-installs on first zsh launch
 # If it fails, manually install:
@@ -262,12 +220,14 @@ git clone https://github.com/zdharma-continuum/zinit.git ~/.local/share/zinit/zi
 ```
 
 **Tmux plugins not installed**:
+
 ```bash
 # TPM (Tmux Plugin Manager) installs on first tmux launch
 # Or manually: press Prefix + I in tmux
 ```
 
 **Language servers missing for Neovim**:
+
 ```bash
 # Python LSP
 pip3 install python-lsp-server
@@ -285,6 +245,7 @@ rustup component add rust-analyzer
 ### Stow Conflicts
 
 If stow reports conflicts:
+
 1. Check `.stow-local-ignore` excludes
 2. Manually resolve conflicting files
 3. Consider backing up existing configs before stowing
@@ -292,5 +253,6 @@ If stow reports conflicts:
 ### Platform-Specific Issues
 
 For platform-specific troubleshooting:
+
 - **macOS**: See [README_MACOS.md#troubleshooting](README_MACOS.md#troubleshooting)
 - **Linux**: See [README_LINUX.md#troubleshooting](README_LINUX.md#troubleshooting)

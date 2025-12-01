@@ -2,6 +2,13 @@
 -- Default options that are always set: https://github.com/LazyVim/LazyVim/blob/main/lua/lazyvim/config/options.lua
 -- Add any additional options here
 
+-- Enable Nerd Font icons (must be set early)
+vim.g.have_nerd_font = true
+
+-- Ensure UTF-8 encoding
+vim.opt.encoding = "utf-8"
+vim.opt.fileencoding = "utf-8"
+
 -- Line numbers
 vim.opt.relativenumber = false
 vim.opt.number = true
@@ -36,7 +43,8 @@ vim.opt.clipboard:append("unnamedplus")
 
 -- Auto-reload files on external changes
 vim.opt.autoread = true
-vim.opt.updatetime = 250
+-- Controls delay for CursorHold event (affects auto-diagnostic popup delay)
+vim.opt.updatetime = 250 -- Also controls CursorHold delay for diagnostic popup
 
 vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold" }, {
   pattern = "*",
