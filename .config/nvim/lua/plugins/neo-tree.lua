@@ -1,233 +1,227 @@
 return {
-	"nvim-neo-tree/neo-tree.nvim",
-	branch = "v3.x",
-	dependencies = {
-		"nvim-lua/plenary.nvim",
-		"nvim-tree/nvim-web-devicons",
-		"MunifTanjim/nui.nvim",
-	},
-	config = function()
-		-- Get catppuccin colors for consistency
-		local colors = require("catppuccin.palettes").get_palette("mocha")
-
-		-- Set up highlight for open buffers
-		vim.api.nvim_set_hl(0, "NeoTreeFileNameOpened", { fg = colors.pink, bold = true })
-
-		require("neo-tree").setup({
-			close_if_last_window = false,
-			popup_border_style = "rounded",
-			enable_git_status = true,
-			enable_diagnostics = true,
-			open_files_do_not_replace_types = { "terminal", "trouble", "qf" },
-			sort_case_insensitive = false,
-			-- Close neo-tree when opening a file
-			event_handlers = {
-				{
-					event = "file_opened",
-					handler = function()
-						require("neo-tree.command").execute({ action = "close" })
-					end,
-				},
-			},
-			default_component_configs = {
-				container = {
-					enable_character_fade = true,
-				},
-				indent = {
-					indent_size = 2,
-					padding = 1,
-					with_markers = true,
-					indent_marker = "│",
-					last_indent_marker = "└",
-					highlight = "NeoTreeIndentMarker",
-					with_expanders = false,
-				},
-				icon = {
-					folder_closed = "",
-					folder_open = "",
-					folder_empty = "󰜌",
-					default = "*",
-					highlight = "NeoTreeFileIcon",
-				},
-				modified = {
-					symbol = "●",
-					highlight = "NeoTreeModified",
-				},
-				name = {
-					trailing_slash = false,
-					use_git_status_colors = true,
-					highlight = "NeoTreeFileName",
-					highlight_opened_files = true,
-				},
-				git_status = {
-					symbols = {
-						added = "",
-						modified = "",
-						deleted = "✖",
-						renamed = "󰁕",
-						untracked = "",
-						ignored = "",
-						unstaged = "󰄱",
-						staged = "",
-						conflict = "",
-					},
-				},
-			},
-			window = {
-				position = "float",
-				width = 40,
-				popup = {
-					position = { col = "50%", row = "50%" },
-					size = {
-						height = "80%",
-						width = "50%",
-					},
-				},
-				mapping_options = {
-					noremap = true,
-					nowait = true,
-				},
-				mappings = {
-					["<space>"] = {
-						"toggle_node",
-						nowait = false,
-					},
-					["<2-LeftMouse>"] = "open",
-					["<cr>"] = "open",
-					["<esc>"] = "cancel",
-					["P"] = { "toggle_preview", config = { use_float = true, use_image_nvim = true } },
-					["l"] = "focus_preview",
-					["S"] = "open_split",
-					["s"] = "open_vsplit",
-					["t"] = "open_tabnew",
-					["w"] = "open_with_window_picker",
-					["C"] = "close_node",
-					["z"] = "close_all_nodes",
-					["a"] = {
-						"add",
-						config = {
-							show_path = "none",
-						},
-					},
-					["A"] = "add_directory",
-					["d"] = "delete",
-					["r"] = "rename",
-					["y"] = "copy_to_clipboard",
-					["x"] = "cut_to_clipboard",
-					["p"] = "paste_from_clipboard",
-					["c"] = "copy",
-					["m"] = "move",
-					["q"] = "close_window",
-					["R"] = "refresh",
-					["?"] = "show_help",
-					["<"] = "prev_source",
-					[">"] = "next_source",
-					["i"] = "show_file_details",
-				},
-			},
-			nesting_rules = {},
-			filesystem = {
-				filtered_items = {
-					visible = false,
-					hide_dotfiles = false,
-					hide_gitignored = false,
-					hide_hidden = true,
-					hide_by_name = {},
-					hide_by_pattern = {},
-					always_show = {},
-					never_show = {},
-					never_show_by_pattern = {},
-				},
-				follow_current_file = {
-					enabled = true,
-					leave_dirs_open = false,
-				},
-				group_empty_dirs = false,
-				hijack_netrw_behavior = "open_default",
-				use_libuv_file_watcher = true,
-				window = {
-					mappings = {
-						["<bs>"] = "navigate_up",
-						["."] = "set_root",
-						["H"] = "toggle_hidden",
-						["/"] = "fuzzy_finder",
-						["D"] = "fuzzy_finder_directory",
-						["#"] = "fuzzy_sorter",
-						["f"] = "filter_on_submit",
-						["<c-x>"] = "clear_filter",
-						["[g"] = "prev_git_modified",
-						["]g"] = "next_git_modified",
-						["o"] = { "show_help", nowait = false, config = { title = "Order by", prefix_key = "o" } },
-						["oc"] = { "order_by_created", nowait = false },
-						["od"] = { "order_by_diagnostics", nowait = false },
-						["og"] = { "order_by_git_status", nowait = false },
-						["om"] = { "order_by_modified", nowait = false },
-						["on"] = { "order_by_name", nowait = false },
-						["os"] = { "order_by_size", nowait = false },
-						["ot"] = { "order_by_type", nowait = false },
-					},
-					fuzzy_finder_mappings = {
-						["<down>"] = "move_cursor_down",
-						["<C-n>"] = "move_cursor_down",
-						["<up>"] = "move_cursor_up",
-						["<C-p>"] = "move_cursor_up",
-					},
-				},
-				commands = {},
-			},
-			buffers = {
-				follow_current_file = {
-					enabled = true,
-					leave_dirs_open = false,
-				},
-				group_empty_dirs = true,
-				show_unloaded = true,
-				window = {
-					mappings = {
-						["bd"] = "buffer_delete",
-						["<bs>"] = "navigate_up",
-						["."] = "set_root",
-						["o"] = { "show_help", nowait = false, config = { title = "Order by", prefix_key = "o" } },
-						["oc"] = { "order_by_created", nowait = false },
-						["od"] = { "order_by_diagnostics", nowait = false },
-						["om"] = { "order_by_modified", nowait = false },
-						["on"] = { "order_by_name", nowait = false },
-						["os"] = { "order_by_size", nowait = false },
-						["ot"] = { "order_by_type", nowait = false },
-					},
-				},
-			},
-			git_status = {
-				window = {
-					position = "float",
-					mappings = {
-						["A"] = "git_add_all",
-						["gu"] = "git_unstage_file",
-						["ga"] = "git_add_file",
-						["gr"] = "git_revert_file",
-						["gc"] = "git_commit",
-						["gp"] = "git_push",
-						["gg"] = "git_commit_and_push",
-						["o"] = { "show_help", nowait = false, config = { title = "Order by", prefix_key = "o" } },
-						["oc"] = { "order_by_created", nowait = false },
-						["od"] = { "order_by_diagnostics", nowait = false },
-						["om"] = { "order_by_modified", nowait = false },
-						["on"] = { "order_by_name", nowait = false },
-						["os"] = { "order_by_size", nowait = false },
-						["ot"] = { "order_by_type", nowait = false },
-					},
-				},
-			},
-		})
-
-		-- Auto-open Neo-tree on startup
-		vim.api.nvim_create_autocmd("VimEnter", {
-			pattern = "*",
-			callback = function()
-				vim.defer_fn(function()
-					vim.cmd("Neotree filesystem reveal float")
-				end, 100)
-			end,
-		})
-	end,
+  "nvim-neo-tree/neo-tree.nvim",
+  branch = "v3.x",
+  cmd = "Neotree",
+  dependencies = {
+    "nvim-lua/plenary.nvim",
+    "nvim-tree/nvim-web-devicons",
+    "MunifTanjim/nui.nvim",
+  },
+  init = function()
+    -- Disable netrw in favor of neo-tree
+    vim.g.loaded_netrw = 1
+    vim.g.loaded_netrwPlugin = 1
+  end,
+  keys = {
+    { "<leader>e", "<cmd>Neotree toggle<cr>", desc = "Toggle Neo-tree" },
+    { "<leader>o", "<cmd>Neotree filesystem reveal left<cr>", desc = "Reveal file in Neo-tree" },
+    { "<leader>bf", "<cmd>Neotree buffers reveal float<cr>", desc = "Show buffers" },
+    { "<leader>gs", "<cmd>Neotree git_status<cr>", desc = "Git status" },
+  },
+  opts = {
+    close_if_last_window = false,
+    popup_border_style = "rounded",
+    enable_git_status = true,
+    enable_diagnostics = true,
+    open_files_do_not_replace_types = { "terminal", "trouble", "qf" },
+    sort_case_insensitive = false,
+    -- Add dashboard action for browsing files
+    sources = { "filesystem", "buffers", "git_status" },
+    source_selector = {
+      winbar = true,
+      statusline = false,
+    },
+    -- Close neo-tree when opening a file
+    event_handlers = {
+      {
+        event = "file_opened",
+        handler = function()
+          require("neo-tree.command").execute({ action = "close" })
+        end,
+      },
+    },
+    default_component_configs = {
+      container = {
+        enable_character_fade = true,
+      },
+      indent = {
+        indent_size = 2,
+        padding = 1,
+        with_markers = true,
+        indent_marker = "│",
+        last_indent_marker = "└",
+        highlight = "NeoTreeIndentMarker",
+        with_expanders = false,
+      },
+      icon = {
+        folder_closed = "",
+        folder_open = "",
+        folder_empty = "󰜌",
+        default = "*",
+        highlight = "NeoTreeFileIcon",
+      },
+      modified = {
+        symbol = "●",
+        highlight = "NeoTreeModified",
+      },
+      name = {
+        trailing_slash = false,
+        use_git_status_colors = true,
+        highlight = "NeoTreeFileName",
+        highlight_opened_files = true,
+      },
+      git_status = {
+        symbols = {
+          added = "",
+          modified = "",
+          deleted = "✖",
+          renamed = "󰁕",
+          untracked = "",
+          ignored = "",
+          unstaged = "󰄱",
+          staged = "",
+          conflict = "",
+        },
+      },
+    },
+    window = {
+      position = "left",
+      width = 40,
+      mapping_options = {
+        noremap = true,
+        nowait = true,
+      },
+      mappings = {
+        ["<space>"] = {
+          "toggle_node",
+          nowait = false,
+        },
+        ["<2-LeftMouse>"] = "open",
+        ["<cr>"] = "open",
+        ["<esc>"] = "cancel",
+        ["P"] = { "toggle_preview", config = { use_float = true, use_image_nvim = true } },
+        ["l"] = "focus_preview",
+        ["S"] = "open_split",
+        ["s"] = "open_vsplit",
+        ["t"] = "open_tabnew",
+        ["w"] = "open_with_window_picker",
+        ["C"] = "close_node",
+        ["z"] = "close_all_nodes",
+        ["a"] = {
+          "add",
+          config = {
+            show_path = "none",
+          },
+        },
+        ["A"] = "add_directory",
+        ["d"] = "delete",
+        ["r"] = "rename",
+        ["y"] = "copy_to_clipboard",
+        ["x"] = "cut_to_clipboard",
+        ["p"] = "paste_from_clipboard",
+        ["c"] = "copy",
+        ["m"] = "move",
+        ["q"] = "close_window",
+        ["R"] = "refresh",
+        ["?"] = "show_help",
+        ["<"] = "prev_source",
+        [">"] = "next_source",
+        ["i"] = "show_file_details",
+      },
+    },
+    filesystem = {
+      filtered_items = {
+        visible = false,
+        hide_dotfiles = false,
+        hide_gitignored = false,
+        hide_hidden = true,
+        hide_by_name = {
+          "node_modules",
+        },
+        hide_by_pattern = {},
+        always_show = {},
+        never_show = {},
+        never_show_by_pattern = {},
+      },
+      follow_current_file = {
+        enabled = true,
+        leave_dirs_open = false,
+      },
+      group_empty_dirs = false,
+      hijack_netrw_behavior = "open_default",
+      use_libuv_file_watcher = false,
+      window = {
+        mappings = {
+          ["<bs>"] = "navigate_up",
+          ["."] = "set_root",
+          ["H"] = "toggle_hidden",
+          ["/"] = "fuzzy_finder",
+          ["D"] = "fuzzy_finder_directory",
+          ["#"] = "fuzzy_sorter",
+          ["f"] = "filter_on_submit",
+          ["<c-x>"] = "clear_filter",
+          ["[g"] = "prev_git_modified",
+          ["]g"] = "next_git_modified",
+          ["o"] = { "show_help", nowait = false, config = { title = "Order by", prefix_key = "o" } },
+          ["oc"] = { "order_by_created", nowait = false },
+          ["od"] = { "order_by_diagnostics", nowait = false },
+          ["og"] = { "order_by_git_status", nowait = false },
+          ["om"] = { "order_by_modified", nowait = false },
+          ["on"] = { "order_by_name", nowait = false },
+          ["os"] = { "order_by_size", nowait = false },
+          ["ot"] = { "order_by_type", nowait = false },
+        },
+        fuzzy_finder_mappings = {
+          ["<down>"] = "move_cursor_down",
+          ["<C-n>"] = "move_cursor_down",
+          ["<up>"] = "move_cursor_up",
+          ["<C-p>"] = "move_cursor_up",
+        },
+      },
+      commands = {},
+    },
+    buffers = {
+      follow_current_file = {
+        enabled = true,
+        leave_dirs_open = false,
+      },
+      group_empty_dirs = true,
+      show_unloaded = true,
+      window = {
+        mappings = {
+          ["bd"] = "buffer_delete",
+          ["<bs>"] = "navigate_up",
+          ["."] = "set_root",
+          ["o"] = { "show_help", nowait = false, config = { title = "Order by", prefix_key = "o" } },
+          ["oc"] = { "order_by_created", nowait = false },
+          ["od"] = { "order_by_diagnostics", nowait = false },
+          ["om"] = { "order_by_modified", nowait = false },
+          ["on"] = { "order_by_name", nowait = false },
+          ["os"] = { "order_by_size", nowait = false },
+          ["ot"] = { "order_by_type", nowait = false },
+        },
+      },
+    },
+    git_status = {
+      window = {
+        position = "float",
+        mappings = {
+          ["A"] = "git_add_all",
+          ["gu"] = "git_unstage_file",
+          ["ga"] = "git_add_file",
+          ["gr"] = "git_revert_file",
+          ["gc"] = "git_commit",
+          ["gp"] = "git_push",
+          ["gg"] = "git_commit_and_push",
+          ["o"] = { "show_help", nowait = false, config = { title = "Order by", prefix_key = "o" } },
+          ["oc"] = { "order_by_created", nowait = false },
+          ["od"] = { "order_by_diagnostics", nowait = false },
+          ["om"] = { "order_by_modified", nowait = false },
+          ["on"] = { "order_by_name", nowait = false },
+          ["os"] = { "order_by_size", nowait = false },
+          ["ot"] = { "order_by_type", nowait = false },
+        },
+      },
+    },
+  },
 }

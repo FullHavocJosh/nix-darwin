@@ -18,3 +18,9 @@ if command -v fzf &> /dev/null; then
     source /usr/share/fzf/key-bindings.zsh
   fi
 fi
+
+# Re-apply omarchy keybindings after tool initialization
+# This ensures omarchy keybindings override default tool bindings
+if [[ -f ~/.zshrc_os_linux_omarchy_keybindings ]]; then
+    source ~/.zshrc_os_linux_omarchy_keybindings
+fi

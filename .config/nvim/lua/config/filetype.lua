@@ -15,7 +15,7 @@ vim.filetype.add({
 })
 
 -- Set commentstring for Terraform files
-vim.api.nvim_create_autocmd({"FileType"}, {
+vim.api.nvim_create_autocmd({ "FileType" }, {
   pattern = "terraform",
   callback = function()
     vim.bo.commentstring = "# %s"

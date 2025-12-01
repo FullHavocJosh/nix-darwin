@@ -1,353 +1,56 @@
 # nix-darwin Configuration & Dotfiles
 
-This repository contains a comprehensive system configuration for macOS using nix-darwin, along with dotfiles and configurations for various development tools and applications. The setup supports both personal and work environments with shared base configurations.
+This repository contains a comprehensive system configuration and dotfiles for both macOS and Linux systems. The setup supports both personal and work environments with shared base configurations.
 
-## Installation
+## Platform-Specific Setup
 
-### Prerequisites
+Choose the guide appropriate for your platform:
 
-#### For macOS
+- **[macOS Setup Guide](README_MACOS.md)** - nix-darwin installation and configuration
+- **[Linux Setup Guide (Omarchy)](README_LINUX.md)** - Arch Linux with Hyprland desktop environment
 
-```bash
-# Enable Full Disk Access for Terminal
-# System Preferences -> Privacy -> Full Disk Access -> Terminal
+## Quick Start
 
-# Install essential tools
-brew install git
-softwareupdate --install-rosetta
-```
+### For macOS
 
-#### For Fedora Linux
-
-**Quick Start**: If you prefer automated installation, see the [Ansible (Linux)](#ansible-linux) section below.
-
-##### DNF Packages (Core System)
+See [README_MACOS.md](README_MACOS.md) for full installation instructions.
 
 ```bash
-sudo dnf install -y git ansible stow zsh util-linux-user fzf neovim tmux gh openssl curl wget which htop vim golang python3 python3-pip python3-devel rust cargo nodejs npm ruby ruby-devel cmake make gcc gcc-c++ kernel-devel fd-find ripgrep btop fastfetch tree watch telnet tar gzip unzip jq openssh-clients sshpass graphviz alacritty kitty nerd-fonts 'mozilla-fira*' fira-code-fonts google-noto-emoji-fonts python3-lsp-server ansible-lint yamllint kubectl speedtest-cli syncthing tldr
+# Clone repository
+git clone git@github.com:FullHavocJosh/nix-darwin.git ~/nix-darwin
+cd ~/nix-darwin
+
+# Install Nix
+sh <(curl -L https://nixos.org/nix/install)
+
+# Deploy nix-darwin
+nix run nix-darwin --extra-experimental-features "nix-command flakes" -- switch --flake ~/nix-darwin#macos_personal
+
+# Deploy dotfiles
+stow . -t ~
 ```
 
-##### COPR Repositories
+### For Linux (Omarchy)
+
+See [README_LINUX.md](README_LINUX.md) for full installation instructions.
 
 ```bash
-sudo dnf copr enable -y solopasha/hyprland && sudo dnf install -y hyprland hyprlock hypridle hyprpaper waybar
+# Install Omarchy first (https://omarchy.org)
+
+# Install core packages
+sudo pacman -S --needed git stow zsh neovim tmux github-cli
+
+# Clone repository
+git clone git@github.com:FullHavocJosh/nix-darwin.git ~/nix-darwin
+cd ~/nix-darwin
+
+# Deploy dotfiles
+stow . -t ~
 ```
 
-##### Cargo Tools
+## Repository Overview
 
-```bash
-cargo install eza zoxide stylua taplo-cli tealdeer
-```
-
-##### Go Tools
-
-```bash
-# Note: golangci-lint has a dependency issue with asciicheck. Use the official installer instead:
-curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
-
-# Install remaining Go tools
-go install github.com/derailed/k9s@latest && \
-go install golang.org/x/tools/gopls@latest && \
-go install github.com/nametake/golangci-lint-langserver@latest
-
-# Install Go 1.25.0 for superfile (requires Go 1.25.0+)
-go install golang.org/dl/go1.25.0@latest && go1.25.0 download
-
-# Install superfile with Go 1.25.0 (note: package renamed from MHNightCat to yorukot)
-go1.25.0 install github.com/yorukot/superfile@latest
-```
-
-##### NPM Language Servers
-
-```bash
-# Configure npm to use user directory (avoid permission issues)
-mkdir -p ~/.npm-global
-npm config set prefix '~/.npm-global'
-
-# Install language servers
-npm install -g typescript-language-server bash-language-server yaml-language-server vscode-langservers-extracted dockerfile-language-server-nodejs prettier pyright
-```
-
-##### Python Tools
-
-```bash
-pip3 install --user python-lsp-server ruff ruff-lsp djlint
-```
-
-##### Ruby Tools
-
-```bash
-gem install --user-install rubocop solargraph
-```
-
-##### Script Installations
-
-```bash
-curl -sS https://starship.rs/install.sh | sh
-```
-
-```bash
-bash <(curl --proto '=https' --tlsv1.2 -sSf https://setup.atuin.sh)
-```
-
-```bash
-# Install JetBrains Mono Nerd Font for proper icon display in tmux/terminal
-mkdir -p ~/.local/share/fonts
-cd ~/.local/share/fonts
-curl -fLO https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
-unzip JetBrainsMono.zip -d JetBrainsMono
-rm JetBrainsMono.zip
-fc-cache -fv
-cd -
-```
-
-```bash
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && unzip awscliv2.zip && sudo ./aws/install && rm -rf aws awscliv2.zip
-```
-
-```bash
-curl -L https://github.com/serokell/nixfmt/releases/latest/download/nixfmt-x86_64-linux -o ~/.local/bin/nixfmt && chmod +x ~/.local/bin/nixfmt
-```
-
-```bash
-curl -L https://raw.githubusercontent.com/warrensbox/terraform-switcher/release/install.sh | bash
-```
-
-```bash
-go install github.com/hashicorp/terraform-ls@latest
-```
-
-```bash
-curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-```
-
-##### Homebrew on Linux
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" && eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-```
-
-```bash
-brew install borders crush opencode shfmt hadolint tree-sitter opentofu ansible-language-server terraform-ls tflint tfswitch
-```
-
-##### Flatpak GUI Applications
-
-```bash
-flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-```
-
-```bash
-flatpak install -y flathub org.kde.krita org.videolan.VLC com.plexamp.Plexamp io.gitlab.librewolf-community com.google.Chrome com.sublimetext.three com.github.Eloston.UngoogledChromium
-```
-
-##### Manual Downloads
-
-- **Ghostty**: https://ghostty.org
-- **Neovide**: https://github.com/neovide/neovide/releases
-- **Claude Desktop**: https://claude.ai
-- **LM Studio**: https://lmstudio.ai
-- **QMK Toolbox**: https://github.com/qmk/qmk_toolbox
-- **VIA**: https://www.caniusevia.com
-- **BalenaEtcher**: https://www.balena.io/etcher
-
-##### Notes
-
-- **PATH Setup**: Ensure these are in your `~/.zshrc` or `~/.bashrc`:
-  ```bash
-  export PATH="$HOME/.local/bin:$HOME/go/bin:$HOME/.cargo/bin:$PATH"
-  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" # If using Homebrew
-  ```
-
-- **Zinit**: Auto-installs on first zsh launch
-- **TPM (Tmux Plugin Manager)**: Auto-installs on first tmux launch
-- **Neovim Plugins**: LazyVim auto-installs on first nvim launch
-- **Language Servers**: Most will be auto-installed by LazyVim when opening relevant files
-- **Nerd Fonts**: Ensure your terminal is configured to use "JetBrainsMono Nerd Font" (not just "JetBrains Mono") for proper icon display in tmux and other applications
-
-##### Post-Installation
-
-```bash
-# Set zsh as default shell
-chsh -s $(which zsh)
-
-# Make Hyprland scripts executable (if using Hyprland)
-chmod +x ~/.config/hypr/scripts/*.sh
-
-# Reload shell
-exec zsh
-```
-
-### Setup Process
-
-1. **Clone the repository**
-
-   ```bash
-   git clone git@github.com:FullHavocJosh/nix-darwin.git ~/nix-darwin
-   cd ~/nix-darwin
-   ```
-
-2. **Install Nix Package Manager**
-
-   ```bash
-   sh <(curl -L https://nixos.org/nix/install)
-   ```
-
-3. **Initial nix-darwin setup**
-
-   ```bash
-   nix run nix-darwin --extra-experimental-features "nix-command flakes" -- switch --flake ~/nix-darwin#macos_personal
-   ```
-
-4. **Verify installation**
-
-   ```bash
-   which darwin-rebuild
-   ```
-
-5. **Deploy configuration**
-
-   ```bash
-   # For personal setup
-   darwin-rebuild switch --flake ~/nix-darwin#macos_personal
-
-   # For work setup
-   darwin-rebuild switch --flake ~/nix-darwin#macos_work
-   ```
-
-6. **Deploy dotfiles with Stow**
-   ```bash
-   stow . -t ~
-   ```
-
-## Package Management Overview
-
-This repository uses different package management strategies depending on the platform:
-
-- **macOS**: Nix + nix-darwin for declarative system configuration, with Homebrew for some GUI applications
-- **Fedora Linux**: Manual DNF installation OR Ansible automation for repeatable setup
-- **Cross-platform**: Cargo (Rust), npm (Node.js), pip (Python), and Go for language-specific tools
-
-The README provides comprehensive Fedora package lists that match all tools referenced in:
-
-- `.zshrc*` shell configuration files
-- `.config/*` application configurations
-- Aliases and functions in shell files
-
-## Usage
-
-### Managing Packages
-
-- **Find packages**: `nix search nixpkgs <package-name>` or visit [search.nixos.org](https://search.nixos.org)
-- **Add packages**: Edit `nix-modules/macos/packages.nix`
-- **Update packages**:
-  ```bash
-  nix flake update
-  darwin-rebuild switch --flake ~/nix-darwin#macos_personal
-  ```
-
-### Configuration Profiles
-
-- **Personal**: `macos_personal` - Full personal development environment
-- **Work**: `macos_work` - Work-specific configurations and restrictions
-
-### Ansible (Linux)
-
-For Fedora Linux systems, use the included Ansible playbooks to automate package installation:
-
-```bash
-cd ansible-linux
-# Install base packages from roles/linux-packages/tasks/main.yml
-ansible-playbook -i inventory/fedora playbooks/linux-base.yml --tags packages
-
-# Install GUI applications (if using desktop)
-ansible-playbook -i inventory/fedora playbooks/linux-base.yml --tags gui
-
-# Apply personal configuration
-ansible-playbook -i inventory/fedora playbooks/linux-personal.yml
-```
-
-The Ansible playbooks in `ansible-linux/roles/linux-packages/tasks/main.yml` install:
-
-- Development tools (Go, Python, Rust, Node.js, Neovim)
-- CLI tools (fd, fzf, ripgrep, btop, tmux, zsh)
-- Network tools (SSH clients)
-- Language servers (Python LSP, TypeScript, Bash, YAML, Go, Rust)
-- Cargo tools (eza, zoxide)
-
-**Note**: See the "Prerequisites - For Fedora Linux" section above for the complete manual package installation list, or use the Ansible playbooks for automated setup.
-
-## Required Packages by Configuration
-
-This section maps each configuration directory in `.config/` to its required Fedora packages:
-
-### Terminal Emulators
-
-- **alacritty/** → `alacritty`
-- **kitty/** → `kitty`
-- **ghostty/** → Manual install from [ghostty.org](https://ghostty.org)
-- **tmux/** → `tmux` (includes TPM plugin manager, auto-installed)
-
-### Development Tools
-
-- **nvim/** → `neovim` + language servers via npm/pip
-  - Requires: `nodejs`, `npm`, `python3-pip`, `golang`, `rust`, `cargo`
-  - LazyVim auto-installs plugins on first run
-- **gh/** → `gh` (GitHub CLI)
-- **git/** → `git` (Git configuration)
-- **opencode/** → Manual install from source
-- **qmk/** → QMK firmware tools (manual install)
-
-### Shell & CLI Tools
-
-- **starship.toml** → `starship` (prompt)
-- **atuin/** → `atuin` (shell history sync)
-- **superfile/** → Manual install or via go: `go install github.com/MHNightCat/superfile@latest`
-- **btop/** → `btop` (system monitor)
-- **crush/** → Manual install from source
-
-### Cloud & Infrastructure
-
-- **k9s/** → `go install github.com/derailed/k9s@latest` (Kubernetes CLI)
-- AWS CLI required for shell functions → `awscli2`
-- Terraform required for aliases → `terraform`
-
-### Desktop Environment (Linux/Wayland)
-
-- **hypr/** → `hyprland`, `hyprlock`, `hypridle`, `hyprpaper`
-- **waybar/** → `waybar`
-- **aerospace/** → macOS only (window manager)
-- **borders/** → macOS only (JankyBorders)
-
-### Additional Tools
-
-- **brew/** → Homebrew package lists (macOS only)
-- **AWSVPNClient/** → AWS VPN Client (manual install)
-
-### Shell Dependencies (.zshrc)
-
-The following packages are required by shell configurations:
-
-- `zsh` - Shell itself
-- `starship` - Prompt (.zshrc:14)
-- `atuin` - History sync (.zshrc:33-35)
-- `fzf` - Fuzzy finder (.zshrc:37-39)
-- `zoxide` - Smart cd (.zshrc:42)
-- `eza` - Modern ls (.zshrc_aliases:13-14)
-- `neovim` - Editor (aliases and functions)
-- `tmux` - Terminal multiplexer (nxvim, devim, psvim aliases)
-- `gh` - GitHub CLI (gpr alias)
-- `git` - Version control
-- `aws` - AWS CLI (asl, sso, ssoswitch, ssoexport aliases)
-- `terraform` - Infrastructure as code (tfs, tfi, tfa, tft, tfp aliases)
-- `ssh` - Remote connections (ssh\* aliases)
-
-### Zinit Plugin Manager
-
-Zinit is auto-installed by `.zshrc_shell` on first run. It manages:
-
-- Oh My Zsh plugins (git, sudo, kubectl, kubectx, rust, command-not-found)
-- zsh-completions, zsh-autosuggestions, zsh-syntax-highlighting
+This repository provides a unified configuration system for both macOS and Linux platforms, featuring consistent shell, terminal, and development tool configurations across operating systems.
 
 ## Terminal Configuration
 
@@ -419,95 +122,7 @@ Located at `.config/tmux/tmux.conf`, features include:
 - **Right**: Battery status (orange/peach), date/time (12-hour format)
 - Custom icons for session, host, and time
 
-## AeroSpace Window Manager
 
-Located at `.config/aerospace/aerospace.toml`, configuration includes:
-
-### Core Settings
-
-- **Auto-start**: Enabled at login
-- **Layout**: Tiles mode with horizontal orientation
-- **Gaps**: 16px inner and outer gaps
-- **Normalization**: Flatten containers and opposite orientation for nested containers
-- **Key mapping**: QWERTY preset
-- **Accordion padding**: 90px
-
-### Workspace Assignments
-
-All workspaces forced to main monitor:
-
-- Communication, AI-LM-Studio, Terminal, Development, Nix-Darwin, Browser (main monitor)
-- 1st through 5th Workspace (secondary monitor)
-
-### Key Bindings
-
-- **Alt+Enter**: Open Ghostty terminal
-- **Alt+Shift+h/j/k/l**: Move focus between windows
-- **Alt+Shift+Arrows**: Move focus with arrow keys
-- **Alt+Ctrl+h/j/k/l**: Move windows between spaces
-- **Alt+Shift+Tab**: Move window to next workspace
-- **Alt+[1-9]**: Switch to numbered workspace
-- **Alt+[A-F]**: Switch to named workspaces (A=Communication, B=AI-LM-Studio, C=Terminal, D=Development, E=Nix-Darwin, F=Browser)
-- **Alt+Shift+[1-9/A-F]**: Move window to workspace
-- **Alt+Tab**: Switch between workspaces
-- **Alt+Shift+c**: Reload config
-- **Alt+Shift+e**: Exit AeroSpace
-
-### Service Mode
-
-- **Enter**: `Alt+Shift+Semicolon`
-- **Exit**: `Esc` or `Ctrl+c`
-- Actions: Join with parent (join-with), flatten workspace, layout switching, window resizing
-
-## macOS System Configuration
-
-Located in `nix-modules/macos/config.nix`:
-
-### Interface
-
-- Dark mode enabled
-- Scroll animations enabled
-- Fast window resize (0.05s)
-- Hidden menu bar
-
-### Dock
-
-- Auto-hide with 0.05s delay
-- 32px tile size, 64px with magnification
-- Genie minimize effect
-- No recent apps or Dashboard
-- All hot corners disabled (set to 1)
-
-### Finder
-
-- Show path bar, status bar, all files, and extensions
-- Column view by default
-- Current folder as search scope
-- No extension change warnings
-- Sort folders first
-- Show POSIX path in title
-- Desktop icons disabled
-
-### Keyboard & Trackpad
-
-- Function keys as standard F1-F12
-- Fast key repeat (2) and initial repeat (15)
-- No three-finger drag
-- No swipe navigation
-
-### Window Manager
-
-- Auto-hide enabled
-- Desktop icons hidden
-- Click-to-show desktop disabled
-- Stage Manager disabled
-- No app window grouping
-
-### Global Settings
-
-- No press-and-hold for accents
-- Cursor size: 1.25x
-- Disabled: automatic capitalization, spelling correction, period substitution, dash substitution, quote substitution, inline prediction
 
 ## Shell Aliases
 
@@ -567,97 +182,15 @@ Intelligent AI dev launcher:
    - Press Esc: Launch Crush using OpenRouter
    - Press q: Exit
 
-## Hyprland Configuration (Nobara KDE)
-
-Complete Wayland compositor setup optimized for Nobara KDE with **minimal package installation**. Leverages KDE's built-in tools for maximum integration. See [HYPRLAND_MIGRATION.md](.config/hypr/HYPRLAND_MIGRATION.md) for full documentation.
-
-### Features
-
-- **KDE Integration**: Uses Konsole, Spectacle, Dolphin, Klipper, KRunner - all pre-installed on Nobara
-- **Minimal Packages**: Only 5 packages needed (hyprland, hyprlock, hypridle, hyprpaper, waybar)
-- **Modular Structure**: Organized into defaults, locals, bindings, apps, and scripts
-- **Catppuccin Mocha Theme**: Consistent theming across Hyprland and Waybar
-- **Native Tools**: PipeWire/wpctl audio, KDE notifications via qdbus
-- **Helper Scripts**: Launch terminal in CWD, toggle gaps, audio switching, power menu, screen recording
-- **Smart Window Rules**: App-specific opacity, workspace assignments, and floating rules
-- **Complete Bindings**: Tiling, media controls, utilities, and clipboard management
-
-### Quick Start (Nobara KDE)
-
-1. **Install ONLY 5 packages**:
-
-   ```bash
-   sudo dnf install hyprland hyprlock hypridle hyprpaper waybar
-   ```
-
-   That's it! Everything else uses KDE defaults already installed.
-
-2. **Make scripts executable**:
-
-   ```bash
-   chmod +x ~/.config/hypr/scripts/*.sh
-   ```
-
-3. **Configure monitors** (edit `.config/hypr/locals/monitors.conf`)
-
-4. **Set wallpaper** (edit `.config/hypr/hyprpaper.conf`)
-
-5. **Launch Hyprland** from TTY
-
-### Key Bindings
-
-- **SUPER + SPACE**: Application launcher (KRunner)
-- **SUPER + RETURN**: Terminal (Konsole)
-- **SUPER + E**: File manager (Dolphin)
-- **SUPER + 1-9**: Switch workspace
-- **SUPER + Arrow Keys**: Move focus
-- **SUPER + W**: Close window
-- **SUPER + T**: Toggle floating
-- **SUPER + F**: Fullscreen
-- **PRINT**: Screenshot with selection (Spectacle)
-- **SUPER + ESCAPE**: Power menu (KDE)
-- **SUPER + CTRL + V**: Clipboard history (Klipper)
-
-### Waybar Modules
-
-Status bar with: Launcher, Workspaces, Window Title, Clock, System Tray, Bluetooth, Network, Audio, CPU, Memory, Temperature, Battery, Power
-
-All styled with Catppuccin Mocha colors and interactive tooltips.
-
-## Included Applications & Tools
-
-### Development
-
-- Neovim with LazyVim, Go, Python, Rust toolchains
-- Language servers, formatters, and linters
-- Git, GitHub CLI, and development utilities
-
-### Terminals & Shell
-
-- Alacritty, Ghostty, Kitty, Neovide
-- Tmux, Zsh with Starship prompt
-- Modern CLI tools: eza, fd, ripgrep, bat, fzf
-
-### Productivity
-
-- AeroSpace window manager, Raycast launcher
-- System monitoring (btop), file management, and utilities
-
-### Creative & Media
-
-- Krita, VLC, Plexamp, and various media tools
-
 ## Repository Structure
 
-### Core Nix Configuration
+### Core Configuration Files
 
-- **`flake.nix`** - Main Nix flake configuration with inputs and outputs
-- **`flake.lock`** - Locked dependency versions
-- **`nix-modules/macos/`** - Modular nix-darwin configurations
-    - `packages.nix` - Homebrew packages, casks, and Mac App Store apps
-    - `config.nix` - System configuration and settings
-    - `personal.nix` - Personal environment specific settings
-    - `work.nix` - Work environment specific settings
+- **`flake.nix`** - Main Nix flake configuration (macOS)
+- **`flake.lock`** - Locked dependency versions (macOS)
+- **`nix-modules/macos/`** - macOS-specific nix-darwin configurations
+- **`.gitconfig`** - Git configuration
+- **`.stow-local-ignore`** - GNU Stow ignore patterns
 
 ### Application Configurations (`.config/`)
 
@@ -676,22 +209,16 @@ All styled with Catppuccin Mocha colors and interactive tooltips.
     - `github-copilot/` - GitHub Copilot settings and session data
 
 - **System & Productivity**
-    - `aerospace/` - AeroSpace window manager configuration (macOS)
-    - `raycast/` - Raycast extensions (Slack integration)
-    - `borders/` - Window borders configuration
     - `btop/` - System monitor with Catppuccin theme
     - `atuin/` - Shell history sync configuration
     - `crush/` - Crush CLI tool configuration
+    - `borders/` - Window borders configuration (macOS)
+    - `raycast/` - Raycast extensions (macOS)
 
-- **Desktop Environments**
-    - **Hyprland (Fedora/Linux)** - Complete Wayland compositor setup
-        - `hypr/` - Hyprland configuration with Catppuccin Mocha theme
-            - Modular structure: defaults, locals, bindings, apps, scripts
-            - Migrated from Omarchy to pure Fedora-compatible tools
-            - See [HYPRLAND_MIGRATION.md](.config/hypr/HYPRLAND_MIGRATION.md) for details
-        - `waybar/` - Status bar with Catppuccin theme and custom modules
-    - **KDE/Plasma** - Various KDE configuration files for Linux compatibility
-        - Plasma desktop, Konsole, and system settings
+- **Window Managers & Desktop Environments**
+    - `aerospace/` - AeroSpace window manager configuration (macOS)
+    - `hypr/` - Hyprland configurations (Linux - see [README_LINUX.md](README_LINUX.md))
+    - Various KDE/Plasma configuration files (Linux)
 
 - **Specialized Tools**
     - `qmk/` - QMK keyboard firmware configurations
@@ -712,7 +239,7 @@ All styled with Catppuccin Mocha colors and interactive tooltips.
 
 ### Automation & Infrastructure
 
-- **`ansible-fedora/`** - Ansible playbooks for Fedora Linux setup
+- **`ansible-linux/`** - Ansible playbooks for Fedora Linux setup (legacy - see [README_LINUX.md](README_LINUX.md))
     - `playbooks/` - Common, packages, and personal setup playbooks
     - `roles/` - Reusable Ansible roles
     - `inventory/` - Host inventory configuration
@@ -723,79 +250,47 @@ All styled with Catppuccin Mocha colors and interactive tooltips.
 - **`.themes/`** - Terminal and application themes
     - `MacOS Terminal/` - macOS Terminal.app themes
 
-### Development Environment
-
-- **`.claude/`** - Claude AI assistant configuration and project data
-- **`.gitconfig`** - Git configuration
-- **`.stow-local-ignore`** - GNU Stow ignore patterns
-
 ## Troubleshooting
 
-### Missing Command Errors
+### Shell and Plugin Issues
 
-If you encounter "command not found" errors after setup:
+**Zinit not loading**:
+```bash
+# Zinit auto-installs on first zsh launch
+# If it fails, manually install:
+git clone https://github.com/zdharma-continuum/zinit.git ~/.local/share/zinit/zinit.git
+```
 
-1. **Check if package is installed**:
+**Tmux plugins not installed**:
+```bash
+# TPM (Tmux Plugin Manager) installs on first tmux launch
+# Or manually: press Prefix + I in tmux
+```
 
-   ```bash
-   which <command>  # or: command -v <command>
-   ```
+**Language servers missing for Neovim**:
+```bash
+# Python LSP
+pip3 install python-lsp-server
 
-2. **Common missing packages**:
-   - `starship` → `sudo dnf install starship`
-   - `eza` → `cargo install eza` (requires rust/cargo)
-   - `zoxide` → `cargo install zoxide`
-   - `atuin` → Follow [atuin.sh](https://atuin.sh) installation guide
-   - `fzf` → `sudo dnf install fzf`
-   - `gh` → `sudo dnf install gh`
-   - `terraform` → Download from [terraform.io](https://terraform.io) or use `tfenv`
-   - `kubectl` → `sudo dnf install kubectl`
+# Node.js LSPs
+npm install -g typescript-language-server bash-language-server yaml-language-server
 
-3. **Zinit not loading**:
+# Go LSP
+go install golang.org/x/tools/gopls@latest
 
-   ```bash
-   # Zinit auto-installs on first zsh launch
-   # If it fails, manually install:
-   git clone https://github.com/zdharma-continuum/zinit.git ~/.local/share/zinit/zinit.git
-   ```
+# Rust LSP
+rustup component add rust-analyzer
+```
 
-4. **Tmux plugins not installed**:
+### Stow Conflicts
 
-   ```bash
-   # TPM (Tmux Plugin Manager) installs on first tmux launch
-   # Or manually: press Prefix + I in tmux
-   ```
+If stow reports conflicts:
+1. Check `.stow-local-ignore` excludes
+2. Manually resolve conflicting files
+3. Consider backing up existing configs before stowing
 
-5. **Language servers missing for Neovim**:
+### Platform-Specific Issues
 
-   ```bash
-   # Python LSP
-   pip3 install python-lsp-server
-
-   # Node.js LSPs
-   npm install -g typescript-language-server bash-language-server yaml-language-server
-
-   # Go LSP
-   go install golang.org/x/tools/gopls@latest
-
-   # Rust LSP
-   rustup component add rust-analyzer
-   ```
-
-6. **Path issues**:
-   ```bash
-   # Ensure these are in your PATH:
-   export PATH="$HOME/.local/bin:$HOME/go/bin:$HOME/.cargo/bin:$PATH"
-   ```
-
-### Fedora-Specific Issues
-
-- **Hyprland not starting**: Ensure you're on Wayland, not X11
-- **Waybar not appearing**: Check `waybar --log-level debug` for errors
-- **AWS CLI v2**: Use `awscli2` package on Fedora, not `aws-cli`
-
-### macOS-Specific Issues
-
-- **Homebrew paths**: Ensure `/opt/homebrew/bin` is in PATH (Apple Silicon) or `/usr/local/bin` (Intel)
-- **AeroSpace not working**: Grant Accessibility permissions in System Preferences
-- **nix-darwin errors**: Run with verbose flag: `darwin-rebuild switch --flake ~/nix-darwin#macos_personal --show-trace`
+For platform-specific troubleshooting:
+- **macOS**: See [README_MACOS.md#troubleshooting](README_MACOS.md#troubleshooting)
+- **Linux**: See [README_LINUX.md#troubleshooting](README_LINUX.md#troubleshooting)
