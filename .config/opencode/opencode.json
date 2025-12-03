@@ -342,6 +342,69 @@
       "extensions": [".toml"]
     }
   },
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "tools": {
+        "read": true,
+        "grep": true,
+        "glob": true,
+        "list": true,
+        "edit": true,
+        "write": true,
+        "bash": true,
+        "webfetch": true
+      },
+      "permission": {
+        "edit": "ask",
+        "write": "ask",
+        "bash": {
+          "cat *": "allow",
+          "view *": "allow",
+          "grep *": "allow",
+          "ls *": "allow",
+          "find *": "allow",
+          "git status": "allow",
+          "git log *": "allow",
+          "git show *": "allow",
+          "git diff *": "allow",
+          "git branch *": "allow",
+          "aws sts get-caller-identity *": "allow",
+          "aws sts get-session-token *": "allow",
+          "aws configure list *": "allow",
+          "aws configure get *": "allow",
+          "aws iam get-*": "allow",
+          "aws iam list-*": "allow",
+          "aws ec2 describe-*": "allow",
+          "aws s3 ls *": "allow",
+          "aws s3 head-object *": "allow",
+          "aws s3api list-*": "allow",
+          "aws s3api get-*": "allow",
+          "aws s3api head-*": "allow",
+          "aws lambda list-*": "allow",
+          "aws lambda get-*": "allow",
+          "aws logs describe-*": "allow",
+          "aws logs get-*": "allow",
+          "aws cloudformation list-*": "allow",
+          "aws cloudformation describe-*": "allow",
+          "aws cloudformation get-*": "allow",
+          "aws eks list-*": "allow",
+          "aws eks describe-*": "allow",
+          "aws rds describe-*": "allow",
+          "aws bedrock list-*": "allow",
+          "aws bedrock get-*": "allow",
+          "aws ssm get-parameter *": "allow",
+          "aws ssm get-parameters *": "allow",
+          "aws ssm describe-parameters *": "allow",
+          "aws secretsmanager list-secrets *": "allow",
+          "aws secretsmanager describe-secret *": "allow",
+          "aws secretsmanager get-secret-value *": "allow",
+          "*": "ask"
+        },
+        "webfetch": "allow"
+      }
+    }
+  },
   "mcp": {
     "memory": {
       "type": "local",
