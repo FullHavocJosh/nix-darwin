@@ -56,6 +56,12 @@ contexts = [
 [docker_context]
 disabled = true
 
+[hostname]
+ssh_only = true
+format = '[@$hostname]($style) '
+style = 'bold blue'
+disabled = false
+
 [palettes.catppuccin_mocha]
 rosewater = "#f5e0dc"
 flamingo = "#f2cdcd"
