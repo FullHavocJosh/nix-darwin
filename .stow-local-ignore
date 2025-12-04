@@ -26,5 +26,4 @@ ansible-.*
 \.config/plasma.*
 \.config/systemsettingsrc$
 \.config/Trolltech\.conf$
-\.config/waybar$
 \.config/hypr\.backup\.pre-restructure$

@@ -1,307 +1,83 @@
-/* Waybar Style with Catppuccin Mocha Theme */
+@import "../omarchy/current/theme/waybar.css";
 
-/* Catppuccin Mocha Colors */
-@define-color rosewater #f5e0dc;
-@define-color flamingo #f2cdcd;
-@define-color pink #f5c2e7;
-@define-color mauve #cba6f7;
-@define-color red #f38ba8;
-@define-color maroon #eba0ac;
-@define-color peach #fab387;
-@define-color yellow #f9e2af;
-@define-color green #a6e3a1;
-@define-color teal #94e2d5;
-@define-color sky #89dceb;
-@define-color sapphire #74c7ec;
-@define-color blue #89b4fa;
-@define-color lavender #b4befe;
-@define-color text #cdd6f4;
-@define-color subtext1 #bac2de;
-@define-color subtext0 #a6adc8;
-@define-color overlay2 #9399b2;
-@define-color overlay1 #7f849c;
-@define-color overlay0 #6c7086;
-@define-color surface2 #585b70;
-@define-color surface1 #45475a;
-@define-color surface0 #313244;
-@define-color base #1e1e2e;
-@define-color mantle #181825;
-@define-color crust #11111b;
-
-/* Reset */
 * {
+  background-color: @background;
+  color: @foreground;
+
   border: none;
   border-radius: 0;
-  font-family:
-    "CaskaydiaCove Nerd Font", "Font Awesome 6 Free", "Font Awesome 6 Brands";
-  font-size: 13px;
   min-height: 0;
+  font-family: "JetBrainsMono Nerd Font";
+  font-size: 15px;
 }
 
-/* Main bar */
-window#waybar {
-  background-color: @base;
-  color: @text;
-  transition-property: background-color;
-  transition-duration: 0.5s;
-}
-
-window#waybar.hidden {
-  opacity: 0.2;
-}
-
-/* Modules positioning */
 .modules-left {
-  margin-left: 8px;
+  margin-left: 10px;
 }
 
 .modules-right {
-  margin-right: 8px;
-}
-
-/* Generic module styling */
-#custom-launcher,
-#workspaces,
-#window,
-#clock,
-#battery,
-#cpu,
-#memory,
-#temperature,
-#network,
-#pulseaudio,
-#bluetooth,
-#tray,
-#custom-power {
-  padding: 0 10px;
-  margin: 4px 2px;
-  background-color: @surface0;
-  color: @text;
-  border-radius: 8px;
-}
-
-/* Launcher */
-#custom-launcher {
-  background-color: @mauve;
-  color: @base;
-  font-size: 18px;
-  padding: 0 12px;
-  margin-left: 0;
-}
-
-#custom-launcher:hover {
-  background-color: @lavender;
-}
-
-/* Workspaces */
-#workspaces {
-  background-color: transparent;
-  padding: 0;
+  margin-right: 10px;
 }
 
 #workspaces button {
-  padding: 0 8px;
-  margin: 4px 2px;
-  background-color: @surface0;
-  color: @text;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-}
-
-#workspaces button:hover {
-  background-color: @surface1;
-  color: @mauve;
-}
-
-#workspaces button.active {
-  background-color: @mauve;
-  color: @base;
-}
-
-#workspaces button.urgent {
-  background-color: @red;
-  color: @base;
+  all: initial;
+  padding: 0 7px;
+  margin: 0 2px;
+  min-width: 11px;
 }
 
 #workspaces button.empty {
-  background-color: transparent;
-  color: @overlay0;
+  opacity: 0.5;
 }
 
-/* Window title */
-#window {
-  background-color: transparent;
-  color: @text;
-  font-weight: 500;
+#cpu,
+#battery,
+#pulseaudio,
+#custom-omarchy,
+#custom-screenrecording-indicator,
+#custom-update {
+  min-width: 15px;
+  margin: 0 9px;
 }
 
-/* Clock */
-#clock {
-  background-color: @surface0;
-  color: @blue;
-  font-weight: 600;
-  min-width: 150px;
-}
-
-#clock:hover {
-  background-color: @surface1;
-  color: @sky;
-}
-
-/* CPU */
-#cpu {
-  background-color: @surface0;
-  color: @green;
-}
-
-#cpu:hover {
-  background-color: @surface1;
-}
-
-/* Memory */
-#memory {
-  background-color: @surface0;
-  color: @yellow;
-}
-
-#memory:hover {
-  background-color: @surface1;
-}
-
-/* Temperature */
-#temperature {
-  background-color: @surface0;
-  color: @peach;
-}
-
-#temperature.critical {
-  background-color: @red;
-  color: @base;
-  animation: blink 0.5s linear infinite;
-}
-
-@keyframes blink {
-  50% {
-    opacity: 0.5;
-  }
-}
-
-/* Network */
-#network {
-  background-color: @surface0;
-  color: @sky;
-}
-
-#network.disconnected {
-  background-color: @red;
-  color: @base;
-}
-
-#network:hover {
-  background-color: @surface1;
-}
-
-/* Battery */
-#battery {
-  background-color: @surface0;
-  color: @green;
-}
-
-#battery.charging {
-  background-color: @green;
-  color: @base;
-}
-
-#battery.plugged {
-  background-color: @teal;
-  color: @base;
-}
-
-#battery.warning:not(.charging) {
-  background-color: @yellow;
-  color: @base;
-}
-
-#battery.critical:not(.charging) {
-  background-color: @red;
-  color: @base;
-  animation: blink 0.5s linear infinite;
-}
-
-#battery:hover {
-  background-color: @surface1;
-}
-
-/* Bluetooth */
-#bluetooth {
-  background-color: @surface0;
-  color: @blue;
-}
-
-#bluetooth.disabled {
-  background-color: @surface0;
-  color: @overlay0;
-}
-
-#bluetooth:hover {
-  background-color: @surface1;
-}
-
-/* PulseAudio */
-#pulseaudio {
-  background-color: @surface0;
-  color: @mauve;
-}
-
-#pulseaudio.muted {
-  background-color: @surface0;
-  color: @overlay0;
-}
-
-#pulseaudio:hover {
-  background-color: @surface1;
-}
-
-/* Tray */
 #tray {
-  background-color: @surface0;
+  margin-right: 20px;
 }
 
-#tray > .passive {
-  -gtk-icon-effect: dim;
+#bluetooth {
+  margin-right: 21px;
 }
 
-#tray > .needs-attention {
-  -gtk-icon-effect: highlight;
-  background-color: @red;
-  border-radius: 8px;
+#network {
+  margin-right: 16px;
 }
 
-#tray:hover {
-  background-color: @surface1;
+#custom-expand-icon {
+  margin-right: 22px;
 }
 
-/* Power button */
-#custom-power {
-  background-color: @red;
-  color: @base;
-  font-size: 16px;
-  padding: 0 12px;
-  margin-right: 0;
-}
-
-#custom-power:hover {
-  background-color: @maroon;
-}
-
-/* Tooltips */
 tooltip {
-  background-color: @base;
-  border: 2px solid @mauve;
-  border-radius: 8px;
-  padding: 10px;
+  padding: 2px;
 }
 
-tooltip label {
-  color: @text;
+#custom-update {
+  font-size: 12px;
+}
+
+#clock {
+  margin-left: 11px;
+}
+
+.hidden {
+  opacity: 0;
+}
+
+#custom-screenrecording-indicator {
+  min-width: 15px;
+  margin-left: 11px;
+  font-size: 12px;
+}
+
+#custom-screenrecording-indicator.active {
+  color: #a55555;
 }
