@@ -1,3 +1,108 @@
 [submodule ".config/tmux/plugins/tpm"]
 	path = .config/tmux/plugins/tpm
 	url = https://github.com/tmux-plugins/tpm.git
+[submodule ".config/omarchy/themes/aetheria"]
+	path = .config/omarchy/themes/aetheria
+	url = https://github.com/JJDizz1L/aetheria
+[submodule ".config/omarchy/themes/arc-blueberry"]
+	path = .config/omarchy/themes/arc-blueberry
+	url = https://github.com/vale-c/omarchy-arc-blueberry
+[submodule ".config/omarchy/themes/archwave"]
+	path = .config/omarchy/themes/archwave
+	url = https://github.com/davidguttman/archwave
+[submodule ".config/omarchy/themes/aura"]
+	path = .config/omarchy/themes/aura
+	url = https://github.com/bjarneo/omarchy-aura-theme
+[submodule ".config/omarchy/themes/ayaka"]
+	path = .config/omarchy/themes/ayaka
+	url = https://github.com/abhijeet-swami/omarchy-ayaka-theme
+[submodule ".config/omarchy/themes/azure-glow"]
+	path = .config/omarchy/themes/azure-glow
+	url = https://github.com/Hydradevx/omarchy-azure-glow-theme
+[submodule ".config/omarchy/themes/blackturq"]
+	path = .config/omarchy/themes/blackturq
+	url = https://github.com/HANCORE-linux/omarchy-blackturq-theme
+[submodule ".config/omarchy/themes/bluedotrb"]
+	path = .config/omarchy/themes/bluedotrb
+	url = https://github.com/dotsilva/omarchy-bluedotrb-theme
+[submodule ".config/omarchy/themes/blueridge-dark"]
+	path = .config/omarchy/themes/blueridge-dark
+	url = https://github.com/hipsterusername/omarchy-blueridge-dark-theme
+[submodule ".config/omarchy/themes/catppuccin-dark"]
+	path = .config/omarchy/themes/catppuccin-dark
+	url = https://github.com/Luquatic/omarchy-catppuccin-dark
+[submodule ".config/omarchy/themes/citrus-cynapse"]
+	path = .config/omarchy/themes/citrus-cynapse
+	url = https://github.com/Grey-007/citrus-cynapse
+[submodule ".config/omarchy/themes/demon"]
+	path = .config/omarchy/themes/demon
+	url = https://github.com/HANCORE-linux/omarchy-demon-theme
+[submodule ".config/omarchy/themes/dotrb"]
+	path = .config/omarchy/themes/dotrb
+	url = https://github.com/dotsilva/omarchy-dotrb-theme
+[submodule ".config/omarchy/themes/drac"]
+	path = .config/omarchy/themes/drac
+	url = https://github.com/ShehabShaef/omarchy-drac-theme
+[submodule ".config/omarchy/themes/dracula"]
+	path = .config/omarchy/themes/dracula
+	url = https://github.com/catlee/omarchy-dracula-theme
+[submodule ".config/omarchy/themes/eldritch"]
+	path = .config/omarchy/themes/eldritch
+	url = https://github.com/eldritch-theme/omarchy
+[submodule ".config/omarchy/themes/felix"]
+	path = .config/omarchy/themes/felix
+	url = https://github.com/TyRichards/omarchy-felix-theme
+[submodule ".config/omarchy/themes/fireside"]
+	path = .config/omarchy/themes/fireside
+	url = https://github.com/bjarneo/omarchy-fireside-theme
+[submodule ".config/omarchy/themes/flexoki-dark"]
+	path = .config/omarchy/themes/flexoki-dark
+	url = https://github.com/euandeas/omarchy-flexoki-dark-theme
+[submodule ".config/omarchy/themes/futurism"]
+	path = .config/omarchy/themes/futurism
+	url = https://github.com/bjarneo/omarchy-futurism-theme
+[submodule ".config/omarchy/themes/hakker-green"]
+	path = .config/omarchy/themes/hakker-green
+	url = https://github.com/joaquinmeza/omarchy-hakker-green-theme
+[submodule ".config/omarchy/themes/mars"]
+	path = .config/omarchy/themes/mars
+	url = https://github.com/steve-lohmeyer/omarchy-mars-theme
+[submodule ".config/omarchy/themes/midnight"]
+	path = .config/omarchy/themes/midnight
+	url = https://github.com/JaxonWright/omarchy-midnight-theme
+[submodule ".config/omarchy/themes/monokai"]
+	path = .config/omarchy/themes/monokai
+	url = https://github.com/bjarneo/omarchy-monokai-theme
+[submodule ".config/omarchy/themes/neovoid"]
+	path = .config/omarchy/themes/neovoid
+	url = https://github.com/RiO7MAKK3R/omarchy-neovoid-theme
+[submodule ".config/omarchy/themes/nes"]
+	path = .config/omarchy/themes/nes
+	url = https://github.com/bjarneo/omarchy-nes-theme
+[submodule ".config/omarchy/themes/pandora"]
+	path = .config/omarchy/themes/pandora
+	url = https://github.com/imbypass/omarchy-pandora-theme
+[submodule ".config/omarchy/themes/pulsar"]
+	path = .config/omarchy/themes/pulsar
+	url = https://github.com/bjarneo/omarchy-pulsar-theme
+[submodule ".config/omarchy/themes/purple-moon"]
+	path = .config/omarchy/themes/purple-moon
+	url = https://github.com/Grey-007/purple-moon
+[submodule ".config/omarchy/themes/sunset-drive"]
+	path = .config/omarchy/themes/sunset-drive
+	url = https://github.com/tahayvr/omarchy-sunset-drive-theme
+[submodule ".config/omarchy/themes/temerald"]
+	path = .config/omarchy/themes/temerald
+	url = https://github.com/Ahmad-Mtr/omarchy-temerald-theme
+[submodule ".config/omarchy/themes/tokyoled"]
+	path = .config/omarchy/themes/tokyoled
+	url = https://github.com/Justin-De-Sio/omarchy-tokyoled-theme
+[submodule ".config/omarchy/themes/waveform-dark"]
+	path = .config/omarchy/themes/waveform-dark
+	url = https://github.com/hipsterusername/omarchy-waveform-dark-theme
+[submodule ".config/omarchy/themes/vhs80"]
+	path = .config/omarchy/themes/vhs80
+	url = https://github.com/tahayvr/omarchy-vhs80-theme
+[submodule ".config/omarchy/themes/void"]
+	path = .config/omarchy/themes/void
+	url = https://github.com/vyrx-dev/omarchy-void-theme
