@@ -4,7 +4,7 @@ format = """$directory$git_branch$git_status
 $character"""
 palette = "catppuccin_mocha"
 # move the rest of the prompt to the right
-right_format = """$aws$golang$python$kubernetes$docker_context$cmd_duration$jobs$battery$time$status$container$shell"""
+right_format = """$hostname$aws$golang$python$kubernetes$docker_context$cmd_duration$jobs$battery$time$status$container$shell"""
 command_timeout = 1000
 
 [character]
