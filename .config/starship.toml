@@ -13,7 +13,7 @@ success_symbol = '[>--➜](bold green)'
 
 [git_branch]
 disabled = false
-format =  '[$symbol$branch(:$remote_branch)]($style)'
+format = '[$symbol$branch(:$remote_branch)]($style)'
 
 [git_status]
 format = '([\[$all_status$ahead_behind\]]($style))'
@@ -32,9 +32,9 @@ deleted = '✘'
 
 [aws]
 format = '[$symbol(profile: $profile )\[$region\]]($style)'
-disabled = false
+disabled = true
 style = 'bold peach'
-symbol = " "
+symbol = " "
 region_aliases = { "us-east-1" = "ue1", "us-west-2" = "uw2", "eu-west-1" = "ew1" }
 
 [golang]
