@@ -47,14 +47,10 @@ mouse = "Middle"
 
 [window]
 decorations = "None"
-dynamic_title = true
+dynamic_title = false
 dynamic_padding = true
 opacity = 1.0
 blur = false
-
-[window.padding]
-x = 0
-y = 0
 
 [scrolling]
 history = 100000
