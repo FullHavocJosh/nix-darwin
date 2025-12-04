@@ -10,3 +10,7 @@
 [core]
 	# Sets Vim as the default editor for Git commands.
 	editor = vim
+
+[alias]
+	# Pull and update submodules automatically
+	pull = !git pull --recurse-submodules && git submodule update --init --recursive
