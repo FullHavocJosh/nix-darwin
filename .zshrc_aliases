@@ -3,7 +3,10 @@ alias sshg14='ssh -i ~/.ssh/id_ed25519 root@Joshs-G14.rollet.family'
 alias sshazeroth='ssh -i ~/.ssh/id_ed25519 root@azerothcore.rollet.family'
 alias sshtestazeroth='ssh -i ~/.ssh/id_ed25519 root@testing-azerothcore.rollet.family'
 alias sshmini='ssh -i ~/.ssh/id_ed25519 havoc@macOS-Mac-mini.rollet.family'
-alias sshdeck='ssh -i ~/.ssh/id_ed25519 havoc@Joshs-SteamDeck.rollet.family'
+alias sshtruenas='ssh -i ~/.ssh/id_ed25519 admin@truenas.rollet.family'
+alias ssh6rx26x1='ssh -i ~/.ssh/id_ed25519 havoc@6rx26x1.rollet.family'
+alias sshcaitsg14='ssh -i ~/.ssh/id_ed25519 nesheri@Caits-G14.rollet.family'
+alias sshxps13='ssh -i ~/.ssh/id_ed25519 havoc@xps13.rollet.family'
 
 alias nxvim="cd ~/nix-darwin && ~/.config/tmux/plugins/tpm/scripts/install_plugins.sh && (tmux has-session -t nix-darwin 2>/dev/null && tmux attach -t nix-darwin || (tmux new-session -s nix-darwin -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys 'nvim' Enter \; select-pane -t 1 \; send-keys 'aidev' Enter \; select-pane -t 2 \; send-keys 'git status' Enter \; select-pane -t 1 \; attach))"
 alias devim='~/.config/tmux/plugins/tpm/scripts/install_plugins.sh && (tmux has-session -t $(basename $(pwd)) 2>/dev/null && tmux attach -t $(basename $(pwd)) || (tmux new-session -s $(basename $(pwd)) -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys "nvim" Enter \; select-pane -t 1 \; send-keys "aidev" Enter \; select-pane -t 2 \; send-keys "git status" Enter \; select-pane -t 1 \; attach))'

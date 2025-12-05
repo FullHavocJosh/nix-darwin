@@ -34,7 +34,9 @@ declare -A SSH_TARGETS=(
     ["azeroth"]="root@azerothcore.rollet.family"
     ["testazeroth"]="root@testing-azerothcore.rollet.family"
     ["mini"]="havoc@macOS-Mac-mini.rollet.family"
-    ["deck"]="havoc@Joshs-SteamDeck.rollet.family"
+    ["truenas"]="admin@truenas.rollet.family"
+    ["6rx26x1"]="havoc@6rx26x1.rollet.family"
+    ["caitsg14"]="nesheri@Caits-G14.rollet.family"
 )
 
 echo -e "${YELLOW}This script will copy your SSH public key to the following servers:${NC}"
@@ -188,4 +190,4 @@ fi
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "You can now test the connections with your aliases:"
-echo "  sshmacbook, sshg14, sshazeroth, sshtestazeroth, sshmini, sshdeck"
+echo "  sshmacbook, sshg14, sshazeroth, sshtestazeroth, sshmini, sshtruenas, ssh6rx26x1, sshcaitsg14, sshxps13"
