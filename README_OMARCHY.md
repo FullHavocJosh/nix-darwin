@@ -198,8 +198,8 @@ This repository manages Omarchy themes as git submodules, deployed via stow.
 #### Option 1: Add Curated Themes (36 selected themes)
 
 ```bash
-cd ~/nix-darwin
-./add-omarchy-themes-as-submodules.sh
+cd ~/nix-darwin/scripts
+./linux-add-omarchy-themes-as-submodules.sh
 ```
 
 This adds a curated selection of 36 themes that you've chosen.
