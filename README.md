@@ -7,6 +7,28 @@ This repository contains a comprehensive system configuration and dotfiles for b
 - **[macOS Setup Guide](README_MACOS.md)** - nix-darwin installation and configuration
 - **[Linux Setup Guide (Omarchy)](README_LINUX.md)** - Arch Linux with Hyprland desktop environment
 
+## Additional Documentation
+
+This repository contains several specialized documentation files for different components and use cases:
+
+### Platform & Environment Guides
+
+- **[README_MACOS.md](README_MACOS.md)** - Complete macOS setup with nix-darwin, including installation, configuration, and troubleshooting
+- **[README_LINUX.md](README_LINUX.md)** - Arch Linux setup guide with Hyprland desktop environment configuration
+- **[README_OMARCHY.md](README_OMARCHY.md)** - Comprehensive Omarchy (Hyprland) configuration guide including keybindings, themes, window management, and customization
+
+### Component-Specific Documentation
+
+- **[.config/nvim/README.md](.config/nvim/README.md)** - LazyVim configuration and plugin setup
+- **[scripts/README_TRUENAS.md](scripts/README_TRUENAS.md)** - TrueNAS SCALE SMB service monitoring script and automated restart system
+
+### Theme Documentation
+
+The repository includes 36+ Omarchy themes as git submodules, each with their own README.md:
+
+- **[.config/omarchy/themes/\*/README.md](.config/omarchy/themes/)** - Individual theme documentation and screenshots
+- See [README_OMARCHY.md](README_OMARCHY.md) for theme management and deployment instructions
+
 ## Repository Overview
 
 This repository provides a unified configuration system for both macOS and Linux platforms, featuring consistent shell, terminal, and development tool configurations across operating systems.
