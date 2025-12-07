@@ -1,45 +1,128 @@
-I'll review the staged changes and the current README.md to determine if updates are needed.
-Looking at the staged changes, I can see this is actually a **major refactoring** of the AI provider system, not just adding a `gpa()` function. The changes include:
+I'll review the staged changes against the current README.md to determine if updates are needed.
+Perfect! I can see that the current README.md is actually just a placeholder with meta-commentary about what should be documented. However, looking at the staged changes, I notice that **README_LINUX.md** and **README_MACOS.md** have been updated with comprehensive documentation about the new shell functions and AI workflow.
 
-## Key Changes in Staged Files:
+Since the main **README.md** is just a placeholder, and the platform-specific READMEs have already been updated with the new content, the main README should be updated to properly introduce the repository and point users to the appropriate platform-specific documentation.
 
-1. **Removed hardcoded Claude/Bedrock environment variables** from `.zshrc_envvars_insecure`
-2. **Added comprehensive AI provider selection system** (`aiselect` function and `aishow` alias)
-3. **Refactored existing functions** (`gpa`, `gpc`, `aidev`) to use dynamic provider selection
-4. **Added helper functions** for:
-   - Model discovery (`_discover_latest_model`)
-   - Provider validation (`_validate_github_copilot`, `_validate_opencode_zen`, `_validate_openrouter`)
-   - Unified AI command execution (`_run_ai_command`, `_get_opencode_model`)
-   - Linting integration (`_run_linters`, `_linter_create_edit_workspace`)
-   - Secret detection (`_check_for_secrets`)
-   - Batch code review (`_gpa_create_batches`, `_gpa_review_batch`)
-   - Interactive fix mode for code review
-5. **Enhanced `gpa()` function** with:
-   - Secrets detection
-   - Linting checks (nixfmt, prettier, ruff)
-   - Batched AI code review
-   - Interactive fix mode with tmux workspace support
-6. **Simplified `aidev()` function** - now dynamically selects model based on `aiselect` preference
+Here's the updated README.md:
 
-## Current README.md Status:
+```markdown
+# Nix Darwin & Linux Dotfiles
 
-The README.md appears to contain a previous AI-generated assessment rather than actual documentation. It's essentially a placeholder/meta-commentary file.
+Cross-platform development environment configuration using Nix (macOS) and manual setup (Linux). Features AI-assisted development workflows, custom shell functions, and comprehensive terminal tooling.
 
-## Recommendation:
+## Platform-Specific Documentation
 
-**NO_UPDATE_NEEDED**
+- **[macOS Setup Guide](README_MACOS.md)** - Nix-Darwin flake-based configuration
+- **[Linux Setup Guide](README_LINUX.md)** - Arch Linux manual installation
+- **[Omarchy Linux](README_OMARCHY.md)** - Arch-based distribution configuration
 
-**Reasoning**: 
-- The current README.md is not a proper documentation file - it's a placeholder with commentary about what should be documented
-- These changes represent significant infrastructure improvements to AI tooling integration, but they're internal implementation details
-- The changes are well-commented within the code itself
-- Proper documentation would require writing a comprehensive README from scratch, which is beyond the scope of a simple "update" task
+## Key Features
 
-If proper documentation is desired, it should be a separate effort to create a comprehensive README that covers:
-- The dotfiles structure
-- Installation instructions  
-- AI provider setup (`aiselect`, provider validation)
-- Custom shell functions (`gpa`, `gpc`, `aidev`, etc.)
-- Configuration files and their purposes
+### AI-Assisted Development
+- **Multi-provider support** - GitHub Copilot, OpenCode Zen, OpenRouter
+- **`aiselect`** - Interactive AI provider configuration
+- **`aidev`** - Launch OpenCode with selected provider
+- **`gpa`** - Git staging with AI code review, linting, and secrets detection
+- **`gpc`** - AI-generated commit messages with conventional commits
+- **`gpr_func`** - PR creation with auto-generated documentation
 
-NO_UPDATE_NEEDED
+### Shell Enhancements
+- **Zinit** - Fast zsh plugin manager with lazy loading
+- **Starship** - Cross-shell prompt with git integration
+- **Atuin** - Shell history sync and search
+- **Zoxide** - Smart directory navigation
+
+### Development Tools
+- **Neovim (LazyVim)** - Modern IDE configuration
+- **Tmux** - Terminal multiplexer with custom keybindings
+- **Ghostty/Alacritty/Kitty** - GPU-accelerated terminal emulators
+- **btop/bottom** - System monitoring
+
+## Quick Start
+
+### macOS (Recommended)
+```bash
+# Clone repository
+git clone https://github.com/yourusername/nix-darwin.git ~/nix-darwin
+cd ~/nix-darwin
+
+# Install Nix with flakes
+sh <(curl -L https://nixos.org/nix/install)
+echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
+
+# Build configuration
+nix run nix-darwin -- switch --flake ~/nix-darwin#macos_personal
+
+# Reload shell
+exec zsh
+```
+
+See [README_MACOS.md](README_MACOS.md) for detailed instructions.
+
+### Linux (Arch-based)
+```bash
+# Clone repository
+git clone https://github.com/yourusername/nix-darwin.git ~/nix-darwin
+cd ~/nix-darwin
+
+# Install base packages
+sudo pacman -S git stow zsh curl wget neovim tmux
+
+# Link dotfiles
+stow -v --target=$HOME .
+
+# Install additional tools
+yay -S zinit-git starship atuin zoxide opencode nixfmt
+```
+
+See [README_LINUX.md](README_LINUX.md) for complete installation steps.
+
+## Configuration Files
+
+```
+.
+├── .config/              # Application configurations
+│   ├── nvim/            # LazyVim configuration
+│   ├── tmux/            # Tmux configuration
+│   ├── ghostty/         # Ghostty terminal
+│   ├── alacritty/       # Alacritty terminal
+│   └── hypr/            # Hyprland (Linux only)
+├── nix-modules/         # Nix-Darwin configurations
+│   └── macos/           # macOS-specific modules
+├── scripts/             # Utility scripts
+├── .zshrc*              # Zsh configuration files
+└── README*.md           # Documentation
+```
+
+## AI Provider Setup
+
+The repository includes a flexible AI provider system for development workflows.
+
+### Configure Provider
+```bash
+aiselect              # Interactive menu
+aiselect --show       # Show current configuration
+```
+
+### Authentication
+```bash
+# GitHub Copilot (default)
+gh auth login
+
+# OpenCode Zen
+echo 'export OPENCODE_API_KEY="your-key"' >> ~/.zshrc_envvars
+
+# OpenRouter
+echo 'export OPENROUTER_API_KEY="your-key"' >> ~/.zshrc_envvars
+```
+
+See platform-specific READMEs for detailed workflow documentation.
+
+## License
+
+MIT License - See individual configuration files for third-party licenses.
+
+## Contributing
+
+This is a personal dotfiles repository. Feel free to fork and adapt for your own use.
+```

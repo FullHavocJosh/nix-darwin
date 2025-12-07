@@ -99,6 +99,14 @@ go install github.com/hashicorp/terraform-ls@latest
 curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
 ```
 
+**Install via AUR (recommended):**
+
+```bash
+yay -S nixfmt
+```
+
+**Or manually download:**
+
 ```bash
 mkdir -p ~/.local/bin
 curl -L https://github.com/serokell/nixfmt/releases/latest/download/nixfmt-x86_64-linux -o ~/.local/bin/nixfmt
@@ -157,6 +165,79 @@ chsh -s $(which zsh)
 chmod +x ~/.config/hypr/scripts/*.sh
 exec zsh
 ```
+
+## Shell Functions & Git Workflow
+
+This repository includes powerful shell functions for AI-assisted development workflows.
+
+### AI Provider Selection
+
+**`aiselect`** - Configure which AI provider to use for shell functions:
+
+```bash
+aiselect              # Interactive menu to select provider
+aiselect --show       # Display current configuration
+```
+
+Supported providers:
+
+- **GitHub Copilot** (default) - Requires `gh auth login`
+- **OpenCode Zen** - Requires `OPENCODE_API_KEY` in `~/.zshrc_envvars`
+- **OpenRouter** - Requires `OPENROUTER_API_KEY` in `~/.zshrc_envvars`
+
+### Git Workflow Commands
+
+**`gpa`** - Git Partial Add with AI code review
+
+Interactive staging with comprehensive checks:
+
+1. **Secrets detection** - Scans for API keys, passwords, tokens
+2. **Linting** - Auto-runs nixfmt, prettier, ruff on staged files
+3. **Batched AI review** - Reviews code in ~300 line batches (handles large changesets)
+4. **Interactive fixes** - Edit issues with AI assistance in tmux workspace
+
+```bash
+gpa                   # Select files, review, and get AI feedback
+```
+
+**`gpc`** - Git Push with Commit (AI-generated message)
+
+Automatically generates conventional commit messages and pushes:
+
+```bash
+gpc                   # AI generates commit message and pushes
+gpc --skip-readme     # Skip README update check
+```
+
+**`gpr_func`** - Git Pull Request with README generation
+
+Creates draft PR with auto-generated README if missing:
+
+```bash
+gpr_func              # Interactive PR creation
+```
+
+### AI Development
+
+**`aidev`** - Launch OpenCode with selected AI provider
+
+```bash
+aidev                 # Start OpenCode session
+aidev --model <model> # Override model selection
+```
+
+### Required Packages for Shell Functions
+
+These are already included in the installation steps above:
+
+- **`jq`** - JSON parsing (pacman)
+- **`nixfmt`** - Nix formatter (AUR: `yay -S nixfmt`)
+- **`prettier`** - JS/TS/JSON/MD formatter (npm global)
+- **`ruff`** - Python linter (pacman)
+- **`opencode`** - AI code assistant (AUR: `yay -S opencode`)
+- **`gh`** - GitHub CLI (pacman)
+- **`tmux`** - Terminal multiplexer (pacman)
+- **`nvim`** - Text editor (pacman)
 
 ## Notes
 
