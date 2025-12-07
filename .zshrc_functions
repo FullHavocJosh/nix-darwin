@@ -1,27 +1,17 @@
-function asc() {
-  if [ "$1" = "clear" ]; then
-    unset -m "AWS_*"
-    echo "AWS environment variables unset"
-  else
-    eval "$(aws configure export-credentials --profile $1 --format env)"
-    export AWS_PROFILE=$1
-    echo "AWS environment variables set"
+# Helper function: Check if current directory is a git repository
+function _check_git_repo() {
+  if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    echo "✗ Error: Not in a git repository"
+    return 1
   fi
+  return 0
 }
 
-function gpr_func() {
-  # Check if there are files in current directory (not subdirectories) and no README.md
-  local files_in_dir=$(find . -maxdepth 1 -type f ! -name "README.md" ! -name ".*" | wc -l)
+# Helper function: Generate README.md content using AI
+function _generate_readme() {
+  local file_list=$(find . -maxdepth 1 -type f ! -name ".*" -exec basename {} \;)
 
-  if [ "$files_in_dir" -gt 0 ] && [ ! -f "README.md" ]; then
-    echo "No README.md found. Generating one with GitHub Copilot..."
-
-    # List files in current directory
-    local file_list=$(find . -maxdepth 1 -type f ! -name ".*" -exec basename {} \;)
-
-    # Generate README.md
-    local readme_content=$(
-      cat <<EOF | opencode run 2>/dev/null
+  cat <<EOF | opencode run 2>/dev/null
 Generate a comprehensive README.md for a directory containing these files:
 
 $file_list
@@ -35,9 +25,33 @@ The README should include:
 
 Return ONLY the README.md content, starting with a # heading.
 EOF
-    )
+}
 
-    if [ ! -z "$readme_content" ]; then
+function asc() {
+  if [ "$1" = "clear" ]; then
+    unset -m "AWS_*"
+    echo "✓ AWS environment variables unset"
+  else
+    eval "$(aws configure export-credentials --profile $1 --format env)"
+    export AWS_PROFILE=$1
+    echo "✓ AWS environment variables set"
+  fi
+}
+
+function gpr_func() {
+  # Validate git repository
+  _check_git_repo || return 1
+
+  # Check if there are files in current directory (not subdirectories) and no README.md
+  local files_in_dir=$(find . -maxdepth 1 -type f ! -name "README.md" ! -name ".*" | wc -l)
+
+  if [ "$files_in_dir" -gt 0 ] && [ ! -f "README.md" ]; then
+    echo "ℹ No README.md found. Generating one with AI..."
+
+    # Generate README.md using helper function
+    local readme_content=$(_generate_readme)
+
+    if [ -n "$readme_content" ]; then
       echo "$readme_content" >README.md
       echo "✓ README.md created"
       git add README.md
@@ -58,14 +72,14 @@ EOF
     1) type_prefix="feat" ;;
     2) type_prefix="fix" ;;
     *)
-      echo "Invalid choice. Please select 1 or 2"
+      echo "✗ Invalid choice. Please select 1 or 2"
       return 1
       ;;
   esac
   echo -n "Branch name: "
   read branch_name
   if [ -z "$branch_name" ]; then
-    echo "Branch name cannot be empty"
+    echo "✗ Branch name cannot be empty"
     return 1
   fi
   git checkout -b "$branch_name" &&
@@ -83,35 +97,27 @@ EOF
 }
 
 function gpc() {
+  # Validate git repository
+  _check_git_repo || return 1
+
+  # Parse arguments
+  local skip_readme=false
+  if [ "$1" = "--skip-readme" ]; then
+    skip_readme=true
+    echo "ℹ Skipping README generation"
+  fi
+
   # Check if there are files in current directory (not subdirectories)
   local files_in_dir=$(find . -maxdepth 1 -type f ! -name "README.md" ! -name ".*" | wc -l)
 
-  if [ "$files_in_dir" -gt 0 ]; then
+  if [ "$skip_readme" = false ] && [ "$files_in_dir" -gt 0 ]; then
     if [ ! -f "README.md" ]; then
-      echo "No README.md found. Generating one with GitHub Copilot..."
+      echo "ℹ No README.md found. Generating one with AI..."
 
-      # List files in current directory
-      local file_list=$(find . -maxdepth 1 -type f ! -name ".*" -exec basename {} \;)
+      # Generate README.md using helper function
+      local readme_content=$(_generate_readme)
 
-      # Generate README.md
-      local readme_content=$(
-        cat <<EOF | opencode run 2>/dev/null
-Generate a comprehensive README.md for a directory containing these files:
-
-$file_list
-
-The README should include:
-1. A clear description of the purpose of the files in this directory
-2. Simple usage examples showing the most basic use case
-3. Advanced/customized usage examples showing more complex scenarios
-4. Any prerequisites or dependencies
-5. Proper markdown formatting
-
-Return ONLY the README.md content, starting with a # heading.
-EOF
-      )
-
-      if [ ! -z "$readme_content" ]; then
+      if [ -n "$readme_content" ]; then
         echo "$readme_content" >README.md
         echo "✓ README.md created"
         git add README.md
@@ -121,7 +127,7 @@ EOF
     else
       # README.md exists, check if staged changes require README update
       if ! git diff --cached --quiet; then
-        echo "Checking if README.md needs updates based on staged changes..."
+        echo "ℹ Checking if README.md needs updates based on staged changes..."
 
         local diff_output=$(git diff --cached)
         local staged_files=$(git diff --cached --name-only)
@@ -149,7 +155,7 @@ If NO updates are needed, return exactly: "NO_UPDATE_NEEDED"
 EOF
         )
 
-        if [ "$readme_update" != "NO_UPDATE_NEEDED" ] && [ ! -z "$readme_update" ]; then
+        if [ "$readme_update" != "NO_UPDATE_NEEDED" ] && [ -n "$readme_update" ]; then
           echo "$readme_update" >README.md
           echo "✓ README.md updated based on staged changes"
           git add README.md
@@ -163,7 +169,7 @@ EOF
   # Check if there are staged changes
   if ! git diff --cached --quiet; then
     echo ""
-    echo "Generating commit message with GitHub Copilot..."
+    echo "ℹ Generating commit message with AI..."
 
     # Get the diff of staged changes
     local diff_output=$(git diff --cached)
@@ -173,11 +179,11 @@ EOF
 
     # Check if we got a valid response
     if [ -z "$commit_msg" ]; then
-      echo "Error: Failed to generate commit message"
+      echo "✗ Error: Failed to generate commit message"
       return 1
     fi
 
-    echo "Commit message: $commit_msg"
+    echo "✓ Commit message: $commit_msg"
     echo ""
 
     # Commit with the generated message
@@ -185,14 +191,20 @@ EOF
 
     if [ $? -eq 0 ]; then
       echo ""
-      echo "Pushing to remote..."
+      echo "ℹ Pushing to remote..."
       git push
+      if [ $? -eq 0 ]; then
+        echo "✓ Successfully pushed to remote"
+      else
+        echo "✗ Push failed"
+        return 1
+      fi
     else
-      echo "Commit failed, skipping push"
+      echo "✗ Commit failed, skipping push"
       return 1
     fi
   else
-    echo "No staged changes to commit"
+    echo "⚠ No staged changes to commit"
     return 1
   fi
 }
@@ -200,9 +212,12 @@ EOF
 function gpa() {
   # Git Partial Add with AI code review
 
-  # Check if there are unstaged changes
+  # Validate git repository
+  _check_git_repo || return 1
+
+  # Check if there are ANY changes (staged or unstaged)
   if git diff --quiet && git diff --cached --quiet; then
-    echo "No changes to stage"
+    echo "⚠ No changes to stage or review"
     return 1
   fi
 
@@ -212,72 +227,73 @@ function gpa() {
     changed_files+=("$file")
   done < <(git diff --name-only)
 
-  if [ ${#changed_files[@]} -eq 0 ]; then
-    echo "No unstaged changes to review"
-    return 0
+  # If there are unstaged changes, let user select what to stage
+  if [ ${#changed_files[@]} -gt 0 ]; then
+    # Display files with numbers
+    echo "Select files to stage and review:"
+    echo ""
+    local i=1
+    for file in "${changed_files[@]}"; do
+      echo "  $i) $file"
+      ((i++))
+    done
+    echo "  a) All files"
+    echo "  q) Quit"
+    echo ""
+    echo -n "Enter numbers separated by spaces (e.g., '1 3 5') or 'a' for all: "
+    read -r selection
+
+    # Handle selection
+    case "$selection" in
+      q | Q)
+        echo "✓ Cancelled"
+        return 0
+        ;;
+      a | A)
+        # Stage all files
+        for file in "${changed_files[@]}"; do
+          git add "$file"
+        done
+        ;;
+      *)
+        # Stage selected files
+        local selected_files=()
+        for num in $selection; do
+          if [[ "$num" =~ ^[0-9]+$ ]] && [ "$num" -ge 1 ] && [ "$num" -le "${#changed_files[@]}" ]; then
+            # Note: zsh arrays are 1-indexed by default, so we use $num directly
+            local selected_file="${changed_files[$num]}"
+            if [ -n "$selected_file" ]; then
+              selected_files+=("$selected_file")
+            fi
+          fi
+        done
+
+        if [ ${#selected_files[@]} -eq 0 ]; then
+          echo "✗ No valid files selected"
+          return 1
+        fi
+
+        # Stage each file individually to avoid empty string issues
+        for file in "${selected_files[@]}"; do
+          git add "$file"
+        done
+        ;;
+    esac
+  else
+    # No unstaged changes, but there are staged changes - proceed to review them
+    echo "ℹ No unstaged changes found, reviewing already-staged changes..."
   fi
 
-  # Display files with numbers
-  echo "Select files to stage and review:"
-  echo ""
-  local i=1
-  for file in "${changed_files[@]}"; do
-    echo "  $i) $file"
-    ((i++))
-  done
-  echo "  a) All files"
-  echo "  q) Quit"
-  echo ""
-  echo -n "Enter numbers separated by spaces (e.g., '1 3 5') or 'a' for all: "
-  read -r selection
-
-  # Handle selection
-  case "$selection" in
-    q | Q)
-      echo "Cancelled"
-      return 0
-      ;;
-    a | A)
-      # Stage all files
-      for file in "${changed_files[@]}"; do
-        git add "$file"
-      done
-      ;;
-    *)
-      # Stage selected files
-      local selected_files=()
-      for num in $selection; do
-        if [[ "$num" =~ ^[0-9]+$ ]] && [ "$num" -ge 1 ] && [ "$num" -le "${#changed_files[@]}" ]; then
-          # Note: zsh arrays are 1-indexed by default, so we use $num directly
-          local selected_file="${changed_files[$num]}"
-          if [ -n "$selected_file" ]; then
-            selected_files+=("$selected_file")
-          fi
-        fi
-      done
-
-      if [ ${#selected_files[@]} -eq 0 ]; then
-        echo "No valid files selected"
-        return 1
-      fi
-
-      # Stage each file individually to avoid empty string issues
-      for file in "${selected_files[@]}"; do
-        git add "$file"
-      done
-      ;;
-  esac
-
-  # Check if anything was actually staged
+  # Check if there are staged changes to review
   if git diff --cached --quiet; then
     echo ""
-    echo "No files were staged"
+    echo "⚠ No files are staged for review"
     return 0
   fi
 
   echo ""
   echo "═══════════════════════════════════════════════════════════"
-  echo "Running AI code review on staged changes..."
+  echo "ℹ Running AI code review on staged changes..."
   echo "═══════════════════════════════════════════════════════════"
   echo ""
 
@@ -285,33 +301,63 @@ function gpa() {
   local diff_output=$(git diff --cached)
   local staged_files=$(git diff --cached --name-only | tr '\n' ', ' | sed 's/,$//')
 
+  # Check if any Terraform files are staged
+  local has_terraform=false
+  local terraform_review=""
+  while IFS= read -r file; do
+    if [[ "$file" == *.tf ]]; then
+      has_terraform=true
+      break
+    fi
+  done < <(git diff --cached --name-only)
+
+  # Prepare review prompt based on file types
+  local review_prompt="Review the following staged git changes for CRITICAL ISSUES AND WARNINGS ONLY:
+
+🔴 **CRITICAL - Must Fix Before Commit:**
+1. **Bugs**: Syntax errors, runtime errors, null pointer dereferences, infinite loops
+2. **Security Vulnerabilities**: Exposed credentials, SQL injection, command injection, XSS, insecure crypto
+3. **Data Loss**: Destructive operations without safeguards, missing transactions, race conditions
+
+🟡 **WARNINGS - Should Consider:**
+4. **Security Concerns**: Overly permissive permissions, missing input validation, unsafe eval
+5. **Logic Flaws**: Off-by-one errors, incorrect conditionals, missing edge cases
+6. **Breaking Changes**: API changes, removed functionality, incompatible updates"
+
+  if [ "$has_terraform" = true ]; then
+    review_prompt="$review_prompt
+
+**TERRAFORM-SPECIFIC CRITICAL/WARNING CHECKS** (detected .tf files):
+🔴 **Critical**: Hardcoded secrets/keys, publicly exposed resources, destructive changes without lifecycle protection
+🟡 **Warnings**: Overly permissive IAM (wildcards in production), missing encryption, expensive resources without justification"
+  fi
+
   # Use OpenCode to perform code review
   local review_result=$(
     cat <<EOF | opencode run 2>/dev/null
-Review the following staged git changes for:
-1. **Bugs and Logic Errors**: Identify potential bugs, edge cases, or logical flaws
-2. **Security Issues**: Flag security vulnerabilities, exposed secrets, or unsafe practices
-3. **Best Practices**: Suggest improvements following language/framework conventions
-4. **Performance**: Identify performance concerns or optimization opportunities
-5. **Code Quality**: Check for readability, maintainability, and code smells
+$review_prompt
 
 Staged files: $staged_files
 
 Git diff:
 $diff_output
 
+**IMPORTANT INSTRUCTIONS:**
+- ONLY report 🔴 Critical issues and 🟡 Warnings
+- IGNORE minor suggestions, style preferences, and code quality opinions
+- Focus on things that will actually break, cause security issues, or have serious consequences
+- If there are no critical/warning issues, respond with: "✓ Code review passed - no critical issues or warnings found"
+
 Provide specific, actionable feedback with:
 - File name and line numbers
-- Issue severity (🔴 Critical, 🟡 Warning, 🟢 Suggestion)
-- Clear explanation of the issue
+- Issue severity (🔴 Critical or 🟡 Warning ONLY)
+- Clear explanation of why this is a problem
 - Recommended fix
-
-If everything looks good, respond with: "✓ Code review passed - no issues found"
 EOF
   )
 
   # Display review results
-  if [ ! -z "$review_result" ]; then
+  if [ -n "$review_result" ]; then
     echo "$review_result"
     echo ""
     echo "═══════════════════════════════════════════════════════════"
@@ -319,8 +365,8 @@ EOF
 
     # Ask if user wants to proceed
     echo "Options:"
-    echo "  [Y/Enter] Continue - keep staged, ready to commit with 'gpc'"
-    echo "  [e] Edit - open files to implement suggestions, keep staged"
+    echo "  [Y/Enter] Commit and push - automatically runs 'gpc'"
+    echo "  [e] Edit - open files to implement fixes, keep staged"
     echo "  [u] Unstage - remove from staging area"
     echo "  [n] Cancel - keep staged but don't proceed"
     echo ""
@@ -330,9 +376,12 @@ EOF
     case "$continue_choice" in
       e | E)
         echo ""
-        echo "Opening staged files in editor..."
-        # Get list of staged files
-        local files_to_edit=($(git diff --cached --name-only))
+        echo "ℹ Opening staged files in editor..."
+        # Get list of staged files - properly handle filenames with spaces
+        local files_to_edit=()
+        while IFS= read -r file; do
+          files_to_edit+=("$file")
+        done < <(git diff --cached --name-only)
 
         # Open in nvim (or fall back to $EDITOR)
         if command -v nvim &>/dev/null; then
@@ -340,36 +389,39 @@ EOF
         elif [ -n "$EDITOR" ]; then
           $EDITOR "${files_to_edit[@]}"
         else
-          echo "No editor found. Set \$EDITOR or install nvim."
+          echo "✗ No editor found. Set \$EDITOR or install nvim."
           return 1
         fi
 
         echo ""
-        echo "Files edited. Run 'gpa' again to review changes or 'gpc' to commit."
+        echo "✓ Files edited. Run 'gpa' again to review changes or 'gpc' to commit."
         return 0
         ;;
       n | N)
-        echo "Keeping changes staged. Use 'git restore --staged <file>' to unstage."
+        echo "ℹ Keeping changes staged. Use 'git restore --staged <file>' to unstage."
         return 0
         ;;
       u | U)
-        echo "Unstaging all changes..."
+        echo "ℹ Unstaging all changes..."
         git restore --staged .
         echo "✓ All changes unstaged"
         return 0
         ;;
       y | Y | "")
-        echo "✓ Changes remain staged. Use 'gpc' to commit and push."
-        return 0
+        echo ""
+        echo "✓ Proceeding to commit and push..."
+        echo ""
+        gpc
+        return $?
         ;;
       *)
-        echo "Invalid choice. Changes remain staged."
+        echo "✗ Invalid choice. Changes remain staged."
         return 1
         ;;
     esac
   else
     echo "⚠ AI review failed or returned no output"
-    echo "Changes remain staged. Review manually before committing."
+    echo "ℹ Changes remain staged. Review manually before committing."
     return 1
   fi
 }
