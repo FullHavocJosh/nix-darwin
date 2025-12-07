@@ -94,7 +94,6 @@
       "balenaetcher"
       "betterdisplay"
       "claude"
-      "claude-code"
       "font-hack-nerd-font"
       "font-jetbrains-mono-nerd-font"
       "ghostty"

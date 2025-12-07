@@ -140,15 +140,14 @@ flatpak install -y flathub org.kde.krita org.videolan.VLC com.plexamp.Plexamp io
 
 ### 12. Manual Downloads
 
-| Application        | Purpose                   | Download Link                               |
-| ------------------ | ------------------------- | ------------------------------------------- |
-| **Ghostty**        | Modern terminal emulator  | https://ghostty.org                         |
-| **Neovide**        | Neovim GUI                | https://github.com/neovide/neovide/releases |
-| **Claude Desktop** | Claude AI desktop app     | https://claude.ai                           |
-| **LM Studio**      | Local LLM runner          | https://lmstudio.ai                         |
-| **QMK Toolbox**    | Keyboard firmware flasher | https://github.com/qmk/qmk_toolbox          |
-| **VIA**            | Keyboard configurator     | https://www.caniusevia.com                  |
-| **BalenaEtcher**   | USB image writer          | https://www.balena.io/etcher                |
+| Application      | Purpose                   | Download Link                               |
+| ---------------- | ------------------------- | ------------------------------------------- |
+| **Ghostty**      | Modern terminal emulator  | https://ghostty.org                         |
+| **Neovide**      | Neovim GUI                | https://github.com/neovide/neovide/releases |
+| **LM Studio**    | Local LLM runner          | https://lmstudio.ai                         |
+| **QMK Toolbox**  | Keyboard firmware flasher | https://github.com/qmk/qmk_toolbox          |
+| **VIA**          | Keyboard configurator     | https://www.caniusevia.com                  |
+| **BalenaEtcher** | USB image writer          | https://www.balena.io/etcher                |
 
 ### 13. Clone and Deploy
 
