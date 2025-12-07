@@ -7,11 +7,128 @@ function _check_git_repo() {
   return 0
 }
 
+# Helper function: Discover latest Claude model for a provider
+# Usage: _discover_latest_model <provider> <model_type>
+# model_type can be "sonnet" or "haiku"
+function _discover_latest_model() {
+  local provider="$1"
+  local model_type="$2"
+  
+  # Get all models for the provider
+  local models=$(opencode models "$provider" 2>/dev/null)
+  
+  if [[ -z "$models" ]]; then
+    return 1
+  fi
+  
+  # Filter for the model type and sort to get the latest
+  local latest_model=""
+  
+  case $model_type in
+    sonnet)
+      # Look for sonnet models, prioritizing higher version numbers
+      # Use -V for natural version sort (handles 4.5 vs 4 correctly)
+      latest_model=$(echo "$models" | grep -i "claude" | grep -i "sonnet" | sort -V | tail -1)
+      ;;
+    haiku)
+      # Look for haiku models, prioritizing higher version numbers
+      latest_model=$(echo "$models" | grep -i "claude" | grep -i "haiku" | sort -V | tail -1)
+      ;;
+  esac
+  
+  if [[ -n "$latest_model" ]]; then
+    echo "$latest_model"
+    return 0
+  fi
+  
+  return 1
+}
+
+# Helper function: Get OpenCode model string based on provider preference
+# Usage: _get_opencode_model ["simple"|"complex"]
+function _get_opencode_model() {
+  local task_type="${1:-complex}"
+  local provider=$(_get_ai_provider)
+  
+  # Try to discover the latest model dynamically
+  local model=""
+  
+  if [[ "$task_type" == "simple" ]]; then
+    model=$(_discover_latest_model "$provider" "haiku")
+  else
+    model=$(_discover_latest_model "$provider" "sonnet")
+  fi
+  
+  # If discovery succeeded, return the model
+  if [[ -n "$model" ]]; then
+    echo "$model"
+    return 0
+  fi
+  
+  # Fallback to hardcoded models if discovery fails
+  case $provider in
+    github-copilot)
+      if [[ "$task_type" == "simple" ]]; then
+        echo "github-copilot/claude-haiku-4.5"
+      else
+        echo "github-copilot/claude-sonnet-4.5"
+      fi
+      ;;
+    opencode)
+      if [[ "$task_type" == "simple" ]]; then
+        echo "opencode/claude-3-5-haiku"
+      else
+        echo "opencode/claude-sonnet-4.5"
+      fi
+      ;;
+    openrouter)
+      if [[ "$task_type" == "simple" ]]; then
+        echo "openrouter/anthropic/claude-3.5-haiku"
+      else
+        echo "openrouter/anthropic/claude-sonnet-4.5"
+      fi
+      ;;
+    *)
+      echo "github-copilot/claude-sonnet-4.5"  # Default fallback
+      ;;
+  esac
+}
+
+# Helper function: Execute AI command with stdin input
+# Usage: echo "prompt" | _run_ai_command ["simple"|"complex"]
+function _run_ai_command() {
+  local task_type="${1:-complex}"
+  local model=$(_get_opencode_model "$task_type")
+  
+  # Read stdin into a variable
+  local prompt=$(cat)
+  
+  # Always use OpenCode (it supports all providers including GitHub Copilot)
+  # OpenCode run takes the prompt as a positional argument
+  opencode run --model "$model" "$prompt"
+}
+
+# Helper function: Get AI command based on provider preference (DEPRECATED - use _run_ai_command)
+# This is kept for backward compatibility but should be replaced
+# Usage: _get_ai_command ["simple"|"complex"]
+function _get_ai_command() {
+  local task_type="${1:-complex}"
+  echo "_run_ai_command $task_type"
+}
+
+# Launch OpenCode with the selected provider/model
+# This replaces the 'aidev' alias to dynamically select model based on aiselect preference
+function aidev() {
+  local model=$(_get_opencode_model "complex")
+  opencode --model "$model" "$@"
+}
+
 # Helper function: Generate README.md content using AI
 function _generate_readme() {
   local file_list=$(find . -maxdepth 1 -type f ! -name ".*" -exec basename {} \;)
 
-  cat <<EOF | opencode run 2>/dev/null
+  # README generation needs full model (complex task)
+  cat <<EOF | _run_ai_command "complex" 2>/dev/null
 Generate a comprehensive README.md for a directory containing these files:
 
 $file_list
@@ -96,6 +213,454 @@ EOF
     )"
 }
 
+# Helper function: Create tmux workspace for linting fixes in new terminal window
+# Usage: _linter_create_edit_workspace <files_with_issues> <lint_report>
+function _linter_create_edit_workspace() {
+  local -a files_array
+  IFS=$'\n' read -rd '' -A files_array <<< "$1"
+  local lint_report="$2"
+  
+  # Get absolute path to repo root
+  local repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+  
+  # Save the prompt to a temp file to avoid quoting issues
+  local prompt_file="/tmp/lint_prompt_$$.txt"
+  cat > "$prompt_file" <<EOF
+Help me fix the following linting issues. The files are already open in the editor above.
+
+Linting Issues:
+$(echo -e "$lint_report")
+
+Files to fix: ${files_array[@]}
+
+Please review the issues and suggest fixes. I can make the changes in the editor above or you can help automate the fixes.
+EOF
+  
+  # Get AI model
+  local model=$(_get_opencode_model "complex")
+  
+  # Open first file with issues in nvim
+  local first_file="${files_array[1]}"
+  # If file path is relative, make it absolute from repo root
+  if [[ ! "$first_file" = /* ]]; then
+    first_file="$repo_root/$first_file"
+  fi
+  
+  # Create a session name
+  local session_name="lint-fix-$$"
+  
+  # Create a startup script that will run tmux in the new terminal
+  local startup_script="/tmp/lint_startup_$$.sh"
+  cat > "$startup_script" <<STARTUP
+#!/usr/bin/env bash
+# Change to repo root
+cd '$repo_root'
+
+# Create tmux session with nvim in top pane and OpenCode in bottom
+tmux new-session -s '$session_name' -c '$repo_root' "nvim '$first_file'" \\; \\
+  split-window -v -p 30 -c '$repo_root' "bash -c 'echo \"=== OpenCode Linting Assistant ===\"; echo \"\"; opencode --model \"$model\" -p \"\\\$(cat \"$prompt_file\")\"; exec \\\$SHELL'" \\; \\
+  select-pane -t 0
+
+# Cleanup temp files after tmux session ends
+rm -f '$prompt_file' '$startup_script'
+STARTUP
+  chmod +x "$startup_script"
+  
+  # Launch in default terminal
+  if command -v xdg-terminal-exec &>/dev/null; then
+    # Use xdg-terminal-exec to launch default terminal
+    nohup xdg-terminal-exec "$startup_script" >/dev/null 2>&1 &
+    echo "✓ Launched editing workspace in new terminal window"
+  elif [ -n "$TERMINAL" ] && command -v "$TERMINAL" &>/dev/null; then
+    # Use $TERMINAL environment variable
+    nohup "$TERMINAL" -e "$startup_script" >/dev/null 2>&1 &
+    echo "✓ Launched editing workspace in new terminal window"
+  else
+    echo "✗ Could not determine default terminal"
+    echo "  Set \$TERMINAL environment variable or install xdg-terminal-exec"
+    rm -f "$prompt_file" "$startup_script"
+    return 1
+  fi
+  
+  echo "  Session: $session_name"
+  echo "  Files: ${files_array[@]}"
+  echo "  Edit the files in the new window, then close it when done."
+  echo ""
+}
+
+# Helper function: Run linters on staged files
+# Returns 0 if all linters pass or user wants to continue, 1 if user wants to abort
+function _run_linters() {
+  local files=()
+  while IFS= read -r file; do
+    files+=("$file")
+  done < <(git diff --cached --name-only)
+  
+  if [ ${#files[@]} -eq 0 ]; then
+    return 0
+  fi
+  
+  local linting_issues=false
+  local lint_report=""
+  local files_with_issues=()
+  
+  # Check for available linters and verify they work
+  local has_nixfmt=false
+  local nixfmt_broken=false
+  if command -v nixfmt &>/dev/null; then
+    local nixfmt_path=$(command -v nixfmt)
+    # Check if it's a real binary (not just a text file placeholder)
+    if file "$nixfmt_path" | grep -qE "(executable|ELF|Mach-O)"; then
+      # Verify nixfmt actually works (not just a placeholder file)
+      if nixfmt --version &>/dev/null || nixfmt --help &>/dev/null; then
+        has_nixfmt=true
+      else
+        nixfmt_broken=true
+      fi
+    else
+      # It's a text file or script placeholder
+      nixfmt_broken=true
+    fi
+  fi
+  
+  local has_prettier=false
+  if command -v prettier &>/dev/null; then
+    if prettier --version &>/dev/null; then
+      has_prettier=true
+    fi
+  fi
+  
+  local has_ruff=false
+  if command -v ruff &>/dev/null; then
+    if ruff --version &>/dev/null; then
+      has_ruff=true
+    fi
+  fi
+  
+  # Track files that need linters but linters are unavailable
+  local missing_linters=false
+  local missing_linters_report=""
+  
+  # Run linters based on file types
+  for file in "${files[@]}"; do
+    # Skip deleted files
+    if [ ! -f "$file" ]; then
+      continue
+    fi
+    
+    local file_has_issues=false
+    
+    case "$file" in
+      *.nix)
+        if $has_nixfmt; then
+          if ! nixfmt --check "$file" 2>/dev/null; then
+            lint_report="${lint_report}🟡 $file: nixfmt formatting issues\n"
+            linting_issues=true
+            file_has_issues=true
+          fi
+        elif $nixfmt_broken; then
+          missing_linters_report="${missing_linters_report}⚠️  $file: nixfmt is broken/unavailable\n"
+          missing_linters=true
+        else
+          missing_linters_report="${missing_linters_report}⚠️  $file: nixfmt not installed\n"
+          missing_linters=true
+        fi
+        ;;
+      *.js|*.jsx|*.ts|*.tsx|*.json|*.md|*.yml|*.yaml|*.css|*.html)
+        if $has_prettier; then
+          if ! prettier --check "$file" 2>/dev/null; then
+            lint_report="${lint_report}🟡 $file: prettier formatting issues\n"
+            linting_issues=true
+            file_has_issues=true
+          fi
+        else
+          missing_linters_report="${missing_linters_report}⚠️  $file: prettier not installed\n"
+          missing_linters=true
+        fi
+        ;;
+      *.py)
+        if $has_ruff; then
+          local ruff_output=$(ruff check "$file" 2>&1)
+          if [ -n "$ruff_output" ]; then
+            lint_report="${lint_report}🟡 $file: ruff linting issues\n"
+            lint_report="${lint_report}   $(echo "$ruff_output" | head -3 | sed 's/^/   /')\n"
+            linting_issues=true
+            file_has_issues=true
+          fi
+        else
+          missing_linters_report="${missing_linters_report}⚠️  $file: ruff not installed\n"
+          missing_linters=true
+        fi
+        ;;
+    esac
+    
+    if $file_has_issues; then
+      files_with_issues+=("$file")
+    fi
+  done
+  
+  # Display missing linters warnings if any
+  if $missing_linters; then
+    echo ""
+    echo "⚠️  MISSING OR BROKEN LINTERS"
+    echo ""
+    echo -e "$missing_linters_report"
+    echo "ℹ  Some files could not be checked. Install missing linters:"
+    if ! $has_nixfmt || $nixfmt_broken; then
+      echo "    • nixfmt: Install via your system package manager or nix profile"
+      if $nixfmt_broken; then
+        echo "      (Note: Current nixfmt at $(command -v nixfmt) is broken)"
+      fi
+    fi
+    if ! $has_prettier; then
+      echo "    • prettier: npm install -g prettier"
+    fi
+    if ! $has_ruff; then
+      echo "    • ruff: pip install ruff or install via system package manager"
+    fi
+    echo ""
+  fi
+  
+  if $linting_issues; then
+    echo ""
+    echo "⚠️  LINTING ISSUES DETECTED"
+    echo ""
+    echo -e "$lint_report"
+    echo ""
+    echo "Options:"
+    echo "  [e] Edit files with AI assistance (opens tmux workspace)"
+    echo "  [f] Auto-fix formatting issues (where possible)"
+    echo "  [i] Ignore and continue"
+    echo "  [q] Quit and fix manually"
+    echo ""
+    echo -n "Your choice: "
+    read -r lint_choice
+    
+    case "$lint_choice" in
+      e | E)
+        echo ""
+        echo "ℹ Opening tmux workspace for manual fixes with AI assistance..."
+        echo "  Top pane: nvim with files"
+        echo "  Bottom pane: OpenCode assistant"
+        echo ""
+        
+        # Convert files_with_issues array to newline-separated string
+        local files_string=$(printf '%s\n' "${files_with_issues[@]}")
+        
+        _linter_create_edit_workspace "$files_string" "$lint_report"
+        
+        # Wait for user to finish editing
+        echo ""
+        echo "═══════════════════════════════════════════════════════════"
+        echo "⏸  Waiting for you to finish editing..."
+        echo "═══════════════════════════════════════════════════════════"
+        echo ""
+        echo "When you're done editing in the new terminal window:"
+        echo "  1. Save your changes in nvim"
+        echo "  2. Close the terminal window (or exit tmux)"
+        echo "  3. Press Enter here to re-run linting checks"
+        echo ""
+        echo -n "Press Enter when editing is complete: "
+        read -r
+        
+        # Re-stage the files
+        echo ""
+        echo "ℹ Re-staging modified files..."
+        for file in "${files_with_issues[@]}"; do
+          if [ -f "$file" ]; then
+            git add "$file"
+            echo "  ✓ Re-staged: $file"
+          fi
+        done
+        
+        # Re-run linting checks
+        echo ""
+        echo "═══════════════════════════════════════════════════════════"
+        echo "ℹ Re-running linting checks..."
+        echo "═══════════════════════════════════════════════════════════"
+        echo ""
+        
+        # Recursively call _run_linters to check again
+        _run_linters
+        return $?
+        ;;
+      f | F)
+        echo ""
+        echo "ℹ Auto-fixing formatting issues..."
+        for file in "${files[@]}"; do
+          if [ ! -f "$file" ]; then
+            continue
+          fi
+          
+          case "$file" in
+            *.nix)
+              if $has_nixfmt; then
+                echo "  Formatting $file with nixfmt..."
+                if nixfmt "$file" 2>&1; then
+                  echo "  ✓ Formatted: $file"
+                  git add "$file"
+                else
+                  echo "  ✗ Failed to format: $file"
+                fi
+              fi
+              ;;
+            *.js|*.jsx|*.ts|*.tsx|*.json|*.md|*.yml|*.yaml|*.css|*.html)
+              if $has_prettier; then
+                echo "  Formatting $file with prettier..."
+                if prettier --write "$file" 2>&1; then
+                  echo "  ✓ Formatted: $file"
+                  git add "$file"
+                else
+                  echo "  ✗ Failed to format: $file"
+                fi
+              fi
+              ;;
+            *.py)
+              if $has_ruff; then
+                echo "  Checking $file with ruff..."
+                if ruff check --fix "$file" 2>&1; then
+                  echo "  ✓ Fixed: $file"
+                  git add "$file"
+                else
+                  echo "  ✗ Failed to fix: $file"
+                fi
+              fi
+              ;;
+          esac
+        done
+        echo ""
+        echo "✓ Auto-fix complete. Files re-staged."
+        
+        # Re-run linting checks to verify fixes
+        echo ""
+        echo "═══════════════════════════════════════════════════════════"
+        echo "ℹ Re-running linting checks to verify fixes..."
+        echo "═══════════════════════════════════════════════════════════"
+        echo ""
+        _run_linters
+        return $?
+        ;;
+      i | I)
+        echo "⚠️  Proceeding with linting issues!"
+        return 0
+        ;;
+      *)
+        echo "✗ Aborting. Fix linting issues manually."
+        return 1
+        ;;
+    esac
+  elif ! $missing_linters; then
+    # Only show "all good" if we actually checked everything
+    echo "✓ No linting issues detected"
+  fi
+  
+  return 0
+}
+
+# Helper function: Check staged changes for secrets/credentials
+# Returns 0 if safe to proceed, 1 if secrets found and user wants to abort
+function _check_for_secrets() {
+  local diff_output=$(git diff --cached)
+  local added_lines=$(echo "$diff_output" | grep "^+" | grep -v "^+++")
+  
+  # Filter out false positives: comments, grep patterns, function definitions, variable names
+  # Keep only lines that might contain actual secrets
+  local filtered_lines=$(echo "$added_lines" | \
+    grep -vE '^\+\s*(#|//|/\*)' | \
+    grep -v 'grep.*-[qE]' | \
+    grep -v 'function _check_for_secrets' | \
+    grep -v 'secrets_report=' | \
+    grep -v 'if echo.*grep' | \
+    grep -v '\.example' | \
+    grep -v '\.sample' | \
+    grep -v 'YOUR_.*_HERE' | \
+    grep -v '<YOUR_' | \
+    grep -v 'REPLACE_' | \
+    grep -v 'INSERT_' || true)
+  
+  local secrets_found=false
+  local secrets_report=""
+  local suspicious_lines=""
+  
+  # Check for AWS credentials - look for actual AKIA keys or key=value patterns
+  if echo "$filtered_lines" | grep -qE "AKIA[0-9A-Z]{16}"; then
+    secrets_report="${secrets_report}  • AWS Access Key (AKIA...)\n"
+    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -E "AKIA[0-9A-Z]{16}" | head -2)\n"
+    secrets_found=true
+  fi
+  
+  if echo "$filtered_lines" | grep -qiE "(aws_access_key_id|aws_secret_access_key)\s*=\s*['\"][A-Za-z0-9/+=]{20,}"; then
+    secrets_report="${secrets_report}  • AWS credentials in config format\n"
+    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -iE "(aws_access_key_id|aws_secret_access_key)\s*=\s*['\"]" | head -2)\n"
+    secrets_found=true
+  fi
+  
+  # Check for API keys - must have key= or key: with actual value
+  if echo "$filtered_lines" | grep -qiE "(api[_-]?key|apikey)\s*[=:]\s*['\"][0-9a-zA-Z_\-]{32,}"; then
+    secrets_report="${secrets_report}  • API key\n"
+    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -iE "(api[_-]?key|apikey)\s*[=:]\s*['\"][0-9a-zA-Z_\-]{32,}" | head -2)\n"
+    secrets_found=true
+  fi
+  
+  # Check for passwords - must be in assignment format
+  if echo "$filtered_lines" | grep -qiE "(password|passwd)\s*[=:]\s*['\"][^'\"]{8,}['\"]"; then
+    secrets_report="${secrets_report}  • Password\n"
+    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -iE "(password|passwd)\s*[=:]\s*['\"]" | head -2)\n"
+    secrets_found=true
+  fi
+  
+  # Check for tokens - must be in assignment format with sufficient length
+  if echo "$filtered_lines" | grep -qiE "(secret|token|auth[_-]?token)\s*[=:]\s*['\"][0-9a-zA-Z_\-]{40,}"; then
+    secrets_report="${secrets_report}  • Secret/Token\n"
+    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -iE "(secret|token|auth[_-]?token)\s*[=:]\s*['\"]" | head -2)\n"
+    secrets_found=true
+  fi
+  
+  # Check for OpenAI/Stripe keys - very specific patterns
+  if echo "$filtered_lines" | grep -qE "sk-[a-zA-Z0-9]{32,}|pk-(live|test)_[a-zA-Z0-9]{24,}"; then
+    secrets_report="${secrets_report}  • OpenAI/Stripe API key\n"
+    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -E "sk-[a-zA-Z0-9]{32,}|pk-(live|test)_" | head -2)\n"
+    secrets_found=true
+  fi
+  
+  # Check for GitHub tokens - very specific patterns
+  if echo "$filtered_lines" | grep -qE "ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}"; then
+    secrets_report="${secrets_report}  • GitHub token\n"
+    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -E "ghp_|gho_|github_pat_" | head -2)\n"
+    secrets_found=true
+  fi
+  
+  # Check for private keys - actual PEM format
+  if echo "$filtered_lines" | grep -qE -- "-----BEGIN (RSA |DSA |EC )?PRIVATE KEY-----"; then
+    secrets_report="${secrets_report}  • Private key\n"
+    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -E -- "-----BEGIN.*PRIVATE KEY-----" | head -2)\n"
+    secrets_found=true
+  fi
+  
+  if $secrets_found; then
+    echo ""
+    echo "🚨 SECRETS DETECTED IN STAGED CHANGES! 🚨"
+    echo ""
+    echo "Potential secrets found:"
+    echo -e "$secrets_report"
+    echo ""
+    echo "⚠️  Committing secrets to git is a security risk!"
+    echo ""
+    echo -n "Abort commit? [Y/n]: "
+    read -r abort_choice
+    
+    if [[ "$abort_choice" =~ ^[Yy]$ ]] || [[ -z "$abort_choice" ]]; then
+      echo "✗ Commit aborted. Please review and remove secrets."
+      return 1
+    else
+      echo "⚠️  Proceeding with commit despite secrets warning!"
+      return 0
+    fi
+  fi
+  
+  return 0
+}
+
 function gpc() {
   # Validate git repository
   _check_git_repo || return 1
@@ -135,9 +700,10 @@ function gpc() {
         # Read current README
         local current_readme=$(cat README.md)
 
-        # Ask OpenCode if README needs updating
+        # Ask AI if README needs updating
+        # README analysis needs full model (complex task)
         local readme_update=$(
-          cat <<EOF | opencode run 2>/dev/null
+          cat <<EOF | _run_ai_command "complex" 2>/dev/null
 Review these staged git changes and the current README.md. Determine if the README.md needs to be updated.
 
 STAGED CHANGES:
@@ -174,8 +740,9 @@ EOF
     # Get the diff of staged changes
     local diff_output=$(git diff --cached)
 
-    # Use OpenCode to generate commit message
-    local commit_msg=$(echo "Review the following git diff and generate a concise, single-sentence commit message that describes the changes. The message should be in imperative mood (e.g., 'Add feature' not 'Added feature'). Return ONLY the commit message, nothing else.\n\n$diff_output" | opencode run 2>/dev/null | tail -1)
+    # Use AI to generate commit message
+    # Commit messages can use fast model (simple task)
+    local commit_msg=$(echo "Review the following git diff and generate a concise, single-sentence commit message that describes the changes. The message should be in imperative mood (e.g., 'Add feature' not 'Added feature'). Return ONLY the commit message, nothing else.\n\n$diff_output" | _run_ai_command "simple" 2>/dev/null | tail -1)
 
     # Check if we got a valid response
     if [ -z "$commit_msg" ]; then
@@ -207,6 +774,417 @@ EOF
     echo "⚠ No staged changes to commit"
     return 1
   fi
+}
+
+# Helper function: Create tmux workspace for manual file editing with AI assistance
+# Usage: _gpa_create_edit_workspace <file_path> <recommendation_text>
+function _gpa_create_edit_workspace() {
+  local file_path="$1"
+  local recommendation="$2"
+  local file_dir=$(dirname "$file_path")
+  local file_name=$(basename "$file_path")
+  local session_name="gpa-fix-${file_name}-$$"
+  
+  # Create a temporary file with the recommendation for OpenCode
+  local rec_file="/tmp/gpa_recommendation_$$.txt"
+  echo "$recommendation" > "$rec_file"
+  
+  # Get the OpenCode model for complex tasks
+  local model=$(_get_opencode_model "complex")
+  
+  # Create a startup script that will run tmux in the new terminal
+  local startup_script="/tmp/gpa_startup_$$.sh"
+  cat > "$startup_script" <<STARTUP
+#!/usr/bin/env bash
+# Change to file directory
+cd '$file_dir'
+
+# Create tmux session with nvim in top pane and OpenCode in bottom
+tmux new-session -s '$session_name' -c '$file_dir' "nvim '$file_path'" \\; \\
+  split-window -v -p 30 -c '$file_dir' "bash -c 'echo \"=== Code Review Fix Assistant ===\"; echo \"\"; echo \"Recommendation:\"; cat \"$rec_file\"; echo \"\"; echo \"Starting OpenCode...\"; echo \"\"; opencode --model \"$model\" -p \"Help me implement this fix: \\\$(cat \\\"$rec_file\\\"). The file to fix is: $file_path\"; exec \\\$SHELL'" \\; \\
+  select-pane -t 0
+
+# Cleanup temp files after tmux session ends
+rm -f '$rec_file' '$startup_script'
+STARTUP
+  chmod +x "$startup_script"
+  
+  # Launch in default terminal
+  if command -v xdg-terminal-exec &>/dev/null; then
+    # Use xdg-terminal-exec to launch default terminal
+    nohup xdg-terminal-exec "$startup_script" >/dev/null 2>&1 &
+    echo "✓ Launched editing workspace in new terminal window"
+  elif [ -n "$TERMINAL" ] && command -v "$TERMINAL" &>/dev/null; then
+    # Use $TERMINAL environment variable
+    nohup "$TERMINAL" -e "$startup_script" >/dev/null 2>&1 &
+    echo "✓ Launched editing workspace in new terminal window"
+  else
+    echo "✗ Could not determine default terminal"
+    echo "  Set \$TERMINAL environment variable or install xdg-terminal-exec"
+    rm -f "$rec_file" "$startup_script"
+    return 1
+  fi
+  
+  echo "  Session: $session_name"
+  echo "  File: $file_path"
+  echo "  Edit the file in the new window, then close it when done."
+  echo ""
+}
+
+# Helper function: Use OpenCode to auto-fix a file based on recommendation
+# Usage: _gpa_auto_fix <file_path> <recommendation_text>
+function _gpa_auto_fix() {
+  local file_path="$1"
+  local recommendation="$2"
+  local model=$(_get_opencode_model "complex")
+  
+  echo ""
+  echo "ℹ Starting OpenCode to automatically fix: $file_path"
+  echo ""
+  
+  # Use OpenCode to fix the file
+  opencode --model "$model" -p "Fix this file based on the following recommendation. Make the necessary changes to address the issue.
+
+File: $file_path
+
+Recommendation:
+$recommendation
+
+Please make the changes directly to the file."
+  
+  local exit_code=$?
+  
+  if [ $exit_code -eq 0 ]; then
+    # Re-stage the file after OpenCode makes changes
+    git add "$file_path"
+    echo ""
+    echo "✓ OpenCode completed. File re-staged."
+    return 0
+  else
+    echo ""
+    echo "⚠ OpenCode session ended. Check if changes were made."
+    return 1
+  fi
+}
+
+# Helper function: Split staged files into batches for AI review
+# Returns batches as a JSON array where each batch is an array of file paths
+# Batches are sized to keep diff output around 300 lines per batch
+# Usage: _gpa_create_batches
+function _gpa_create_batches() {
+  local target_lines=300
+  local batches="[]"
+  local current_batch="[]"
+  local current_batch_lines=0
+  
+  # Get all staged files
+  local staged_files=()
+  while IFS= read -r file; do
+    staged_files+=("$file")
+  done < <(git diff --cached --name-only)
+  
+  if [ ${#staged_files[@]} -eq 0 ]; then
+    echo "[]"
+    return 0
+  fi
+  
+  # Process each file and group into batches
+  for file in "${staged_files[@]}"; do
+    # Get line count for this file's diff
+    local file_diff_lines=$(git diff --cached -- "$file" | wc -l)
+    
+    # If adding this file would exceed target, start a new batch
+    # (unless current batch is empty - always include at least one file per batch)
+    if [ $current_batch_lines -gt 0 ] && [ $((current_batch_lines + file_diff_lines)) -gt $target_lines ]; then
+      # Save current batch and start a new one
+      batches=$(echo "$batches" | jq --argjson batch "$current_batch" '. += [$batch]')
+      current_batch="[]"
+      current_batch_lines=0
+    fi
+    
+    # Add file to current batch
+    current_batch=$(echo "$current_batch" | jq --arg file "$file" '. += [$file]')
+    current_batch_lines=$((current_batch_lines + file_diff_lines))
+  done
+  
+  # Add the last batch if it's not empty
+  if [ "$(echo "$current_batch" | jq 'length')" -gt 0 ]; then
+    batches=$(echo "$batches" | jq --argjson batch "$current_batch" '. += [$batch]')
+  fi
+  
+  echo "$batches"
+}
+
+# Helper function: Review a batch of files and return structured issues
+# Usage: _gpa_review_batch <batch_files_json> <batch_number> <total_batches>
+function _gpa_review_batch() {
+  local batch_files_json="$1"
+  local batch_number="$2"
+  local total_batches="$3"
+  
+  # Convert JSON array to regular array
+  local batch_files=()
+  while IFS= read -r file; do
+    batch_files+=("$file")
+  done < <(echo "$batch_files_json" | jq -r '.[]')
+  
+  if [ ${#batch_files[@]} -eq 0 ]; then
+    echo "[]"
+    return 0
+  fi
+  
+  # Get diff for only these files
+  local batch_diff=""
+  for file in "${batch_files[@]}"; do
+    batch_diff="${batch_diff}$(git diff --cached -- "$file")\n"
+  done
+  
+  # Count lines in this batch
+  local batch_lines=$(echo -e "$batch_diff" | wc -l)
+  
+  # Check if any Terraform files are in this batch
+  local has_terraform=false
+  for file in "${batch_files[@]}"; do
+    if [[ "$file" == *.tf ]]; then
+      has_terraform=true
+      break
+    fi
+  done
+  
+  # Build review prompt
+  local review_prompt="Review the following staged git changes for CRITICAL ISSUES AND WARNINGS ONLY:
+
+🔴 **CRITICAL - Must Fix Before Commit:**
+1. **SECRETS & CREDENTIALS**: API keys, passwords, tokens, private keys, connection strings, AWS credentials, OAuth secrets, certificates
+2. **Bugs**: Syntax errors, runtime errors, null pointer dereferences, infinite loops
+3. **Security Vulnerabilities**: SQL injection, command injection, XSS, insecure crypto, path traversal
+4. **Data Loss**: Destructive operations without safeguards, missing transactions, race conditions
+
+🟡 **WARNINGS - Should Consider:**
+5. **Security Concerns**: Overly permissive permissions, missing input validation, unsafe eval, hardcoded IPs/domains
+6. **Logic Flaws**: Off-by-one errors, incorrect conditionals, missing edge cases
+7. **Breaking Changes**: API changes, removed functionality, incompatible updates"
+  
+  if [ "$has_terraform" = true ]; then
+    review_prompt="$review_prompt
+
+**TERRAFORM-SPECIFIC CRITICAL/WARNING CHECKS** (detected .tf files):
+🔴 **Critical**: Hardcoded secrets/keys, publicly exposed resources, destructive changes without lifecycle protection
+🟡 **Warnings**: Overly permissive IAM (wildcards in production), missing encryption, expensive resources without justification"
+  fi
+  
+  # Build full prompt
+  local full_prompt="${review_prompt}
+
+Batch ${batch_number} of ${total_batches} (${batch_lines} lines)
+
+Files in this batch:
+$(printf '%s\n' "${batch_files[@]}")
+
+Git diff:
+${batch_diff}
+
+**IMPORTANT INSTRUCTIONS:**
+- ONLY report 🔴 Critical issues and 🟡 Warnings
+- IGNORE minor suggestions, style preferences, and code quality opinions
+- Focus on things that will actually break, cause security issues, or have serious consequences
+- Output ONLY a JSON array of issues in this exact format:
+[
+  {
+    \"file\": \"path/to/file.ext\",
+    \"severity\": \"Critical\" or \"Warning\",
+    \"issue\": \"Brief issue description\",
+    \"recommendation\": \"Detailed fix recommendation\"
+  }
+]
+- If there are no critical/warning issues in this batch, return an empty array: []
+- Return ONLY valid JSON, nothing else."
+  
+  echo "  Batch $batch_number/$total_batches: ${#batch_files[@]} file(s), $batch_lines lines" >&2
+  
+  # Run AI review
+  local batch_result=$(echo "$full_prompt" | _run_ai_command "complex" 2>/dev/null)
+  
+  # Validate JSON and return
+  if echo "$batch_result" | jq empty 2>/dev/null; then
+    echo "$batch_result"
+  else
+    # If not valid JSON, try to extract JSON array from the response
+    local extracted_json=$(echo "$batch_result" | grep -o '\[.*\]' | head -1)
+    if echo "$extracted_json" | jq empty 2>/dev/null; then
+      echo "$extracted_json"
+    else
+      echo "[]"
+    fi
+  fi
+}
+
+# Helper function: Interactive fix mode for code review suggestions
+# Usage: _gpa_interactive_fix <structured_issues_json>
+function _gpa_interactive_fix() {
+  local structured_issues="$1"
+  
+  # Validate JSON input
+  if ! echo "$structured_issues" | jq empty 2>/dev/null; then
+    echo "⚠ Invalid JSON structure for issues."
+    echo ""
+    echo "Options:"
+    echo "  [e] Edit all staged files manually"
+    echo "  [c] Continue to commit anyway"
+    echo "  [q] Quit and keep changes staged"
+    echo ""
+    echo -n "Your choice: "
+    read -r choice
+    
+    case "$choice" in
+      e | E)
+        local files_to_edit=()
+        while IFS= read -r file; do
+          files_to_edit+=("$file")
+        done < <(git diff --cached --name-only)
+        
+        if command -v nvim &>/dev/null; then
+          nvim "${files_to_edit[@]}"
+        else
+          echo "✗ No editor found."
+          return 1
+        fi
+        echo "✓ Files edited. Run 'gpa' again to review."
+        return 0
+        ;;
+      c | C)
+        gpc
+        return $?
+        ;;
+      *)
+        echo "ℹ Keeping changes staged."
+        return 0
+        ;;
+    esac
+  fi
+  
+  # Count issues
+  local issue_count=$(echo "$structured_issues" | jq 'length' 2>/dev/null)
+  
+  if [ "$issue_count" -eq 0 ] || [ -z "$issue_count" ]; then
+    echo "✓ No issues found. Proceeding to commit."
+    gpc
+    return $?
+  fi
+  
+  echo ""
+  echo "Found $issue_count issue(s) to address."
+  echo ""
+  
+  # Process each issue
+  local issue_index=0
+  while [ $issue_index -lt $issue_count ]; do
+    local issue=$(echo "$structured_issues" | jq -r ".[$issue_index]" 2>/dev/null)
+    local file=$(echo "$issue" | jq -r '.file' 2>/dev/null)
+    local severity=$(echo "$issue" | jq -r '.severity' 2>/dev/null)
+    local issue_desc=$(echo "$issue" | jq -r '.issue' 2>/dev/null)
+    local recommendation=$(echo "$issue" | jq -r '.recommendation' 2>/dev/null)
+    
+    echo "═══════════════════════════════════════════════════════════"
+    echo "Issue $((issue_index + 1)) of $issue_count"
+    echo "═══════════════════════════════════════════════════════════"
+    echo "File: $file"
+    echo "Severity: $severity"
+    echo "Issue: $issue_desc"
+    echo ""
+    echo "Recommendation:"
+    echo "$recommendation"
+    echo ""
+    echo "Options:"
+    echo "  [m] Manual fix - open tmux workspace with nvim + OpenCode"
+    echo "  [a] Auto-fix - let OpenCode fix it automatically"
+    echo "  [s] Skip this issue"
+    echo "  [q] Quit and proceed to commit"
+    echo ""
+    echo -n "Your choice: "
+    read -r choice
+    
+    case "$choice" in
+      m | M)
+        echo ""
+        _gpa_create_edit_workspace "$file" "$recommendation"
+        
+        # Wait for user to finish editing
+        echo ""
+        echo "═══════════════════════════════════════════════════════════"
+        echo "⏸  Waiting for you to finish editing..."
+        echo "═══════════════════════════════════════════════════════════"
+        echo ""
+        echo "When you're done editing in the new terminal window:"
+        echo "  1. Save your changes in nvim"
+        echo "  2. Close the terminal window (or exit tmux)"
+        echo "  3. Press Enter here to continue"
+        echo ""
+        echo -n "Press Enter when editing is complete: "
+        read -r
+        
+        # Re-stage the file
+        echo ""
+        echo "ℹ Re-staging file..."
+        git add "$file" 2>/dev/null && echo "  ✓ Re-staged: $file"
+        echo ""
+        echo "✓ Returning to issue list..."
+        echo ""
+        ;;
+      a | A)
+        _gpa_auto_fix "$file" "$recommendation"
+        echo ""
+        ;;
+      s | S)
+        echo "⊳ Skipping this issue"
+        echo ""
+        ;;
+      q | Q)
+        echo ""
+        echo "✓ Proceeding to commit with current changes..."
+        echo ""
+        gpc
+        return $?
+        ;;
+      *)
+        echo "✗ Invalid choice. Skipping this issue."
+        echo ""
+        ;;
+    esac
+    
+    ((issue_index++))
+  done
+  
+  # All issues processed
+  echo "═══════════════════════════════════════════════════════════"
+  echo "All issues processed!"
+  echo "═══════════════════════════════════════════════════════════"
+  echo ""
+  echo "Options:"
+  echo "  [c] Commit and push changes"
+  echo "  [r] Review again with 'gpa'"
+  echo "  [q] Quit and keep changes staged"
+  echo ""
+  echo -n "Your choice: "
+  read -r final_choice
+  
+  case "$final_choice" in
+    c | C)
+      echo ""
+      gpc
+      return $?
+      ;;
+    r | R)
+      echo ""
+      gpa
+      return $?
+      ;;
+    *)
+      echo "ℹ Keeping changes staged."
+      return 0
+      ;;
+  esac
+  
 }
 
 function gpa() {
@@ -293,120 +1271,102 @@ function gpa() {
 
   echo ""
   echo "═══════════════════════════════════════════════════════════"
+  echo "ℹ Running secrets detection scan..."
+  echo "═══════════════════════════════════════════════════════════"
+  echo ""
+
+  # Run secrets detection using helper function
+  if ! _check_for_secrets; then
+    echo "✗ Secrets detection aborted commit."
+    return 1
+  fi
+  
+  echo "✓ No secrets detected in staged changes"
+  
+  echo ""
+  echo "═══════════════════════════════════════════════════════════"
+  echo "ℹ Running linters on staged files..."
+  echo "═══════════════════════════════════════════════════════════"
+  echo ""
+  
+  # Run linters
+  if ! _run_linters; then
+    echo "✗ Linting check aborted."
+    return 1
+  fi
+  
+  echo ""
+  echo "═══════════════════════════════════════════════════════════"
   echo "ℹ Running AI code review on staged changes..."
   echo "═══════════════════════════════════════════════════════════"
   echo ""
 
-  # Get the diff of staged changes
-  local diff_output=$(git diff --cached)
-  local staged_files=$(git diff --cached --name-only | tr '\n' ', ' | sed 's/,$//')
-
-  # Check if any Terraform files are staged
-  local has_terraform=false
-  local terraform_review=""
-  while IFS= read -r file; do
-    if [[ "$file" == *.tf ]]; then
-      has_terraform=true
-      break
-    fi
-  done < <(git diff --cached --name-only)
-
-  # Prepare review prompt based on file types
-  local review_prompt="Review the following staged git changes for CRITICAL ISSUES AND WARNINGS ONLY:
-
-🔴 **CRITICAL - Must Fix Before Commit:**
-1. **Bugs**: Syntax errors, runtime errors, null pointer dereferences, infinite loops
-2. **Security Vulnerabilities**: Exposed credentials, SQL injection, command injection, XSS, insecure crypto
-3. **Data Loss**: Destructive operations without safeguards, missing transactions, race conditions
-
-🟡 **WARNINGS - Should Consider:**
-4. **Security Concerns**: Overly permissive permissions, missing input validation, unsafe eval
-5. **Logic Flaws**: Off-by-one errors, incorrect conditionals, missing edge cases
-6. **Breaking Changes**: API changes, removed functionality, incompatible updates"
-
-  if [ "$has_terraform" = true ]; then
-    review_prompt="$review_prompt
-
-**TERRAFORM-SPECIFIC CRITICAL/WARNING CHECKS** (detected .tf files):
-🔴 **Critical**: Hardcoded secrets/keys, publicly exposed resources, destructive changes without lifecycle protection
-🟡 **Warnings**: Overly permissive IAM (wildcards in production), missing encryption, expensive resources without justification"
+  # Create batches for review
+  echo "ℹ Analyzing staged files and creating review batches..."
+  local batches=$(_gpa_create_batches)
+  local batch_count=$(echo "$batches" | jq 'length')
+  
+  if [ "$batch_count" -eq 0 ]; then
+    echo "⚠ No files to review"
+    return 0
   fi
-
-  # Use OpenCode to perform code review
-  local review_result=$(
-    cat <<EOF | opencode run 2>/dev/null
-$review_prompt
-
-Staged files: $staged_files
-
-Git diff:
-$diff_output
-
-**IMPORTANT INSTRUCTIONS:**
-- ONLY report 🔴 Critical issues and 🟡 Warnings
-- IGNORE minor suggestions, style preferences, and code quality opinions
-- Focus on things that will actually break, cause security issues, or have serious consequences
-- If there are no critical/warning issues, respond with: "✓ Code review passed - no critical issues or warnings found"
-
-Provide specific, actionable feedback with:
-- File name and line numbers
-- Issue severity (🔴 Critical or 🟡 Warning ONLY)
-- Clear explanation of why this is a problem
-- Recommended fix
-EOF
-  )
-
-  # Display review results
-  if [ -n "$review_result" ]; then
-    echo "$review_result"
+  
+  local total_files=$(git diff --cached --name-only | wc -l)
+  local total_lines=$(git diff --cached | wc -l)
+  
+  echo "ℹ Processing $total_files file(s) in $batch_count batch(es)"
+  echo "  Total changes: $total_lines lines"
+  echo "  Model: $(_get_opencode_model 'complex')"
+  echo ""
+  
+  # Process each batch and collect all issues
+  local all_issues="[]"
+  local batch_index=0
+  
+  while [ $batch_index -lt $batch_count ]; do
+    local batch=$(echo "$batches" | jq -c ".[$batch_index]")
+    local batch_num=$((batch_index + 1))
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Reviewing batch $batch_num of $batch_count..."
+    
+    # Review this batch
+    local batch_issues=$(_gpa_review_batch "$batch" "$batch_num" "$batch_count")
+    
+    # Merge batch issues into all_issues
+    if [ -n "$batch_issues" ] && echo "$batch_issues" | jq empty 2>/dev/null; then
+      local issue_count=$(echo "$batch_issues" | jq 'length')
+      if [ "$issue_count" -gt 0 ]; then
+        echo "  Found $issue_count issue(s) in this batch"
+        all_issues=$(echo "$all_issues" | jq --argjson batch "$batch_issues" '. + $batch')
+      else
+        echo "  ✓ No issues found in this batch"
+      fi
+    else
+      echo "  ⚠ Batch review failed or returned invalid JSON"
+    fi
+    
     echo ""
-    echo "═══════════════════════════════════════════════════════════"
+    ((batch_index++))
+  done
+  
+  echo "═══════════════════════════════════════════════════════════"
+  
+  # Count total issues found
+  local total_issue_count=$(echo "$all_issues" | jq 'length')
+  
+  if [ "$total_issue_count" -eq 0 ]; then
+    # No issues found - proceed directly to commit
+    echo "✓ Code review complete - no critical issues or warnings found"
     echo ""
-
-    # Ask if user wants to proceed
     echo "Options:"
     echo "  [Y/Enter] Commit and push - automatically runs 'gpc'"
-    echo "  [e] Edit - open files to implement fixes, keep staged"
-    echo "  [u] Unstage - remove from staging area"
     echo "  [n] Cancel - keep staged but don't proceed"
     echo ""
     echo -n "Your choice: "
     read -r continue_choice
 
     case "$continue_choice" in
-      e | E)
-        echo ""
-        echo "ℹ Opening staged files in editor..."
-        # Get list of staged files - properly handle filenames with spaces
-        local files_to_edit=()
-        while IFS= read -r file; do
-          files_to_edit+=("$file")
-        done < <(git diff --cached --name-only)
-
-        # Open in nvim (or fall back to $EDITOR)
-        if command -v nvim &>/dev/null; then
-          nvim "${files_to_edit[@]}"
-        elif [ -n "$EDITOR" ]; then
-          $EDITOR "${files_to_edit[@]}"
-        else
-          echo "✗ No editor found. Set \$EDITOR or install nvim."
-          return 1
-        fi
-
-        echo ""
-        echo "✓ Files edited. Run 'gpa' again to review changes or 'gpc' to commit."
-        return 0
-        ;;
-      n | N)
-        echo "ℹ Keeping changes staged. Use 'git restore --staged <file>' to unstage."
-        return 0
-        ;;
-      u | U)
-        echo "ℹ Unstaging all changes..."
-        git restore --staged .
-        echo "✓ All changes unstaged"
-        return 0
-        ;;
       y | Y | "")
         echo ""
         echo "✓ Proceeding to commit and push..."
@@ -415,120 +1375,340 @@ EOF
         return $?
         ;;
       *)
-        echo "✗ Invalid choice. Changes remain staged."
-        return 1
+        echo "ℹ Keeping changes staged."
+        return 0
         ;;
     esac
   else
-    echo "⚠ AI review failed or returned no output"
-    echo "ℹ Changes remain staged. Review manually before committing."
-    return 1
+    # Issues found - display summary and enter interactive mode
+    echo "⚠ Found $total_issue_count issue(s) across all batches"
+    echo ""
+    
+    # Display a summary of issues by severity
+    local critical_count=$(echo "$all_issues" | jq '[.[] | select(.severity == "Critical")] | length')
+    local warning_count=$(echo "$all_issues" | jq '[.[] | select(.severity == "Warning")] | length')
+    
+    if [ "$critical_count" -gt 0 ]; then
+      echo "  🔴 Critical: $critical_count"
+    fi
+    if [ "$warning_count" -gt 0 ]; then
+      echo "  🟡 Warning: $warning_count"
+    fi
+    echo ""
+    
+    # Enter interactive fix mode
+    echo "Entering interactive fix mode..."
+    echo ""
+    _gpa_interactive_fix "$all_issues"
+    return $?
   fi
 }
 
-function aidev() {
-  # Display simplified menu
-  echo "Choose your AI coding assistant:"
-  echo "  [ENTER] OpenCode (CoPilot/OpenCodeZen)"
-  echo "  [c] Crush (Bedrock/OpenRouter)"
-  echo "  [ESC] Quit"
-  echo ""
-  read -k1 -s choice
-  echo
-  case $choice in
-    $'\n' | '')
-      # OpenCode - supports: GitHub Copilot, AWS Bedrock
-      echo "Selected: OpenCode"
-      echo ""
+# Validation Functions for AI Providers
 
-      # Step 1: Check GitHub Copilot authentication via OpenCode
-      echo "Checking GitHub Copilot authentication..."
-      if opencode auth list 2>/dev/null | grep -q "GitHub Copilot"; then
-        echo "✓ GitHub Copilot authenticated."
-      else
-        echo "✗ GitHub Copilot not authenticated in OpenCode."
-        echo "Starting authentication..."
-        echo ""
-        echo "Opening GitHub device login page..."
-        open "https://github.com/login/device/"
-        echo ""
-        opencode auth login
-
-        # Verify authentication succeeded
-        if opencode auth list 2>/dev/null | grep -q "GitHub Copilot"; then
-          echo ""
-          echo "✓ Authentication successful! Continuing..."
-        else
-          echo ""
-          echo "✗ Authentication failed or was cancelled."
-          return 1
-        fi
-      fi
-      echo ""
-
-      # Step 2: Check AWS Bedrock access (optional - disabled in OpenCode config)
-      echo "Checking AWS Bedrock access..."
-      if timeout 5 aws bedrock list-foundation-models --region us-east-1 &>/dev/null; then
-        echo "✓ AWS Bedrock access confirmed (but disabled in OpenCode config)."
-      else
-        echo "⚠️  AWS Bedrock access unavailable (continuing with GitHub Copilot only)."
-      fi
-      echo ""
-
-      # Step 3: Launch OpenCode
-      echo "Launching OpenCode..."
-      command opencode "$@"
-      ;;
-
-    c | C)
-      # Crush - supports: AWS Bedrock, OpenRouter (NO GitHub Copilot support)
-      echo "Selected: Crush"
-      echo ""
-
-      # Check if crush is available
-      if ! command -v crush &>/dev/null; then
-        echo "✗ Crush not found. Please install it first."
-        return 1
-      fi
-
-      # Step 1: Check AWS Bedrock access
-      echo "Checking AWS Bedrock access..."
-      if timeout 5 aws bedrock list-foundation-models --region us-east-1 &>/dev/null; then
-        echo "✓ AWS Bedrock access confirmed."
-        echo "Setting Crush provider to: bedrock"
-        sed -i.bak 's/"provider": "[^"]*"/"provider": "bedrock"/' ~/.config/crush/crush.json
-      else
-        echo "✗ AWS Bedrock access unavailable."
-        echo "Triggering AWS SSO (30s timeout)..."
-        if timeout 30 aws sso login --sso-session aws; then
-          if timeout 5 aws bedrock list-foundation-models --region us-east-1 &>/dev/null; then
-            echo "✓ AWS SSO successful. Bedrock available."
-            echo "Setting Crush provider to: bedrock"
-            sed -i.bak 's/"provider": "[^"]*"/"provider": "bedrock"/' ~/.config/crush/crush.json
-          else
-            echo "⚠️  AWS Bedrock still unavailable. Falling back to OpenRouter."
-            sed -i.bak 's/"provider": "[^"]*"/"provider": "openrouter"/' ~/.config/crush/crush.json
-          fi
-        else
-          echo "⚠️  AWS SSO timed out or failed. Falling back to OpenRouter."
-          sed -i.bak 's/"provider": "[^"]*"/"provider": "openrouter"/' ~/.config/crush/crush.json
-        fi
-      fi
-      echo ""
-
-      # Step 2: Launch Crush
-      echo "Launching Crush..."
-      command crush "$@"
-      ;;
-
-    $'\e')
-      echo "Exiting..."
+# Validate GitHub Copilot authentication
+function _validate_github_copilot() {
+  # Check if GitHub Copilot is authenticated via OpenCode
+  if command -v opencode &>/dev/null; then
+    if opencode auth list 2>/dev/null | grep -q "GitHub Copilot"; then
       return 0
-      ;;
-
-    *)
-      echo "Invalid choice. Please press [ENTER], [c], or [ESC]."
-      return 1
-      ;;
-  esac
+    fi
+  fi
+  
+  # Fallback: Check gh CLI authentication
+  if command -v gh &>/dev/null; then
+    if gh auth status &>/dev/null; then
+      return 0
+    fi
+  fi
+  
+  return 1
 }
+
+# Validate OpenCode Zen API key
+function _validate_opencode_zen() {
+  # Check for OpenCode API key in environment
+  if [[ -n "$OPENCODE_API_KEY" ]]; then
+    return 0
+  fi
+  
+  # Check if key is in .zshrc_envvars (not tracked by git)
+  if [[ -f ~/.zshrc_envvars ]]; then
+    if grep -q "OPENCODE_API_KEY" ~/.zshrc_envvars; then
+      return 0
+    fi
+  fi
+  
+  # Also check .zshrc_envvars_insecure (for non-sensitive configs, not tracked by git)
+  if [[ -f ~/.zshrc_envvars_insecure ]]; then
+    if grep -q "OPENCODE_API_KEY" ~/.zshrc_envvars_insecure; then
+      return 0
+    fi
+  fi
+  
+  return 1
+}
+
+# Validate OpenRouter API key
+function _validate_openrouter() {
+  # Check for OpenRouter API key in environment
+  if [[ -n "$OPENROUTER_API_KEY" ]]; then
+    return 0
+  fi
+  
+  # Check if key is in .zshrc_envvars (not tracked by git)
+  if [[ -f ~/.zshrc_envvars ]]; then
+    if grep -q "OPENROUTER_API_KEY" ~/.zshrc_envvars; then
+      return 0
+    fi
+  fi
+  
+  # Also check .zshrc_envvars_insecure (for non-sensitive configs, not tracked by git)
+  if [[ -f ~/.zshrc_envvars_insecure ]]; then
+    if grep -q "OPENROUTER_API_KEY" ~/.zshrc_envvars_insecure; then
+      return 0
+    fi
+  fi
+  
+  return 1
+}
+
+# AI Provider Selection - System-wide provider preference
+# Stores selection in ~/.ai_provider_preference
+function aiselect() {
+  local preference_file="$HOME/.ai_provider_preference"
+  
+  # If called with --show or --status, just display current provider
+  if [[ "$1" == "--show" ]] || [[ "$1" == "--status" ]]; then
+    local current_provider=$(_get_ai_provider)
+    local opencode_model=$(_get_opencode_model "complex")
+    local opencode_simple_model=$(_get_opencode_model "simple")
+    
+    echo "═══════════════════════════════════════════════════════════"
+    echo "Current AI Configuration"
+    echo "═══════════════════════════════════════════════════════════"
+    echo "Active Provider: $current_provider"
+    echo ""
+    echo "Interactive Sessions (aidev/opencode):"
+    echo "  Model: $opencode_model"
+    echo "  → Launched with -m flag based on aiselect preference"
+    echo ""
+    echo "Helper Functions:"
+    echo "  Simple tasks  (commit msgs): $opencode_simple_model"
+    echo "  Complex tasks (code review): $opencode_model"
+    echo ""
+    echo "Command → Model Mapping:"
+    echo "  • aidev                     → $opencode_model"
+    echo "  • gpc (commit messages)     → $opencode_simple_model"
+    echo "  • gpa (code review)         → $opencode_model"
+    echo "  • README generation         → $opencode_model"
+    echo ""
+    echo "Note: Run 'aiselect' to change provider. Changes apply immediately"
+    echo "      to new 'aidev' sessions (no restart required)."
+    echo "═══════════════════════════════════════════════════════════"
+    return 0
+  fi
+  
+  # Colors for terminal output
+  local RED='\033[0;31m'
+  local GREEN='\033[0;32m'
+  local YELLOW='\033[1;33m'
+  local NC='\033[0m' # No Color
+  
+  # Run validations
+  echo "Checking AI provider availability..."
+  echo ""
+  
+  local github_valid=false
+  local opencode_valid=false
+  local openrouter_valid=false
+  
+  # Validate GitHub Copilot
+  if _validate_github_copilot; then
+    github_valid=true
+  else
+    # Offer to authenticate
+    echo "${YELLOW}⚠${NC}  GitHub Copilot not authenticated"
+    echo ""
+    echo -n "Would you like to authenticate now? [Y/n]: "
+    read -k1 auth_choice
+    echo ""
+    
+    if [[ "$auth_choice" =~ ^[Yy]$ ]] || [[ -z "$auth_choice" ]]; then
+      echo ""
+      echo "Opening GitHub device login page..."
+      if command -v open &>/dev/null; then
+        open "https://github.com/login/device"
+      elif command -v xdg-open &>/dev/null; then
+        xdg-open "https://github.com/login/device"
+      fi
+      echo ""
+      echo "Starting OpenCode authentication..."
+      opencode auth login
+      
+      # Re-validate
+      if _validate_github_copilot; then
+        github_valid=true
+        echo ""
+        echo "${GREEN}✓${NC} GitHub Copilot authenticated successfully!"
+      else
+        echo ""
+        echo "${RED}✗${NC} Authentication failed or was cancelled"
+      fi
+    fi
+    echo ""
+  fi
+  
+  # Validate OpenCode Zen
+  if _validate_opencode_zen; then
+    opencode_valid=true
+  fi
+  
+  # Validate OpenRouter
+  if _validate_openrouter; then
+    openrouter_valid=true
+  fi
+  
+  # Display menu with status indicators
+  while true; do
+    echo "═══════════════════════════════════════════════════════════"
+    echo "Select AI Provider:"
+    echo "═══════════════════════════════════════════════════════════"
+    
+    if $github_valid; then
+      echo "  [g] GitHub Copilot (default) ${GREEN}✓${NC}"
+    else
+      echo "  [g] GitHub Copilot (default) ${RED}✗${NC}"
+    fi
+    
+    if $opencode_valid; then
+      echo "  [c] OpenCode Zen             ${GREEN}✓${NC}"
+    else
+      echo "  [c] OpenCode Zen             ${RED}✗${NC}"
+    fi
+    
+    if $openrouter_valid; then
+      echo "  [r] OpenRouter               ${GREEN}✓${NC}"
+    else
+      echo "  [r] OpenRouter               ${RED}✗${NC}"
+    fi
+    
+    echo "  [q] Quit"
+    echo "═══════════════════════════════════════════════════════════"
+    echo ""
+    echo -n "Your choice: "
+    
+    # Read single character
+    local choice
+    read -k1 choice
+    echo ""
+    echo ""
+    
+    case $choice in
+      $'\n' | '' | g | G)
+        if $github_valid; then
+          echo "github-copilot" > "$preference_file"
+          echo ""
+          echo "${GREEN}✓${NC} Provider set to: GitHub Copilot"
+          echo ""
+          echo "Discovering latest Claude models..."
+          local sonnet_model=$(_discover_latest_model "github-copilot" "sonnet")
+          local haiku_model=$(_discover_latest_model "github-copilot" "haiku")
+          
+          if [[ -n "$sonnet_model" ]] && [[ -n "$haiku_model" ]]; then
+            echo "  • Complex tasks (Sonnet): $sonnet_model"
+            echo "  • Simple tasks (Haiku):   $haiku_model"
+          else
+            echo "  ${YELLOW}⚠${NC} Could not discover models, using defaults"
+          fi
+          echo ""
+          echo "ℹ  New OpenCode sessions (via 'aidev') will use this provider"
+          return 0
+        else
+          echo "${RED}✗${NC} GitHub Copilot is not available (not authenticated)"
+          echo ""
+          continue
+        fi
+        ;;
+      c | C)
+        if $opencode_valid; then
+          echo "opencode" > "$preference_file"
+          echo ""
+          echo "${GREEN}✓${NC} Provider set to: OpenCode Zen"
+          echo ""
+          echo "Discovering latest Claude models..."
+          local sonnet_model=$(_discover_latest_model "opencode" "sonnet")
+          local haiku_model=$(_discover_latest_model "opencode" "haiku")
+          
+          if [[ -n "$sonnet_model" ]] && [[ -n "$haiku_model" ]]; then
+            echo "  • Complex tasks (Sonnet): $sonnet_model"
+            echo "  • Simple tasks (Haiku):   $haiku_model"
+          else
+            echo "  ${YELLOW}⚠${NC} Could not discover models, using defaults"
+          fi
+          echo ""
+          echo "ℹ  New OpenCode sessions (via 'aidev') will use this provider"
+          return 0
+        else
+          echo "${RED}✗${NC} OpenCode Zen is not available"
+          echo "ℹ  Set OPENCODE_API_KEY in ~/.zshrc_envvars (not tracked by git)"
+          echo ""
+          continue
+        fi
+        ;;
+      r | R)
+        if $openrouter_valid; then
+          echo "openrouter" > "$preference_file"
+          echo ""
+          echo "${GREEN}✓${NC} Provider set to: OpenRouter"
+          echo ""
+          echo "Discovering latest Claude models..."
+          local sonnet_model=$(_discover_latest_model "openrouter" "sonnet")
+          local haiku_model=$(_discover_latest_model "openrouter" "haiku")
+          
+          if [[ -n "$sonnet_model" ]] && [[ -n "$haiku_model" ]]; then
+            echo "  • Complex tasks (Sonnet): $sonnet_model"
+            echo "  • Simple tasks (Haiku):   $haiku_model"
+          else
+            echo "  ${YELLOW}⚠${NC} Could not discover models, using defaults"
+          fi
+          echo ""
+          echo "ℹ  New OpenCode sessions (via 'aidev') will use this provider"
+          return 0
+        else
+          echo "${RED}✗${NC} OpenRouter is not available"
+          echo "ℹ  Set OPENROUTER_API_KEY in ~/.zshrc_envvars (not tracked by git)"
+          echo ""
+          continue
+        fi
+        ;;
+      q | Q | $'\e')
+        echo "✗ Cancelled"
+        return 0
+        ;;
+      *)
+        echo "${RED}✗${NC} Invalid choice. Please select a valid option."
+        echo ""
+        continue
+        ;;
+    esac
+  done
+}
+
+# Helper function to get current AI provider preference
+function _get_ai_provider() {
+  local preference_file="$HOME/.ai_provider_preference"
+  
+  # If preference file doesn't exist, default to GitHub Copilot
+  if [[ ! -f "$preference_file" ]]; then
+    echo "github-copilot"
+    return 0
+  fi
+  
+  # Read and return the preference
+  cat "$preference_file"
+}
+
+# Export AI_PROVIDER environment variable for use in scripts
+export AI_PROVIDER=$(_get_ai_provider)
+

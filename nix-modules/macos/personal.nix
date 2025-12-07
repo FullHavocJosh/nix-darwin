@@ -1,4 +1,5 @@
-{ pkgs, config, ... }: {
+{ pkgs, config, ... }:
+{
 
   ###########################################
   ### MacOS Settings for Personal Devices ###
@@ -60,4 +61,3 @@
     };
   };
 }
-

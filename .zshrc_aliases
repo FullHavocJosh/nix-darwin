@@ -33,3 +33,6 @@ alias ssoexport='eval "$(aws configure export-credentials --profile $AWS_PROFILE
 
 alias gpr='gpr_func'
 
+# AI Provider aliases
+alias aishow='aiselect --show'
+
