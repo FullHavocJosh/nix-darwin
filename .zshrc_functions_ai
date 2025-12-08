@@ -1,0 +1,588 @@
+# =============================================================================
+# AI Provider Functions
+# =============================================================================
+
+# Helper function: Discover latest Claude model for a provider
+# Usage: _discover_latest_model <provider> <model_type>
+# model_type can be "sonnet" or "haiku"
+function _discover_latest_model() {
+  local provider="$1"
+  local model_type="$2"
+  
+  # Get all models for the provider
+  local models=$(opencode models "$provider" 2>/dev/null)
+  
+  if [[ -z "$models" ]]; then
+    return 1
+  fi
+  
+  # Filter for the model type and sort to get the latest
+  local latest_model=""
+  
+  case $model_type in
+    sonnet)
+      # Look for sonnet models, prioritizing higher version numbers
+      # Use -V for natural version sort (handles 4.5 vs 4 correctly)
+      latest_model=$(echo "$models" | grep -i "claude" | grep -i "sonnet" | sort -V | tail -1)
+      ;;
+    haiku)
+      # Look for haiku models, prioritizing higher version numbers
+      latest_model=$(echo "$models" | grep -i "claude" | grep -i "haiku" | sort -V | tail -1)
+      ;;
+  esac
+  
+  if [[ -n "$latest_model" ]]; then
+    echo "$latest_model"
+    return 0
+  fi
+  
+  return 1
+}
+
+# Helper function: Get OpenCode model string based on provider preference
+# Usage: _get_opencode_model ["simple"|"complex"]
+function _get_opencode_model() {
+  local task_type="${1:-complex}"
+  local provider=$(_get_ai_provider)
+  
+  # Try to discover the latest model dynamically
+  local model=""
+  
+  if [[ "$task_type" == "simple" ]]; then
+    model=$(_discover_latest_model "$provider" "haiku")
+  else
+    model=$(_discover_latest_model "$provider" "sonnet")
+  fi
+  
+  # If discovery succeeded, return the model
+  if [[ -n "$model" ]]; then
+    echo "$model"
+    return 0
+  fi
+  
+  # Fallback to hardcoded models if discovery fails
+  case $provider in
+    github-copilot)
+      if [[ "$task_type" == "simple" ]]; then
+        echo "github-copilot/claude-haiku-4.5"
+      else
+        echo "github-copilot/claude-sonnet-4.5"
+      fi
+      ;;
+    opencode)
+      if [[ "$task_type" == "simple" ]]; then
+        echo "opencode/claude-3-5-haiku"
+      else
+        echo "opencode/claude-sonnet-4.5"
+      fi
+      ;;
+    openrouter)
+      if [[ "$task_type" == "simple" ]]; then
+        echo "openrouter/anthropic/claude-3.5-haiku"
+      else
+        echo "openrouter/anthropic/claude-sonnet-4.5"
+      fi
+      ;;
+    *)
+      echo "github-copilot/claude-sonnet-4.5"  # Default fallback
+      ;;
+  esac
+}
+
+# =============================================================================
+# AI Command Execution Functions
+# =============================================================================
+
+# PRIMARY FUNCTION: Execute AI command with direct API call (lightweight, fast)
+# Usage: echo "prompt" | _run_ai_direct ["simple"|"complex"]
+# This is the recommended function for all AI tasks that don't need agent capabilities
+# - Respects aiselect provider configuration
+# - Makes direct API calls (no agent overhead)
+# - Typical response time: 5-15 seconds
+# - Supports: GitHub Copilot, OpenCode, OpenRouter
+function _run_ai_direct() {
+  local task_type="${1:-complex}"
+  local provider=$(_get_ai_provider)
+  local model=$(_get_opencode_model "$task_type")
+  
+  # Read stdin into a variable
+  local prompt=$(cat)
+  
+  # Make direct API call based on provider
+  case $provider in
+    github-copilot)
+      # GitHub Copilot direct API access
+      # Note: This uses internal GitHub APIs which may require specific access
+      # If this fails, we fall back to using OpenCode as a lightweight proxy
+      
+      if ! command -v gh &>/dev/null; then
+        echo "Error: gh CLI not found for GitHub Copilot access" >&2
+        return 1
+      fi
+      
+      # Get GitHub token
+      local gh_token=$(gh auth token 2>/dev/null)
+      if [[ -z "$gh_token" ]]; then
+        echo "Error: Not authenticated with GitHub CLI" >&2
+        return 1
+      fi
+      
+      # Extract just the model name (after the /)
+      local model_name="${model#github-copilot/}"
+      
+      # Try to get GitHub Copilot token from internal API
+      local copilot_token=$(curl -s -X GET \
+        -H "Authorization: token $gh_token" \
+        -H "Editor-Version: vscode/1.85.0" \
+        -H "Editor-Plugin-Version: copilot/1.150.0" \
+        "https://api.github.com/copilot_internal/v2/token" 2>/dev/null | jq -r '.token' 2>/dev/null)
+      
+      # Check if we got a valid token
+      if [[ -n "$copilot_token" && "$copilot_token" != "null" ]]; then
+        # Use direct GitHub Copilot API
+        local result=$(curl -s -X POST "https://api.githubcopilot.com/chat/completions" \
+          -H "Authorization: Bearer $copilot_token" \
+          -H "Content-Type: application/json" \
+          -H "Editor-Version: vscode/1.85.0" \
+          -H "Editor-Plugin-Version: copilot/1.150.0" \
+          -d "{
+            \"model\": \"$model_name\",
+            \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
+            \"max_tokens\": 4096,
+            \"temperature\": 0.0,
+            \"stream\": false
+          }" 2>/dev/null | jq -r '.choices[0].message.content' 2>/dev/null)
+        
+        # If we got a valid result, return it
+        if [[ -n "$result" && "$result" != "null" ]]; then
+          echo "$result"
+          return 0
+        fi
+      fi
+      
+      # Fallback: Use OpenCode as a lightweight proxy for GitHub Copilot
+      # Note: opencode run returns markdown-formatted output, so we need to extract the JSON
+      if command -v opencode &>/dev/null; then
+        local result=$(opencode run --model "$model" "$prompt" 2>/dev/null)
+        if [[ -n "$result" ]]; then
+          # Try to extract JSON from markdown code blocks or plain text
+          # First try: Look for ```json ... ``` block
+          local extracted=$(echo "$result" | sed -n '/```json/,/```/p' | sed '1d;$d')
+          if [[ -z "$extracted" ]]; then
+            # Second try: Look for any code block
+            extracted=$(echo "$result" | sed -n '/```/,/```/p' | sed '1d;$d')
+          fi
+          if [[ -z "$extracted" ]]; then
+            # Third try: Look for JSON array pattern
+            extracted=$(echo "$result" | grep -o '\[.*\]')
+          fi
+          if [[ -z "$extracted" ]]; then
+            # Last resort: return the raw result
+            extracted="$result"
+          fi
+          
+          echo "$extracted"
+          return 0
+        fi
+      fi
+      
+      echo "Error: Failed to access GitHub Copilot (direct API and fallback both failed)" >&2
+      return 1
+      ;;
+      
+    opencode)
+      # Use curl with OpenCode API
+      if [[ -z "$OPENCODE_API_KEY" ]]; then
+        echo "Error: OPENCODE_API_KEY not set" >&2
+        return 1
+      fi
+      
+      local model_name="${model#opencode/}"
+      
+      curl -s https://api.opencode.ai/v1/chat/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $OPENCODE_API_KEY" \
+        -d "{
+          \"model\": \"$model_name\",
+          \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
+          \"max_tokens\": 4096
+        }" | jq -r '.choices[0].message.content' 2>/dev/null
+      ;;
+      
+    openrouter)
+      # Use curl with OpenRouter API
+      if [[ -z "$OPENROUTER_API_KEY" ]]; then
+        echo "Error: OPENROUTER_API_KEY not set" >&2
+        return 1
+      fi
+      
+      local model_name="${model#openrouter/}"
+      
+      curl -s https://openrouter.ai/api/v1/chat/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+        -H "HTTP-Referer: https://github.com/user/zsh-functions" \
+        -d "{
+          \"model\": \"$model_name\",
+          \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
+          \"max_tokens\": 4096
+        }" | jq -r '.choices[0].message.content' 2>/dev/null
+      ;;
+      
+    *)
+      echo "Error: Unknown provider $provider" >&2
+      return 1
+      ;;
+  esac
+}
+
+# LEGACY FUNCTION: Execute AI command with OpenCode agent (slower, full agent capabilities)
+# Usage: echo "prompt" | _run_ai_agent ["simple"|"complex"]
+# Only use this when you need full agent capabilities (file editing, tool use, etc.)
+# - Uses OpenCode's full agent framework
+# - Typical response time: 60-300+ seconds
+# - For simple queries, use _run_ai_direct instead
+# NOTE: This is kept for backward compatibility and special cases like auto-fix
+function _run_ai_agent() {
+  local task_type="${1:-complex}"
+  local model=$(_get_opencode_model "$task_type")
+  
+  # Read stdin into a variable
+  local prompt=$(cat)
+  
+  # Always use OpenCode (it supports all providers including GitHub Copilot)
+  # OpenCode run takes the prompt as a positional argument
+  opencode run --model "$model" "$prompt"
+}
+
+# DEPRECATED ALIAS: Use _run_ai_direct for new code
+# This is kept for backward compatibility only
+function _run_ai_command() {
+  _run_ai_direct "$@"
+}
+
+# DEPRECATED: Get AI command based on provider preference (use _run_ai_direct instead)
+# This is kept for backward compatibility but should be replaced
+# Usage: _get_ai_command ["simple"|"complex"]
+function _get_ai_command() {
+  local task_type="${1:-complex}"
+  echo "_run_ai_direct $task_type"
+}
+
+# Launch OpenCode with the selected provider/model
+# This replaces the 'aidev' alias to dynamically select model based on aiselect preference
+function aidev() {
+  local model=$(_get_opencode_model "complex")
+  opencode --model "$model" "$@"
+}
+
+# Validation Functions for AI Providers
+
+# Validate GitHub Copilot authentication
+function _validate_github_copilot() {
+  # Check if GitHub Copilot is authenticated via OpenCode
+  if command -v opencode &>/dev/null; then
+    if opencode auth list 2>/dev/null | grep -q "GitHub Copilot"; then
+      return 0
+    fi
+  fi
+  
+  # Fallback: Check gh CLI authentication
+  if command -v gh &>/dev/null; then
+    if gh auth status &>/dev/null; then
+      return 0
+    fi
+  fi
+  
+  return 1
+}
+
+# Validate OpenCode Zen API key
+function _validate_opencode_zen() {
+  # Check for OpenCode API key in environment
+  if [[ -n "$OPENCODE_API_KEY" ]]; then
+    return 0
+  fi
+  
+  # Check if key is in .zshrc_envvars (not tracked by git)
+  if [[ -f ~/.zshrc_envvars ]]; then
+    if grep -q "OPENCODE_API_KEY" ~/.zshrc_envvars; then
+      return 0
+    fi
+  fi
+  
+  # Also check .zshrc_envvars_insecure (for non-sensitive configs, not tracked by git)
+  if [[ -f ~/.zshrc_envvars_insecure ]]; then
+    if grep -q "OPENCODE_API_KEY" ~/.zshrc_envvars_insecure; then
+      return 0
+    fi
+  fi
+  
+  return 1
+}
+
+# Validate OpenRouter API key
+function _validate_openrouter() {
+  # Check for OpenRouter API key in environment
+  if [[ -n "$OPENROUTER_API_KEY" ]]; then
+    return 0
+  fi
+  
+  # Check if key is in .zshrc_envvars (not tracked by git)
+  if [[ -f ~/.zshrc_envvars ]]; then
+    if grep -q "OPENROUTER_API_KEY" ~/.zshrc_envvars; then
+      return 0
+    fi
+  fi
+  
+  # Also check .zshrc_envvars_insecure (for non-sensitive configs, not tracked by git)
+  if [[ -f ~/.zshrc_envvars_insecure ]]; then
+    if grep -q "OPENROUTER_API_KEY" ~/.zshrc_envvars_insecure; then
+      return 0
+    fi
+  fi
+  
+  return 1
+}
+
+# Helper function to get current AI provider preference
+function _get_ai_provider() {
+  local preference_file="$HOME/.ai_provider_preference"
+  
+  # If preference file doesn't exist, default to GitHub Copilot
+  if [[ ! -f "$preference_file" ]]; then
+    echo "github-copilot"
+    return 0
+  fi
+  
+  # Read and return the preference
+  cat "$preference_file"
+}
+
+# AI Provider Selection - System-wide provider preference
+# Stores selection in ~/.ai_provider_preference
+function aiselect() {
+  local preference_file="$HOME/.ai_provider_preference"
+  
+  # If called with --show or --status, just display current provider
+  if [[ "$1" == "--show" ]] || [[ "$1" == "--status" ]]; then
+    local current_provider=$(_get_ai_provider)
+    local opencode_model=$(_get_opencode_model "complex")
+    local opencode_simple_model=$(_get_opencode_model "simple")
+    
+    echo "═══════════════════════════════════════════════════════════"
+    echo "Current AI Configuration"
+    echo "═══════════════════════════════════════════════════════════"
+    echo "Active Provider: $current_provider"
+    echo ""
+    echo "Interactive Sessions (aidev):"
+    echo "  Model: $opencode_model"
+    echo "  Mode: Full OpenCode agent with tools"
+    echo "  → Launched with -m flag based on aiselect preference"
+    echo ""
+    echo "Direct API Functions (fast, lightweight):"
+    echo "  Simple tasks  (commit msgs): $opencode_simple_model"
+    echo "  Complex tasks (code review): $opencode_model"
+    echo "  Mode: Direct API calls (no agent overhead)"
+    echo "  Response time: ~5-15 seconds"
+    echo ""
+    echo "Command → Model → Mode:"
+    echo "  • aidev                     → $opencode_model → Full Agent"
+    echo "  • gpc (commit messages)     → $opencode_simple_model → Direct API"
+    echo "  • gpa (code review)         → $opencode_model → Direct API"
+    echo "  • README generation         → $opencode_model → Direct API"
+    echo ""
+    echo "Note: Run 'aiselect' to change provider. Changes apply immediately"
+    echo "      to all commands (no restart required)."
+    echo "═══════════════════════════════════════════════════════════"
+    return 0
+  fi
+  
+  # Colors for terminal output
+  local RED='\033[0;31m'
+  local GREEN='\033[0;32m'
+  local YELLOW='\033[1;33m'
+  local NC='\033[0m' # No Color
+  
+  # Run validations
+  echo "Checking AI provider availability..."
+  echo ""
+  
+  local github_valid=false
+  local opencode_valid=false
+  local openrouter_valid=false
+  
+  # Validate GitHub Copilot
+  if _validate_github_copilot; then
+    github_valid=true
+  else
+    # Offer to authenticate
+    echo "${YELLOW}⚠${NC}  GitHub Copilot not authenticated"
+    echo ""
+    echo -n "Would you like to authenticate now? [Y/n]: "
+    read -k1 auth_choice
+    echo ""
+    
+    if [[ "$auth_choice" =~ ^[Yy]$ ]] || [[ -z "$auth_choice" ]]; then
+      echo ""
+      echo "Opening GitHub device login page..."
+      if command -v open &>/dev/null; then
+        open "https://github.com/login/device"
+      elif command -v xdg-open &>/dev/null; then
+        xdg-open "https://github.com/login/device"
+      fi
+      echo ""
+      echo "Starting OpenCode authentication..."
+      opencode auth login
+      
+      # Re-validate
+      if _validate_github_copilot; then
+        github_valid=true
+        echo ""
+        echo "${GREEN}✓${NC} GitHub Copilot authenticated successfully!"
+      else
+        echo ""
+        echo "${RED}✗${NC} Authentication failed or was cancelled"
+      fi
+    fi
+    echo ""
+  fi
+  
+  # Validate OpenCode Zen
+  if _validate_opencode_zen; then
+    opencode_valid=true
+  fi
+  
+  # Validate OpenRouter
+  if _validate_openrouter; then
+    openrouter_valid=true
+  fi
+  
+  # Display menu with status indicators
+  while true; do
+    echo "═══════════════════════════════════════════════════════════"
+    echo "Select AI Provider:"
+    echo "═══════════════════════════════════════════════════════════"
+    
+    if $github_valid; then
+      echo "  [g] GitHub Copilot (default) ${GREEN}✓${NC}"
+    else
+      echo "  [g] GitHub Copilot (default) ${RED}✗${NC}"
+    fi
+    
+    if $opencode_valid; then
+      echo "  [c] OpenCode Zen             ${GREEN}✓${NC}"
+    else
+      echo "  [c] OpenCode Zen             ${RED}✗${NC}"
+    fi
+    
+    if $openrouter_valid; then
+      echo "  [r] OpenRouter               ${GREEN}✓${NC}"
+    else
+      echo "  [r] OpenRouter               ${RED}✗${NC}"
+    fi
+    
+    echo "  [q] Quit"
+    echo "═══════════════════════════════════════════════════════════"
+    echo ""
+    echo -n "Your choice: "
+    
+    # Read single character
+    local choice
+    read -k1 choice
+    echo ""
+    echo ""
+    
+    case $choice in
+      $'\n' | '' | g | G)
+        if $github_valid; then
+          echo "github-copilot" > "$preference_file"
+          echo ""
+          echo "${GREEN}✓${NC} Provider set to: GitHub Copilot"
+          echo ""
+          echo "Discovering latest Claude models..."
+          local sonnet_model=$(_discover_latest_model "github-copilot" "sonnet")
+          local haiku_model=$(_discover_latest_model "github-copilot" "haiku")
+          
+          if [[ -n "$sonnet_model" ]] && [[ -n "$haiku_model" ]]; then
+            echo "  • Complex tasks (Sonnet): $sonnet_model"
+            echo "  • Simple tasks (Haiku):   $haiku_model"
+          else
+            echo "  ${YELLOW}⚠${NC} Could not discover models, using defaults"
+          fi
+          echo ""
+          echo "ℹ  New OpenCode sessions (via 'aidev') will use this provider"
+          return 0
+        else
+          echo "${RED}✗${NC} GitHub Copilot is not available (not authenticated)"
+          echo ""
+          continue
+        fi
+        ;;
+      c | C)
+        if $opencode_valid; then
+          echo "opencode" > "$preference_file"
+          echo ""
+          echo "${GREEN}✓${NC} Provider set to: OpenCode Zen"
+          echo ""
+          echo "Discovering latest Claude models..."
+          local sonnet_model=$(_discover_latest_model "opencode" "sonnet")
+          local haiku_model=$(_discover_latest_model "opencode" "haiku")
+          
+          if [[ -n "$sonnet_model" ]] && [[ -n "$haiku_model" ]]; then
+            echo "  • Complex tasks (Sonnet): $sonnet_model"
+            echo "  • Simple tasks (Haiku):   $haiku_model"
+          else
+            echo "  ${YELLOW}⚠${NC} Could not discover models, using defaults"
+          fi
+          echo ""
+          echo "ℹ  New OpenCode sessions (via 'aidev') will use this provider"
+          return 0
+        else
+          echo "${RED}✗${NC} OpenCode Zen is not available"
+          echo "ℹ  Set OPENCODE_API_KEY in ~/.zshrc_envvars (not tracked by git)"
+          echo ""
+          continue
+        fi
+        ;;
+      r | R)
+        if $openrouter_valid; then
+          echo "openrouter" > "$preference_file"
+          echo ""
+          echo "${GREEN}✓${NC} Provider set to: OpenRouter"
+          echo ""
+          echo "Discovering latest Claude models..."
+          local sonnet_model=$(_discover_latest_model "openrouter" "sonnet")
+          local haiku_model=$(_discover_latest_model "openrouter" "haiku")
+          
+          if [[ -n "$sonnet_model" ]] && [[ -n "$haiku_model" ]]; then
+            echo "  • Complex tasks (Sonnet): $sonnet_model"
+            echo "  • Simple tasks (Haiku):   $haiku_model"
+          else
+            echo "  ${YELLOW}⚠${NC} Could not discover models, using defaults"
+          fi
+          echo ""
+          echo "ℹ  New OpenCode sessions (via 'aidev') will use this provider"
+          return 0
+        else
+          echo "${RED}✗${NC} OpenRouter is not available"
+          echo "ℹ  Set OPENROUTER_API_KEY in ~/.zshrc_envvars (not tracked by git)"
+          echo ""
+          continue
+        fi
+        ;;
+      q | Q | $'\e')
+        echo "✗ Cancelled"
+        return 0
+        ;;
+      *)
+        echo "${RED}✗${NC} Invalid choice. Please select a valid option."
+        echo ""
+        continue
+        ;;
+    esac
+  done
+}
+
+# Export AI_PROVIDER environment variable for use in scripts
+export AI_PROVIDER=$(_get_ai_provider)

@@ -1,0 +1,12 @@
+function _get_ai_provider() {
+  local preference_file="$HOME/.ai_provider_preference"
+  
+  # If preference file doesn't exist, default to GitHub Copilot
+  if [[ ! -f "$preference_file" ]]; then
+    echo "github-copilot"
+    return 0
+  fi
+  
+  # Read and return the preference
+  cat "$preference_file"
+}

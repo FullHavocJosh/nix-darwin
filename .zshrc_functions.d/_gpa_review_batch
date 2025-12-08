@@ -1,0 +1,101 @@
+function _gpa_review_batch() {
+  local batch_files_json="$1"
+  local batch_number="$2"
+  local total_batches="$3"
+  
+  # Convert JSON array to regular array
+  local batch_files=()
+  while IFS= read -r file; do
+    batch_files+=("$file")
+  done < <(echo "$batch_files_json" | jq -r '.[]')
+  
+  if [ ${#batch_files[@]} -eq 0 ]; then
+    echo "[]"
+    return 0
+  fi
+  
+  # Get diff for only these files
+  local batch_diff=""
+  for file in "${batch_files[@]}"; do
+    batch_diff="${batch_diff}$(git diff --cached -- "$file")\n"
+  done
+  
+  # Count lines in this batch
+  local batch_lines=$(echo -e "$batch_diff" | wc -l)
+  
+  # Check if any Terraform files are in this batch
+  local has_terraform=false
+  for file in "${batch_files[@]}"; do
+    if [[ "$file" == *.tf ]]; then
+      has_terraform=true
+      break
+    fi
+  done
+  
+  # Build review prompt
+  local review_prompt="Review the following staged git changes for CRITICAL ISSUES AND WARNINGS ONLY:
+
+🔴 **CRITICAL - Must Fix Before Commit:**
+1. **SECRETS & CREDENTIALS**: API keys, passwords, tokens, private keys, connection strings, AWS credentials, OAuth secrets, certificates
+2. **Bugs**: Syntax errors, runtime errors, null pointer dereferences, infinite loops
+3. **Security Vulnerabilities**: SQL injection, command injection, XSS, insecure crypto, path traversal
+4. **Data Loss**: Destructive operations without safeguards, missing transactions, race conditions
+
+🟡 **WARNINGS - Should Consider:**
+5. **Security Concerns**: Overly permissive permissions, missing input validation, unsafe eval, hardcoded IPs/domains
+6. **Logic Flaws**: Off-by-one errors, incorrect conditionals, missing edge cases
+7. **Breaking Changes**: API changes, removed functionality, incompatible updates"
+  
+  if [ "$has_terraform" = true ]; then
+    review_prompt="$review_prompt
+
+**TERRAFORM-SPECIFIC CRITICAL/WARNING CHECKS** (detected .tf files):
+🔴 **Critical**: Hardcoded secrets/keys, publicly exposed resources, destructive changes without lifecycle protection
+🟡 **Warnings**: Overly permissive IAM (wildcards in production), missing encryption, expensive resources without justification"
+  fi
+  
+  # Build full prompt
+  local full_prompt="${review_prompt}
+
+Batch ${batch_number} of ${total_batches} (${batch_lines} lines)
+
+Files in this batch:
+$(printf '%s\n' "${batch_files[@]}")
+
+Git diff:
+${batch_diff}
+
+**IMPORTANT INSTRUCTIONS:**
+- ONLY report 🔴 Critical issues and 🟡 Warnings
+- IGNORE minor suggestions, style preferences, and code quality opinions
+- Focus on things that will actually break, cause security issues, or have serious consequences
+- Output ONLY a JSON array of issues in this exact format:
+[
+  {
+    \"file\": \"path/to/file.ext\",
+    \"severity\": \"Critical\" or \"Warning\",
+    \"issue\": \"Brief issue description\",
+    \"recommendation\": \"Detailed fix recommendation\"
+  }
+]
+- If there are no critical/warning issues in this batch, return an empty array: []
+- Return ONLY valid JSON, nothing else."
+  
+  echo "  Batch $batch_number/$total_batches: ${#batch_files[@]} file(s), $batch_lines lines" >&2
+  
+  # Run AI review
+  local batch_result=$(echo "$full_prompt" | _run_ai_command "complex" 2>/dev/null)
+  
+  # Validate JSON and return
+  if echo "$batch_result" | jq empty 2>/dev/null; then
+    echo "$batch_result"
+  else
+    # If not valid JSON, try to extract JSON array from the response
+    local extracted_json=$(echo "$batch_result" | grep -o '\[.*\]' | head -1)
+    if echo "$extracted_json" | jq empty 2>/dev/null; then
+      echo "$extracted_json"
+    else
+      echo "[]"
+    fi
+  fi
+}

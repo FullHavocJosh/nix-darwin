@@ -1,0 +1,17 @@
+function _validate_github_copilot() {
+  # Check if GitHub Copilot is authenticated via OpenCode
+  if command -v opencode &>/dev/null; then
+    if opencode auth list 2>/dev/null | grep -q "GitHub Copilot"; then
+      return 0
+    fi
+  fi
+  
+  # Fallback: Check gh CLI authentication
+  if command -v gh &>/dev/null; then
+    if gh auth status &>/dev/null; then
+      return 0
+    fi
+  fi
+  
+  return 1
+}

@@ -1,0 +1,7 @@
+function _check_git_repo() {
+  if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    echo "✗ Error: Not in a git repository"
+    return 1
+  fi
+  return 0
+}

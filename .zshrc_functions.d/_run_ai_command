@@ -1,0 +1,11 @@
+function _run_ai_command() {
+  local task_type="${1:-complex}"
+  local model=$(_get_opencode_model "$task_type")
+  
+  # Read stdin into a variable
+  local prompt=$(cat)
+  
+  # Always use OpenCode (it supports all providers including GitHub Copilot)
+  # OpenCode run takes the prompt as a positional argument
+  opencode run --model "$model" "$prompt"
+}

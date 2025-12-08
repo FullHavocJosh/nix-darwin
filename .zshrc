@@ -20,7 +20,8 @@ fi
 [ -f ~/.zshrc_os_macos ] && source ~/.zshrc_os_macos
 [ -f ~/.zshrc_shell ] && source ~/.zshrc_shell
 [ -f ~/.zshrc_aliases ] && source ~/.zshrc_aliases
-[ -f ~/.zshrc_functions ] && source ~/.zshrc_functions
+[ -f ~/.zshrc_functions_ai ] && source ~/.zshrc_functions_ai
+[ -f ~/.zshrc_functions_git ] && source ~/.zshrc_functions_git
 
 # File descriptor limits fix for AWS MCP servers
 [ -f ~/.zshrc_ulimit ] && source ~/.zshrc_ulimit

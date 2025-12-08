@@ -1,0 +1,4 @@
+function aidev() {
+  local model=$(_get_opencode_model "complex")
+  opencode --model "$model" "$@"
+}

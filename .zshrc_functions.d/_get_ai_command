@@ -1,0 +1,4 @@
+function _get_ai_command() {
+  local task_type="${1:-complex}"
+  echo "_run_ai_command $task_type"
+}

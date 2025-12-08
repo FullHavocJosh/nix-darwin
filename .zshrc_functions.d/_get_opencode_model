@@ -1,0 +1,47 @@
+function _get_opencode_model() {
+  local task_type="${1:-complex}"
+  local provider=$(_get_ai_provider)
+  
+  # Try to discover the latest model dynamically
+  local model=""
+  
+  if [[ "$task_type" == "simple" ]]; then
+    model=$(_discover_latest_model "$provider" "haiku")
+  else
+    model=$(_discover_latest_model "$provider" "sonnet")
+  fi
+  
+  # If discovery succeeded, return the model
+  if [[ -n "$model" ]]; then
+    echo "$model"
+    return 0
+  fi
+  
+  # Fallback to hardcoded models if discovery fails
+  case $provider in
+    github-copilot)
+      if [[ "$task_type" == "simple" ]]; then
+        echo "github-copilot/claude-haiku-4.5"
+      else
+        echo "github-copilot/claude-sonnet-4.5"
+      fi
+      ;;
+    opencode)
+      if [[ "$task_type" == "simple" ]]; then
+        echo "opencode/claude-3-5-haiku"
+      else
+        echo "opencode/claude-sonnet-4.5"
+      fi
+      ;;
+    openrouter)
+      if [[ "$task_type" == "simple" ]]; then
+        echo "openrouter/anthropic/claude-3.5-haiku"
+      else
+        echo "openrouter/anthropic/claude-sonnet-4.5"
+      fi
+      ;;
+    *)
+      echo "github-copilot/claude-sonnet-4.5"  # Default fallback
+      ;;
+  esac
+}

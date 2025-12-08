@@ -1,0 +1,165 @@
+function _gpa_interactive_fix() {
+  local structured_issues="$1"
+  
+  # Validate JSON input
+  if ! echo "$structured_issues" | jq empty 2>/dev/null; then
+    echo "⚠ Invalid JSON structure for issues."
+    echo ""
+    echo "Options:"
+    echo "  [e] Edit all staged files manually"
+    echo "  [c] Continue to commit anyway"
+    echo "  [q] Quit and keep changes staged"
+    echo ""
+    echo -n "Your choice: "
+    read -r choice
+    
+    case "$choice" in
+      e | E)
+        local files_to_edit=()
+        while IFS= read -r file; do
+          files_to_edit+=("$file")
+        done < <(git diff --cached --name-only)
+        
+        if command -v nvim &>/dev/null; then
+          nvim "${files_to_edit[@]}"
+        else
+          echo "✗ No editor found."
+          return 1
+        fi
+        echo "✓ Files edited. Run 'gpa' again to review."
+        return 0
+        ;;
+      c | C)
+        gpc
+        return $?
+        ;;
+      *)
+        echo "ℹ Keeping changes staged."
+        return 0
+        ;;
+    esac
+  fi
+  
+  # Count issues
+  local issue_count=$(echo "$structured_issues" | jq 'length' 2>/dev/null)
+  
+  if [ "$issue_count" -eq 0 ] || [ -z "$issue_count" ]; then
+    echo "✓ No issues found. Proceeding to commit."
+    gpc
+    return $?
+  fi
+  
+  echo ""
+  echo "Found $issue_count issue(s) to address."
+  echo ""
+  
+  # Process each issue
+  local issue_index=0
+  while [ $issue_index -lt $issue_count ]; do
+    local issue=$(echo "$structured_issues" | jq -r ".[$issue_index]" 2>/dev/null)
+    local file=$(echo "$issue" | jq -r '.file' 2>/dev/null)
+    local severity=$(echo "$issue" | jq -r '.severity' 2>/dev/null)
+    local issue_desc=$(echo "$issue" | jq -r '.issue' 2>/dev/null)
+    local recommendation=$(echo "$issue" | jq -r '.recommendation' 2>/dev/null)
+    
+    echo "═══════════════════════════════════════════════════════════"
+    echo "Issue $((issue_index + 1)) of $issue_count"
+    echo "═══════════════════════════════════════════════════════════"
+    echo "File: $file"
+    echo "Severity: $severity"
+    echo "Issue: $issue_desc"
+    echo ""
+    echo "Recommendation:"
+    echo "$recommendation"
+    echo ""
+    echo "Options:"
+    echo "  [m] Manual fix - open tmux workspace with nvim + OpenCode"
+    echo "  [a] Auto-fix - let OpenCode fix it automatically"
+    echo "  [s] Skip this issue"
+    echo "  [q] Quit and proceed to commit"
+    echo ""
+    echo -n "Your choice: "
+    read -r choice
+    
+    case "$choice" in
+      m | M)
+        echo ""
+        _gpa_create_edit_workspace "$file" "$recommendation"
+        
+        # Wait for user to finish editing
+        echo ""
+        echo "═══════════════════════════════════════════════════════════"
+        echo "⏸  Waiting for you to finish editing..."
+        echo "═══════════════════════════════════════════════════════════"
+        echo ""
+        echo "When you're done editing in the new terminal window:"
+        echo "  1. Save your changes in nvim"
+        echo "  2. Close the terminal window (or exit tmux)"
+        echo "  3. Press Enter here to continue"
+        echo ""
+        echo -n "Press Enter when editing is complete: "
+        read -r
+        
+        # Re-stage the file
+        echo ""
+        echo "ℹ Re-staging file..."
+        git add "$file" 2>/dev/null && echo "  ✓ Re-staged: $file"
+        echo ""
+        echo "✓ Returning to issue list..."
+        echo ""
+        ;;
+      a | A)
+        _gpa_auto_fix "$file" "$recommendation"
+        echo ""
+        ;;
+      s | S)
+        echo "⊳ Skipping this issue"
+        echo ""
+        ;;
+      q | Q)
+        echo ""
+        echo "✓ Proceeding to commit with current changes..."
+        echo ""
+        gpc
+        return $?
+        ;;
+      *)
+        echo "✗ Invalid choice. Skipping this issue."
+        echo ""
+        ;;
+    esac
+    
+    ((issue_index++))
+  done
+  
+  # All issues processed
+  echo "═══════════════════════════════════════════════════════════"
+  echo "All issues processed!"
+  echo "═══════════════════════════════════════════════════════════"
+  echo ""
+  echo "Options:"
+  echo "  [c] Commit and push changes"
+  echo "  [r] Review again with 'gpa'"
+  echo "  [q] Quit and keep changes staged"
+  echo ""
+  echo -n "Your choice: "
+  read -r final_choice
+  
+  case "$final_choice" in
+    c | C)
+      echo ""
+      gpc
+      return $?
+      ;;
+    r | R)
+      echo ""
+      gpa
+      return $?
+      ;;
+    *)
+      echo "ℹ Keeping changes staged."
+      return 0
+      ;;
+  esac
+  
+}

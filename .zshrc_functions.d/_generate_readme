@@ -1,0 +1,19 @@
+function _generate_readme() {
+  local file_list=$(find . -maxdepth 1 -type f ! -name ".*" -exec basename {} \;)
+
+  # README generation needs full model (complex task)
+  cat <<EOF | _run_ai_command "complex" 2>/dev/null
+Generate a comprehensive README.md for a directory containing these files:
+
+$file_list
+
+The README should include:
+1. A clear description of the purpose of the files in this directory
+2. Simple usage examples showing the most basic use case
+3. Advanced/customized usage examples showing more complex scenarios
+4. Any prerequisites or dependencies
+5. Proper markdown formatting
+
+Return ONLY the README.md content, starting with a # heading.
+EOF
+}

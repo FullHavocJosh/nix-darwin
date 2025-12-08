@@ -1,0 +1,33 @@
+function _gpa_auto_fix() {
+  local file_path="$1"
+  local recommendation="$2"
+  local model=$(_get_opencode_model "complex")
+  
+  echo ""
+  echo "ℹ Starting OpenCode to automatically fix: $file_path"
+  echo ""
+  
+  # Use OpenCode to fix the file
+  opencode --model "$model" -p "Fix this file based on the following recommendation. Make the necessary changes to address the issue.
+
+File: $file_path
+
+Recommendation:
+$recommendation
+
+Please make the changes directly to the file."
+  
+  local exit_code=$?
+  
+  if [ $exit_code -eq 0 ]; then
+    # Re-stage the file after OpenCode makes changes
+    git add "$file_path"
+    echo ""
+    echo "✓ OpenCode completed. File re-staged."
+    return 0
+  else
+    echo ""
+    echo "⚠ OpenCode session ended. Check if changes were made."
+    return 1
+  fi
+}

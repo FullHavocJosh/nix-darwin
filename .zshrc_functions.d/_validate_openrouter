@@ -1,0 +1,22 @@
+function _validate_openrouter() {
+  # Check for OpenRouter API key in environment
+  if [[ -n "$OPENROUTER_API_KEY" ]]; then
+    return 0
+  fi
+  
+  # Check if key is in .zshrc_envvars (not tracked by git)
+  if [[ -f ~/.zshrc_envvars ]]; then
+    if grep -q "OPENROUTER_API_KEY" ~/.zshrc_envvars; then
+      return 0
+    fi
+  fi
+  
+  # Also check .zshrc_envvars_insecure (for non-sensitive configs, not tracked by git)
+  if [[ -f ~/.zshrc_envvars_insecure ]]; then
+    if grep -q "OPENROUTER_API_KEY" ~/.zshrc_envvars_insecure; then
+      return 0
+    fi
+  fi
+  
+  return 1
+}
