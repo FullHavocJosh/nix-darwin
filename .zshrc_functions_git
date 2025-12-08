@@ -12,24 +12,167 @@ function _check_git_repo() {
   return 0
 }
 
-# Helper function: Generate README.md content using AI
+# Helper function: Prompt user to update or create README.md at repo root
+function _gpa_readme_prompt() {
+  # Get git root directory
+  local git_root=$(git rev-parse --show-toplevel 2>/dev/null)
+  if [ -z "$git_root" ]; then
+    return 0  # Not in a git repo, skip silently
+  fi
+  
+  local readme_path="$git_root/README.md"
+  
+  echo ""
+  echo "═══════════════════════════════════════════════════════════"
+  
+  if [ -f "$readme_path" ]; then
+    echo "ℹ README.md exists at repository root"
+    echo "═══════════════════════════════════════════════════════════"
+    echo ""
+    echo "Would you like to update README.md based on your staged changes?"
+    echo "  [y] Yes - Update README.md with AI"
+    echo "  [n/Enter] No - Skip README update"
+    echo ""
+    echo -n "Your choice: "
+    
+    # Read single character
+    read -rsk1 choice
+    echo ""  # Move to new line
+    
+    case "$choice" in
+      y | Y)
+        echo ""
+        echo "ℹ Analyzing staged changes to update README.md..."
+        
+        local diff_output=$(git diff --cached)
+        local current_readme=$(cat "$readme_path")
+        
+        # Ask AI to update README
+        local readme_update=$(
+          cat <<EOF | _run_ai_direct "simple" 2>/dev/null
+Review these staged git changes and the current README.md. Update the README.md to reflect any significant changes.
+
+STAGED CHANGES:
+$diff_output
+
+CURRENT README.md:
+$current_readme
+
+Return the COMPLETE updated README.md content with:
+1. Updated descriptions reflecting the changes
+2. Updated or new usage examples if functionality changed
+3. Updated prerequisites or setup steps if needed
+4. Proper markdown formatting
+
+If NO significant updates are needed, return exactly: "NO_UPDATE_NEEDED"
+EOF
+        )
+        
+        if [ "$readme_update" = "NO_UPDATE_NEEDED" ]; then
+          echo "✓ README.md is already up to date"
+        elif [ -n "$readme_update" ]; then
+          echo "$readme_update" > "$readme_path"
+          echo "✓ README.md updated"
+          git add "$readme_path"
+          echo "  (README.md has been staged)"
+        else
+          echo "⚠ Failed to generate README.md update"
+        fi
+        ;;
+      $'\n' | "")
+        echo "ℹ Skipping README.md update"
+        ;;
+      *)
+        echo "ℹ Skipping README.md update"
+        ;;
+    esac
+  else
+    echo "ℹ No README.md found at repository root"
+    echo "═══════════════════════════════════════════════════════════"
+    echo ""
+    echo "Would you like to create a README.md for this repository?"
+    echo "  [y] Yes - Generate README.md with AI"
+    echo "  [n/Enter] No - Skip README creation"
+    echo ""
+    echo -n "Your choice: "
+    
+    # Read single character
+    read -rsk1 choice
+    echo ""  # Move to new line
+    
+    case "$choice" in
+      y | Y)
+        echo ""
+        echo "ℹ Generating README.md for repository..."
+        
+        local readme_content=$(_generate_readme)
+        
+        if [ -n "$readme_content" ]; then
+          echo "$readme_content" > "$readme_path"
+          echo "✓ README.md created at repository root"
+          git add "$readme_path"
+          echo "  (README.md has been staged)"
+        else
+          echo "⚠ Failed to generate README.md"
+        fi
+        ;;
+      $'\n' | "")
+        echo "ℹ Skipping README.md creation"
+        ;;
+      *)
+        echo "ℹ Skipping README.md creation"
+        ;;
+    esac
+  fi
+}
+
+# Helper function: Generate README.md content using AI for the git repository
 function _generate_readme() {
-  local file_list=$(find . -maxdepth 1 -type f ! -name ".*" -exec basename {} \;)
+  # Get git root directory
+  local git_root=$(git rev-parse --show-toplevel 2>/dev/null)
+  if [ -z "$git_root" ]; then
+    echo "Error: Not in a git repository" >&2
+    return 1
+  fi
+  
+  # Get repository structure (top-level files and directories)
+  local repo_structure=$(cd "$git_root" && find . -maxdepth 2 -type f ! -path '*/\.*' ! -name '.*' | head -50)
+  local directories=$(cd "$git_root" && find . -maxdepth 1 -type d ! -path '*/\.*' ! -name '.' | head -20)
+  
+  # Get git remote URL if available
+  local repo_url=$(git config --get remote.origin.url 2>/dev/null || echo "N/A")
+  
+  # Get recent commit messages for context
+  local recent_commits=$(git log --oneline -10 2>/dev/null || echo "N/A")
 
   # README generation can use simple model (structured markdown generation)
   cat <<EOF | _run_ai_direct "simple" 2>/dev/null
-Generate a comprehensive README.md for a directory containing these files:
+Generate a comprehensive README.md for this git repository. This is a human-readable guide for understanding and using this repository.
 
-$file_list
+REPOSITORY INFORMATION:
+Remote URL: $repo_url
 
-The README should include:
-1. A clear description of the purpose of the files in this directory
-2. Simple usage examples showing the most basic use case
-3. Advanced/customized usage examples showing more complex scenarios
-4. Any prerequisites or dependencies
-5. Proper markdown formatting
+TOP-LEVEL STRUCTURE:
+Directories:
+$directories
+
+Key Files (sample):
+$repo_structure
+
+RECENT ACTIVITY:
+$recent_commits
+
+REQUIREMENTS FOR README.md:
+1. Project Title and Brief Description (1-2 sentences about what this repo contains)
+2. Purpose/Overview (what problem does this solve or what does it provide)
+3. Key Components (describe main directories or file groups)
+4. Getting Started / Installation (if applicable)
+5. Usage Examples (how to use the main features)
+6. Prerequisites or Dependencies (if any)
+7. Proper markdown formatting with clear sections
 
 Return ONLY the README.md content, starting with a # heading.
+Make it informative but concise - users should understand the repo's purpose within 30 seconds of reading.
 EOF
 }
 
@@ -213,7 +356,10 @@ function _run_linters() {
       *.py)
         if $has_ruff; then
           local ruff_output=$(ruff check "$file" 2>&1)
-          if [ -n "$ruff_output" ]; then
+          local ruff_exit=$?
+          # ruff returns non-zero exit code when issues are found
+          # Don't check output text as "All checks passed!" is also output
+          if [ $ruff_exit -ne 0 ]; then
             lint_report="${lint_report}🟡 $file: ruff linting issues\n"
             lint_report="${lint_report}   $(echo "$ruff_output" | head -3 | sed 's/^/   /')\n"
             linting_issues=true
@@ -922,10 +1068,17 @@ function _gpa_interactive_fix() {
   local issue_index=0
   while [ $issue_index -lt $issue_count ]; do
     local issue=$(echo "$structured_issues" | jq -r ".[$issue_index]" 2>/dev/null)
-    local file=$(echo "$issue" | jq -r '.file' 2>/dev/null)
-    local severity=$(echo "$issue" | jq -r '.severity' 2>/dev/null)
-    local issue_desc=$(echo "$issue" | jq -r '.issue' 2>/dev/null)
-    local recommendation=$(echo "$issue" | jq -r '.recommendation' 2>/dev/null)
+    local file=$(echo "$issue" | jq -r '.file // empty' 2>/dev/null)
+    local severity=$(echo "$issue" | jq -r '.severity // empty' 2>/dev/null)
+    local issue_desc=$(echo "$issue" | jq -r '.issue // empty' 2>/dev/null)
+    local recommendation=$(echo "$issue" | jq -r '.recommendation // empty' 2>/dev/null)
+    
+    # Skip if any required field is missing
+    if [ -z "$file" ] || [ -z "$severity" ] || [ -z "$issue_desc" ] || [ -z "$recommendation" ]; then
+      echo "⚠ Skipping malformed issue entry at index $issue_index"
+      ((issue_index++))
+      continue
+    fi
     
     echo "═══════════════════════════════════════════════════════════"
     echo "Issue $((issue_index + 1)) of $issue_count"
@@ -1258,12 +1411,12 @@ function gpa() {
     else
       # If not Escape or Enter, it's the first character - continue reading the rest of the line
       local rest_of_line
+      echo "DEBUG: First char captured: '$selection'" >&2
       read -r rest_of_line
+      echo "DEBUG: Rest of line read: '$rest_of_line'" >&2
       selection="${selection}${rest_of_line}"
+      echo "DEBUG: Final selection: '$selection'" >&2
       echo ""  # Move to new line after input
-      
-      # Debug: Show what we got (remove this later)
-      echo "DEBUG: selection=[$selection]" >&2
       
       # Handle selection
       case "$selection" in
@@ -1283,15 +1436,29 @@ function gpa() {
           # Stage selected files
           local selected_files=()
           for num in $selection; do
+            # Debug output
+            echo "DEBUG: Processing selection number: $num" >&2
+            echo "DEBUG: Total files: ${#changed_files[@]}" >&2
+            echo "DEBUG: Regex match: $([[ "$num" =~ ^[0-9]+$ ]] && echo "YES" || echo "NO")" >&2
+            echo "DEBUG: Range check: num=$num, min=1, max=${#changed_files[@]}" >&2
+            
             if [[ "$num" =~ ^[0-9]+$ ]] && [ "$num" -ge 1 ] && [ "$num" -le "${#changed_files[@]}" ]; then
               # Note: zsh arrays are 1-indexed by default, so we use $num directly
               local selected_file="${changed_files[$num]}"
+              echo "DEBUG: Selected file at index $num: '$selected_file'" >&2
               if [ -n "$selected_file" ]; then
                 selected_files+=("$selected_file")
+                echo "DEBUG: Added to selected_files" >&2
+              else
+                echo "DEBUG: File was empty!" >&2
               fi
+            else
+              echo "DEBUG: Number $num failed validation" >&2
             fi
           done
 
+          echo "DEBUG: Total selected files: ${#selected_files[@]}" >&2
+          
           if [ ${#selected_files[@]} -eq 0 ]; then
             echo "✗ No valid files selected"
             return 1
@@ -1395,10 +1562,18 @@ function gpa() {
     if [ $review_status -eq 0 ]; then
       # Merge batch issues into all_issues
       if [ -n "$batch_issues" ] && echo "$batch_issues" | jq empty 2>/dev/null; then
-        local issue_count=$(echo "$batch_issues" | jq 'length')
-        if [ "$issue_count" -gt 0 ]; then
-          echo "  Found $issue_count issue(s) in this batch"
-          all_issues=$(echo "$all_issues" | jq --argjson batch "$batch_issues" '. + $batch')
+        # Filter out invalid/malformed issue objects
+        # Valid issues must have: file, severity, issue, recommendation fields
+        local valid_batch_issues=$(echo "$batch_issues" | jq '[.[] | select(type == "object" and has("file") and has("severity") and has("issue") and has("recommendation"))]' 2>/dev/null)
+        
+        if [ -n "$valid_batch_issues" ]; then
+          local issue_count=$(echo "$valid_batch_issues" | jq 'length')
+          if [ "$issue_count" -gt 0 ]; then
+            echo "  Found $issue_count issue(s) in this batch"
+            all_issues=$(echo "$all_issues" | jq --argjson batch "$valid_batch_issues" '. + $batch')
+          else
+            echo "  ✓ No issues found in this batch"
+          fi
         else
           echo "  ✓ No issues found in this batch"
         fi
@@ -1456,6 +1631,10 @@ function gpa() {
     else
       echo "✓ Code review complete - no critical issues or warnings found"
     fi
+    
+    # Prompt for README update/creation
+    _gpa_readme_prompt
+    
     echo ""
     echo "Options:"
     echo "  [Y/Enter] Commit and push - automatically runs 'gpc'"
@@ -1469,7 +1648,7 @@ function gpa() {
         echo ""
         echo "✓ Proceeding to commit and push..."
         echo ""
-        gpc
+        gpc --skip-readme
         return $?
         ;;
       *)
@@ -1483,8 +1662,8 @@ function gpa() {
     echo ""
     
     # Display a summary of issues by severity
-    local critical_count=$(echo "$all_issues" | jq '[.[] | select(.severity == "Critical")] | length')
-    local warning_count=$(echo "$all_issues" | jq '[.[] | select(.severity == "Warning")] | length')
+    local critical_count=$(echo "$all_issues" | jq '[.[] | select(type == "object" and .severity == "Critical")] | length' 2>/dev/null || echo "0")
+    local warning_count=$(echo "$all_issues" | jq '[.[] | select(type == "object" and .severity == "Warning")] | length' 2>/dev/null || echo "0")
     
     if [ "$critical_count" -gt 0 ]; then
       echo "  🔴 Critical: $critical_count"
