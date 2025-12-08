@@ -1411,11 +1411,8 @@ function gpa() {
     else
       # If not Escape or Enter, it's the first character - continue reading the rest of the line
       local rest_of_line
-      echo "DEBUG: First char captured: '$selection'" >&2
       read -r rest_of_line
-      echo "DEBUG: Rest of line read: '$rest_of_line'" >&2
       selection="${selection}${rest_of_line}"
-      echo "DEBUG: Final selection: '$selection'" >&2
       echo ""  # Move to new line after input
       
       # Handle selection
@@ -1436,29 +1433,15 @@ function gpa() {
           # Stage selected files
           local selected_files=()
           for num in $selection; do
-            # Debug output
-            echo "DEBUG: Processing selection number: $num" >&2
-            echo "DEBUG: Total files: ${#changed_files[@]}" >&2
-            echo "DEBUG: Regex match: $([[ "$num" =~ ^[0-9]+$ ]] && echo "YES" || echo "NO")" >&2
-            echo "DEBUG: Range check: num=$num, min=1, max=${#changed_files[@]}" >&2
-            
             if [[ "$num" =~ ^[0-9]+$ ]] && [ "$num" -ge 1 ] && [ "$num" -le "${#changed_files[@]}" ]; then
               # Note: zsh arrays are 1-indexed by default, so we use $num directly
               local selected_file="${changed_files[$num]}"
-              echo "DEBUG: Selected file at index $num: '$selected_file'" >&2
               if [ -n "$selected_file" ]; then
                 selected_files+=("$selected_file")
-                echo "DEBUG: Added to selected_files" >&2
-              else
-                echo "DEBUG: File was empty!" >&2
               fi
-            else
-              echo "DEBUG: Number $num failed validation" >&2
             fi
           done
 
-          echo "DEBUG: Total selected files: ${#selected_files[@]}" >&2
-          
           if [ ${#selected_files[@]} -eq 0 ]; then
             echo "✗ No valid files selected"
             return 1
