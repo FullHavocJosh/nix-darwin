@@ -1257,20 +1257,18 @@ function gpa() {
       echo -n "Enter numbers separated by spaces (e.g., '1 3 5'), 'a' for all, or ESC to exit: "
     fi
     
-    # Read input with support for Escape key - first character with echo
-    local first_char
-    read -rsk1 first_char
+    # Read the entire line with full readline support (backspace, arrow keys, etc.)
+    local selection
+    read -r selection
     
-    # Check for Escape key (ASCII 27 / ^[)
-    if [[ "$first_char" == $'\x1b' ]]; then
-      echo ""
+    # Check for Escape sequence at start (if user typed ESC + Enter)
+    if [[ "$selection" == $'\x1b'* ]]; then
       echo "✓ Cancelled"
       return 0
     fi
     
-    # Check for Enter key (newline)
-    if [[ "$first_char" == $'\n' ]] || [[ -z "$first_char" ]]; then
-      echo ""
+    # Check for empty input (just Enter)
+    if [[ -z "$selection" ]]; then
       # Empty input (Enter key) - handle immediately
       if [ "$staged_count" -gt 0 ]; then
         echo "✓ Continuing with $staged_count already-staged file(s)"
@@ -1281,14 +1279,6 @@ function gpa() {
         return 1
       fi
     else
-      # Echo the first character so user can see what they typed
-      echo -n "$first_char"
-      
-      # Read the rest of the line normally (with echo)
-      local rest_of_line
-      read -r rest_of_line
-      selection="${first_char}${rest_of_line}"
-      echo ""  # Move to new line after input
       
       # Handle selection
       case "$selection" in
