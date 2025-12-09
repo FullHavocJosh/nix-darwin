@@ -390,7 +390,6 @@ function aiselect() {
     echo "  • aidev                     → $opencode_model → Full Agent"
     echo "  • gpc (commit messages)     → $opencode_simple_model → Direct API"
     echo "  • gpa (code review)         → $opencode_model → Direct API"
-    echo "  • README generation         → $opencode_model → Direct API"
     echo ""
     echo "Note: Run 'aiselect' to change provider. Changes apply immediately"
     echo "      to all commands (no restart required)."

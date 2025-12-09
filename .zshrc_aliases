@@ -32,6 +32,7 @@ alias ssoswitch='function awsswitch() { export AWS_PROFILE="$1"; unset AWS_ACCES
 alias ssoexport='eval "$(aws configure export-credentials --profile $AWS_PROFILE --format env)"'
 
 alias gpr='gpr_func'
+alias gpa-clear-cache='_gpa_clear_cache'
 
 # AI Provider aliases
 alias aishow='aiselect --show'

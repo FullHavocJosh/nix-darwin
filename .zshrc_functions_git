@@ -12,169 +12,7 @@ function _check_git_repo() {
   return 0
 }
 
-# Helper function: Prompt user to update or create README.md at repo root
-function _gpa_readme_prompt() {
-  # Get git root directory
-  local git_root=$(git rev-parse --show-toplevel 2>/dev/null)
-  if [ -z "$git_root" ]; then
-    return 0  # Not in a git repo, skip silently
-  fi
-  
-  local readme_path="$git_root/README.md"
-  
-  echo ""
-  echo "═══════════════════════════════════════════════════════════"
-  
-  if [ -f "$readme_path" ]; then
-    echo "ℹ README.md exists at repository root"
-    echo "═══════════════════════════════════════════════════════════"
-    echo ""
-    echo "Would you like to update README.md based on your staged changes?"
-    echo "  [y] Yes - Update README.md with AI"
-    echo "  [n/Enter] No - Skip README update"
-    echo ""
-    echo -n "Your choice: "
-    
-    # Read single character
-    read -rsk1 choice
-    echo ""  # Move to new line
-    
-    case "$choice" in
-      y | Y)
-        echo ""
-        echo "ℹ Analyzing staged changes to update README.md..."
-        
-        local diff_output=$(git diff --cached)
-        local current_readme=$(cat "$readme_path")
-        
-        # Ask AI to update README
-        local readme_update=$(
-          cat <<EOF | _run_ai_direct "simple" 2>/dev/null
-Review these staged git changes and the current README.md. Update the README.md to reflect any significant changes.
 
-STAGED CHANGES:
-$diff_output
-
-CURRENT README.md:
-$current_readme
-
-Return the COMPLETE updated README.md content with:
-1. Updated descriptions reflecting the changes
-2. Updated or new usage examples if functionality changed
-3. Updated prerequisites or setup steps if needed
-4. Proper markdown formatting
-
-If NO significant updates are needed, return exactly: "NO_UPDATE_NEEDED"
-EOF
-        )
-        
-        if [ "$readme_update" = "NO_UPDATE_NEEDED" ]; then
-          echo "✓ README.md is already up to date"
-        elif [ -n "$readme_update" ]; then
-          echo "$readme_update" > "$readme_path"
-          echo "✓ README.md updated"
-          git add "$readme_path"
-          echo "  (README.md has been staged)"
-        else
-          echo "⚠ Failed to generate README.md update"
-        fi
-        ;;
-      $'\n' | "")
-        echo "ℹ Skipping README.md update"
-        ;;
-      *)
-        echo "ℹ Skipping README.md update"
-        ;;
-    esac
-  else
-    echo "ℹ No README.md found at repository root"
-    echo "═══════════════════════════════════════════════════════════"
-    echo ""
-    echo "Would you like to create a README.md for this repository?"
-    echo "  [y] Yes - Generate README.md with AI"
-    echo "  [n/Enter] No - Skip README creation"
-    echo ""
-    echo -n "Your choice: "
-    
-    # Read single character
-    read -rsk1 choice
-    echo ""  # Move to new line
-    
-    case "$choice" in
-      y | Y)
-        echo ""
-        echo "ℹ Generating README.md for repository..."
-        
-        local readme_content=$(_generate_readme)
-        
-        if [ -n "$readme_content" ]; then
-          echo "$readme_content" > "$readme_path"
-          echo "✓ README.md created at repository root"
-          git add "$readme_path"
-          echo "  (README.md has been staged)"
-        else
-          echo "⚠ Failed to generate README.md"
-        fi
-        ;;
-      $'\n' | "")
-        echo "ℹ Skipping README.md creation"
-        ;;
-      *)
-        echo "ℹ Skipping README.md creation"
-        ;;
-    esac
-  fi
-}
-
-# Helper function: Generate README.md content using AI for the git repository
-function _generate_readme() {
-  # Get git root directory
-  local git_root=$(git rev-parse --show-toplevel 2>/dev/null)
-  if [ -z "$git_root" ]; then
-    echo "Error: Not in a git repository" >&2
-    return 1
-  fi
-  
-  # Get repository structure (top-level files and directories)
-  local repo_structure=$(cd "$git_root" && find . -maxdepth 2 -type f ! -path '*/\.*' ! -name '.*' | head -50)
-  local directories=$(cd "$git_root" && find . -maxdepth 1 -type d ! -path '*/\.*' ! -name '.' | head -20)
-  
-  # Get git remote URL if available
-  local repo_url=$(git config --get remote.origin.url 2>/dev/null || echo "N/A")
-  
-  # Get recent commit messages for context
-  local recent_commits=$(git log --oneline -10 2>/dev/null || echo "N/A")
-
-  # README generation can use simple model (structured markdown generation)
-  cat <<EOF | _run_ai_direct "simple" 2>/dev/null
-Generate a comprehensive README.md for this git repository. This is a human-readable guide for understanding and using this repository.
-
-REPOSITORY INFORMATION:
-Remote URL: $repo_url
-
-TOP-LEVEL STRUCTURE:
-Directories:
-$directories
-
-Key Files (sample):
-$repo_structure
-
-RECENT ACTIVITY:
-$recent_commits
-
-REQUIREMENTS FOR README.md:
-1. Project Title and Brief Description (1-2 sentences about what this repo contains)
-2. Purpose/Overview (what problem does this solve or what does it provide)
-3. Key Components (describe main directories or file groups)
-4. Getting Started / Installation (if applicable)
-5. Usage Examples (how to use the main features)
-6. Prerequisites or Dependencies (if any)
-7. Proper markdown formatting with clear sections
-
-Return ONLY the README.md content, starting with a # heading.
-Make it informative but concise - users should understand the repo's purpose within 30 seconds of reading.
-EOF
-}
 
 # AWS credentials switcher
 function asc() {
@@ -643,73 +481,6 @@ function gpc() {
   # Validate git repository
   _check_git_repo || return 1
 
-  # Parse arguments
-  local skip_readme=false
-  if [ "$1" = "--skip-readme" ]; then
-    skip_readme=true
-    echo "ℹ Skipping README generation"
-  fi
-
-  # Check if there are files in current directory (not subdirectories)
-  local files_in_dir=$(find . -maxdepth 1 -type f ! -name "README.md" ! -name ".*" | wc -l)
-
-  if [ "$skip_readme" = false ] && [ "$files_in_dir" -gt 0 ]; then
-    if [ ! -f "README.md" ]; then
-      echo "ℹ No README.md found. Generating one with AI..."
-
-      # Generate README.md using helper function
-      local readme_content=$(_generate_readme)
-
-      if [ -n "$readme_content" ]; then
-        echo "$readme_content" >README.md
-        echo "✓ README.md created"
-        git add README.md
-      else
-        echo "⚠ Failed to generate README.md"
-      fi
-    else
-      # README.md exists, check if staged changes require README update
-      if ! git diff --cached --quiet; then
-        echo "ℹ Checking if README.md needs updates based on staged changes..."
-
-        local diff_output=$(git diff --cached)
-        local staged_files=$(git diff --cached --name-only)
-
-        # Read current README
-        local current_readme=$(cat README.md)
-
-        # Ask AI if README needs updating
-        # README update check can use simple model (yes/no decision + text generation)
-        local readme_update=$(
-          cat <<EOF | _run_ai_direct "simple" 2>/dev/null
-Review these staged git changes and the current README.md. Determine if the README.md needs to be updated.
-
-STAGED CHANGES:
-$diff_output
-
-CURRENT README.md:
-$current_readme
-
-If updates are needed, return the COMPLETE updated README.md content with:
-1. Updated description reflecting the changes
-2. Updated or new usage examples (both simple and advanced)
-3. Proper markdown formatting
-
-If NO updates are needed, return exactly: "NO_UPDATE_NEEDED"
-EOF
-        )
-
-        if [ "$readme_update" != "NO_UPDATE_NEEDED" ] && [ -n "$readme_update" ]; then
-          echo "$readme_update" >README.md
-          echo "✓ README.md updated based on staged changes"
-          git add README.md
-        else
-          echo "✓ README.md is up to date"
-        fi
-      fi
-    fi
-  fi
-
   # Check if there are staged changes
   if ! git diff --cached --quiet; then
     echo ""
@@ -845,9 +616,72 @@ Please make the changes directly to the file."
   fi
 }
 
+# Helper function: Get hash of file's staged content
+# Usage: _gpa_get_file_hash <file_path>
+function _gpa_get_file_hash() {
+  local file="$1"
+  # Hash the staged content of the file (not the file itself)
+  git diff --cached -- "$file" | shasum -a 256 | cut -d' ' -f1
+}
+
+# Helper function: Check if a file has been reviewed and hasn't changed
+# Usage: _gpa_is_file_reviewed <file_path>
+function _gpa_is_file_reviewed() {
+  local file="$1"
+  local git_root=$(git rev-parse --show-toplevel 2>/dev/null)
+  local cache_file="$git_root/.git/gpa_review_cache"
+  
+  if [ ! -f "$cache_file" ]; then
+    return 1  # No cache file, file not reviewed
+  fi
+  
+  local current_hash=$(_gpa_get_file_hash "$file")
+  
+  # Check if this file+hash exists in cache
+  if grep -q "^${file}:${current_hash}$" "$cache_file" 2>/dev/null; then
+    return 0  # File reviewed and unchanged
+  fi
+  
+  return 1  # File not reviewed or changed
+}
+
+# Helper function: Mark a file as reviewed
+# Usage: _gpa_mark_file_reviewed <file_path>
+function _gpa_mark_file_reviewed() {
+  local file="$1"
+  local git_root=$(git rev-parse --show-toplevel 2>/dev/null)
+  local cache_file="$git_root/.git/gpa_review_cache"
+  
+  local current_hash=$(_gpa_get_file_hash "$file")
+  
+  # Remove any old entries for this file
+  if [ -f "$cache_file" ]; then
+    grep -v "^${file}:" "$cache_file" > "${cache_file}.tmp" 2>/dev/null || touch "${cache_file}.tmp"
+    mv "${cache_file}.tmp" "$cache_file"
+  fi
+  
+  # Add new entry
+  echo "${file}:${current_hash}" >> "$cache_file"
+}
+
+# Helper function: Clear review cache
+# Usage: _gpa_clear_cache
+function _gpa_clear_cache() {
+  local git_root=$(git rev-parse --show-toplevel 2>/dev/null)
+  local cache_file="$git_root/.git/gpa_review_cache"
+  
+  if [ -f "$cache_file" ]; then
+    rm -f "$cache_file"
+    echo "✓ Review cache cleared"
+  else
+    echo "ℹ No review cache to clear"
+  fi
+}
+
 # Helper function: Split staged files into batches for AI review
 # Returns batches as a JSON array where each batch is an array of file paths
 # Batches are sized to keep diff output around 300 lines per batch
+# Skips files that have been reviewed and haven't changed
 # Usage: _gpa_create_batches
 function _gpa_create_batches() {
   local target_lines=300
@@ -857,9 +691,25 @@ function _gpa_create_batches() {
   
   # Get all staged files
   local staged_files=()
+  local skipped_files=()
+  
   while IFS= read -r file; do
-    staged_files+=("$file")
+    # Check if file was already reviewed and hasn't changed
+    if _gpa_is_file_reviewed "$file"; then
+      skipped_files+=("$file")
+    else
+      staged_files+=("$file")
+    fi
   done < <(git diff --cached --name-only)
+  
+  # Show skipped files info
+  if [ ${#skipped_files[@]} -gt 0 ]; then
+    echo "ℹ Skipping ${#skipped_files[@]} previously reviewed file(s) with no changes:"
+    for file in "${skipped_files[@]}"; do
+      echo "  ✓ $file"
+    done
+    echo ""
+  fi
   
   if [ ${#staged_files[@]} -eq 0 ]; then
     echo "[]"
@@ -1136,10 +986,10 @@ function _gpa_interactive_fix() {
         ;;
       q | Q)
         echo ""
-        echo "✓ Proceeding to commit with current changes..."
+        echo "ℹ Skipping remaining issues"
         echo ""
-        gpc
-        return $?
+        # Jump to the final prompt
+        break
         ;;
       *)
         echo "✗ Invalid choice. Skipping this issue."
@@ -1150,21 +1000,25 @@ function _gpa_interactive_fix() {
     ((issue_index++))
   done
   
-  # All issues processed
+  # All issues processed (or user quit early)
   echo "═══════════════════════════════════════════════════════════"
-  echo "All issues processed!"
+  if [ $issue_index -ge $issue_count ]; then
+    echo "All issues processed!"
+  else
+    echo "Issue review session ended"
+  fi
   echo "═══════════════════════════════════════════════════════════"
   echo ""
   echo "Options:"
-  echo "  [c] Commit and push changes"
+  echo "  [Y/Enter] Commit and push changes (gpc)"
   echo "  [r] Review again with 'gpa'"
-  echo "  [q] Quit and keep changes staged"
+  echo "  [n] Cancel - keep staged"
   echo ""
   echo -n "Your choice: "
   read -r final_choice
   
   case "$final_choice" in
-    c | C)
+    y | Y | "")
       echo ""
       gpc
       return $?
@@ -1324,6 +1178,7 @@ function gpa() {
   local changed_files=()
   local file_status=()
   local display_files=()  # Files as shown by git status (for display)
+  local auto_excluded_files=()  # Files automatically excluded
   
   while IFS= read -r line; do
     # Parse git status --short format: XY filename
@@ -1334,6 +1189,13 @@ function gpa() {
     # Only include unstaged changes (status code in second position)
     # Check for: modified (M), deleted (D), or untracked (??)
     if [[ "$git_status" == " M" || "$git_status" == " D" || "$git_status" == "??" ]]; then
+      # Check if file should be auto-excluded
+      local file_basename=$(basename "$file")
+      if [[ "$file_basename" == ".terraform.lock.hcl" ]]; then
+        auto_excluded_files+=("$file")
+        continue
+      fi
+      
       # Convert path relative to current dir to path relative to git root
       local file_from_root
       if [[ -n "$relative_to_root" ]]; then
@@ -1347,6 +1209,15 @@ function gpa() {
       display_files+=("$file")  # Keep original for display
     fi
   done < <(git status --short)
+  
+  # Show auto-excluded files if any
+  if [ ${#auto_excluded_files[@]} -gt 0 ]; then
+    echo "ℹ Auto-excluded ${#auto_excluded_files[@]} file(s):"
+    for file in "${auto_excluded_files[@]}"; do
+      echo "  ⊝ $file"
+    done
+    echo ""
+  fi
 
   # Check if there are already staged changes
   local staged_count=$(git diff --cached --name-only | wc -l | tr -d ' ')
@@ -1386,18 +1257,19 @@ function gpa() {
       echo -n "Enter numbers separated by spaces (e.g., '1 3 5'), 'a' for all, or ESC to exit: "
     fi
     
-    # Read input with support for Escape key
-    read -rsk1 selection
+    # Read input with support for Escape key - first character with echo
+    local first_char
+    read -rsk1 first_char
     
     # Check for Escape key (ASCII 27 / ^[)
-    if [[ "$selection" == $'\x1b' ]]; then
+    if [[ "$first_char" == $'\x1b' ]]; then
       echo ""
       echo "✓ Cancelled"
       return 0
     fi
     
     # Check for Enter key (newline)
-    if [[ "$selection" == $'\n' ]] || [[ -z "$selection" ]]; then
+    if [[ "$first_char" == $'\n' ]] || [[ -z "$first_char" ]]; then
       echo ""
       # Empty input (Enter key) - handle immediately
       if [ "$staged_count" -gt 0 ]; then
@@ -1409,10 +1281,13 @@ function gpa() {
         return 1
       fi
     else
-      # If not Escape or Enter, it's the first character - continue reading the rest of the line
+      # Echo the first character so user can see what they typed
+      echo -n "$first_char"
+      
+      # Read the rest of the line normally (with echo)
       local rest_of_line
       read -r rest_of_line
-      selection="${selection}${rest_of_line}"
+      selection="${first_char}${rest_of_line}"
       echo ""  # Move to new line after input
       
       # Handle selection
@@ -1423,7 +1298,10 @@ function gpa() {
           ;;
         a | A)
           # Stage all files - run git add from repo root to handle relative paths correctly
-          echo "ℹ Staging all ${#changed_files[@]} file(s)..."
+          echo "ℹ Staging all ${#changed_files[@]} file(s)"
+          if [ ${#auto_excluded_files[@]} -gt 0 ]; then
+            echo "  (excluding ${#auto_excluded_files[@]} auto-excluded file(s))"
+          fi
           for file in "${changed_files[@]}"; do
             git -C "$git_root" add "$file" 2>/dev/null
           done
@@ -1513,8 +1391,37 @@ function gpa() {
   local batch_count=$(echo "$batches" | jq 'length')
   
   if [ "$batch_count" -eq 0 ]; then
-    echo "⚠ No files to review"
-    return 0
+    echo ""
+    echo "✓ All staged files have been previously reviewed with no changes"
+    echo ""
+    echo "Options:"
+    echo "  [Y/Enter] Proceed to commit and push (gpc)"
+    echo "  [r] Re-review all files (clear cache)"
+    echo "  [n] Cancel - keep staged"
+    echo ""
+    echo -n "Your choice: "
+    read -r skip_choice
+    
+    case "$skip_choice" in
+      y | Y | "")
+        echo ""
+        gpc
+        return $?
+        ;;
+      r | R)
+        echo ""
+        _gpa_clear_cache
+        echo ""
+        echo "Re-running gpa to review all files..."
+        echo ""
+        gpa
+        return $?
+        ;;
+      *)
+        echo "ℹ Keeping changes staged."
+        return 0
+        ;;
+    esac
   fi
   
   local total_files=$(git diff --cached --name-only | wc -l)
@@ -1556,9 +1463,27 @@ function gpa() {
             all_issues=$(echo "$all_issues" | jq --argjson batch "$valid_batch_issues" '. + $batch')
           else
             echo "  ✓ No issues found in this batch"
+            # Mark all files in this batch as reviewed (no issues found)
+            local batch_files=()
+            while IFS= read -r file; do
+              batch_files+=("$file")
+            done < <(echo "$batch" | jq -r '.[]')
+            
+            for file in "${batch_files[@]}"; do
+              _gpa_mark_file_reviewed "$file"
+            done
           fi
         else
           echo "  ✓ No issues found in this batch"
+          # Mark all files in this batch as reviewed (no issues found)
+          local batch_files=()
+          while IFS= read -r file; do
+            batch_files+=("$file")
+          done < <(echo "$batch" | jq -r '.[]')
+          
+          for file in "${batch_files[@]}"; do
+            _gpa_mark_file_reviewed "$file"
+          done
         fi
       else
         echo "  ⚠ Batch review returned invalid JSON"
@@ -1615,9 +1540,6 @@ function gpa() {
       echo "✓ Code review complete - no critical issues or warnings found"
     fi
     
-    # Prompt for README update/creation
-    _gpa_readme_prompt
-    
     echo ""
     echo "Options:"
     echo "  [Y/Enter] Commit and push - automatically runs 'gpc'"
@@ -1631,7 +1553,7 @@ function gpa() {
         echo ""
         echo "✓ Proceeding to commit and push..."
         echo ""
-        gpc --skip-readme
+        gpc
         return $?
         ;;
       *)
@@ -1669,27 +1591,6 @@ function gpr_func() {
   # Validate git repository
   _check_git_repo || return 1
 
-  # Check if there are files in current directory (not subdirectories) and no README.md
-  local files_in_dir=$(find . -maxdepth 1 -type f ! -name "README.md" ! -name ".*" | wc -l)
-
-  if [ "$files_in_dir" -gt 0 ] && [ ! -f "README.md" ]; then
-    echo "ℹ No README.md found. Generating one with AI..."
-
-    # Generate README.md using helper function
-    local readme_content=$(_generate_readme)
-
-    if [ -n "$readme_content" ]; then
-      echo "$readme_content" >README.md
-      echo "✓ README.md created"
-      git add README.md
-      git commit -m "docs: Add README.md"
-      echo ""
-    else
-      echo "⚠ Failed to generate README.md"
-    fi
-  fi
-
-  # Original gpr functionality
   echo "Select type:"
   echo "  1) feat"
   echo "  2) fix"

@@ -113,3 +113,5 @@ stow-uninstall-local-ignore
 # Ignore AWS VPN configs
 /.config/AWS VPN Client*
 /.config/AWSVPNCLient*
+# GPA code review cache (stored in .git directory)
+.git/gpa_review_cache
