@@ -488,14 +488,53 @@ function gpc() {
 
     # Get the diff of staged changes
     local diff_output=$(git diff --cached)
+    
+    # Debug: Show diff size
+    local diff_lines=$(echo "$diff_output" | wc -l | tr -d ' ')
+    local diff_chars=$(echo "$diff_output" | wc -c | tr -d ' ')
+    echo "  Diff size: $diff_lines lines, $diff_chars characters"
 
     # Use AI to generate commit message
     # Commit messages can use fast model (simple task)
-    local commit_msg=$(echo "Review the following git diff and generate a concise, single-sentence commit message that describes the changes. The message should be in imperative mood (e.g., 'Add feature' not 'Added feature'). Return ONLY the commit message, nothing else.\n\n$diff_output" | _run_ai_direct "simple" 2>/dev/null | tail -1)
+    local ai_output=$(echo "Review the following git diff and generate a concise, single-sentence commit message that describes the changes. The message should be in imperative mood (e.g., 'Add feature' not 'Added feature'). Return ONLY the commit message, nothing else.\n\n$diff_output" | _run_ai_direct "simple" 2>&1)
+    local ai_exit=$?
+    
+    # Check if AI command succeeded
+    if [ $ai_exit -ne 0 ]; then
+      echo "✗ Error: AI command failed (exit code: $ai_exit)"
+      echo ""
+      echo "Full output:"
+      echo "$ai_output"
+      return 1
+    fi
+    
+    # Check if output contains error messages (case-insensitive)
+    if echo "$ai_output" | grep -qi "^Error:"; then
+      echo "✗ Error: AI command returned error"
+      echo ""
+      echo "Full output:"
+      echo "$ai_output"
+      return 1
+    fi
+    
+    # Extract last non-empty line as commit message
+    local commit_msg=$(echo "$ai_output" | grep -v '^$' | tail -1)
 
     # Check if we got a valid response
     if [ -z "$commit_msg" ]; then
-      echo "✗ Error: Failed to generate commit message"
+      echo "✗ Error: Failed to generate commit message (empty response)"
+      echo ""
+      echo "Full AI output:"
+      echo "$ai_output"
+      return 1
+    fi
+    
+    # Final check if response looks like an error message
+    if [[ "$commit_msg" == Error:* ]] || [[ "$commit_msg" == *"failed"* ]] || [[ "$commit_msg" == Debug:* ]]; then
+      echo "✗ Error: Failed to generate commit message (error in response)"
+      echo ""
+      echo "Full AI output:"
+      echo "$ai_output"
       return 1
     fi
 
@@ -616,13 +655,56 @@ Please make the changes directly to the file."
   fi
 }
 
-# Helper function: Get hash of file's staged content
-# Usage: _gpa_get_file_hash <file_path>
-function _gpa_get_file_hash() {
-  local file="$1"
-  # Hash the staged content of the file (not the file itself)
-  git diff --cached -- "$file" | shasum -a 256 | cut -d' ' -f1
-}
+# DISABLED: Review caching functions (not reliable, disabled for now)
+# 
+# # Helper function: Get hash of file's staged content
+# # Usage: _gpa_get_file_hash <file_path>
+# function _gpa_get_file_hash() {
+#   local file="$1"
+#   # Hash the staged content of the file (not the file itself)
+#   git diff --cached -- "$file" | shasum -a 256 | cut -d' ' -f1
+# }
+# 
+# # Helper function: Check if a file has been reviewed and hasn't changed
+# # Usage: _gpa_is_file_reviewed <file_path>
+# function _gpa_is_file_reviewed() {
+#   local file="$1"
+#   local git_root=$(git rev-parse --show-toplevel 2>/dev/null)
+#   local cache_file="$git_root/.git/gpa_review_cache"
+#   
+#   if [ ! -f "$cache_file" ]; then
+#     return 1  # No cache file, file not reviewed
+#   fi
+#   
+#   local current_hash=$(_gpa_get_file_hash "$file")
+#   
+#   # Check if this file+hash exists in cache
+#   if grep -q "^${file}:${current_hash}$" "$cache_file" 2>/dev/null; then
+#     return 0  # File reviewed and unchanged
+#   fi
+#   
+#   return 1  # File not reviewed or changed
+# }
+# 
+# # Helper function: Mark a file as reviewed
+# # Usage: _gpa_mark_file_reviewed <file_path>
+# function _gpa_mark_file_reviewed() {
+#   local file="$1"
+#   local git_root=$(git rev-parse --show-toplevel 2>/dev/null)
+#   local cache_file="$git_root/.git/gpa_review_cache"
+#   
+#   local current_hash=$(_gpa_get_file_hash "$file")
+#   
+#   # Create cache file if it doesn't exist
+#   touch "$cache_file"
+#   
+#   # Remove any existing entries for this file (in case hash changed)
+#   grep -v "^${file}:" "$cache_file" > "${cache_file}.tmp" 2>/dev/null || true
+#   mv "${cache_file}.tmp" "$cache_file"
+#   
+#   # Add new entry
+#   echo "${file}:${current_hash}" >> "$cache_file"
+# }
 
 # Helper function: Check if a file has been reviewed and hasn't changed
 # Usage: _gpa_is_file_reviewed <file_path>
@@ -681,7 +763,6 @@ function _gpa_clear_cache() {
 # Helper function: Split staged files into batches for AI review
 # Returns batches as a JSON array where each batch is an array of file paths
 # Batches are sized to keep diff output around 300 lines per batch
-# Skips files that have been reviewed and haven't changed
 # Usage: _gpa_create_batches
 function _gpa_create_batches() {
   local target_lines=300
@@ -691,25 +772,10 @@ function _gpa_create_batches() {
   
   # Get all staged files
   local staged_files=()
-  local skipped_files=()
   
   while IFS= read -r file; do
-    # Check if file was already reviewed and hasn't changed
-    if _gpa_is_file_reviewed "$file"; then
-      skipped_files+=("$file")
-    else
-      staged_files+=("$file")
-    fi
+    staged_files+=("$file")
   done < <(git diff --cached --name-only)
-  
-  # Show skipped files info
-  if [ ${#skipped_files[@]} -gt 0 ]; then
-    echo "ℹ Skipping ${#skipped_files[@]} previously reviewed file(s) with no changes:"
-    for file in "${skipped_files[@]}"; do
-      echo "  ✓ $file"
-    done
-    echo ""
-  fi
   
   if [ ${#staged_files[@]} -eq 0 ]; then
     echo "[]"
@@ -1453,27 +1519,10 @@ function gpa() {
             all_issues=$(echo "$all_issues" | jq --argjson batch "$valid_batch_issues" '. + $batch')
           else
             echo "  ✓ No issues found in this batch"
-            # Mark all files in this batch as reviewed (no issues found)
-            local batch_files=()
-            while IFS= read -r file; do
-              batch_files+=("$file")
-            done < <(echo "$batch" | jq -r '.[]')
-            
-            for file in "${batch_files[@]}"; do
-              _gpa_mark_file_reviewed "$file"
-            done
           fi
         else
           echo "  ✓ No issues found in this batch"
-          # Mark all files in this batch as reviewed (no issues found)
-          local batch_files=()
-          while IFS= read -r file; do
-            batch_files+=("$file")
-          done < <(echo "$batch" | jq -r '.[]')
-          
-          for file in "${batch_files[@]}"; do
-            _gpa_mark_file_reviewed "$file"
-          done
+          # No issues found - continue
         fi
       else
         echo "  ⚠ Batch review returned invalid JSON"
