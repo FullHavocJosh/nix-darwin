@@ -16,6 +16,23 @@
     osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/havoc/.wallpapers/wallhaven-2yxj8m.jpg"'
   '';
 
+  # Configure Ollama service to listen on all interfaces
+  launchd.user.agents.ollama = {
+    serviceConfig = {
+      ProgramArguments = [
+        "/Applications/Ollama.app/Contents/Resources/ollama"
+        "serve"
+      ];
+      EnvironmentVariables = {
+        OLLAMA_HOST = "0.0.0.0:11434";
+      };
+      KeepAlive = true;
+      RunAtLoad = true;
+      StandardOutPath = "/tmp/ollama.log";
+      StandardErrorPath = "/tmp/ollama.error.log";
+    };
+  };
+
   # System Settings for macOS
   # Documentation at: mynixos.com and look for nix-services
   system.defaults = {
