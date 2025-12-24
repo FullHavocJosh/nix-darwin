@@ -41,6 +41,7 @@
       "graphviz"
       "hadolint"
       "jq"
+      "lazygit"
       "lua-language-server"
       "luarocks"
       "mas"
