@@ -1,0 +1,118 @@
+{
+  "_id": "vGY0kv9TP",
+  "name": "Convert FLAC to MP3 + Copy Existing MP3s",
+  "description": "Convert FLAC to 320kbps MP3 for iPod, copy existing MP3s, preserve originals",
+  "priority": 0,
+  "tags": "audio,flac,mp3,ipod",
+  "flowPlugins": [
+    {
+      "name": "Input File",
+      "sourceRepo": "Community",
+      "pluginName": "inputFile",
+      "version": "1.0.0",
+      "inputsDB": {},
+      "fpEnabled": true,
+      "id": "input_1",
+      "position": {
+        "x": 100,
+        "y": 200
+      }
+    },
+    {
+      "name": "Check if FLAC",
+      "sourceRepo": "Community",
+      "pluginName": "checkFlowVariable",
+      "version": "1.0.0",
+      "inputsDB": {
+        "variable": "file.container",
+        "condition": "===",
+        "value": "flac"
+      },
+      "fpEnabled": true,
+      "id": "check_flac",
+      "position": {
+        "x": 300,
+        "y": 150
+      }
+    },
+    {
+      "name": "Check if MP3",
+      "sourceRepo": "Community",
+      "pluginName": "checkFlowVariable",
+      "version": "1.0.0",
+      "inputsDB": {
+        "variable": "file.container",
+        "condition": "===",
+        "value": "mp3"
+      },
+      "fpEnabled": true,
+      "id": "check_mp3",
+      "position": {
+        "x": 300,
+        "y": 300
+      }
+    },
+    {
+      "name": "Transcode FLAC to MP3 320kbps",
+      "sourceRepo": "Community",
+      "pluginName": "ffmpegCommandExecute",
+      "version": "1.0.0",
+      "inputsDB": {
+        "container": ".mp3",
+        "ffmpegCommandArgs": "-c:a libmp3lame -b:a 320k -ar 44100 -map_metadata 0 -id3v2_version 3"
+      },
+      "fpEnabled": true,
+      "id": "transcode_flac",
+      "position": {
+        "x": 500,
+        "y": 150
+      }
+    },
+    {
+      "name": "Copy MP3 (Stream Copy)",
+      "sourceRepo": "Community",
+      "pluginName": "ffmpegCommandExecute",
+      "version": "1.0.0",
+      "inputsDB": {
+        "container": ".mp3",
+        "ffmpegCommandArgs": "-c copy -map_metadata 0"
+      },
+      "fpEnabled": true,
+      "id": "copy_mp3",
+      "position": {
+        "x": 500,
+        "y": 300
+      }
+    }
+  ],
+  "flowEdges": [
+    {
+      "source": "input_1",
+      "sourceHandle": "1",
+      "target": "check_flac",
+      "targetHandle": null,
+      "id": "edge1"
+    },
+    {
+      "source": "input_1",
+      "sourceHandle": "1",
+      "target": "check_mp3",
+      "targetHandle": null,
+      "id": "edge2"
+    },
+    {
+      "source": "check_flac",
+      "sourceHandle": "1",
+      "target": "transcode_flac",
+      "targetHandle": null,
+      "id": "edge3"
+    },
+    {
+      "source": "check_mp3",
+      "sourceHandle": "1",
+      "target": "copy_mp3",
+      "targetHandle": null,
+      "id": "edge4"
+    }
+  ]
+}
