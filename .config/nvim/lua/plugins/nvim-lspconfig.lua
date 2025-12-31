@@ -5,7 +5,7 @@ return {
       "saghen/blink.cmp",
       "mason-org/mason-lspconfig.nvim",
       "glepnir/lspsaga.nvim",
-      "b0o/schemastore.nvim",
+      -- schemastore.nvim is already provided by lazyvim.plugins.extras.lang.json
     },
     config = function()
       local capabilities = require("blink.cmp").get_lsp_capabilities()
