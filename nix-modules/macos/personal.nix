@@ -61,7 +61,7 @@
       "curseforge"
       "discord"
       "obsidian"
-      "ollama"
+      "ollama-app"
       "plex"
       "plexamp"
       "proton-drive"
