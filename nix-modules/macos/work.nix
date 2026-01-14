@@ -1,4 +1,5 @@
-{ pkgs, config, ... }: {
+{ pkgs, config, ... }:
+{
 
   #######################################
   ### MacOS Settings for Work Devices ###
@@ -23,10 +24,7 @@
     dock.persistent-apps = [
       "/Applications/Alacritty.app"
       "/Applications/Zen.app"
-      "/Applications/Remote Desktop Manager Free.app"
       "/Applications/Slack.app"
-      "/Applications/Microsoft Outlook.app"
-      "/Applications/Microsoft Teams.app"
     ];
   };
   homebrew = {
