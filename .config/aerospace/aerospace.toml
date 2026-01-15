@@ -9,23 +9,22 @@ default-root-container-orientation = 'horizontal'
 key-mapping.preset = 'qwerty'
 [gaps]
 inner.horizontal = 16
-inner.vertical =   16
-outer.left =       16
-outer.bottom =     16
-outer.top =        16
-outer.right =      16
+inner.vertical = 16
+outer.left = 16
+outer.bottom = 16
+outer.top = 16
+outer.right = 16
 [workspace-to-monitor-force-assignment]
-    "Communication" = ['main']
-    "AI-LM-Studio" = ['main']
-    "Terminal" = ['main']
-    "Development" = ['main']
-    "Nix-Darwin" = ['main']
-    "Browser" = ['main']
-    "1st-Workspace" = ['secondary']
-    "2nd-Workspace" = ['secondary']
-    "3rd-Workspace" = ['secondary']
-    "4th-Workspace" = ['secondary']
-    "5th-Workspace" = ['secondary']
+"Communication" = ['main']
+"Audio-Video" = ['main']
+"Development" = ['main']
+"Nix-Darwin" = ['main']
+"Browser" = ['main']
+"1st-Workspace" = ['secondary']
+"2nd-Workspace" = ['secondary']
+"3rd-Workspace" = ['secondary']
+"4th-Workspace" = ['secondary']
+"5th-Workspace" = ['secondary']
 [mode.main.binding]
 alt-enter = 'exec-and-forget open -na /Applications/Alacritty.app'
 alt-slash = 'layout tiles horizontal vertical'
@@ -46,21 +45,21 @@ alt-shift-k = 'move up'
 alt-shift-up = 'move up'
 alt-shift-l = 'move right'
 alt-shift-right = 'move right'
-alt-t = 'workspace "Terminal"'
 alt-d = 'workspace "Development"'
 alt-x = 'workspace "Nix-Darwin"'
 alt-c = 'workspace "Communication"'
 alt-b = 'workspace "Browser"'
+alt-a = 'workspace "Audio-Video"'
 alt-1 = 'workspace "1st-Workspace"'
 alt-2 = 'workspace "2nd-Workspace"'
 alt-3 = 'workspace "3rd-Workspace"'
 alt-4 = 'workspace "4th-Workspace"'
 alt-5 = 'workspace "5th-Workspace"'
-alt-shift-t = 'move-node-to-workspace "Terminal"'
 alt-shift-d = 'move-node-to-workspace "Development"'
 alt-shift-x = 'move-node-to-workspace "Nix-Darwin"'
 alt-shift-c = 'move-node-to-workspace "Communication"'
 alt-shift-b = 'move-node-to-workspace "Browser"'
+alt-shift-a = 'move-node-to-workspace "Audio-Video"'
 alt-shift-1 = 'move-node-to-workspace "1st-Workspace"'
 alt-shift-2 = 'move-node-to-workspace "2nd-Workspace"'
 alt-shift-3 = 'move-node-to-workspace "3rd-Workspace"'
@@ -89,7 +88,10 @@ esc = 'mode main'
 [mode.service.binding]
 esc = ['reload-config', 'mode main']
 r = ['flatten-workspace-tree', 'mode main'] # Reset layout
-f = ['layout floating tiling', 'mode main'] # Toggle between floating and tiling layout
+f = [
+  'layout floating tiling',
+  'mode main',
+] # Toggle between floating and tiling layout
 backspace = ['close-all-windows-but-current', 'mode main']
 alt-shift-h = ['join-with left', 'mode main']
 alt-shift-j = ['join-with down', 'mode main']
