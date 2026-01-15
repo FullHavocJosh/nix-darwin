@@ -14,16 +14,3 @@ nix-modules$
 result$
 CRUSH\.md$
 ansible-.*
-\.config/dolphinrc$
-\.config/gtkrc.*
-\.config/kactivitymanagerdrc$
-\.config/kcminputrc$
-\.config/kdeglobals$
-\.config/kglobalshortcutsrc$
-\.config/konsole.*
-\.config/konsolesshconfig$
-\.config/kwinrc$
-\.config/plasma.*
-\.config/systemsettingsrc$
-\.config/Trolltech\.conf$
-\.config/hypr\.backup\.pre-restructure$
