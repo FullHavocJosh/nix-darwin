@@ -115,9 +115,14 @@ function _run_ai_direct() {
       
       local model_name="$model"  # Keep full model name with prefix
       
+      # Add a strong instruction to output ONLY JSON
+      local json_prompt="$prompt
+
+CRITICAL: Your response must contain ONLY the JSON array, with no additional text, explanations, or markdown. Do not include any conversational text before or after the JSON. Start your response with [ and end with ]. Output nothing else."
+      
       # Use opencode run with stdin to avoid issues with special characters
       # Timeout after 90s (longer than direct API but acceptable)
-      local result=$(echo "$prompt" | timeout 90s opencode run --model "$model_name" 2>&1)
+      local result=$(echo "$json_prompt" | timeout 90s opencode run --model "$model_name" 2>&1)
       local exit_code=$?
       
       if [ $exit_code -eq 124 ]; then
@@ -131,10 +136,26 @@ function _run_ai_direct() {
         return 1
       fi
       
-      # Return the result
+      # Return the result - try to clean it up if needed
       if [[ -n "$result" ]]; then
-        echo "$result"
-        return 0
+        # If result contains JSON, try to extract just the JSON part
+        # This handles cases where the agent adds conversational text
+        if echo "$result" | grep -q '^\['; then
+          # Already starts with JSON
+          echo "$result"
+          return 0
+        else
+          # Try to extract JSON array from response
+          local extracted=$(echo "$result" | grep -o '\[.*\]' | head -1)
+          if [[ -n "$extracted" ]]; then
+            echo "$extracted"
+            return 0
+          else
+            # Fall back to full response
+            echo "$result"
+            return 0
+          fi
+        fi
       fi
       
       echo "Error: OpenCode returned empty response" >&2

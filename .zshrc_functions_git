@@ -910,16 +910,33 @@ ${batch_diff}
   if echo "$batch_result" | jq empty 2>/dev/null; then
     echo "$batch_result"
   else
-    # If not valid JSON, try to extract JSON array from the response
-    local extracted_json=$(echo "$batch_result" | grep -o '\[.*\]' | head -1)
-    if echo "$extracted_json" | jq empty 2>/dev/null; then
+    # If not valid JSON, try multiple extraction strategies
+    
+    # Strategy 1: Extract JSON array with greedy match (handles multi-line JSON)
+    local extracted_json=$(echo "$batch_result" | perl -0777 -ne 'print $1 if /(\[[\s\S]*\])/s' | head -c 50000)
+    if [[ -n "$extracted_json" ]] && echo "$extracted_json" | jq empty 2>/dev/null; then
       echo "$extracted_json"
-    else
-      # Debug: show what we got
-      echo "  ⚠ Could not extract valid JSON from response" >&2
-      echo "  Response preview: $(echo "$batch_result" | head -c 150)" >&2
-      echo "[]"
+      return 0
     fi
+    
+    # Strategy 2: Try to find JSON between code blocks or markdown
+    extracted_json=$(echo "$batch_result" | sed -n '/^\[/,/^\]/p' | head -c 50000)
+    if [[ -n "$extracted_json" ]] && echo "$extracted_json" | jq empty 2>/dev/null; then
+      echo "$extracted_json"
+      return 0
+    fi
+    
+    # Strategy 3: Original grep-based extraction
+    extracted_json=$(echo "$batch_result" | grep -o '\[.*\]' | head -1)
+    if [[ -n "$extracted_json" ]] && echo "$extracted_json" | jq empty 2>/dev/null; then
+      echo "$extracted_json"
+      return 0
+    fi
+    
+    # All strategies failed
+    echo "  ⚠ Could not extract valid JSON from response" >&2
+    echo "  Response preview: $(echo "$batch_result" | head -c 200)" >&2
+    echo "[]"
   fi
 }
 
@@ -1193,17 +1210,36 @@ function _gpa_review_batch_with_timeout() {
         echo "$batch_result"
         return 0
       else
-        # Not valid JSON - try to extract JSON from the response
+        # Not valid JSON - try multiple extraction strategies
         printf "\r  ⚠ Response not valid JSON, attempting to extract...\n" >&2
-        local extracted_json=$(echo "$batch_result" | grep -o '\[.*\]' | head -1)
+        
+        # Strategy 1: Multi-line JSON extraction with perl
+        local extracted_json=$(echo "$batch_result" | perl -0777 -ne 'print $1 if /(\[[\s\S]*\])/s' | head -c 50000)
         if [ -n "$extracted_json" ] && echo "$extracted_json" | jq empty 2>/dev/null; then
           printf "\r  ✓ Extracted valid JSON from response\n" >&2
           echo "$extracted_json"
           return 0
         fi
-        # If extraction failed, show first 200 chars of response for debugging
+        
+        # Strategy 2: Line-range extraction
+        extracted_json=$(echo "$batch_result" | sed -n '/^\[/,/^\]/p' | head -c 50000)
+        if [ -n "$extracted_json" ] && echo "$extracted_json" | jq empty 2>/dev/null; then
+          printf "\r  ✓ Extracted valid JSON from response\n" >&2
+          echo "$extracted_json"
+          return 0
+        fi
+        
+        # Strategy 3: Original grep-based extraction
+        extracted_json=$(echo "$batch_result" | grep -o '\[.*\]' | head -1)
+        if [ -n "$extracted_json" ] && echo "$extracted_json" | jq empty 2>/dev/null; then
+          printf "\r  ✓ Extracted valid JSON from response\n" >&2
+          echo "$extracted_json"
+          return 0
+        fi
+        
+        # If extraction failed, show response for debugging
         printf "\r  ⚠ Failed to extract JSON. Response preview:\n" >&2
-        echo "$batch_result" | head -c 200 >&2
+        echo "$batch_result" | head -c 300 >&2
         echo "" >&2
       fi
     fi
