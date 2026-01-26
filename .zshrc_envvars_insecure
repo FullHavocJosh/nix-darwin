@@ -1,3 +1,29 @@
+# =============================================================================
+# Non-Sensitive Environment Variables
+# =============================================================================
+#
+# ⚠️  IMPORTANT SECURITY NOTICE:
+#
+# This file (.zshrc_envvars_insecure) is TRACKED by git and visible to all
+# repository contributors. Only store NON-SENSITIVE environment variables here.
+#
+# For sensitive data (API keys, tokens, passwords):
+#   → Use ~/.zshrc_envvars instead (ignored by git)
+#   → Configured automatically via 'aiselect' command
+#   → Stored with 600 permissions (owner read/write only)
+#
+# This file should contain:
+#   ✓ AWS regions, profiles (non-sensitive settings)
+#   ✓ Default configuration values
+#   ✓ Non-sensitive application settings
+#
+# This file should NOT contain:
+#   ✗ API keys, tokens, passwords
+#   ✗ Private credentials
+#   ✗ Secrets of any kind
+#
+# =============================================================================
+
 # AWS Environment Variables
 export AWS_REGION="us-east-1"
 export AWS_PROFILE="services"

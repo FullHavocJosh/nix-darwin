@@ -12,8 +12,35 @@
 private/
 *bak
 *.backup
-*_insecure*
 *_local*
+
+# =============================================================================
+# Environment Variable Files - Security Policy
+# =============================================================================
+#
+# Two-file system for environment variables:
+#
+# 1. .zshrc_envvars (IGNORED - contains SENSITIVE data)
+#    - API keys, tokens, secrets, passwords
+#    - Plain text storage with chmod 600
+#    - Never committed to git
+#
+# 2. .zshrc_envvars_insecure (TRACKED - contains NON-SENSITIVE data)
+#    - AWS regions, profiles, default configurations
+#    - Safe to share with team via git
+#    - Despite "_insecure" in name, this file is intentionally tracked
+#    - Name indicates "insecure to store secrets here" not "ignored by git"
+#    - See file header for detailed security notice
+#
+# IMPORTANT: The wildcard pattern *_insecure* was intentionally removed
+# to allow .zshrc_envvars_insecure to be tracked. This is by design.
+#
+# =============================================================================
+
+# Ignore SENSITIVE environment variables (API keys, tokens, secrets)
+.zshrc_envvars
+
+# NOTE: .zshrc_envvars_insecure is intentionally NOT ignored (see above)
 
 # Ansible inventory with real IPs/hosts  
 ansible-linux/inventory/linux
