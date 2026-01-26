@@ -23,8 +23,6 @@
     # Apps installed via nix package must include ${pkgs.APPNAME}
     dock.persistent-apps = [
       "/Applications/Alacritty.app"
-      "/Applications/Zen.app"
-      "/Applications/Slack.app"
     ];
   };
   homebrew = {

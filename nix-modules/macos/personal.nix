@@ -38,14 +38,6 @@
   system.defaults = {
     dock.persistent-apps = [
       "/Applications/Alacritty.app"
-      "/Applications/Zen.app"
-      "/System/Applications/Music.app"
-      "/System/Applications/Notes.app"
-      "/Applications/Obsidian.app"
-      "/System/Applications/Freeform.app"
-      "/Applications/Discord.app"
-      "/System/Applications/Messages.app"
-      "/Applications/Proton Mail.app"
     ];
   };
   homebrew = {
