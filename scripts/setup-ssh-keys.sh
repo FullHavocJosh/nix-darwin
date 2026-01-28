@@ -37,6 +37,7 @@ declare -A SSH_TARGETS=(
     ["truenas"]="admin@truenas.rollet.family"
     ["6rx26x1"]="havoc@6rx26x1.rollet.family"
     ["caitsg14"]="nesheri@Caits-G14.rollet.family"
+    ["opnsense"]="root@192.168.144.1"
 )
 
 echo -e "${YELLOW}This script will copy your SSH public key to the following servers:${NC}"
@@ -190,4 +191,4 @@ fi
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "You can now test the connections with your aliases:"
-echo "  sshmacbook, sshg14, sshazeroth, sshtestazeroth, sshmini, sshtruenas, ssh6rx26x1, sshcaitsg14, sshxps13"
+echo "  sshmacbook, sshg14, sshazeroth, sshtestazeroth, sshmini, sshtruenas, ssh6rx26x1, sshcaitsg14, sshxps13, sshopnsense"
