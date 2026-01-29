@@ -61,9 +61,6 @@
 [submodule ".config/omarchy/themes/futurism"]
 	path = .config/omarchy/themes/futurism
 	url = https://github.com/bjarneo/omarchy-futurism-theme
-[submodule ".config/omarchy/themes/hakker-green"]
-	path = .config/omarchy/themes/hakker-green
-	url = https://github.com/joaquinmeza/omarchy-hakker-green-theme
 [submodule ".config/omarchy/themes/mars"]
 	path = .config/omarchy/themes/mars
 	url = https://github.com/steve-lohmeyer/omarchy-mars-theme
