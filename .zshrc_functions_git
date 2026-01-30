@@ -1666,6 +1666,24 @@ function gpr_func() {
   # Validate git repository
   _check_git_repo || return 1
 
+  # Stash any uncommitted changes
+  echo "Stashing uncommitted changes..."
+  local stash_result=$(git stash)
+  local did_stash=false
+  if [[ "$stash_result" != "No local changes to save" ]]; then
+    did_stash=true
+  fi
+
+  # Always attempt git pull, continue regardless of result
+  echo "Pulling latest changes..."
+  git pull || true
+
+  # Restore stashed changes only if we stashed something
+  if [[ "$did_stash" == true ]]; then
+    echo "Restoring stashed changes..."
+    git stash pop || true
+  fi
+
   echo "Select type:"
   echo "  1) feat"
   echo "  2) fix"
