@@ -483,8 +483,12 @@ function gpc() {
 
   # Check if there are staged changes
   if ! git diff --cached --quiet; then
+    # Get model information for display
+    local model_tier="haiku"
+    local model_name=$(_get_opencode_model "$model_tier")
+    
     echo ""
-    echo "ℹ Generating commit message with AI..."
+    echo "ℹ Generating commit message with 🟢 Haiku..."
 
     # Get the diff of staged changes
     local diff_output=$(git diff --cached)
@@ -1585,7 +1589,7 @@ function gpa() {
   echo "ℹ Processing $total_files file(s) in $batch_count batch(es)"
   echo "  Total changes: $total_lines lines"
   if [[ "$tier_override" == "auto" ]]; then
-    echo "  Model: Auto-detect (🔴 Opus for critical/large, 🔵 Sonnet default)"
+    echo "  Model: Auto-detect (🔴 Opus critical/large | 🔵 Sonnet default | 🟢 Haiku simple)"
   else
     local tier_emoji=""
     case "$tier_override" in
@@ -1792,12 +1796,6 @@ function gpa() {
       echo "ℹ Proceeding without AI review"
     else
       echo "✓ Code review complete - no critical issues or warnings found"
-      
-      # Show model legend if auto-detect was used
-      if [[ "$tier_override" == "auto" ]]; then
-        echo ""
-        echo "Model icons: 🔴 Opus (critical/large) | 🔵 Sonnet (default) | 🟢 Haiku (simple)"
-      fi
     fi
     
     echo ""
