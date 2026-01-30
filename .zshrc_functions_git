@@ -50,7 +50,7 @@ Please review the issues and suggest fixes. I can make the changes in the editor
 EOF
   
   # Get AI model
-  local model=$(_get_opencode_model "complex")
+  local model=$(_get_opencode_model "sonnet")
   
   # Open first file with issues in nvim
   local first_file="${files_array[1]}"
@@ -495,8 +495,8 @@ function gpc() {
     echo "  Diff size: $diff_lines lines, $diff_chars characters"
 
     # Use AI to generate commit message
-    # Commit messages can use fast model (simple task)
-    local ai_output=$(echo "Review the following git diff and generate a concise, single-sentence commit message that describes the changes. The message should be in imperative mood (e.g., 'Add feature' not 'Added feature'). Return ONLY the commit message, nothing else.\n\n$diff_output" | _run_ai_direct "simple" 2>&1)
+    # Commit messages can use fast model (Haiku - simple task)
+    local ai_output=$(echo "Review the following git diff and generate a concise, single-sentence commit message that describes the changes. The message should be in imperative mood (e.g., 'Add feature' not 'Added feature'). Return ONLY the commit message, nothing else.\n\n$diff_output" | _run_ai_plain "haiku" 2>&1)
     local ai_exit=$?
     
     # Check if AI command succeeded
@@ -577,8 +577,8 @@ function _gpa_create_edit_workspace() {
   local rec_file="/tmp/gpa_recommendation_$$.txt"
   echo "$recommendation" > "$rec_file"
   
-  # Get the OpenCode model for complex tasks
-  local model=$(_get_opencode_model "complex")
+  # Get the OpenCode model for Sonnet (standard tasks)
+  local model=$(_get_opencode_model "sonnet")
   
   # Create a startup script that will run tmux in the new terminal
   local startup_script="/tmp/gpa_startup_$$.sh"
@@ -624,7 +624,7 @@ STARTUP
 function _gpa_auto_fix() {
   local file_path="$1"
   local recommendation="$2"
-  local model=$(_get_opencode_model "complex")
+  local model=$(_get_opencode_model "sonnet")
   
   echo ""
   echo "ℹ Starting OpenCode to automatically fix: $file_path"
@@ -809,9 +809,46 @@ function _gpa_create_batches() {
   echo "$batches"
 }
 
+# Helper function: Check if issues warrant escalation to Opus
+# Usage: _gpa_should_escalate <issues_json>
+# Returns: 0 (true) if escalation recommended, 1 (false) otherwise
+function _gpa_should_escalate() {
+  local issues_json="$1"
+  
+  # Check if we have any issues at all
+  local issue_count=$(echo "$issues_json" | jq 'length' 2>/dev/null)
+  if [[ -z "$issue_count" ]] || [[ "$issue_count" -eq 0 ]]; then
+    return 1  # No issues, no escalation
+  fi
+  
+  # Keywords that indicate security-critical issues
+  local security_keywords=("security" "credential" "secret" "password" "token" "key" "auth" "vulnerability" "injection" "xss" "csrf" "encryption")
+  
+  # Check for Critical severity issues with security keywords
+  local has_critical_security=false
+  while IFS= read -r issue_text; do
+    # Check if this is a Critical issue
+    local severity=$(echo "$issue_text" | jq -r '.severity' 2>/dev/null)
+    if [[ "$severity" != "Critical" ]]; then
+      continue
+    fi
+    
+    # Check if issue or recommendation contains security keywords
+    local issue_desc=$(echo "$issue_text" | jq -r '.issue + " " + .recommendation' 2>/dev/null | tr '[:upper:]' '[:lower:]')
+    
+    for keyword in "${security_keywords[@]}"; do
+      if echo "$issue_desc" | grep -qi "$keyword"; then
+        return 0  # Found Critical + security keyword = escalate
+      fi
+    done
+  done < <(echo "$issues_json" | jq -c '.[]' 2>/dev/null)
+  
+  return 1  # No critical security issues found
+}
+
 # Helper function: Determine appropriate AI model tier based on batch characteristics
 # Usage: _gpa_determine_tier <batch_files_json> <batch_lines>
-# Returns: "simple", "complex", or "ultra"
+# Returns: "haiku", "sonnet", or "opus"
 function _gpa_determine_tier() {
   local batch_files_json="$1"
   local batch_lines="$2"
@@ -822,19 +859,19 @@ function _gpa_determine_tier() {
   
   for critical_path in "${critical_paths[@]}"; do
     if echo "$batch_files_str" | grep -qi "$critical_path"; then
-      echo "ultra"
+      echo "opus"
       return 0
     fi
   done
   
   # Check for large batches (>500 lines) - use Opus for better accuracy
   if [ "$batch_lines" -gt 500 ]; then
-    echo "ultra"
+    echo "opus"
     return 0
   fi
   
-  # Default to complex (Sonnet)
-  echo "complex"
+  # Default to sonnet
+  echo "sonnet"
   return 0
 }
 
@@ -844,7 +881,7 @@ function _gpa_review_batch() {
   local batch_files_json="$1"
   local batch_number="$2"
   local total_batches="$3"
-  local tier_override="${4:-auto}"  # Optional: "simple", "complex", "ultra", or "auto"
+  local tier_override="${4:-auto}"  # Optional: "haiku", "sonnet", "opus", or "auto"
   
   # Convert JSON array to regular array
   local batch_files=()
@@ -867,7 +904,7 @@ function _gpa_review_batch() {
   local batch_lines=$(echo -e "$batch_diff" | wc -l)
   
   # Determine which AI tier to use
-  local ai_tier="complex"
+  local ai_tier="sonnet"
   if [[ "$tier_override" == "auto" ]]; then
     ai_tier=$(_gpa_determine_tier "$batch_files_json" "$batch_lines")
   else
@@ -932,49 +969,36 @@ ${batch_diff}
 - If there are no critical/warning issues in this batch, return an empty array: []
 - Return ONLY valid JSON, nothing else."
   
-  echo "  Batch $batch_number/$total_batches: ${#batch_files[@]} file(s), $batch_lines lines" >&2
-  
-  # Show which AI tier is being used
-  local tier_emoji="🔵"
-  local tier_name="Sonnet"
-  if [[ "$ai_tier" == "ultra" ]]; then
-    tier_emoji="🔴"
-    tier_name="Opus"
-  elif [[ "$ai_tier" == "simple" ]]; then
-    tier_emoji="🟢"
-    tier_name="Haiku"
-  fi
-  echo "  $tier_emoji Using $tier_name model (tier: $ai_tier)" >&2
+  # Note: Tier display moved to main loop for better visibility
+  # (was being cleared by progress spinner)
   
   # Run AI review using direct API call (much faster than full agent)
   local batch_result=$(echo "$full_prompt" | _run_ai_direct "$ai_tier" 2>&1)
+  local api_exit_code=$?
   
-  # Check if we got an error from the API
-  if echo "$batch_result" | grep -q "^Error:"; then
-    echo "  API Error: $batch_result" >&2
+  # Check exit codes
+  if [ $api_exit_code -eq 1 ]; then
+    # Hard failure - API error, timeout, network issue
+    echo "  ✗ API Error" >&2
     echo "[]"
     return 1
+  elif [ $api_exit_code -eq 2 ]; then
+    # Soft failure - unparseable response
+    echo "  ⚠ AI response could not be parsed" >&2
+    echo "[]"
+    return 2
   fi
   
-  # Validate JSON - with improved prompting, should work first try
+  # Success (exit code 0) - validate and return
   if echo "$batch_result" | jq empty 2>/dev/null; then
     echo "$batch_result"
     return 0
   fi
   
-  # Single fallback extraction strategy (simplified from 3 strategies)
-  # Extract from first [ to last ]
-  local extracted_json=$(echo "$batch_result" | perl -0777 -pe 's/^[^\[]*(\[.*\])[^\]]*$/$1/s' | head -c 50000)
-  
-  if [[ -n "$extracted_json" ]] && echo "$extracted_json" | jq empty 2>/dev/null; then
-    echo "$extracted_json"
-    return 0
-  fi
-  
-  # If all else fails, return empty array (better than failing)
-  echo "  ⚠ Could not parse response as JSON, returning empty array" >&2
+  # Shouldn't reach here if _run_ai_direct works correctly, but handle it
+  echo "  ⚠ Unexpected: Valid exit code but invalid JSON" >&2
   echo "[]"
-  return 0
+  return 2
 }
 
 # Helper function: Interactive fix mode for code review suggestions
@@ -1256,9 +1280,15 @@ function _gpa_review_batch_with_timeout() {
           return 0
         fi
         
-        # Failed to extract valid JSON
+        # Soft failure - could not parse
         printf "\r  ⚠ Could not parse response as JSON\n" >&2
+        echo "[]"
+        return 2
       fi
+    elif [ $exit_code -eq 2 ]; then
+      # Soft failure from _gpa_review_batch (unparseable)
+      echo "$batch_result"
+      return 2
     fi
     
     # Failed, increment retry
@@ -1272,18 +1302,18 @@ function _gpa_review_batch_with_timeout() {
 
 function gpa() {
   # Git Partial Add with AI code review
-  # Usage: gpa [--tier=simple|complex|ultra]
+  # Usage: gpa [--tier=haiku|sonnet|opus]
   
   # Parse optional --tier flag
   local tier_override="auto"
   for arg in "$@"; do
     case $arg in
-      --tier=simple|--tier=complex|--tier=ultra)
+      --tier=haiku|--tier=sonnet|--tier=opus)
         tier_override="${arg#--tier=}"
         shift
         ;;
       --tier=*)
-        echo "✗ Invalid tier. Use: simple, complex, or ultra"
+        echo "✗ Invalid tier. Use: haiku, sonnet, or opus"
         return 1
         ;;
     esac
@@ -1554,28 +1584,58 @@ function gpa() {
   
   echo "ℹ Processing $total_files file(s) in $batch_count batch(es)"
   echo "  Total changes: $total_lines lines"
-  echo "  Model: $(_get_opencode_model 'complex')"
+  if [[ "$tier_override" == "auto" ]]; then
+    echo "  Model: Auto-detect (🔴 Opus for critical/large, 🔵 Sonnet default)"
+  else
+    local tier_emoji=""
+    case "$tier_override" in
+      opus) tier_emoji="🔴" ;;
+      sonnet) tier_emoji="🔵" ;;
+      haiku) tier_emoji="🟢" ;;
+    esac
+    echo "  Model: $tier_emoji $tier_override (forced)"
+    echo "  Using: $(_get_opencode_model "$tier_override")"
+  fi
   echo ""
   
   # Process each batch and collect all issues
   local all_issues="[]"
   local batch_index=0
   local failed_batches=0
+  local soft_failed_batches=0  # Track unparseable responses separately
   local ai_review_failed=false
   
   while [ $batch_index -lt $batch_count ]; do
     local batch=$(echo "$batches" | jq -c ".[$batch_index]")
     local batch_num=$((batch_index + 1))
     
+    # Determine which tier will be used for this batch (for display purposes)
+    local batch_tier="$tier_override"
+    if [[ "$tier_override" == "auto" ]]; then
+      # Pre-calculate tier for display (will be recalculated inside _gpa_review_batch)
+      local batch_files_json=$(echo "$batch" | jq -c '.')
+      local batch_diff_lines=$(echo "$batch_files_json" | jq -r '.[]' | xargs git diff --cached -- | wc -l)
+      batch_tier=$(_gpa_determine_tier "$batch_files_json" "$batch_diff_lines")
+    fi
+    
+    # Display tier icon
+    local tier_icon=""
+    case "$batch_tier" in
+      opus)   tier_icon="🔴" ;;
+      sonnet) tier_icon="🔵" ;;
+      haiku)  tier_icon="🟢" ;;
+      *)      tier_icon="🔵" ;;
+    esac
+    
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Reviewing batch $batch_num of $batch_count..."
+    echo "$tier_icon Reviewing batch $batch_num of $batch_count..."
     
     # Review this batch with timeout and retry
     local batch_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "$tier_override")
     local review_status=$?
     
     if [ $review_status -eq 0 ]; then
-      # Merge batch issues into all_issues
+      # Success - merge batch issues into all_issues
       if [ -n "$batch_issues" ] && echo "$batch_issues" | jq empty 2>/dev/null; then
         # Filter out invalid/malformed issue objects
         # Valid issues must have: file, severity, issue, recommendation fields
@@ -1585,6 +1645,52 @@ function gpa() {
           local issue_count=$(echo "$valid_batch_issues" | jq 'length')
           if [ "$issue_count" -gt 0 ]; then
             echo "  Found $issue_count issue(s) in this batch"
+            
+            # Check if we should escalate to Opus (only if tier was auto-selected or was sonnet/haiku)
+            if [[ "$tier_override" == "auto" ]] || [[ "$tier_override" == "sonnet" ]] || [[ "$tier_override" == "haiku" ]]; then
+              if _gpa_should_escalate "$valid_batch_issues"; then
+                echo ""
+                echo "  ⚠ CRITICAL SECURITY ISSUE DETECTED"
+                echo "  Sonnet found Critical severity issues with security implications."
+                echo ""
+                echo "  Recommendation: Re-review this batch with Opus (more thorough model)"
+                echo "  for comprehensive security analysis."
+                echo ""
+                echo "  Options:"
+                echo "    [y] Yes - Re-review with Opus (recommended for security)"
+                echo "    [n] No - Continue with Sonnet findings"
+                echo ""
+                echo -n "  Your choice: "
+                read -r escalate_choice
+                
+                if [[ "$escalate_choice" == "y" || "$escalate_choice" == "Y" ]]; then
+                  echo ""
+                  echo "  🔴 Escalating to Opus for security review..."
+                  
+                  # Re-review with Opus
+                  local opus_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "opus")
+                  local opus_status=$?
+                  
+                  if [ $opus_status -eq 0 ] && [ -n "$opus_issues" ] && echo "$opus_issues" | jq empty 2>/dev/null; then
+                    local valid_opus_issues=$(echo "$opus_issues" | jq '[.[] | select(type == "object" and has("file") and has("severity") and has("issue") and has("recommendation"))]' 2>/dev/null)
+                    
+                    if [ -n "$valid_opus_issues" ]; then
+                      local opus_issue_count=$(echo "$valid_opus_issues" | jq 'length')
+                      echo "  🔴 Opus review complete: Found $opus_issue_count issue(s)"
+                      
+                      # Replace Sonnet issues with Opus issues (Opus is authoritative)
+                      valid_batch_issues="$valid_opus_issues"
+                    else
+                      echo "  🔴 Opus review found no additional issues"
+                    fi
+                  else
+                    echo "  ⚠ Opus review failed, keeping Sonnet findings"
+                  fi
+                  echo ""
+                fi
+              fi
+            fi
+            
             all_issues=$(echo "$all_issues" | jq --argjson batch "$valid_batch_issues" '. + $batch')
           else
             echo "  ✓ No issues found in this batch"
@@ -1597,7 +1703,12 @@ function gpa() {
         echo "  ⚠ Batch review returned invalid JSON"
         ((failed_batches++))
       fi
+    elif [ $review_status -eq 2 ]; then
+      # Soft failure - unparseable response (already retried)
+      echo "  ⚠ AI response could not be parsed (after retries)"
+      ((soft_failed_batches++))
     else
+      # Hard failure - API error, timeout, network issue
       echo "  ✗ Batch review failed completely"
       ((failed_batches++))
     fi
@@ -1606,7 +1717,7 @@ function gpa() {
     ((batch_index++))
   done
   
-  # Check if all batches failed
+  # Check if all batches failed (hard failures)
   if [ $failed_batches -eq $batch_count ]; then
     ai_review_failed=true
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1631,7 +1742,42 @@ function gpa() {
         ;;
     esac
   elif [ $failed_batches -gt 0 ]; then
-    echo "⚠ Warning: $failed_batches of $batch_count batch(es) failed review"
+    echo "⚠ Warning: $failed_batches of $batch_count batch(es) failed review (hard failures)"
+  fi
+  
+  # Handle soft failures (unparseable responses)
+  if [ $soft_failed_batches -gt 0 ]; then
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "⚠ WARNING: $soft_failed_batches batch(es) returned unparseable responses"
+    echo ""
+    echo "The AI reviewed your code but returned output that could not be parsed."
+    echo "This means issues may have been found but weren't captured."
+    echo ""
+    echo "Options:"
+    echo "  [i] Ignore and continue - proceed to commit"
+    echo "  [r] Retry review - re-run review on all failed batches"
+    echo "  [c] Cancel review - exit gpa and keep changes staged"
+    echo ""
+    echo -n "Your choice: "
+    read -r soft_fail_choice
+    
+    case "$soft_fail_choice" in
+      i|I)
+        echo "✓ Ignoring unparseable responses and continuing"
+        ;;
+      r|R)
+        echo ""
+        echo "♻️  Retrying review..."
+        echo ""
+        # Recursively call gpa (will re-review everything)
+        gpa "$@"
+        return $?
+        ;;
+      c|C|*)
+        echo "✗ Canceling review - changes remain staged"
+        return 1
+        ;;
+    esac
   fi
   
   echo "═══════════════════════════════════════════════════════════"
@@ -1646,6 +1792,12 @@ function gpa() {
       echo "ℹ Proceeding without AI review"
     else
       echo "✓ Code review complete - no critical issues or warnings found"
+      
+      # Show model legend if auto-detect was used
+      if [[ "$tier_override" == "auto" ]]; then
+        echo ""
+        echo "Model icons: 🔴 Opus (critical/large) | 🔵 Sonnet (default) | 🟢 Haiku (simple)"
+      fi
     fi
     
     echo ""

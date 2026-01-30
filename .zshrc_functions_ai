@@ -36,6 +36,7 @@
 # Helper function: Discover latest Claude model for a provider
 # Usage: _discover_latest_model <provider> <model_type>
 # model_type can be "sonnet", "haiku", or "opus"
+# Returns the latest version with smart version comparison
 function _discover_latest_model() {
   local provider="$1"
   local model_type="$2"
@@ -47,45 +48,55 @@ function _discover_latest_model() {
     return 1
   fi
   
-  # Filter for the model type and sort to get the latest
-  local latest_model=""
+  # Filter for the model type
+  local filtered_models=""
   
   case $model_type in
     sonnet)
-      # Look for sonnet models, prioritizing higher version numbers
-      # Use -V for natural version sort (handles 4.5 vs 4 correctly)
-      latest_model=$(echo "$models" | grep -i "claude" | grep -i "sonnet" | sort -V | tail -1)
+      filtered_models=$(echo "$models" | grep -i "claude" | grep -i "sonnet")
       ;;
     haiku)
-      # Look for haiku models, prioritizing higher version numbers
-      latest_model=$(echo "$models" | grep -i "claude" | grep -i "haiku" | sort -V | tail -1)
+      filtered_models=$(echo "$models" | grep -i "claude" | grep -i "haiku")
       ;;
     opus)
-      # Look for opus models, prioritizing higher version numbers
-      latest_model=$(echo "$models" | grep -i "claude" | grep -i "opus" | sort -V | tail -1)
+      filtered_models=$(echo "$models" | grep -i "claude" | grep -i "opus")
       ;;
   esac
   
-  if [[ -n "$latest_model" ]]; then
-    echo "$latest_model"
+  if [[ -z "$filtered_models" ]]; then
+    return 1
+  fi
+  
+  # Smart version comparison: prioritize decimal versions (4.5) over integer versions (41)
+  # Claude versions follow semantic versioning: 3, 3.5, 4, 4.5
+  # So opus-4.5 should be preferred over opus-41 (which might be a typo or alternate naming)
+  
+  # First, try to find models with decimal versions (e.g., 4.5, 3.5)
+  local decimal_models=$(echo "$filtered_models" | grep -E '\-[0-9]+\.[0-9]+$')
+  
+  if [[ -n "$decimal_models" ]]; then
+    # Found decimal versions, use the highest one
+    echo "$decimal_models" | sort -t'-' -k2 -V | tail -1
     return 0
   fi
   
-  return 1
+  # Fallback: no decimal versions found, use standard version sort
+  echo "$filtered_models" | sort -V | tail -1
+  return 0
 }
 
 # Helper function: Get OpenCode model string based on provider preference
-# Usage: _get_opencode_model ["simple"|"complex"|"ultra"]
+# Usage: _get_opencode_model ["haiku"|"sonnet"|"opus"]
 function _get_opencode_model() {
-  local task_type="${1:-complex}"
+  local task_type="${1:-sonnet}"
   local provider=$(_get_ai_provider)
   
   # Try to discover the latest model dynamically
   local model=""
   
-  if [[ "$task_type" == "simple" ]]; then
+  if [[ "$task_type" == "haiku" ]]; then
     model=$(_discover_latest_model "$provider" "haiku")
-  elif [[ "$task_type" == "ultra" ]]; then
+  elif [[ "$task_type" == "opus" ]]; then
     model=$(_discover_latest_model "$provider" "opus")
   else
     model=$(_discover_latest_model "$provider" "sonnet")
@@ -98,37 +109,37 @@ function _get_opencode_model() {
   fi
   
   # Fallback to hardcoded models if discovery fails
+  # Note: These fallback values should be updated periodically to match latest available models
   case $provider in
     github-copilot)
-      # Note: GitHub Copilot may not have Opus or all Haiku models available
-      if [[ "$task_type" == "ultra" ]]; then
-        echo "github-copilot/claude-opus-4"
-      elif [[ "$task_type" == "simple" ]]; then
-        echo "github-copilot/claude-sonnet-4.5"  # Fallback to sonnet if haiku unavailable
+      if [[ "$task_type" == "opus" ]]; then
+        echo "github-copilot/claude-opus-4.5"  # Latest: Opus 4.5 (semantic versioning)
+      elif [[ "$task_type" == "haiku" ]]; then
+        echo "github-copilot/claude-haiku-4.5"  # Latest: Haiku 4.5
       else
-        echo "github-copilot/claude-sonnet-4.5"
+        echo "github-copilot/claude-sonnet-4.5"  # Latest: Sonnet 4.5
       fi
       ;;
     opencode)
-      if [[ "$task_type" == "simple" ]]; then
-        echo "opencode/claude-3-5-haiku"
-      elif [[ "$task_type" == "ultra" ]]; then
-        echo "opencode/claude-opus-4"
+      if [[ "$task_type" == "haiku" ]]; then
+        echo "opencode/claude-3-5-haiku"  # Latest known Haiku
+      elif [[ "$task_type" == "opus" ]]; then
+        echo "opencode/claude-opus-4.5"  # Latest: Opus 4.5
       else
-        echo "opencode/claude-sonnet-4.5"
+        echo "opencode/claude-sonnet-4.5"  # Latest: Sonnet 4.5
       fi
       ;;
     openrouter)
-      if [[ "$task_type" == "simple" ]]; then
-        echo "openrouter/anthropic/claude-3.5-haiku"
-      elif [[ "$task_type" == "ultra" ]]; then
-        echo "openrouter/anthropic/claude-opus-4"
+      if [[ "$task_type" == "haiku" ]]; then
+        echo "openrouter/anthropic/claude-3.5-haiku"  # Latest known Haiku
+      elif [[ "$task_type" == "opus" ]]; then
+        echo "openrouter/anthropic/claude-opus-4.5"  # Latest: Opus 4.5
       else
-        echo "openrouter/anthropic/claude-sonnet-4.5"
+        echo "openrouter/anthropic/claude-sonnet-4.5"  # Latest: Sonnet 4.5
       fi
       ;;
     *)
-      echo "github-copilot/claude-sonnet-4.5"  # Default fallback
+      echo "github-copilot/claude-sonnet-4.5"  # Default fallback to latest Sonnet
       ;;
   esac
 }
@@ -137,15 +148,109 @@ function _get_opencode_model() {
 # AI Command Execution Functions
 # =============================================================================
 
+# HELPER: Execute AI command with plain text output (for commit messages, etc.)
+# Usage: echo "prompt" | _run_ai_plain ["haiku"|"sonnet"|"opus"]
+# Returns plain text response without JSON parsing
+function _run_ai_plain() {
+  local task_type="${1:-sonnet}"
+  local provider=$(_get_ai_provider)
+  local model=$(_get_opencode_model "$task_type")
+  
+  # Read stdin into a variable
+  local prompt=$(cat)
+  
+  # Make direct API call based on provider
+  case $provider in
+    github-copilot)
+      local model_name="$model"
+      local result=$(echo "$prompt" | timeout 90s opencode run --model "$model_name" 2>&1)
+      local exit_code=$?
+      
+      if [ $exit_code -eq 124 ]; then
+        echo "Error: OpenCode command timeout after 90s" >&2
+        return 1
+      elif [ $exit_code -ne 0 ]; then
+        echo "Error: OpenCode command failed (exit code: $exit_code)" >&2
+        return 1
+      fi
+      
+      # Return raw output for plain text responses
+      echo "$result"
+      return 0
+      ;;
+      
+    opencode)
+      if [[ -z "$OPENCODE_API_KEY" ]]; then
+        echo "Error: OPENCODE_API_KEY not set" >&2
+        return 1
+      fi
+      
+      local model_name="${model#opencode/}"
+      local result=$(curl -s https://api.opencode.ai/v1/chat/completions \
+        --max-time 60 \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $OPENCODE_API_KEY" \
+        -d "{
+          \"model\": \"$model_name\",
+          \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
+          \"max_tokens\": 4096
+        }" 2>/dev/null)
+      
+      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
+      if [[ -n "$extracted" && "$extracted" != "null" ]]; then
+        echo "$extracted"
+        return 0
+      fi
+      
+      echo "Error: OpenCode API returned invalid response" >&2
+      return 1
+      ;;
+      
+    openrouter)
+      if [[ -z "$OPENROUTER_API_KEY" ]]; then
+        echo "Error: OPENROUTER_API_KEY not set" >&2
+        return 1
+      fi
+      
+      local model_name="${model#openrouter/}"
+      local result=$(curl -s https://openrouter.ai/api/v1/chat/completions \
+        --max-time 60 \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+        -H "HTTP-Referer: https://github.com/user/zsh-functions" \
+        -d "{
+          \"model\": \"$model_name\",
+          \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
+          \"max_tokens\": 4096
+        }" 2>/dev/null)
+      
+      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
+      if [[ -n "$extracted" && "$extracted" != "null" ]]; then
+        echo "$extracted"
+        return 0
+      fi
+      
+      echo "Error: OpenRouter API returned invalid response" >&2
+      return 1
+      ;;
+      
+    *)
+      echo "Error: Unknown provider $provider" >&2
+      return 1
+      ;;
+  esac
+}
+
 # PRIMARY FUNCTION: Execute AI command with direct API call (lightweight, fast)
-# Usage: echo "prompt" | _run_ai_direct ["simple"|"complex"]
+# Usage: echo "prompt" | _run_ai_direct ["haiku"|"sonnet"|"opus"]
 # This is the recommended function for all AI tasks that don't need agent capabilities
 # - Respects aiselect provider configuration
 # - Makes direct API calls (no agent overhead)
 # - Typical response time: 5-15 seconds
 # - Supports: GitHub Copilot, OpenCode, OpenRouter
+# NOTE: This function expects JSON array responses. For plain text, use _run_ai_plain
 function _run_ai_direct() {
-  local task_type="${1:-complex}"
+  local task_type="${1:-sonnet}"
   local provider=$(_get_ai_provider)
   local model=$(_get_opencode_model "$task_type")
   
@@ -213,9 +318,11 @@ START YOUR RESPONSE NOW WITH [ OR []:"
           return 0
         fi
         
-        # Fallback: if extraction failed, return empty array
+        # Soft failure: Could not parse response
+        # Exit code 2 = unparseable output (user should be warned)
+        echo "Error: Could not parse AI response as JSON" >&2
         echo "[]"
-        return 0
+        return 2
       fi
       
       echo "Error: OpenCode returned empty response" >&2
@@ -311,14 +418,14 @@ START YOUR RESPONSE NOW WITH [ OR []:"
 }
 
 # LEGACY FUNCTION: Execute AI command with OpenCode agent (slower, full agent capabilities)
-# Usage: echo "prompt" | _run_ai_agent ["simple"|"complex"]
+# Usage: echo "prompt" | _run_ai_agent ["haiku"|"sonnet"|"opus"]
 # Only use this when you need full agent capabilities (file editing, tool use, etc.)
 # - Uses OpenCode's full agent framework
 # - Typical response time: 60-300+ seconds
 # - For simple queries, use _run_ai_direct instead
 # NOTE: This is kept for backward compatibility and special cases like auto-fix
 function _run_ai_agent() {
-  local task_type="${1:-complex}"
+  local task_type="${1:-sonnet}"
   local model=$(_get_opencode_model "$task_type")
   
   # Read stdin into a variable
@@ -337,9 +444,9 @@ function _run_ai_command() {
 
 # DEPRECATED: Get AI command based on provider preference (use _run_ai_direct instead)
 # This is kept for backward compatibility but should be replaced
-# Usage: _get_ai_command ["simple"|"complex"]
+# Usage: _get_ai_command ["haiku"|"sonnet"|"opus"]
 function _get_ai_command() {
-  local task_type="${1:-complex}"
+  local task_type="${1:-sonnet}"
   echo "_run_ai_direct $task_type"
 }
 
@@ -437,7 +544,7 @@ function aidev() {
     esac
   fi
   
-  local model=$(_get_opencode_model "complex")
+  local model=$(_get_opencode_model "sonnet")
   opencode --model "$model" "$@"
 }
 
@@ -532,8 +639,8 @@ function aiselect() {
   # If called with --show or --status, just display current provider
   if [[ "$1" == "--show" ]] || [[ "$1" == "--status" ]]; then
     local current_provider=$(_get_ai_provider)
-    local opencode_model=$(_get_opencode_model "complex")
-    local opencode_simple_model=$(_get_opencode_model "simple")
+    local opencode_model=$(_get_opencode_model "sonnet")
+    local opencode_haiku_model=$(_get_opencode_model "haiku")
     
     echo "═══════════════════════════════════════════════════════════"
     echo "Current AI Configuration"
@@ -546,14 +653,14 @@ function aiselect() {
     echo "  → Launched with -m flag based on aiselect preference"
     echo ""
     echo "Direct API Functions (fast, lightweight):"
-    echo "  Simple tasks  (commit msgs): $opencode_simple_model"
-    echo "  Complex tasks (code review): $opencode_model"
+    echo "  Haiku tasks  (commit msgs): $opencode_haiku_model"
+    echo "  Sonnet tasks (code review): $opencode_model"
     echo "  Mode: Direct API calls (no agent overhead)"
     echo "  Response time: ~5-15 seconds"
     echo ""
     echo "Command → Model → Mode:"
     echo "  • aidev                     → $opencode_model → Full Agent"
-    echo "  • gpc (commit messages)     → $opencode_simple_model → Direct API"
+    echo "  • gpc (commit messages)     → $opencode_haiku_model → Direct API"
     echo "  • gpa (code review)         → $opencode_model → Direct API"
     echo ""
     echo "Note: Run 'aiselect' to change provider. Changes apply immediately"
