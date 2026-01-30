@@ -488,7 +488,7 @@ function gpc() {
     local model_name=$(_get_opencode_model "$model_tier")
     
     echo ""
-    echo "ℹ Generating commit message with 🟢 Haiku..."
+    echo "🟢 Generating commit message with Haiku..."
 
     # Get the diff of staged changes
     local diff_output=$(git diff --cached)
@@ -498,47 +498,169 @@ function gpc() {
     local diff_chars=$(echo "$diff_output" | wc -c | tr -d ' ')
     echo "  Diff size: $diff_lines lines, $diff_chars characters"
 
-    # Use AI to generate commit message
-    # Commit messages can use fast model (Haiku - simple task)
-    local ai_output=$(echo "Review the following git diff and generate a concise, single-sentence commit message that describes the changes. The message should be in imperative mood (e.g., 'Add feature' not 'Added feature'). Return ONLY the commit message, nothing else.\n\n$diff_output" | _run_ai_plain "haiku" 2>&1)
-    local ai_exit=$?
+    # Retry loop for AI commit message generation
+    local max_retries=3
+    local retry_count=0
+    local commit_msg=""
+    local generation_succeeded=false
     
-    # Check if AI command succeeded
-    if [ $ai_exit -ne 0 ]; then
-      echo "✗ Error: AI command failed (exit code: $ai_exit)"
-      echo ""
-      echo "Full output:"
-      echo "$ai_output"
-      return 1
-    fi
-    
-    # Check if output contains error messages (case-insensitive)
-    if echo "$ai_output" | grep -qi "^Error:"; then
-      echo "✗ Error: AI command returned error"
-      echo ""
-      echo "Full output:"
-      echo "$ai_output"
-      return 1
-    fi
-    
-    # Extract last non-empty line as commit message
-    local commit_msg=$(echo "$ai_output" | grep -v '^$' | tail -1)
+    while [ $retry_count -lt $max_retries ]; do
+      # Use AI to generate commit message
+      local ai_output=$(echo "Review the following git diff and generate a concise, single-sentence commit message that describes the changes. The message should be in imperative mood (e.g., 'Add feature' not 'Added feature'). Return ONLY the commit message, nothing else.\n\n$diff_output" | _run_ai_plain "haiku" 2>&1)
+      local ai_exit=$?
+      
+      # Check if AI command succeeded
+      if [ $ai_exit -ne 0 ]; then
+        local error_msg="AI command failed (exit code: $ai_exit)"
+        if echo "$ai_output" | grep -qi "timeout"; then
+          error_msg="AI request timed out"
+        elif echo "$ai_output" | grep -qi "API\|network\|connection"; then
+          error_msg="Network or API error"
+        fi
+        
+        # Prompt user for action
+        _prompt_ai_error_action "$error_msg" "Commit message generation"
+        local action=$?
+        
+        case $action in
+          0)  # Retry
+            ((retry_count++))
+            if [ $retry_count -lt $max_retries ]; then
+              echo "  ⟳ Retrying... (attempt $((retry_count + 1))/$max_retries)" >&2
+            fi
+            continue
+            ;;
+          1)  # Continue (skip AI, use manual)
+            echo "" >&2
+            echo "ℹ Skipping AI generation. Please enter commit message manually:" >&2
+            read -r commit_msg
+            if [ -n "$commit_msg" ]; then
+              generation_succeeded=true
+              break
+            else
+              echo "✗ Empty commit message, aborting" >&2
+              return 1
+            fi
+            ;;
+          2)  # Cancel
+            echo "✗ Operation cancelled by user" >&2
+            return 1
+            ;;
+        esac
+        continue
+      fi
+      
+      # Check if output contains error messages (case-insensitive)
+      if echo "$ai_output" | grep -qi "^Error:"; then
+        _prompt_ai_error_action "AI returned error message" "Commit message generation"
+        local action=$?
+        
+        case $action in
+          0)  # Retry
+            ((retry_count++))
+            if [ $retry_count -lt $max_retries ]; then
+              echo "  ⟳ Retrying... (attempt $((retry_count + 1))/$max_retries)" >&2
+            fi
+            continue
+            ;;
+          1)  # Continue with manual input
+            echo "" >&2
+            echo "ℹ Skipping AI generation. Please enter commit message manually:" >&2
+            read -r commit_msg
+            if [ -n "$commit_msg" ]; then
+              generation_succeeded=true
+              break
+            else
+              echo "✗ Empty commit message, aborting" >&2
+              return 1
+            fi
+            ;;
+          2)  # Cancel
+            echo "✗ Operation cancelled by user" >&2
+            return 1
+            ;;
+        esac
+        continue
+      fi
+      
+      # Extract last non-empty line as commit message
+      commit_msg=$(echo "$ai_output" | grep -v '^$' | tail -1)
 
-    # Check if we got a valid response
-    if [ -z "$commit_msg" ]; then
-      echo "✗ Error: Failed to generate commit message (empty response)"
-      echo ""
-      echo "Full AI output:"
-      echo "$ai_output"
-      return 1
-    fi
+      # Check if we got a valid response
+      if [ -z "$commit_msg" ]; then
+        _prompt_ai_error_action "AI returned empty response" "Commit message generation"
+        local action=$?
+        
+        case $action in
+          0)  # Retry
+            ((retry_count++))
+            if [ $retry_count -lt $max_retries ]; then
+              echo "  ⟳ Retrying... (attempt $((retry_count + 1))/$max_retries)" >&2
+            fi
+            continue
+            ;;
+          1)  # Continue with manual input
+            echo "" >&2
+            echo "ℹ Skipping AI generation. Please enter commit message manually:" >&2
+            read -r commit_msg
+            if [ -n "$commit_msg" ]; then
+              generation_succeeded=true
+              break
+            else
+              echo "✗ Empty commit message, aborting" >&2
+              return 1
+            fi
+            ;;
+          2)  # Cancel
+            echo "✗ Operation cancelled by user" >&2
+            return 1
+            ;;
+        esac
+        continue
+      fi
+      
+      # Final check if response looks like an error message
+      if [[ "$commit_msg" == Error:* ]] || [[ "$commit_msg" == *"failed"* ]] || [[ "$commit_msg" == Debug:* ]]; then
+        _prompt_ai_error_action "AI response contains error markers" "Commit message generation"
+        local action=$?
+        
+        case $action in
+          0)  # Retry
+            ((retry_count++))
+            if [ $retry_count -lt $max_retries ]; then
+              echo "  ⟳ Retrying... (attempt $((retry_count + 1))/$max_retries)" >&2
+            fi
+            continue
+            ;;
+          1)  # Continue with manual input
+            echo "" >&2
+            echo "ℹ Skipping AI generation. Please enter commit message manually:" >&2
+            read -r commit_msg
+            if [ -n "$commit_msg" ]; then
+              generation_succeeded=true
+              break
+            else
+              echo "✗ Empty commit message, aborting" >&2
+              return 1
+            fi
+            ;;
+          2)  # Cancel
+            echo "✗ Operation cancelled by user" >&2
+            return 1
+            ;;
+        esac
+        continue
+      fi
+      
+      # Success!
+      generation_succeeded=true
+      break
+    done
     
-    # Final check if response looks like an error message
-    if [[ "$commit_msg" == Error:* ]] || [[ "$commit_msg" == *"failed"* ]] || [[ "$commit_msg" == Debug:* ]]; then
-      echo "✗ Error: Failed to generate commit message (error in response)"
-      echo ""
-      echo "Full AI output:"
-      echo "$ai_output"
+    # Check if we exhausted retries
+    if [ "$generation_succeeded" != true ]; then
+      echo "" >&2
+      echo "✗ Failed to generate commit message after $max_retries attempts" >&2
       return 1
     fi
 
@@ -1304,6 +1426,46 @@ function _gpa_review_batch_with_timeout() {
   return 1
 }
 
+# Helper function: Prompt user for action on AI errors
+# Usage: _prompt_ai_error_action <error_message> <context>
+# Returns: 0 for retry, 1 for continue, 2 for cancel
+function _prompt_ai_error_action() {
+  local error_msg="$1"
+  local context="${2:-AI operation}"
+  
+  echo "" >&2
+  echo "⚠ ERROR: $error_msg" >&2
+  echo "  Context: $context" >&2
+  echo "" >&2
+  echo "Options:" >&2
+  echo "  [ENTER] Retry - Try the operation again" >&2
+  echo "  [c] Continue - Skip this step and continue" >&2
+  echo "  [ESC] Cancel - Abort the operation" >&2
+  echo "" >&2
+  echo -n "Your choice: " >&2
+  
+  # Read a single character
+  local choice
+  read -r choice
+  
+  case "$choice" in
+    ""|$'\n')  # ENTER key
+      return 0  # Retry
+      ;;
+    c|C)
+      return 1  # Continue
+      ;;
+    $'\e'|q|Q)  # ESC or q
+      return 2  # Cancel
+      ;;
+    *)
+      # Invalid input, treat as cancel
+      echo "⚠ Invalid input, cancelling..." >&2
+      return 2
+      ;;
+  esac
+}
+
 function gpa() {
   # Git Partial Add with AI code review
   # Usage: gpa [--tier=haiku|sonnet|opus]
@@ -1733,15 +1895,27 @@ function gpa() {
     echo "  - AI service unavailability"
     echo "  - Rate limiting"
     echo ""
-    echo -n "Do you want to continue without AI review? [y/N]: "
+    echo "Options:"
+    echo "  [ENTER] Retry - Run code review again"
+    echo "  [c] Continue - Proceed without AI review"
+    echo "  [ESC] Cancel - Abort and keep changes staged"
+    echo ""
+    echo -n "Your choice: "
     read -r skip_review
     
     case "$skip_review" in
-      y|Y)
+      ""|$'\n')  # ENTER - Retry
+        echo ""
+        echo "♻️  Retrying review..."
+        echo ""
+        gpa "$@"
+        return $?
+        ;;
+      c|C)  # Continue without review
         echo "✓ Continuing without AI review"
         ;;
-      *)
-        echo "✗ Aborting commit"
+      $'\e'|q|Q|*)  # ESC or invalid - Cancel
+        echo "✗ Aborting commit - changes remain staged"
         return 1
         ;;
     esac
@@ -1758,26 +1932,25 @@ function gpa() {
     echo "This means issues may have been found but weren't captured."
     echo ""
     echo "Options:"
-    echo "  [i] Ignore and continue - proceed to commit"
-    echo "  [r] Retry review - re-run review on all failed batches"
-    echo "  [c] Cancel review - exit gpa and keep changes staged"
+    echo "  [ENTER] Retry - Re-run review on failed batches"
+    echo "  [c] Continue - Ignore and proceed to commit"
+    echo "  [ESC] Cancel - Exit and keep changes staged"
     echo ""
     echo -n "Your choice: "
     read -r soft_fail_choice
     
     case "$soft_fail_choice" in
-      i|I)
-        echo "✓ Ignoring unparseable responses and continuing"
-        ;;
-      r|R)
+      ""|$'\n')  # ENTER - Retry
         echo ""
         echo "♻️  Retrying review..."
         echo ""
-        # Recursively call gpa (will re-review everything)
         gpa "$@"
         return $?
         ;;
-      c|C|*)
+      c|C)  # Continue
+        echo "✓ Ignoring unparseable responses and continuing"
+        ;;
+      $'\e'|q|Q|*)  # ESC or invalid - Cancel
         echo "✗ Canceling review - changes remain staged"
         return 1
         ;;
