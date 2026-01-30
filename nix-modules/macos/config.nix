@@ -135,6 +135,31 @@
     /System/Library/Frameworks/ApplicationServices.framework/Frameworks/ATS.framework/Support/atsutil databases -remove 2>/dev/null || true
     /System/Library/Frameworks/ApplicationServices.framework/Frameworks/ATS.framework/Support/atsutil server -shutdown 2>/dev/null || true
     /System/Library/Frameworks/ApplicationServices.framework/Frameworks/ATS.framework/Support/atsutil server -ping 2>/dev/null || true
+
+    echo "Updating global npm packages..."
+    # Check if npm is available
+    if command -v npm &>/dev/null; then
+      # Get list of globally installed packages that need updates
+      OUTDATED=$(npm outdated -g --json 2>/dev/null || echo "{}")
+      OUTDATED_COUNT=$(echo "$OUTDATED" | jq 'length' 2>/dev/null || echo "0")
+      
+      if [ "$OUTDATED_COUNT" -gt 0 ]; then
+        echo "Found $OUTDATED_COUNT outdated global npm package(s)"
+        echo "$OUTDATED" | jq -r 'keys[]' 2>/dev/null | while read -r pkg; do
+          CURRENT=$(echo "$OUTDATED" | jq -r ".[\"$pkg\"].current" 2>/dev/null)
+          LATEST=$(echo "$OUTDATED" | jq -r ".[\"$pkg\"].latest" 2>/dev/null)
+          echo "  Updating $pkg: $CURRENT → $LATEST"
+        done
+        
+        # Update all global packages
+        npm update -g 2>&1 | grep -v "npm warn" || true
+        echo "Finished updating global npm packages"
+      else
+        echo "All global npm packages are up to date"
+      fi
+    else
+      echo "npm not found, skipping npm package updates"
+    fi
   '';
 
   system.defaults = {

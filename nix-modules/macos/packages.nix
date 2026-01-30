@@ -50,7 +50,7 @@
       "neovide"
       "neovim"
       "nixfmt"
-      "opencode"
+      # "opencode"  # Managed by npm to get latest version (1.1.45+) - Homebrew is stuck on 1.1.40
       "opentofu"
       "prettier"
       "python-lsp-server"
