@@ -35,7 +35,7 @@
 
 # Helper function: Discover latest Claude model for a provider
 # Usage: _discover_latest_model <provider> <model_type>
-# model_type can be "sonnet" or "haiku"
+# model_type can be "sonnet", "haiku", or "opus"
 function _discover_latest_model() {
   local provider="$1"
   local model_type="$2"
@@ -60,6 +60,10 @@ function _discover_latest_model() {
       # Look for haiku models, prioritizing higher version numbers
       latest_model=$(echo "$models" | grep -i "claude" | grep -i "haiku" | sort -V | tail -1)
       ;;
+    opus)
+      # Look for opus models, prioritizing higher version numbers
+      latest_model=$(echo "$models" | grep -i "claude" | grep -i "opus" | sort -V | tail -1)
+      ;;
   esac
   
   if [[ -n "$latest_model" ]]; then
@@ -71,7 +75,7 @@ function _discover_latest_model() {
 }
 
 # Helper function: Get OpenCode model string based on provider preference
-# Usage: _get_opencode_model ["simple"|"complex"]
+# Usage: _get_opencode_model ["simple"|"complex"|"ultra"]
 function _get_opencode_model() {
   local task_type="${1:-complex}"
   local provider=$(_get_ai_provider)
@@ -81,6 +85,8 @@ function _get_opencode_model() {
   
   if [[ "$task_type" == "simple" ]]; then
     model=$(_discover_latest_model "$provider" "haiku")
+  elif [[ "$task_type" == "ultra" ]]; then
+    model=$(_discover_latest_model "$provider" "opus")
   else
     model=$(_discover_latest_model "$provider" "sonnet")
   fi
@@ -94,13 +100,20 @@ function _get_opencode_model() {
   # Fallback to hardcoded models if discovery fails
   case $provider in
     github-copilot)
-      # Note: GitHub Copilot may not have all Haiku models available
-      # Use Sonnet for both simple and complex tasks as it's fast enough
-      echo "github-copilot/claude-sonnet-4.5"
+      # Note: GitHub Copilot may not have Opus or all Haiku models available
+      if [[ "$task_type" == "ultra" ]]; then
+        echo "github-copilot/claude-opus-4"
+      elif [[ "$task_type" == "simple" ]]; then
+        echo "github-copilot/claude-sonnet-4.5"  # Fallback to sonnet if haiku unavailable
+      else
+        echo "github-copilot/claude-sonnet-4.5"
+      fi
       ;;
     opencode)
       if [[ "$task_type" == "simple" ]]; then
         echo "opencode/claude-3-5-haiku"
+      elif [[ "$task_type" == "ultra" ]]; then
+        echo "opencode/claude-opus-4"
       else
         echo "opencode/claude-sonnet-4.5"
       fi
@@ -108,6 +121,8 @@ function _get_opencode_model() {
     openrouter)
       if [[ "$task_type" == "simple" ]]; then
         echo "openrouter/anthropic/claude-3.5-haiku"
+      elif [[ "$task_type" == "ultra" ]]; then
+        echo "openrouter/anthropic/claude-opus-4"
       else
         echo "openrouter/anthropic/claude-sonnet-4.5"
       fi
@@ -146,10 +161,30 @@ function _run_ai_direct() {
       
       local model_name="$model"  # Keep full model name with prefix
       
-      # Add a strong instruction to output ONLY JSON
+      # Add a VERY strong instruction to output ONLY JSON with explicit format
       local json_prompt="$prompt
 
-CRITICAL: Your response must contain ONLY the JSON array, with no additional text, explanations, or markdown. Do not include any conversational text before or after the JSON. Start your response with [ and end with ]. Output nothing else."
+CRITICAL INSTRUCTIONS - READ CAREFULLY:
+You MUST respond with ONLY a JSON array. Do not include:
+- Any conversational text before the JSON
+- Any explanations after the JSON  
+- Any markdown code blocks or backticks
+- Any commentary or notes
+
+Your entire response must be valid JSON starting with [ and ending with ].
+If there are no issues to report, respond with exactly: []
+
+Example of CORRECT response format:
+[{\"file\":\"example.tf\",\"severity\":\"Critical\",\"issue\":\"Hardcoded secret\",\"recommendation\":\"Use variable\"}]
+
+Example of INCORRECT response (DO NOT DO THIS):
+Here are the issues I found:
+\`\`\`json
+[{...}]
+\`\`\`
+Let me know if you need anything else!
+
+START YOUR RESPONSE NOW WITH [ OR []:"
       
       # Use opencode run with stdin to avoid issues with special characters
       # Timeout after 90s (longer than direct API but acceptable)
@@ -167,26 +202,20 @@ CRITICAL: Your response must contain ONLY the JSON array, with no additional tex
         return 1
       fi
       
-      # Return the result - try to clean it up if needed
+      # Extract JSON more efficiently - single strategy that handles most cases
       if [[ -n "$result" ]]; then
-        # If result contains JSON, try to extract just the JSON part
-        # This handles cases where the agent adds conversational text
-        if echo "$result" | grep -q '^\['; then
-          # Already starts with JSON
-          echo "$result"
+        # Strategy: Extract from first [ to last ] (handles wrapped JSON)
+        local extracted=$(echo "$result" | perl -0777 -pe 's/^[^\[]*(\[.*\])[^\]]*$/$1/s' | head -c 50000)
+        
+        # Validate it's proper JSON
+        if echo "$extracted" | jq empty 2>/dev/null; then
+          echo "$extracted"
           return 0
-        else
-          # Try to extract JSON array from response
-          local extracted=$(echo "$result" | grep -o '\[.*\]' | head -1)
-          if [[ -n "$extracted" ]]; then
-            echo "$extracted"
-            return 0
-          else
-            # Fall back to full response
-            echo "$result"
-            return 0
-          fi
         fi
+        
+        # Fallback: if extraction failed, return empty array
+        echo "[]"
+        return 0
       fi
       
       echo "Error: OpenCode returned empty response" >&2
