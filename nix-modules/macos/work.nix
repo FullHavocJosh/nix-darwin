@@ -28,13 +28,11 @@
       if [ "$BEFORE_COUNT" -gt 0 ]; then
         echo "Found $BEFORE_COUNT .terraform directories (''${BEFORE_SIZE} MB)"
         
-        # Remove .terraform directories from v3 and v4 only
+        # Remove only .terraform directories (cache) from v3 and v4
+        # Note: .terraform.lock.hcl files are preserved as they should be committed to git
         find "$TERRAFORM_BASE/v3" "$TERRAFORM_BASE/v4" -type d -name ".terraform" -exec rm -rf {} + 2>/dev/null
         
-        # Also remove .terraform.lock.hcl files
-        find "$TERRAFORM_BASE/v3" "$TERRAFORM_BASE/v4" -type f -name ".terraform.lock.hcl" -delete 2>/dev/null
-        
-        echo "Cleaned up Terraform cache files from v3 and v4 directories"
+        echo "Cleaned up Terraform cache directories from v3 and v4"
       else
         echo "No .terraform directories found to clean"
       fi
