@@ -142,3 +142,33 @@ stow-uninstall-local-ignore
 /.config/AWSVPNCLient*
 # GPA code review cache (stored in .git directory)
 .git/gpa_review_cache
+
+# =============================================================================
+# Zed Editor - Security Policy
+# =============================================================================
+#
+# SECURITY RATIONALE:
+# - settings.json contains hardcoded GitHub Personal Access Token
+# - conversations/ contains AI chat history (potentially sensitive)
+# - prompts/ contains LMDB database files (unencrypted, may include sensitive context)
+#
+# TRACKED vs IGNORED:
+# - Themes are safe to track (no secrets)
+# - All other Zed config contains sensitive data and must be gitignored
+#
+# CROSS-MACHINE SYNC:
+# - Settings cannot use environment variables (Zed limitation)
+# - Must manually replicate settings.json on each machine
+# - Token stored in ~/.zshrc_envvars (already gitignored above)
+#
+# =============================================================================
+
+# Ignore Zed settings (contains hardcoded GitHub token)
+.config/zed/settings.json
+
+# Ignore AI conversation history and prompts database
+.config/zed/conversations/
+.config/zed/prompts/
+
+# Keep themes tracked (safe, no secrets)
+!.config/zed/themes/

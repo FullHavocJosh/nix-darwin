@@ -2,6 +2,7 @@
 {
   environment.systemPackages = with pkgs; [
     nil
+    nixd # Nix language server
     smassh
     python3Packages.fonttools # For creating font aliases
     lemminx # XML Language Server
@@ -50,7 +51,7 @@
       "neovide"
       "neovim"
       "nixfmt"
-      # "opencode"  # Managed by npm to get latest version (1.1.45+) - Homebrew is stuck on 1.1.40
+      # "opencode"  # Managed by npm (opencode-ai package) to get latest version - Homebrew core is stuck on 1.1.40
       "opentofu"
       "prettier"
       "python-lsp-server"
@@ -121,6 +122,7 @@
       "via"
       "vial"
       "vlc"
+      "zed"
       "zen"
     ];
     masApps = {
