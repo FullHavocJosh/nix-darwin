@@ -1,9 +1,4 @@
-{
-  pkgs,
-  config,
-  lib,
-  ...
-}:
+{ pkgs, ... }:
 {
   nixpkgs.config.allowUnfree = true;
   nixpkgs.hostPlatform = "aarch64-darwin";
@@ -32,7 +27,7 @@
 
     if command -v cargo &>/dev/null && command -v git &>/dev/null && command -v rustc &>/dev/null; then
       echo "Checking ferrosonic installation..."
-      
+
       # Clone or update repository
       if [ ! -d "$FERROSONIC_DIR" ]; then
         echo "Cloning ferrosonic repository..."
@@ -41,11 +36,11 @@
         echo "Updating ferrosonic repository..."
         cd "$FERROSONIC_DIR" && git pull || echo "Failed to update ferrosonic"
       fi
-      
+
       # Build and install if directory exists
       if [ -d "$FERROSONIC_DIR" ]; then
         cd "$FERROSONIC_DIR"
-        
+
         # Check if we need to rebuild (source changed or binary doesn't exist)
         if [ ! -f "$FERROSONIC_BIN" ] || [ "$FERROSONIC_DIR/src" -nt "$FERROSONIC_BIN" ]; then
           echo "Building ferrosonic (this may take a few minutes)..."
@@ -144,12 +139,12 @@
         echo "Installing opencode-ai..."
         npm install -g opencode-ai 2>&1 | grep -v "npm warn" || echo "Failed to install opencode-ai"
       fi
-      
+
       # Get list of globally installed packages that need updates
       OUTDATED=$(npm outdated -g --json 2>/dev/null || echo "{}")
       if [ -n "$OUTDATED" ] && [ "$OUTDATED" != "{}" ]; then
         OUTDATED_COUNT=$(echo "$OUTDATED" | jq 'length' 2>/dev/null || echo "0")
-        
+
         if [ "$OUTDATED_COUNT" -gt 0 ] 2>/dev/null; then
           echo "Found $OUTDATED_COUNT outdated global npm package(s)"
           echo "$OUTDATED" | jq -r 'keys[]' 2>/dev/null | while read -r pkg; do
@@ -157,7 +152,7 @@
             LATEST=$(echo "$OUTDATED" | jq -r ".[\"$pkg\"].latest" 2>/dev/null)
             echo "  Updating $pkg: $CURRENT → $LATEST"
           done
-          
+
           # Update all global packages
           npm update -g 2>&1 | grep -v "npm warn" || true
           echo "Finished updating global npm packages"

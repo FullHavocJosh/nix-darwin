@@ -1,4 +1,4 @@
-{ pkgs, config, ... }:
+{ pkgs, ... }:
 {
 
   #######################################
@@ -24,14 +24,14 @@
     if [ -d "$TERRAFORM_BASE/v3" ] || [ -d "$TERRAFORM_BASE/v4" ]; then
       BEFORE_SIZE=$(find "$TERRAFORM_BASE/v3" "$TERRAFORM_BASE/v4" -type d -name ".terraform" -exec du -sk {} \; 2>/dev/null | awk '{sum+=$1} END {print sum/1024}')
       BEFORE_COUNT=$(find "$TERRAFORM_BASE/v3" "$TERRAFORM_BASE/v4" -type d -name ".terraform" 2>/dev/null | wc -l | tr -d ' ')
-      
+
       if [ "$BEFORE_COUNT" -gt 0 ]; then
         echo "Found $BEFORE_COUNT .terraform directories (''${BEFORE_SIZE} MB)"
-        
+
         # Remove only .terraform directories (cache) from v3 and v4
         # Note: .terraform.lock.hcl files are preserved as they should be committed to git
         find "$TERRAFORM_BASE/v3" "$TERRAFORM_BASE/v4" -type d -name ".terraform" -exec rm -rf {} + 2>/dev/null
-        
+
         echo "Cleaned up Terraform cache directories from v3 and v4"
       else
         echo "No .terraform directories found to clean"
