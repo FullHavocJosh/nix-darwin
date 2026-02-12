@@ -57,7 +57,7 @@ contexts = [
 disabled = true
 
 [hostname]
-ssh_only = true
+ssh_only = false
 format = '[@$hostname]($style) '
 style = 'bold blue'
 disabled = false

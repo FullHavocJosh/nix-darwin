@@ -24,3 +24,18 @@ fi
 if [[ -f ~/.zshrc_os_linux_omarchy_keybindings ]]; then
     source ~/.zshrc_os_linux_omarchy_keybindings
 fi
+
+# Auto-connect to Mac mini when opening terminal on Omarchy laptop
+# Only trigger if:
+# - We're not already in an SSH session
+# - This is an interactive shell
+# - We haven't disabled auto-ssh (set NO_AUTO_SSH=1 to disable)
+# - We're not in a tmux session (to avoid auto-connecting in every tmux pane)
+if [[ -z "$SSH_CONNECTION" ]] && [[ -o interactive ]] && [[ -z "$NO_AUTO_SSH" ]] && [[ -z "$TMUX" ]]; then
+    # Set flag to prevent reconnecting after first SSH session ends
+    export NO_AUTO_SSH=1
+    # Connect to Mac mini
+    ssh -i ~/.ssh/id_ed25519 havoc@macOS-Mac-mini.rollet.family
+    # After SSH ends, continue with local shell (don't exit)
+    echo "Disconnected from Mac mini. You are now in a local shell."
+fi
