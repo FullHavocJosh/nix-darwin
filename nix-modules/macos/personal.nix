@@ -25,11 +25,20 @@
       ];
       EnvironmentVariables = {
         OLLAMA_HOST = "0.0.0.0:11434";
+        OLLAMA_FLASH_ATTENTION = "1";
+        OLLAMA_KV_CACHE_TYPE = "q8_0";
       };
       KeepAlive = true;
       RunAtLoad = true;
       StandardOutPath = "/tmp/ollama.log";
       StandardErrorPath = "/tmp/ollama.error.log";
+      LimitLoadToSessionType = [
+        "Aqua"
+        "Background"
+        "LoginWindow"
+        "StandardIO"
+        "System"
+      ];
     };
   };
 
