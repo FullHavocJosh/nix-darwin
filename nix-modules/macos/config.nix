@@ -140,6 +140,12 @@
         npm install -g opencode-ai 2>&1 | grep -v "npm warn" || echo "Failed to install opencode-ai"
       fi
 
+      # Install jsonlint if not already installed
+      if ! npm list -g jsonlint &>/dev/null; then
+        echo "Installing jsonlint..."
+        npm install -g jsonlint 2>&1 | grep -v "npm warn" || echo "Failed to install jsonlint"
+      fi
+
       # Get list of globally installed packages that need updates
       OUTDATED=$(npm outdated -g --json 2>/dev/null || echo "{}")
       if [ -n "$OUTDATED" ] && [ "$OUTDATED" != "{}" ]; then
