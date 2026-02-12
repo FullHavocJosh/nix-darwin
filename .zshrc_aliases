@@ -34,7 +34,7 @@ alias ssoexport='eval "$(aws configure export-credentials --profile $AWS_PROFILE
 
 alias gpr='gpr_func'
 alias gpa-clear-cache='_gpa_clear_cache'
-alias gp='git pull && git submodule update --init --recursive && git submodule update --remote --recursive'
+alias gp='git pull && git submodule update --init --recursive'
 
 # AI Provider aliases
 alias aishow='aiselect --show'
