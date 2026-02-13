@@ -194,7 +194,7 @@ in
     echo "Finished Stowing dotfiles..."
 
     echo "Setting wallpaper..."
-    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/havoc/.wallpapers/wallhaven-2yxj8m.jpg"'
+    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/havoc/.wallpapers/wallhaven-1k9m9w.jpg"'
   '';
 
   # Configure Ollama service to listen on all interfaces
