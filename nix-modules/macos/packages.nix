@@ -7,6 +7,7 @@
     python3Packages.fonttools # For creating font aliases
     lemminx # XML Language Server
     rubyPackages.rubocop # Ruby linter/formatter
+    openvpn # OpenVPN client for VPN connections
   ];
 
   homebrew = {
@@ -117,6 +118,7 @@
       "shottr"
       "stats"
       "sublime-text"
+      # "tunnelblick" # Replaced with OpenVPN + custom network manager
       "ungoogled-chromium"
       "vanilla"
       "via"
