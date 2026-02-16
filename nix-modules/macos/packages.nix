@@ -44,6 +44,7 @@
       "graphviz"
       "hadolint"
       "jq"
+      "kubectl"
       "lazygit"
       "lua-language-server"
       "luarocks"

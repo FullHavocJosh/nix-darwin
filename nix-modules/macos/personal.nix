@@ -252,12 +252,12 @@ in
     ];
     # Install Brew Formulas
     brews = [
+      "k9s"
     ];
     # Install Brew Casks
     casks = [
       "battle-net"
       "curseforge"
-      "discord"
       "obsidian"
       "ollama-app"
       "plex"

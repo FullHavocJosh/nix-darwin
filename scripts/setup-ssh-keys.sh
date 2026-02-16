@@ -40,6 +40,8 @@ declare -A SSH_TARGETS=(
 	["xps13"]="havoc@xps13.rollet.family"
 	["opnsense"]="root@192.168.144.1"
 	["705g4"]="havoc@705g4.rollet.family"
+	["k3sworkervm0"]="havoc@k3sworkervm0.rollet.family"
+	["k3sworkervm1"]="havoc@k3sworkervm1.rollet.family"
 )
 
 echo -e "${YELLOW}This script will copy your SSH public key to the following servers:${NC}"
@@ -193,4 +195,4 @@ fi
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "You can now test the connections with your aliases:"
-echo "  sshmacbook, sshg14, sshazeroth, sshtestazeroth, sshmini, sshtruenas, ssh6rx26x1, sshcaitsg14, sshxps13, sshopnsense, ssh705g4"
+echo "  sshmacbook, sshg14, sshazeroth, sshtestazeroth, sshmini, sshtruenas, ssh6rx26x1, sshcaitsg14, sshxps13, sshopnsense, ssh705g4, sshk3sworkervm0, sshk3sworkervm1"
