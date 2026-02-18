@@ -36,53 +36,44 @@
 # Helper function: Discover latest Claude model for a provider
 # Usage: _discover_latest_model <provider> <model_type>
 # model_type can be "sonnet", "haiku", or "opus"
-# Returns the latest version with smart version comparison
+# Returns the highest-versioned base model (no dated variants, no -latest aliases)
 function _discover_latest_model() {
   local provider="$1"
   local model_type="$2"
   
   # Get all models for the provider
-  local models=$(opencode models "$provider" 2>/dev/null)
+  local models
+  models=$(opencode models "$provider" 2>/dev/null)
   
   if [[ -z "$models" ]]; then
     return 1
   fi
   
-  # Filter for the model type
-  local filtered_models=""
-  
-  case $model_type in
-    sonnet)
-      filtered_models=$(echo "$models" | grep -i "claude" | grep -i "sonnet")
-      ;;
-    haiku)
-      filtered_models=$(echo "$models" | grep -i "claude" | grep -i "haiku")
-      ;;
-    opus)
-      filtered_models=$(echo "$models" | grep -i "claude" | grep -i "opus")
-      ;;
-  esac
+  # Filter for the model type keyword
+  local filtered_models
+  filtered_models=$(echo "$models" | grep -i "$model_type")
   
   if [[ -z "$filtered_models" ]]; then
     return 1
   fi
   
-  # Smart version comparison: prioritize decimal versions (4.5) over integer versions (41)
-  # Claude versions follow semantic versioning: 3, 3.5, 4, 4.5
-  # So opus-4.5 should be preferred over opus-41 (which might be a typo or alternate naming)
+  # Exclude:
+  #   - dated variants (lines ending in 8-digit date like -20241022)
+  #   - -latest aliases
+  # This leaves only canonical versioned names like anthropic/claude-sonnet-4-6
+  local base_models
+  base_models=$(echo "$filtered_models" | grep -Ev -- '-[0-9]{8}$|-latest$')
   
-  # First, try to find models with decimal versions (e.g., 4.5, 3.5)
-  local decimal_models=$(echo "$filtered_models" | grep -E '\-[0-9]+\.[0-9]+$')
-  
-  if [[ -n "$decimal_models" ]]; then
-    # Found decimal versions, use the highest one
-    echo "$decimal_models" | sort -t'-' -k2 -V | tail -1
-    return 0
+  if [[ -z "$base_models" ]]; then
+    # Fall back to all matches if filtering removed everything
+    base_models="$filtered_models"
   fi
   
-  # Fallback: no decimal versions found, use standard version sort
-  echo "$filtered_models" | sort -V | tail -1
-  return 0
+  # Sort using version sort on the full line — handles both:
+  #   hyphen-separated:  anthropic/claude-sonnet-4-6  (treated as version tokens)
+  #   dot-separated:     github-copilot/claude-sonnet-4.5
+  # sort -V understands numeric segments so 4-6 > 4-5 > 4 > 3-7
+  echo "$base_models" | sort -V | tail -1
 }
 
 # Helper function: Get OpenCode model string based on provider preference
@@ -138,8 +129,17 @@ function _get_opencode_model() {
         echo "openrouter/anthropic/claude-sonnet-4.5"  # Latest: Sonnet 4.5
       fi
       ;;
+    anthropic)
+      if [[ "$task_type" == "haiku" ]]; then
+        echo "anthropic/claude-haiku-4-5"
+      elif [[ "$task_type" == "opus" ]]; then
+        echo "anthropic/claude-opus-4-5"
+      else
+        echo "anthropic/claude-sonnet-4-5"
+      fi
+      ;;
     *)
-      echo "github-copilot/claude-sonnet-4.5"  # Default fallback to latest Sonnet
+      echo "anthropic/claude-sonnet-4-5"  # Default fallback
       ;;
   esac
 }
@@ -461,39 +461,25 @@ function aidev() {
   local YELLOW='\033[1;33m'
   local NC='\033[0m' # No Color
   
-  # Validate authentication before launching
+  # Validate provider and model before launching
   local auth_valid=false
-  case $provider in
-    github-copilot)
-      if _validate_github_copilot; then
-        auth_valid=true
-      else
-        echo "${RED}✗${NC} GitHub Copilot not authenticated"
-        echo ""
-      fi
-      ;;
-    opencode)
-      if _validate_opencode_zen; then
-        auth_valid=true
-      else
-        echo "${RED}✗${NC} OpenCode Zen API key not configured"
-        echo ""
-      fi
-      ;;
-    openrouter)
-      if _validate_openrouter; then
-        auth_valid=true
-      else
-        echo "${RED}✗${NC} OpenRouter API key not configured"
-        echo ""
-      fi
-      ;;
-  esac
+  local _aidev_validate() {
+    case $provider in
+      anthropic)    _validate_anthropic ;;
+      github-copilot) _validate_github_copilot ;;
+      opencode)     _validate_opencode_zen ;;
+      openrouter)   _validate_openrouter ;;
+      *)            return 1 ;;
+    esac
+  }
   
-  # If authentication failed, ask user what to do
-  if ! $auth_valid; then
+  if _aidev_validate; then
+    auth_valid=true
+  else
+    echo "${RED}✗${NC} Provider '$provider' is not available or not authenticated"
+    echo ""
     echo "Options:"
-    echo "  [a] Run aiselect to configure authentication"
+    echo "  [a] Run aiselect to configure or switch provider"
     echo "  [c] Continue anyway (may fail)"
     echo "  [q] Quit"
     echo ""
@@ -507,27 +493,12 @@ function aidev() {
     case $choice in
       a | A)
         aiselect
-        # Check if authentication succeeded after running aiselect
-        case $provider in
-          github-copilot)
-            if ! _validate_github_copilot; then
-              echo "${RED}✗${NC} Authentication still not valid. Aborting."
-              return 1
-            fi
-            ;;
-          opencode)
-            if ! _validate_opencode_zen; then
-              echo "${RED}✗${NC} API key still not configured. Aborting."
-              return 1
-            fi
-            ;;
-          openrouter)
-            if ! _validate_openrouter; then
-              echo "${RED}✗${NC} API key still not configured. Aborting."
-              return 1
-            fi
-            ;;
-        esac
+        # Re-read provider in case user switched it
+        provider=$(_get_ai_provider)
+        if ! _aidev_validate; then
+          echo "${RED}✗${NC} Provider '$provider' still not valid. Aborting."
+          return 1
+        fi
         ;;
       c | C)
         echo "${YELLOW}⚠${NC}  Continuing without valid authentication..."
@@ -544,7 +515,18 @@ function aidev() {
     esac
   fi
   
-  local model=$(_get_opencode_model "sonnet")
+  # Resolve the model for the current provider
+  local model
+  model=$(_get_opencode_model "sonnet")
+  if [[ -z "$model" ]]; then
+    echo "${RED}✗${NC} Could not determine model for provider: $provider"
+    return 1
+  fi
+  
+  echo "${GREEN}✓${NC} Provider: $provider"
+  echo "${GREEN}✓${NC} Model:    $model"
+  echo ""
+  
   opencode --model "$model" "$@"
 }
 
@@ -617,13 +599,25 @@ function _validate_openrouter() {
   return 1
 }
 
+# Validate Anthropic provider availability via OpenCode
+# Checks that opencode can list models for the anthropic provider
+function _validate_anthropic() {
+  if ! command -v opencode &>/dev/null; then
+    return 1
+  fi
+  # If opencode can list at least one claude model for anthropic, the provider is available
+  local models
+  models=$(opencode models anthropic 2>/dev/null | grep -i "claude")
+  [[ -n "$models" ]]
+}
+
 # Helper function to get current AI provider preference
 function _get_ai_provider() {
   local preference_file="$HOME/.ai_provider_preference"
   
-  # If preference file doesn't exist, default to GitHub Copilot
+  # If preference file doesn't exist, default to Anthropic
   if [[ ! -f "$preference_file" ]]; then
-    echo "github-copilot"
+    echo "anthropic"
     return 0
   fi
   
@@ -659,7 +653,7 @@ function aiselect() {
     echo "  Response time: ~5-15 seconds"
     echo ""
     echo "Command → Model → Mode:"
-    echo "  • aidev                     → $opencode_model → Full Agent"
+    echo "  • aidev                     → $opencode_model → Full Agent (opencode)"
     echo "  • gpc (commit messages)     → $opencode_haiku_model → Direct API"
     echo "  • gpa (code review)         → $opencode_model → Direct API"
     echo ""
@@ -679,9 +673,21 @@ function aiselect() {
   echo "Checking AI provider availability..."
   echo ""
   
+  local anthropic_valid=false
   local github_valid=false
   local opencode_valid=false
   local openrouter_valid=false
+  
+  # Validate Anthropic (via OpenCode)
+  if _validate_anthropic; then
+    anthropic_valid=true
+    echo "${GREEN}✓${NC} Anthropic available via OpenCode"
+    echo ""
+  else
+    echo "${YELLOW}⚠${NC}  Anthropic not available via OpenCode"
+    echo "   Ensure OpenCode is installed and has the Anthropic provider configured"
+    echo ""
+  fi
   
   # Validate GitHub Copilot
   if _validate_github_copilot; then
@@ -945,22 +951,28 @@ function aiselect() {
     echo "Select AI Provider:"
     echo "═══════════════════════════════════════════════════════════"
     
-    if $github_valid; then
-      echo "  [g] GitHub Copilot (default) ${GREEN}✓${NC}"
+    if $anthropic_valid; then
+      echo "  [a] Anthropic Claude (default) ${GREEN}✓${NC}"
     else
-      echo "  [g] GitHub Copilot (default) ${RED}✗${NC}"
+      echo "  [a] Anthropic Claude (default) ${RED}✗${NC}"
+    fi
+    
+    if $github_valid; then
+      echo "  [g] GitHub Copilot             ${GREEN}✓${NC}"
+    else
+      echo "  [g] GitHub Copilot             ${RED}✗${NC}"
     fi
     
     if $opencode_valid; then
-      echo "  [c] OpenCode Zen             ${GREEN}✓${NC}"
+      echo "  [c] OpenCode Zen               ${GREEN}✓${NC}"
     else
-      echo "  [c] OpenCode Zen             ${RED}✗${NC}"
+      echo "  [c] OpenCode Zen               ${RED}✗${NC}"
     fi
     
     if $openrouter_valid; then
-      echo "  [r] OpenRouter               ${GREEN}✓${NC}"
+      echo "  [r] OpenRouter                 ${GREEN}✓${NC}"
     else
-      echo "  [r] OpenRouter               ${RED}✗${NC}"
+      echo "  [r] OpenRouter                 ${RED}✗${NC}"
     fi
     
     echo "  [q] Quit"
@@ -975,7 +987,32 @@ function aiselect() {
     echo ""
     
     case $choice in
-      $'\n' | '' | g | G)
+      $'\n' | '' | a | A)
+        if $anthropic_valid; then
+          echo "anthropic" > "$preference_file"
+          echo ""
+          echo "${GREEN}✓${NC} Provider set to: Anthropic (via OpenCode)"
+          echo ""
+          echo "Discovering latest Claude models..."
+          local sonnet_model=$(_discover_latest_model "anthropic" "sonnet")
+          local haiku_model=$(_discover_latest_model "anthropic" "haiku")
+          if [[ -n "$sonnet_model" ]] && [[ -n "$haiku_model" ]]; then
+            echo "  • Complex tasks (Sonnet): $sonnet_model"
+            echo "  • Simple tasks (Haiku):   $haiku_model"
+          else
+            echo "  ${YELLOW}⚠${NC} Could not discover models, using defaults"
+          fi
+          echo ""
+          echo "ℹ  New OpenCode sessions (via 'aidev') will use this provider"
+          return 0
+        else
+          echo "${RED}✗${NC} Anthropic is not available via OpenCode"
+          echo "ℹ  Ensure OpenCode is installed and the Anthropic provider is configured"
+          echo ""
+          continue
+        fi
+        ;;
+      g | G)
         if $github_valid; then
           echo "github-copilot" > "$preference_file"
           echo ""
