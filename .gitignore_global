@@ -1,0 +1,278 @@
+# =============================================================================
+# Global .gitignore - Applies to all repositories on this system
+# =============================================================================
+# Configured via: git config --global core.excludesfile ~/.gitignore_global
+# Managed by: nix-darwin configuration
+# Combined from: ~/nix-darwin/.gitignore + ~/pscloudops/terraform-infrastructure/.gitignore
+# =============================================================================
+
+# =============================================================================
+# macOS System Files
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.AppleDouble
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# =============================================================================
+# Editor Swap/Backup Files
+# =============================================================================
+*.swp
+*.swo
+*~
+*.bak
+*bak
+*.backup
+*_local*
+
+# =============================================================================
+# IDE Configurations
+# =============================================================================
+.idea/
+.vscode/
+.cursor/
+
+# =============================================================================
+# Terraform
+# =============================================================================
+*.tfstate
+*.tfstate.*.backup
+*.tfstate.backup
+*.terraform.lock.hcl
+*.terraform.tfstate.lock.info
+.terraform/
+secret.tfvars
+secret.auto.tfvars
+# Exception: Allow template files
+!**/_template/secret.auto.tfvars
+
+# =============================================================================
+# Environment Variables & Secrets - SECURITY CRITICAL
+# =============================================================================
+# Two-file system for environment variables:
+#
+# 1. .zshrc_envvars (IGNORED - contains SENSITIVE data)
+#    - API keys, tokens, secrets, passwords
+#    - Plain text storage with chmod 600
+#    - Never committed to git
+#
+# 2. .zshrc_envvars_insecure (TRACKED - contains NON-SENSITIVE data)
+#    - AWS regions, profiles, default configurations
+#    - Safe to share with team via git
+#    - Despite "_insecure" in name, this file is intentionally tracked
+#    - Name indicates "insecure to store secrets here" not "ignored by git"
+#
+# IMPORTANT: The wildcard pattern *_insecure* was intentionally removed
+# to allow .zshrc_envvars_insecure to be tracked. This is by design.
+# =============================================================================
+
+.zshrc_envvars
+.env
+.env.local
+.env.production
+.env.staging
+**/secrets/
+private/
+secret.*
+
+# =============================================================================
+# SSH & Authentication
+# =============================================================================
+.ssh/
+**/.ssh/
+*.pem
+*.key
+*_rsa
+*.p12
+*.pfx
+
+# =============================================================================
+# Ansible
+# =============================================================================
+.ansible/
+**/.ansible/
+# Ansible inventory with real IPs/hosts
+ansible-linux/inventory/linux
+ansible-linux/inventory/production
+ansible-linux/inventory/staging
+
+# =============================================================================
+# Programming Language Build Artifacts
+# =============================================================================
+# Python
+venv/
+ve/
+__pycache__/
+*.pyc
+*.pyo
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Go
+vendor/
+
+# Archives
+*.zip
+*.tar.gz
+*.tgz
+
+# =============================================================================
+# Logs & Temporary Files
+# =============================================================================
+*.log
+*.tmp
+*.pid
+.cache/
+btop.log
+
+# =============================================================================
+# AI Coding Tools - Repository-Local Artifacts
+# =============================================================================
+# These tools create files/folders inside repos when used
+# Entries without trailing slashes ignore both files AND directories
+
+# Claude (AI assistant)
+.claude
+.claude/
+
+# Crush (AI coding tool)
+.crush
+.crush/
+
+# OpenCode (AI coding assistant)
+.opencode
+.opencode/
+
+# Cursor (AI-powered IDE)
+.cursor
+.cursor/
+
+# Aider (AI pair programming)
+.aider*
+
+# Continue.dev (AI code assistant)
+.continue
+.continue/
+
+# GitHub Copilot artifacts
+.copilot
+.copilot/
+
+# Generic AI tool artifacts
+.ai
+.ai/
+.gpt
+.gpt/
+
+# =============================================================================
+# Application-Specific Config Directories (Global)
+# =============================================================================
+# These are for ~/.config/ paths, not repo-local files
+
+# GitHub Copilot global config
+.config/github-copilot/
+
+# Crush global config
+.config/crush/commands/
+
+# OpenCode global config
+.config/opencode/commands/
+
+# K9s clusters
+.config/k9s/clusters/
+
+# iTerm2
+.config/iterm2/AppSupport/
+.config/iterm2/sockets/
+
+# JetBrains
+.config/jgit/
+
+# NuGet
+.config/NuGet/
+
+# Raycast
+.config/raycast/
+
+# AWS VPN Client
+.config/AWS VPN Client*/
+.config/AWSVPNClient*/
+
+# Git review cache
+.git/gpa_review_cache
+
+# =============================================================================
+# Zed Editor - SECURITY CRITICAL
+# =============================================================================
+# SECURITY RATIONALE:
+# - settings.json contains hardcoded GitHub Personal Access Token
+# - conversations/ contains AI chat history (potentially sensitive)
+# - prompts/ contains LMDB database files (unencrypted, may include sensitive context)
+#
+# TRACKED vs IGNORED:
+# - Themes are safe to track (no secrets)
+# - All other Zed config contains sensitive data and must be gitignored
+#
+# CROSS-MACHINE SYNC:
+# - Settings cannot use environment variables (Zed limitation)
+# - Must manually replicate settings.json on each machine
+# - Token stored in ~/.zshrc_envvars (already gitignored above)
+# =============================================================================
+.config/zed/settings.json
+.config/zed/conversations/
+.config/zed/prompts/
+# Keep themes tracked (safe, no secrets)
+!.config/zed/themes/
+
+# =============================================================================
+# Nix-Darwin & Nix Build Artifacts
+# =============================================================================
+result
+/nix/store
+/nix/var/nix/profiles
+/nix/var/nix/gcroots
+/nix/var/log/nix/drvs
+/nix/var/nix/temproots
+/Library/Caches/com.apple.dt.Xcode
+
+# =============================================================================
+# Homebrew
+# =============================================================================
+opt/
+/usr/local/Cellar/
+/usr/local/Homebrew/
+Library/Taps/
+
+# =============================================================================
+# Stow
+# =============================================================================
+.stow-local-ignore
+.stow-uninstall-local-ignore
+stow-uninstall-local-ignore
+**/.stow-uninstall-local-ignore
+
+# =============================================================================
+# Plugin Lock Files
+# =============================================================================
+**/lazy-lock.json
+
+# =============================================================================
+# tmux Plugins
+# =============================================================================
+.config/tmux/plugins/tmux*
+.config/tmux/plugins/tmux-*
+.config/tmux/plugins/*-tmux-*
+
+# =============================================================================
+# Miscellaneous
+# =============================================================================
+ignore.txt
+*.local

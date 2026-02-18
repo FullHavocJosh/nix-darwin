@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "context-guardian": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["$HOME/context-guardian-mcp-server/dist/index.js"]
+    }
+  }
+}

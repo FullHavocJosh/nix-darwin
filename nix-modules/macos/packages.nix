@@ -8,6 +8,8 @@
     lemminx # XML Language Server
     rubyPackages.rubocop # Ruby linter/formatter
     openvpn # OpenVPN client for VPN connections
+    nodejs_22 # Node.js for MCP servers and development
+    typescript # TypeScript compiler
   ];
 
   homebrew = {
@@ -53,7 +55,7 @@
       "neovide"
       "neovim"
       "nixfmt"
-      # "opencode"  # Managed by npm (opencode-ai package) to get latest version - Homebrew core is stuck on 1.1.40
+      "opencode" # OpenCode CLI - now available in homebrew
       "opentofu"
       "prettier"
       "python-lsp-server"
@@ -100,6 +102,7 @@
       "balenaetcher"
       "betterdisplay"
       "claude"
+      "claude-code" # Claude Code terminal-based AI coding assistant
       "font-hack-nerd-font"
       "font-jetbrains-mono-nerd-font"
       "ghostty"

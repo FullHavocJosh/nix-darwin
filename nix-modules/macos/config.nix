@@ -9,6 +9,21 @@
   # Create font aliases by modifying font metadata
   # This allows Core Text to recognize "JetBrains Mono" as an alias for "JetBrainsMono Nerd Font Mono"
   system.activationScripts.postUserActivation.text = ''
+    # Symlink global gitignore from nix-darwin to home directory
+    if [ ! -L "$HOME/.gitignore_global" ] || [ "$(readlink "$HOME/.gitignore_global")" != "$HOME/nix-darwin/.gitignore_global" ]; then
+      echo "Creating symlink for global gitignore..."
+      ln -sf "$HOME/nix-darwin/.gitignore_global" "$HOME/.gitignore_global"
+    fi
+
+    # Configure git to use global gitignore
+    if command -v git &>/dev/null; then
+      CURRENT_EXCLUDES=$(git config --global core.excludesfile 2>/dev/null || echo "")
+      if [ "$CURRENT_EXCLUDES" != "$HOME/.gitignore_global" ]; then
+        echo "Configuring git to use global gitignore..."
+        git config --global core.excludesfile "$HOME/.gitignore_global"
+      fi
+    fi
+
     # Install GitHub Copilot CLI extension if not already installed
     if command -v gh &>/dev/null; then
       if ! gh extension list 2>/dev/null | grep -q "gh-copilot"; then
@@ -55,6 +70,39 @@
       fi
     else
       echo "Skipping ferrosonic installation (cargo, rustc, or git not available in PATH)"
+    fi
+
+    # Build and install fullhavoc-context-guardian MCP server
+    MCP_DIR="$HOME/fullhavoc-context-guardian-mcp-server"
+    MCP_DIST="$MCP_DIR/dist/index.js"
+
+    if command -v npm &>/dev/null && command -v node &>/dev/null; then
+      echo "Checking fullhavoc-context-guardian MCP server installation..."
+
+      if [ -d "$MCP_DIR" ]; then
+        cd "$MCP_DIR"
+
+        # Check if dependencies are installed
+        if [ ! -d "node_modules" ]; then
+          echo "Installing MCP server dependencies..."
+          npm install || echo "Failed to install MCP server dependencies"
+        fi
+
+        # Check if we need to rebuild (source changed or dist doesn't exist)
+        if [ ! -f "$MCP_DIST" ] || [ "$MCP_DIR/src" -nt "$MCP_DIST" ]; then
+          echo "Building fullhavoc-context-guardian MCP server..."
+          npm run build && \
+          echo "MCP server built successfully!" || \
+          echo "Failed to build MCP server. You can manually run: cd ~/fullhavoc-context-guardian-mcp-server && npm install && npm run build"
+        else
+          echo "MCP server is already up to date."
+        fi
+      else
+        echo "MCP server directory not found at $MCP_DIR - skipping build"
+        echo "To set up the MCP server, clone or create it at $MCP_DIR"
+      fi
+    else
+      echo "Skipping MCP server build (npm or node not available in PATH)"
     fi
 
     echo "Creating font aliases for terminal compatibility..."
@@ -134,11 +182,7 @@
     echo "Managing global npm packages..."
     # Check if npm is available
     if command -v npm &>/dev/null; then
-      # Install opencode-ai if not already installed
-      if ! npm list -g opencode-ai &>/dev/null; then
-        echo "Installing opencode-ai..."
-        npm install -g opencode-ai 2>&1 | grep -v "npm warn" || echo "Failed to install opencode-ai"
-      fi
+      # Note: opencode is already provided by Homebrew, no need for opencode-ai npm package
 
       # Install jsonlint if not already installed
       if ! npm list -g jsonlint &>/dev/null; then

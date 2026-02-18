@@ -148,6 +148,50 @@ All packages are automatically installed via nix-darwin/homebrew:
 
 These are already included in `nix-modules/macos/packages.nix`.
 
+## MCP Server Configuration
+
+The Context Guardian MCP Server enforces methodology constraints and system context for AI assistants.
+
+### Installation
+
+After rebuilding nix-darwin with the updated packages:
+
+```bash
+# 1. Build the MCP server
+cd ~/context-guardian-mcp-server
+npm install
+npm run build
+
+# 2. Install MCP configs for all tools
+~/.config/mcp/install-mcp-configs.sh
+```
+
+### Supported Tools
+
+- **OpenCode** (`opencode`) - AI coding assistant via Homebrew
+- **Crush** (`crush`) - AI shell assistant via Homebrew
+- **ClaudeCode** (`claude-code`) - Anthropic's CLI tool via Homebrew
+
+### What It Enforces
+
+1. **No Affirmations** - Prevents "Great question!" and similar padding
+2. **No Sycophancy** - AI won't agree just to be agreeable
+3. **Direct Communication** - Concise, imperative responses
+4. **Command Safety** - Checks commands against allowed lists
+5. **System Context** - Discovers available tools and zsh configs
+
+### Customization
+
+Edit methodology and command rules:
+
+```bash
+# Methodology constraints
+~/context-guardian-mcp-server/config/policies.json
+
+# Allowed commands
+~/context-guardian-mcp-server/config/allowed-commands.json
+```
+
 ## Troubleshooting
 
 **Homebrew paths**: Ensure `/opt/homebrew/bin` (Apple Silicon) or `/usr/local/bin` (Intel) is in PATH

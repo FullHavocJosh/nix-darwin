@@ -4,6 +4,7 @@
 \.git$
 \.gitconfig$
 \.gitignore$
+\.gitignore_global$
 \.gitmodules$
 \.idea$
 \.themes$
