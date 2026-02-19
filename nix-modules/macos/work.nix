@@ -7,6 +7,7 @@
 
   system.activationScripts.script.text = ''
     #!/usr/bin/env bash
+
     echo "Stowing dotfiles..."
     cd "/Users/jrollet/nix-darwin" || { echo "Failed to cd into /Users/jrollet/nix-darwin"; exit 1; }
     ${pkgs.stow}/bin/stow -R . || { echo "Failed to stow dotfiles"; exit 1; }
@@ -72,4 +73,5 @@
     masApps = {
     };
   };
+
 }

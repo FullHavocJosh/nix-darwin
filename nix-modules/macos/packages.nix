@@ -18,11 +18,13 @@
       "warrensbox/tap"
       "nikitabobko/tap"
       "charmbracelet/tap"
+      "dimentium/autoraise"
     ];
     brews = [
       "ansible"
       "ansible-lint"
       "atuin"
+      "dimentium/autoraise/autoraise"
       "awscli"
       "bash-language-server"
       "borders"

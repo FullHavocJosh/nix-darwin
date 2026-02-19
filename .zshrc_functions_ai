@@ -161,9 +161,10 @@ function _run_ai_plain() {
   
   # Make direct API call based on provider
   case $provider in
-    github-copilot)
-      local model_name="$model"
-      local result=$(echo "$prompt" | timeout 90s opencode run --model "$model_name" 2>&1)
+    anthropic | github-copilot)
+      # Both anthropic and github-copilot route through opencode run
+      local result
+      result=$(echo "$prompt" | timeout 90s opencode run --model "$model" 2>&1)
       local exit_code=$?
       
       if [ $exit_code -eq 124 ]; then
@@ -174,7 +175,6 @@ function _run_ai_plain() {
         return 1
       fi
       
-      # Return raw output for plain text responses
       echo "$result"
       return 0
       ;;
@@ -193,7 +193,7 @@ function _run_ai_plain() {
         -d "{
           \"model\": \"$model_name\",
           \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
-          \"max_tokens\": 4096
+          \"max_tokens\": 200000
         }" 2>/dev/null)
       
       local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
@@ -221,7 +221,7 @@ function _run_ai_plain() {
         -d "{
           \"model\": \"$model_name\",
           \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
-          \"max_tokens\": 4096
+          \"max_tokens\": 200000
         }" 2>/dev/null)
       
       local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
@@ -259,10 +259,9 @@ function _run_ai_direct() {
   
   # Make direct API call based on provider
   case $provider in
-    github-copilot)
-      # GitHub Copilot requires OAuth authentication which OpenCode CLI handles
+    anthropic | github-copilot)
+      # Both anthropic and github-copilot route through opencode run
       # We can't make direct API calls, so use opencode run via stdin
-      # This is fast enough for our use case (5-15s response time)
       
       local model_name="$model"  # Keep full model name with prefix
       
@@ -346,7 +345,7 @@ START YOUR RESPONSE NOW WITH [ OR []:"
         -d "{
           \"model\": \"$model_name\",
           \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
-          \"max_tokens\": 4096
+          \"max_tokens\": 200000
         }" 2>/dev/null)
       
       local curl_exit=$?
@@ -387,7 +386,7 @@ START YOUR RESPONSE NOW WITH [ OR []:"
         -d "{
           \"model\": \"$model_name\",
           \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
-          \"max_tokens\": 4096
+          \"max_tokens\": 200000
         }" 2>/dev/null)
       
       local curl_exit=$?
