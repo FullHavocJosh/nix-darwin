@@ -470,20 +470,29 @@ START YOUR RESPONSE NOW WITH [ OR []:"
       local endpoint="${LLAMACPP_HOST:-http://127.0.0.1:8080}"
       local model_name="${model#llama-cpp/}"
 
+      # Truncate prompt to ~4000 chars (~1000 tokens) to keep inference fast (~10s).
+      # Each additional 1000 tokens adds ~20s on 7B Q8; code review JSON is short.
+      local truncated_prompt="${prompt:0:4000}"
+      local prompt_len=${#prompt}
+      if [ $prompt_len -gt 4000 ]; then
+        truncated_prompt="${truncated_prompt}
+... [diff truncated at 4000 chars — ${prompt_len} total]"
+      fi
+
       local result=$(curl -s "${endpoint}/v1/chat/completions" \
-        --max-time 90 \
+        --max-time 60 \
         --connect-timeout 5 \
         -H "Content-Type: application/json" \
         -d "{
           \"model\": \"$model_name\",
-          \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
+          \"messages\": [{\"role\": \"user\", \"content\": $(echo "$truncated_prompt" | jq -Rs .)}],
           \"temperature\": 0.1,
-          \"max_tokens\": 4096
+          \"max_tokens\": 256
         }" 2>/dev/null)
 
       local curl_exit=$?
       if [ $curl_exit -eq 28 ]; then
-        echo "Error: llama-server timeout after 90s" >&2
+        echo "Error: llama-server timeout after 60s" >&2
         return 1
       elif [ $curl_exit -ne 0 ]; then
         echo "Error: llama-server not reachable (is llama-server running?)" >&2
