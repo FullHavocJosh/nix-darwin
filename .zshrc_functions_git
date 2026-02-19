@@ -491,7 +491,7 @@ function gpc() {
 
     echo ""
     if [[ "$active_provider" == "llama-cpp" ]]; then
-      echo "🏠 Generating commit message locally (llama-cpp)..."
+      echo "⚪ $(_llamacpp_model_short) — Generating commit message locally..."
     else
       echo "🟢 Generating commit message with Haiku..."
     fi
@@ -512,7 +512,7 @@ function gpc() {
     
     while [ $retry_count -lt $max_retries ]; do
       # Use AI to generate commit message
-      local ai_output=$(echo "Review the following git diff and generate a concise, single-sentence commit message that describes the changes. The message should be in imperative mood (e.g., 'Add feature' not 'Added feature'). Return ONLY the commit message, nothing else.\n\n$diff_output" | _run_ai_plain "haiku" 2>&1)
+      local ai_output=$(echo "Review the following git diff and generate a concise, single-sentence commit message that describes the changes. The message should be in imperative mood (e.g., 'Add feature' not 'Added feature'). Maximum 72 characters. Return ONLY the commit message, nothing else.\n\n$diff_output" | _run_ai_plain "haiku" 2>&1)
       local ai_exit=$?
       
       # Check if AI command succeeded
@@ -625,8 +625,8 @@ function gpc() {
         continue
       fi
       
-      # Final check if response looks like an error message
-      if [[ "$commit_msg" == Error:* ]] || [[ "$commit_msg" == *"failed"* ]] || [[ "$commit_msg" == Debug:* ]]; then
+      # Final check if response looks like an error message (only match at start of string)
+      if [[ "$commit_msg" == Error:* ]] || [[ "$commit_msg" == Debug:* ]]; then
         _prompt_ai_error_action "AI response contains error markers" "Commit message generation"
         local action=$?
         
@@ -670,7 +670,10 @@ function gpc() {
       return 1
     fi
 
-    echo "✓ Commit message: $commit_msg"
+    echo ""
+    echo "═══════════════════════════════════════════════════════════"
+    echo "  $commit_msg"
+    echo "═══════════════════════════════════════════════════════════"
     echo ""
 
     # Commit with the generated message
@@ -678,10 +681,11 @@ function gpc() {
 
     if [ $? -eq 0 ]; then
       echo ""
-      echo "ℹ Pushing to remote..."
+      local remote_url=$(git remote get-url origin 2>/dev/null || echo "remote")
+      echo "ℹ Pushing to $remote_url..."
       git push
       if [ $? -eq 0 ]; then
-        echo "✓ Successfully pushed to remote"
+        echo "✓ Successfully pushed"
       else
         echo "✗ Push failed"
         return 1
@@ -986,17 +990,28 @@ function _gpa_should_escalate() {
 }
 
 # Helper function: Determine appropriate AI model tier based on batch characteristics
-# Usage: _gpa_determine_tier <batch_files_json> <batch_lines>
+# Usage: _gpa_determine_tier <batch_files_json> <batch_lines> [total_batch_count]
 # Returns: "local" (llama-cpp provider), "haiku", "sonnet", or "opus" (cloud providers)
+#
+# llama-cpp size routing (based on total_batch_count, each batch ~300 lines):
+#   ≤2 batches  (~600 lines)  → local 7B  (~30s/batch, ~60s total)
+#   3-4 batches (~1200 lines) → cloud Haiku (fast, cheap)
+#   5+ batches  (~1500+ lines) → cloud Sonnet (large diff, needs quality)
 function _gpa_determine_tier() {
   local batch_files_json="$1"
   local batch_lines="$2"
+  local total_batch_count="${3:-1}"
 
-  # When using llama-cpp, all batches run locally — escalation to cloud is handled
-  # separately in _gpa_review_batch when Critical+security issues are found.
   local provider=$(_get_ai_provider)
   if [[ "$provider" == "llama-cpp" ]]; then
-    echo "local"
+    # For small diffs, keep local. For larger diffs, escalate to cloud.
+    if [ "$total_batch_count" -ge 5 ]; then
+      echo "sonnet"  # large diff — cloud quality
+    elif [ "$total_batch_count" -ge 3 ]; then
+      echo "haiku"   # medium diff — fast cloud
+    else
+      echo "local"   # small diff — local 7B is fast enough
+    fi
     return 0
   fi
 
@@ -1053,7 +1068,7 @@ function _gpa_review_batch() {
   # Determine which AI tier to use
   local ai_tier="sonnet"
   if [[ "$tier_override" == "auto" ]]; then
-    ai_tier=$(_gpa_determine_tier "$batch_files_json" "$batch_lines")
+    ai_tier=$(_gpa_determine_tier "$batch_files_json" "$batch_lines" "$total_batches")
   else
     ai_tier="$tier_override"
   fi
@@ -1355,8 +1370,23 @@ function _gpa_review_batch_with_timeout() {
   local batch_num="$2"
   local total_batches="$3"
   local tier_override="${4:-auto}"  # Optional tier override
-  local timeout=90  # 90 seconds for AI review
-  local max_retries=3
+
+  # Local 7B model: ~15-30s per batch. Cloud APIs: ~5-15s.
+  # Use 60s for local (generous but not painful), 90s for cloud.
+  # Pass total_batches=1 so tier defaults to "local" only when genuinely local.
+  # For cloud tiers (haiku/sonnet/opus) always use 90s.
+  local _tier_for_timeout="$tier_override"
+  if [[ "$_tier_for_timeout" == "auto" ]]; then
+    _tier_for_timeout=$(_gpa_determine_tier "[]" "0" "$total_batches")
+  fi
+  local timeout max_retries
+  if [[ "$_tier_for_timeout" == "local" ]]; then
+    timeout=60
+    max_retries=2
+  else
+    timeout=90
+    max_retries=3
+  fi
   local retry_count=0
   
   while [ $retry_count -lt $max_retries ]; do
@@ -1599,9 +1629,19 @@ function gpa() {
   if [ ${#changed_files[@]} -gt 0 ]; then
     # Show already-staged files if any
     if [ "$staged_count" -gt 0 ]; then
-      echo "Already staged ($staged_count file(s)):"
+      local GREEN='\033[0;32m'
+      local NC='\033[0m'
+      echo "Changes to be committed:"
       git diff --cached --name-status | while IFS=$'\t' read -r file_status_code file; do
-        echo "  $file_status_code $file"
+        local label=""
+        case "$file_status_code" in
+          M) label="modified:  " ;;
+          A) label="new file:  " ;;
+          D) label="deleted:   " ;;
+          R) label="renamed:   " ;;
+          *) label="$file_status_code         " ;;
+        esac
+        echo -e "  ${GREEN}${label}${file}${NC}"
       done
       echo ""
       echo "  [Enter] Continue with already-staged files"
@@ -1700,12 +1740,21 @@ function gpa() {
   else
     # No unstaged changes, but there are staged changes - proceed to review them
     if [ "$staged_count" -gt 0 ]; then
-      echo "Already staged ($staged_count file(s)):"
+      local GREEN='\033[0;32m'
+      local NC='\033[0m'
+      echo "Changes to be committed:"
       git diff --cached --name-status | while IFS=$'\t' read -r file_status_code file; do
-        echo "  $file_status_code $file"
+        local label=""
+        case "$file_status_code" in
+          M) label="modified:  " ;;
+          A) label="new file:  " ;;
+          D) label="deleted:   " ;;
+          R) label="renamed:   " ;;
+          *) label="$file_status_code         " ;;
+        esac
+        echo -e "  ${GREEN}${label}${file}${NC}"
       done
       echo ""
-      echo "ℹ No unstaged changes found, reviewing already-staged changes..."
     fi
   fi
 
@@ -1795,9 +1844,9 @@ function gpa() {
   local _active_provider=$(_get_ai_provider)
   if [[ "$tier_override" == "auto" ]]; then
     if [[ "$_active_provider" == "llama-cpp" ]]; then
-      echo "  Model: 🏠 local (llama-cpp) → ☁  cloud escalation on Critical+security"
+      echo "  Model: ⚪ $(_llamacpp_model_short) (local) → 🟢 Haiku for medium diffs → 🔵 Sonnet for large diffs → 🔴 Opus for critical or security"
     else
-      echo "  Model: Auto-detect (🔴 Opus critical/large | 🔵 Sonnet default | 🟢 Haiku simple)"
+      echo "  Model: Auto-detect (🟢 Haiku simple | 🔵 Sonnet default | 🔴 Opus critical/large)"
     fi
   else
     local tier_emoji=""
@@ -1828,21 +1877,21 @@ function gpa() {
       # Pre-calculate tier for display (will be recalculated inside _gpa_review_batch)
       local batch_files_json=$(echo "$batch" | jq -c '.')
       local batch_diff_lines=$(echo "$batch_files_json" | jq -r '.[]' | xargs git diff --cached -- | wc -l)
-      batch_tier=$(_gpa_determine_tier "$batch_files_json" "$batch_diff_lines")
+      batch_tier=$(_gpa_determine_tier "$batch_files_json" "$batch_diff_lines" "$batch_count")
     fi
     
-    # Display tier icon
-    local tier_icon=""
+    # Display tier icon and label
+    local tier_icon="" tier_label=""
     case "$batch_tier" in
-      opus)   tier_icon="🔴" ;;
-      sonnet) tier_icon="🔵" ;;
-      haiku)  tier_icon="🟢" ;;
-      local)  tier_icon="🏠" ;;
-      *)      tier_icon="🔵" ;;
+      opus)   tier_icon="🔴" ; tier_label="Opus" ;;
+      sonnet) tier_icon="🔵" ; tier_label="Sonnet" ;;
+      haiku)  tier_icon="🟢" ; tier_label="Haiku" ;;
+      local)  tier_icon="⚪" ; tier_label="$(_llamacpp_model_short)" ;;
+      *)      tier_icon="🔵" ; tier_label="Sonnet" ;;
     esac
-    
+
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "$tier_icon Reviewing batch $batch_num of $batch_count..."
+    echo "$tier_icon $tier_label — Reviewing batch $batch_num of $batch_count..."
     
     # Review this batch with timeout and retry
     local batch_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "$tier_override")

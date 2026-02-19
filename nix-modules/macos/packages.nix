@@ -37,26 +37,15 @@ let
 
     mkdir -p "$MODELS_DIR"
 
-    # ── Detect RAM tier (mirrors llamaServerLauncher thresholds) ──────────────
+    # ── Model selection ────────────────────────────────────────────────────────
+    # 7B Q8 on all machines: fast enough for interactive pre-commit review
+    # (~15-30s per batch). Larger models (14B/32B) are too slow for gpa.
+    MODEL_FILE="qwen2.5-coder-7b-instruct-q8_0.gguf"
+    HF_REPO="bartowski/Qwen2.5-Coder-7B-Instruct-GGUF"
+    HF_FILENAME="Qwen2.5-Coder-7B-Instruct-Q8_0.gguf"
     RAM_BYTES=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
     RAM_GB=$(( RAM_BYTES / 1024 / 1024 / 1024 ))
-
-    if [ "$RAM_GB" -ge 30 ]; then
-      MODEL_FILE="qwen2.5-coder-32b-instruct-q4_k_m.gguf"
-      HF_REPO="bartowski/Qwen2.5-Coder-32B-Instruct-GGUF"
-      HF_FILENAME="Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf"
-      TIER="large (32B Q4_K_M, ''${RAM_GB} GB)"
-    elif [ "$RAM_GB" -ge 24 ]; then
-      MODEL_FILE="qwen2.5-coder-14b-instruct-q8_0.gguf"
-      HF_REPO="bartowski/Qwen2.5-Coder-14B-Instruct-GGUF"
-      HF_FILENAME="Qwen2.5-Coder-14B-Instruct-Q8_0.gguf"
-      TIER="medium (14B Q8, ''${RAM_GB} GB)"
-    else
-      MODEL_FILE="qwen2.5-coder-7b-instruct-q8_0.gguf"
-      HF_REPO="bartowski/Qwen2.5-Coder-7B-Instruct-GGUF"
-      HF_FILENAME="Qwen2.5-Coder-7B-Instruct-Q8_0.gguf"
-      TIER="small (7B Q8, ''${RAM_GB} GB)"
-    fi
+    TIER="7B Q8 (''${RAM_GB} GB device)"
 
     DEST="$MODELS_DIR/$MODEL_FILE"
     STAMP="$MODELS_DIR/.downloaded-$MODEL_FILE"
@@ -104,25 +93,14 @@ let
 
     log() { echo "$LOG_PREFIX $*"; }
 
-    # ── Detect unified memory ──────────────────────────────────────────────────
+    # ── Model selection ────────────────────────────────────────────────────────
+    # 7B Q8 on all machines: fast enough for interactive pre-commit review.
     RAM_BYTES=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
     RAM_GB=$(( RAM_BYTES / 1024 / 1024 / 1024 ))
     log "Detected ''${RAM_GB} GB unified memory"
-
-    # ── Select model tier ──────────────────────────────────────────────────────
-    if [ "$RAM_GB" -ge 30 ]; then
-      MODEL_FILE="$MODELS_DIR/qwen2.5-coder-32b-instruct-q4_k_m.gguf"
-      CTX_SIZE=8192
-      TIER="large (32B Q4_K_M, ''${RAM_GB} GB device)"
-    elif [ "$RAM_GB" -ge 24 ]; then
-      MODEL_FILE="$MODELS_DIR/qwen2.5-coder-14b-instruct-q8_0.gguf"
-      CTX_SIZE=8192
-      TIER="medium (14B Q8, ''${RAM_GB} GB device)"
-    else
-      MODEL_FILE="$MODELS_DIR/qwen2.5-coder-7b-instruct-q8_0.gguf"
-      CTX_SIZE=4096
-      TIER="small (7B Q8, ''${RAM_GB} GB device)"
-    fi
+    MODEL_FILE="$MODELS_DIR/qwen2.5-coder-7b-instruct-q8_0.gguf"
+    CTX_SIZE=32768
+    TIER="7B Q8 (''${RAM_GB} GB device)"
 
     log "Selected tier: $TIER"
     log "Model file: $MODEL_FILE"
