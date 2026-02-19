@@ -72,37 +72,63 @@
       echo "Skipping ferrosonic installation (cargo, rustc, or git not available in PATH)"
     fi
 
-    # Build and install fullhavoc-context-guardian MCP server
+    # Deploy and build fullhavoc-context-guardian MCP server
+    # 
+    # This MCP server provides context about home infrastructure and AI contexts.
+    # 
+    # Important directories:
+    #   - ~/aicontexts: AI context documentation for various systems
+    #   - ~/home-infrastructure: Infrastructure as Code (K3s, Ansible, Terraform)
+    # 
+    # Network Architecture (see ~/aicontexts/NETWORK-ARCHITECTURE.md):
+    #   - OPNsense Nginx: SSL/TLS termination + ALL security (HSTS, auth, rate limiting, WAF)
+    #   - K8s Nginx Ingress: BASIC LOAD BALANCING ONLY (no SSL, no security, just routing)
+    # 
+    MCP_TEMPLATE="$HOME/nix-darwin/mcp-servers/fullhavoc-context-guardian"
     MCP_DIR="$HOME/fullhavoc-context-guardian-mcp-server"
     MCP_DIST="$MCP_DIR/dist/index.js"
+    MCP_CONTEXT="$MCP_DIR/infrastructure-context.json"
 
     if command -v npm &>/dev/null && command -v node &>/dev/null; then
-      echo "Checking fullhavoc-context-guardian MCP server installation..."
+      echo "Deploying fullhavoc-context-guardian MCP server..."
 
-      if [ -d "$MCP_DIR" ]; then
-        cd "$MCP_DIR"
+      # Create target directory if it doesn't exist
+      mkdir -p "$MCP_DIR"
 
-        # Check if dependencies are installed
-        if [ ! -d "node_modules" ]; then
-          echo "Installing MCP server dependencies..."
-          npm install || echo "Failed to install MCP server dependencies"
-        fi
+      # Sync template to target (preserve infrastructure-context.json if it exists)
+      if [ -f "$MCP_CONTEXT" ]; then
+        # Backup existing context
+        cp "$MCP_CONTEXT" "$MCP_CONTEXT.backup"
+      fi
 
-        # Check if we need to rebuild (source changed or dist doesn't exist)
-        if [ ! -f "$MCP_DIST" ] || [ "$MCP_DIR/src" -nt "$MCP_DIST" ]; then
-          echo "Building fullhavoc-context-guardian MCP server..."
-          npm run build && \
-          echo "MCP server built successfully!" || \
-          echo "Failed to build MCP server. You can manually run: cd ~/fullhavoc-context-guardian-mcp-server && npm install && npm run build"
-        else
-          echo "MCP server is already up to date."
-        fi
+      # Sync all files from template
+      ${pkgs.rsync}/bin/rsync -av --exclude='node_modules' --exclude='dist' --exclude='.git' \
+        "$MCP_TEMPLATE/" "$MCP_DIR/"
+
+      # Restore context if we backed it up
+      if [ -f "$MCP_CONTEXT.backup" ]; then
+        mv "$MCP_CONTEXT.backup" "$MCP_CONTEXT"
+      fi
+
+      cd "$MCP_DIR"
+
+      # Check if dependencies are installed or need updating
+      if [ ! -d "node_modules" ] || [ "$MCP_TEMPLATE/package.json" -nt "node_modules" ]; then
+        echo "Installing MCP server dependencies..."
+        npm install || echo "Failed to install MCP server dependencies"
+      fi
+
+      # Check if we need to rebuild (source changed or dist doesn't exist)
+      if [ ! -f "$MCP_DIST" ] || [ "$MCP_TEMPLATE/src" -nt "$MCP_DIST" ]; then
+        echo "Building fullhavoc-context-guardian MCP server..."
+        npm run build && \
+        echo "MCP server deployed and built successfully!" || \
+        echo "Failed to build MCP server. You can manually run: cd ~/fullhavoc-context-guardian-mcp-server && npm install && npm run build"
       else
-        echo "MCP server directory not found at $MCP_DIR - skipping build"
-        echo "To set up the MCP server, clone or create it at $MCP_DIR"
+        echo "MCP server is already up to date."
       fi
     else
-      echo "Skipping MCP server build (npm or node not available in PATH)"
+      echo "Skipping MCP server deployment (npm or node not available in PATH)"
     fi
 
     echo "Creating font aliases for terminal compatibility..."
