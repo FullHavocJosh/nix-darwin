@@ -483,12 +483,18 @@ function gpc() {
 
   # Check if there are staged changes
   if ! git diff --cached --quiet; then
-    # Get model information for display
+    # Commit messages are always generated locally when using llama-cpp —
+    # they are short, formulaic, and never worth a cloud API call.
+    local active_provider=$(_get_ai_provider)
     local model_tier="haiku"
     local model_name=$(_get_opencode_model "$model_tier")
-    
+
     echo ""
-    echo "🟢 Generating commit message with Haiku..."
+    if [[ "$active_provider" == "llama-cpp" ]]; then
+      echo "🏠 Generating commit message locally (llama-cpp)..."
+    else
+      echo "🟢 Generating commit message with Haiku..."
+    fi
 
     # Get the diff of staged changes
     local diff_output=$(git diff --cached)
@@ -832,6 +838,13 @@ Please make the changes directly to the file."
 #   echo "${file}:${current_hash}" >> "$cache_file"
 # }
 
+# Helper function: Get hash of file's staged content
+# Usage: _gpa_get_file_hash <file_path>
+function _gpa_get_file_hash() {
+  local file="$1"
+  git diff --cached -- "$file" | shasum -a 256 | cut -d' ' -f1
+}
+
 # Helper function: Check if a file has been reviewed and hasn't changed
 # Usage: _gpa_is_file_reviewed <file_path>
 function _gpa_is_file_reviewed() {
@@ -974,12 +987,20 @@ function _gpa_should_escalate() {
 
 # Helper function: Determine appropriate AI model tier based on batch characteristics
 # Usage: _gpa_determine_tier <batch_files_json> <batch_lines>
-# Returns: "haiku", "sonnet", or "opus"
+# Returns: "local" (llama-cpp provider), "haiku", "sonnet", or "opus" (cloud providers)
 function _gpa_determine_tier() {
   local batch_files_json="$1"
   local batch_lines="$2"
-  
-  # Check for critical file paths that should use Opus
+
+  # When using llama-cpp, all batches run locally — escalation to cloud is handled
+  # separately in _gpa_review_batch when Critical+security issues are found.
+  local provider=$(_get_ai_provider)
+  if [[ "$provider" == "llama-cpp" ]]; then
+    echo "local"
+    return 0
+  fi
+
+  # Cloud providers: check for critical file paths that should use Opus
   local critical_paths=("security" "auth" "payment" "encryption" "credential" "secret" "iam" "policy" "kms")
   local batch_files_str=$(echo "$batch_files_json" | jq -r '.[]' | tr '\n' ' ')
   
@@ -1097,11 +1118,32 @@ ${batch_diff}
   
   # Note: Tier display moved to main loop for better visibility
   # (was being cleared by progress spinner)
-  
-  # Run AI review using direct API call (much faster than full agent)
-  local batch_result=$(echo "$full_prompt" | _run_ai_direct "$ai_tier" 2>&1)
-  local api_exit_code=$?
-  
+
+  # ── Route the API call ──────────────────────────────────────────────────────
+  # "local"            → llama-cpp via _run_ai_direct (provider already set)
+  # "cloud-escalation" → cloud fallback provider via _run_ai_direct_cloud
+  # anything else      → cloud provider via _run_ai_direct (haiku/sonnet/opus)
+  local batch_result
+  local api_exit_code
+
+  if [[ "$ai_tier" == "cloud-escalation" ]]; then
+    echo "  ☁  Routing to cloud ($(_get_cloud_fallback_provider) Sonnet) for escalation..." >&2
+    batch_result=$(echo "$full_prompt" | _run_ai_direct_cloud "sonnet" 2>&1)
+    api_exit_code=$?
+  elif [[ "$ai_tier" == "local" ]]; then
+    batch_result=$(echo "$full_prompt" | _run_ai_direct "sonnet" 2>&1)
+    api_exit_code=$?
+    # Hard failure on local → automatically fall back to cloud rather than giving up
+    if [ $api_exit_code -eq 1 ]; then
+      echo "  ⚠ Local model failed — falling back to cloud ($(_get_cloud_fallback_provider))..." >&2
+      batch_result=$(echo "$full_prompt" | _run_ai_direct_cloud "sonnet" 2>&1)
+      api_exit_code=$?
+    fi
+  else
+    batch_result=$(echo "$full_prompt" | _run_ai_direct "$ai_tier" 2>&1)
+    api_exit_code=$?
+  fi
+
   # Check exit codes
   if [ $api_exit_code -eq 1 ]; then
     # Hard failure - API error, timeout, network issue
@@ -1750,8 +1792,13 @@ function gpa() {
   
   echo "ℹ Processing $total_files file(s) in $batch_count batch(es)"
   echo "  Total changes: $total_lines lines"
+  local _active_provider=$(_get_ai_provider)
   if [[ "$tier_override" == "auto" ]]; then
-    echo "  Model: Auto-detect (🔴 Opus critical/large | 🔵 Sonnet default | 🟢 Haiku simple)"
+    if [[ "$_active_provider" == "llama-cpp" ]]; then
+      echo "  Model: 🏠 local (llama-cpp) → ☁  cloud escalation on Critical+security"
+    else
+      echo "  Model: Auto-detect (🔴 Opus critical/large | 🔵 Sonnet default | 🟢 Haiku simple)"
+    fi
   else
     local tier_emoji=""
     case "$tier_override" in
@@ -1790,6 +1837,7 @@ function gpa() {
       opus)   tier_icon="🔴" ;;
       sonnet) tier_icon="🔵" ;;
       haiku)  tier_icon="🟢" ;;
+      local)  tier_icon="🏠" ;;
       *)      tier_icon="🔵" ;;
     esac
     
@@ -1812,11 +1860,51 @@ function gpa() {
           if [ "$issue_count" -gt 0 ]; then
             echo "  Found $issue_count issue(s) in this batch"
             
-            # Check if we should escalate to Opus (only if tier was auto-selected or was sonnet/haiku)
-            if [[ "$tier_override" == "auto" ]] || [[ "$tier_override" == "sonnet" ]] || [[ "$tier_override" == "haiku" ]]; then
-              if _gpa_should_escalate "$valid_batch_issues"; then
+            # Check if we should escalate (only when auto-selected or non-opus cloud tier)
+            local active_provider=$(_get_ai_provider)
+            local can_escalate=false
+            if [[ "$tier_override" == "auto" ]] || [[ "$tier_override" == "sonnet" ]] || \
+               [[ "$tier_override" == "haiku" ]] || [[ "$tier_override" == "local" ]]; then
+              can_escalate=true
+            fi
+
+            if $can_escalate && _gpa_should_escalate "$valid_batch_issues"; then
+              echo ""
+              echo "  ⚠ CRITICAL SECURITY ISSUE DETECTED"
+
+              if [[ "$active_provider" == "llama-cpp" ]]; then
+                # Hybrid mode: escalate local findings to cloud Sonnet
+                local cloud_provider=$(_get_cloud_fallback_provider)
+                echo "  Local model found Critical+security issues."
                 echo ""
-                echo "  ⚠ CRITICAL SECURITY ISSUE DETECTED"
+                echo "  Recommendation: Re-review with cloud ($cloud_provider Sonnet)"
+                echo "  for authoritative security analysis."
+                echo ""
+                echo "  Options:"
+                echo "    [y] Yes - Escalate to cloud (recommended)"
+                echo "    [n] No  - Keep local findings"
+                echo ""
+                echo -n "  Your choice: "
+                read -r escalate_choice
+
+                if [[ "$escalate_choice" == "y" || "$escalate_choice" == "Y" ]]; then
+                  echo ""
+                  echo "  ☁  Escalating to $cloud_provider Sonnet..."
+                  local cloud_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "cloud-escalation")
+                  local cloud_status=$?
+
+                  if [ $cloud_status -eq 0 ] && [ -n "$cloud_issues" ] && echo "$cloud_issues" | jq empty 2>/dev/null; then
+                    local valid_cloud_issues=$(echo "$cloud_issues" | jq '[.[] | select(type == "object" and has("file") and has("severity") and has("issue") and has("recommendation"))]' 2>/dev/null)
+                    local cloud_issue_count=$(echo "$valid_cloud_issues" | jq 'length')
+                    echo "  ☁  Cloud review complete: Found $cloud_issue_count issue(s)"
+                    valid_batch_issues="$valid_cloud_issues"
+                  else
+                    echo "  ⚠ Cloud escalation failed, keeping local findings"
+                  fi
+                  echo ""
+                fi
+              else
+                # Cloud-only mode: escalate to Opus on same provider
                 echo "  Sonnet found Critical severity issues with security implications."
                 echo ""
                 echo "  Recommendation: Re-review this batch with Opus (more thorough model)"
@@ -1828,23 +1916,18 @@ function gpa() {
                 echo ""
                 echo -n "  Your choice: "
                 read -r escalate_choice
-                
+
                 if [[ "$escalate_choice" == "y" || "$escalate_choice" == "Y" ]]; then
                   echo ""
                   echo "  🔴 Escalating to Opus for security review..."
-                  
-                  # Re-review with Opus
                   local opus_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "opus")
                   local opus_status=$?
-                  
+
                   if [ $opus_status -eq 0 ] && [ -n "$opus_issues" ] && echo "$opus_issues" | jq empty 2>/dev/null; then
                     local valid_opus_issues=$(echo "$opus_issues" | jq '[.[] | select(type == "object" and has("file") and has("severity") and has("issue") and has("recommendation"))]' 2>/dev/null)
-                    
                     if [ -n "$valid_opus_issues" ]; then
                       local opus_issue_count=$(echo "$valid_opus_issues" | jq 'length')
                       echo "  🔴 Opus review complete: Found $opus_issue_count issue(s)"
-                      
-                      # Replace Sonnet issues with Opus issues (Opus is authoritative)
                       valid_batch_issues="$valid_opus_issues"
                     else
                       echo "  🔴 Opus review found no additional issues"
@@ -2021,6 +2104,11 @@ function gpa() {
 function gpr_func() {
   # Validate git repository
   _check_git_repo || return 1
+
+  # gpr never calls an AI provider — branch naming and PR creation are
+  # templated operations that don't benefit from cloud quality.
+  echo "🏠 Creating PR locally (no AI provider needed)..."
+  echo ""
 
   # Stash any uncommitted changes
   echo "Stashing uncommitted changes..."

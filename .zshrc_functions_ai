@@ -138,6 +138,12 @@ function _get_opencode_model() {
         echo "anthropic/claude-sonnet-4-5"
       fi
       ;;
+    llama-cpp)
+      # llama-server is always started with --alias local-coder regardless of
+      # which model file was selected by the RAM-aware launcher wrapper script.
+      # Shell code never needs to know the RAM tier — the server handles it.
+      echo "llama-cpp/local-coder"
+      ;;
     *)
       echo "anthropic/claude-sonnet-4-5"  # Default fallback
       ;;
@@ -234,6 +240,41 @@ function _run_ai_plain() {
       return 1
       ;;
       
+    llama-cpp)
+      # llama-server exposes an OpenAI-compatible /v1/chat/completions endpoint
+      local endpoint="${LLAMACPP_HOST:-http://127.0.0.1:8080}"
+      local model_name="${model#llama-cpp/}"
+
+      local result=$(curl -s "${endpoint}/v1/chat/completions" \
+        --max-time 120 \
+        --connect-timeout 5 \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"model\": \"$model_name\",
+          \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
+          \"temperature\": 0.2,
+          \"max_tokens\": 4096
+        }" 2>/dev/null)
+
+      local curl_exit=$?
+      if [ $curl_exit -eq 28 ]; then
+        echo "Error: llama-server timeout after 120s" >&2
+        return 1
+      elif [ $curl_exit -ne 0 ]; then
+        echo "Error: llama-server not reachable (is llama-server running?)" >&2
+        return 1
+      fi
+
+      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
+      if [[ -n "$extracted" && "$extracted" != "null" ]]; then
+        echo "$extracted"
+        return 0
+      fi
+
+      echo "Error: llama-server returned invalid response" >&2
+      return 1
+      ;;
+
     *)
       echo "Error: Unknown provider $provider" >&2
       return 1
@@ -409,6 +450,49 @@ START YOUR RESPONSE NOW WITH [ OR []:"
       return 1
       ;;
       
+    llama-cpp)
+      # llama-server exposes an OpenAI-compatible /v1/chat/completions endpoint
+      local endpoint="${LLAMACPP_HOST:-http://127.0.0.1:8080}"
+      local model_name="${model#llama-cpp/}"
+
+      local result=$(curl -s "${endpoint}/v1/chat/completions" \
+        --max-time 120 \
+        --connect-timeout 5 \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"model\": \"$model_name\",
+          \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
+          \"temperature\": 0.1,
+          \"max_tokens\": 4096
+        }" 2>/dev/null)
+
+      local curl_exit=$?
+      if [ $curl_exit -eq 28 ]; then
+        echo "Error: llama-server timeout after 120s" >&2
+        return 1
+      elif [ $curl_exit -ne 0 ]; then
+        echo "Error: llama-server not reachable (is llama-server running?)" >&2
+        return 1
+      fi
+
+      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
+      if [[ -n "$extracted" && "$extracted" != "null" ]]; then
+        # Extract JSON array from the response (same strategy as anthropic branch)
+        local json_extracted=$(echo "$extracted" | perl -0777 -pe 's/^[^\[]*(\[.*\])[^\]]*$/$1/s' | head -c 50000)
+        if echo "$json_extracted" | jq empty 2>/dev/null; then
+          echo "$json_extracted"
+          return 0
+        fi
+        # Soft failure: response not parseable as JSON
+        echo "Error: Could not parse llama-server response as JSON" >&2
+        echo "[]"
+        return 2
+      fi
+
+      echo "Error: llama-server returned invalid response" >&2
+      return 1
+      ;;
+
     *)
       echo "Error: Unknown provider $provider" >&2
       return 1
@@ -461,6 +545,15 @@ function aidev() {
   local NC='\033[0m' # No Color
   
   # Validate provider and model before launching
+  # llama-cpp is not a valid aidev provider — it has no OpenCode integration.
+  # gpa/gpc/gpr detect it and route locally themselves.
+  if [[ "$provider" == "llama-cpp" ]]; then
+    echo "${YELLOW}⚠${NC}  llama-cpp is not supported for interactive sessions (aidev)."
+    echo "   It is used automatically by gpa/gpc/gpr when llama-server is running."
+    echo "   Run 'aiselect' to choose a cloud provider for aidev."
+    return 1
+  fi
+
   local auth_valid=false
   local _aidev_validate() {
     case $provider in
@@ -598,6 +691,36 @@ function _validate_openrouter() {
   return 1
 }
 
+# Helper: return a human-readable string for the model tier this machine will use.
+# Mirrors the RAM thresholds in the llama-server-launcher wrapper script in packages.nix.
+# Usage: _llamacpp_model_tier
+function _llamacpp_model_tier() {
+  local ram_bytes ram_gb
+  ram_bytes=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
+  ram_gb=$(( ram_bytes / 1024 / 1024 / 1024 ))
+
+  if [ "$ram_gb" -ge 30 ]; then
+    echo "large  — qwen2.5-coder-32b Q4_K_M (~19 GB, ${ram_gb} GB device)"
+  elif [ "$ram_gb" -ge 24 ]; then
+    echo "medium — qwen2.5-coder-14b Q8     (~15 GB, ${ram_gb} GB device)"
+  else
+    echo "small  — qwen2.5-coder-7b  Q8     (~8 GB,  ${ram_gb} GB device)"
+  fi
+}
+
+# Validate llama.cpp server availability
+# Checks that llama-server is reachable and has a model loaded
+function _validate_llamacpp() {
+  local endpoint="${LLAMACPP_HOST:-http://127.0.0.1:8080}"
+  # Health check: /health returns {"status":"ok"} when model is loaded
+  local response
+  response=$(curl -s --max-time 3 "${endpoint}/health" 2>/dev/null)
+  if echo "$response" | grep -q '"status"'; then
+    return 0
+  fi
+  return 1
+}
+
 # Validate Anthropic provider availability via OpenCode
 # Checks that opencode can list models for the anthropic provider
 function _validate_anthropic() {
@@ -622,6 +745,166 @@ function _get_ai_provider() {
   
   # Read and return the preference
   cat "$preference_file"
+}
+
+# =============================================================================
+# Hybrid Routing: local (llama-cpp) → cloud escalation
+# =============================================================================
+#
+# When the active provider is llama-cpp, gpa/gpc/gpr run locally for all
+# routine tasks. If gpa's local review raises a Critical+security finding,
+# it escalates that batch to the configured cloud provider for a deeper look.
+#
+# Cloud provider is stored separately in ~/.ai_cloud_provider_preference so
+# switching to llama-cpp doesn't lose your previous cloud setup.
+# Set it via: aiselect (the llama-cpp flow prompts you to choose a cloud provider)
+#
+# Flow:
+#   gpc  → always local (commit messages never need cloud quality)
+#   gpr  → always local (templated PR creation)
+#   gpa  → local first; Critical+security finding → escalate to cloud Sonnet
+#          local hard failure → fall back to cloud automatically
+# =============================================================================
+
+# Get the configured cloud escalation provider (used when main provider is llama-cpp)
+function _get_cloud_fallback_provider() {
+  local cloud_pref="$HOME/.ai_cloud_provider_preference"
+  if [[ -f "$cloud_pref" ]]; then
+    cat "$cloud_pref"
+  else
+    echo "anthropic"  # sensible default
+  fi
+}
+
+# Get the cloud model string for a given task type, ignoring the active provider.
+# Always reads from the cloud fallback provider preference.
+function _get_cloud_model() {
+  local task_type="${1:-sonnet}"
+  local provider=$(_get_cloud_fallback_provider)
+
+  case $provider in
+    github-copilot)
+      [[ "$task_type" == "opus"  ]] && echo "github-copilot/claude-opus-4.5"  && return
+      [[ "$task_type" == "haiku" ]] && echo "github-copilot/claude-haiku-4.5" && return
+      echo "github-copilot/claude-sonnet-4.5"
+      ;;
+    opencode)
+      [[ "$task_type" == "opus"  ]] && echo "opencode/claude-opus-4.5"        && return
+      [[ "$task_type" == "haiku" ]] && echo "opencode/claude-3-5-haiku"        && return
+      echo "opencode/claude-sonnet-4.5"
+      ;;
+    openrouter)
+      [[ "$task_type" == "opus"  ]] && echo "openrouter/anthropic/claude-opus-4.5"   && return
+      [[ "$task_type" == "haiku" ]] && echo "openrouter/anthropic/claude-3.5-haiku"  && return
+      echo "openrouter/anthropic/claude-sonnet-4.5"
+      ;;
+    anthropic|*)
+      [[ "$task_type" == "opus"  ]] && echo "anthropic/claude-opus-4-5"  && return
+      [[ "$task_type" == "haiku" ]] && echo "anthropic/claude-haiku-4-5" && return
+      echo "anthropic/claude-sonnet-4-5"
+      ;;
+  esac
+}
+
+# Execute a plain-text AI call unconditionally against the cloud fallback provider.
+# Used for escalation from llama-cpp when the active provider IS llama-cpp.
+# Usage: echo "prompt" | _run_ai_plain_cloud ["haiku"|"sonnet"|"opus"]
+function _run_ai_plain_cloud() {
+  local task_type="${1:-sonnet}"
+  local provider=$(_get_cloud_fallback_provider)
+  local model=$(_get_cloud_model "$task_type")
+  local prompt=$(cat)
+
+  case $provider in
+    anthropic | github-copilot)
+      local result
+      result=$(echo "$prompt" | timeout 90s opencode run --model "$model" 2>&1)
+      local exit_code=$?
+      [ $exit_code -eq 124 ] && { echo "Error: cloud timeout after 90s" >&2; return 1; }
+      [ $exit_code -ne 0  ] && { echo "Error: cloud call failed (exit $exit_code)" >&2; return 1; }
+      echo "$result"
+      ;;
+    opencode)
+      [[ -z "$OPENCODE_API_KEY" ]] && { echo "Error: OPENCODE_API_KEY not set" >&2; return 1; }
+      local model_name="${model#opencode/}"
+      local result=$(curl -s https://api.opencode.ai/v1/chat/completions \
+        --max-time 60 --connect-timeout 10 \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $OPENCODE_API_KEY" \
+        -d "{\"model\":\"$model_name\",\"messages\":[{\"role\":\"user\",\"content\":$(echo "$prompt" | jq -Rs .)}],\"max_tokens\":200000}" 2>/dev/null)
+      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
+      [[ -n "$extracted" && "$extracted" != "null" ]] && echo "$extracted" && return 0
+      echo "Error: OpenCode cloud API returned invalid response" >&2; return 1
+      ;;
+    openrouter)
+      [[ -z "$OPENROUTER_API_KEY" ]] && { echo "Error: OPENROUTER_API_KEY not set" >&2; return 1; }
+      local model_name="${model#openrouter/}"
+      local result=$(curl -s https://openrouter.ai/api/v1/chat/completions \
+        --max-time 60 --connect-timeout 10 \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+        -H "HTTP-Referer: https://github.com/user/zsh-functions" \
+        -d "{\"model\":\"$model_name\",\"messages\":[{\"role\":\"user\",\"content\":$(echo "$prompt" | jq -Rs .)}],\"max_tokens\":200000}" 2>/dev/null)
+      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
+      [[ -n "$extracted" && "$extracted" != "null" ]] && echo "$extracted" && return 0
+      echo "Error: OpenRouter cloud API returned invalid response" >&2; return 1
+      ;;
+  esac
+}
+
+# Execute a structured-JSON AI call unconditionally against the cloud fallback provider.
+# Used for escalation from llama-cpp when the active provider IS llama-cpp.
+# Usage: echo "prompt" | _run_ai_direct_cloud ["haiku"|"sonnet"|"opus"]
+function _run_ai_direct_cloud() {
+  local task_type="${1:-sonnet}"
+  local provider=$(_get_cloud_fallback_provider)
+  local model=$(_get_cloud_model "$task_type")
+  local prompt=$(cat)
+
+  local json_prompt="$prompt
+
+CRITICAL INSTRUCTIONS - READ CAREFULLY:
+You MUST respond with ONLY a JSON array. Do not include any text before or after it.
+If there are no issues, respond with exactly: []
+START YOUR RESPONSE NOW WITH [ OR []:"
+
+  case $provider in
+    anthropic | github-copilot)
+      local result
+      result=$(echo "$json_prompt" | timeout 90s opencode run --model "$model" 2>&1)
+      local exit_code=$?
+      [ $exit_code -eq 124 ] && { echo "Error: cloud timeout" >&2; return 1; }
+      [ $exit_code -ne 0  ] && { echo "Error: cloud call failed" >&2; return 1; }
+      local extracted=$(echo "$result" | perl -0777 -pe 's/^[^\[]*(\[.*\])[^\]]*$/$1/s' | head -c 50000)
+      echo "$extracted" | jq empty 2>/dev/null && echo "$extracted" && return 0
+      echo "[]"; return 2
+      ;;
+    opencode)
+      [[ -z "$OPENCODE_API_KEY" ]] && { echo "Error: OPENCODE_API_KEY not set" >&2; return 1; }
+      local model_name="${model#opencode/}"
+      local result=$(curl -s https://api.opencode.ai/v1/chat/completions \
+        --max-time 60 --connect-timeout 10 \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $OPENCODE_API_KEY" \
+        -d "{\"model\":\"$model_name\",\"messages\":[{\"role\":\"user\",\"content\":$(echo "$json_prompt" | jq -Rs .)}],\"max_tokens\":200000}" 2>/dev/null)
+      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
+      [[ -n "$extracted" && "$extracted" != "null" ]] && echo "$extracted" && return 0
+      echo "[]"; return 1
+      ;;
+    openrouter)
+      [[ -z "$OPENROUTER_API_KEY" ]] && { echo "Error: OPENROUTER_API_KEY not set" >&2; return 1; }
+      local model_name="${model#openrouter/}"
+      local result=$(curl -s https://openrouter.ai/api/v1/chat/completions \
+        --max-time 60 --connect-timeout 10 \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+        -H "HTTP-Referer: https://github.com/user/zsh-functions" \
+        -d "{\"model\":\"$model_name\",\"messages\":[{\"role\":\"user\",\"content\":$(echo "$json_prompt" | jq -Rs .)}],\"max_tokens\":200000}" 2>/dev/null)
+      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
+      [[ -n "$extracted" && "$extracted" != "null" ]] && echo "$extracted" && return 0
+      echo "[]"; return 1
+      ;;
+  esac
 }
 
 # AI Provider Selection - System-wide provider preference
@@ -656,6 +939,23 @@ function aiselect() {
     echo "  • gpc (commit messages)     → $opencode_haiku_model → Direct API"
     echo "  • gpa (code review)         → $opencode_model → Direct API"
     echo ""
+    if [[ "$current_provider" == "llama-cpp" ]]; then
+      local endpoint="${LLAMACPP_HOST:-http://127.0.0.1:8080}"
+      local cloud_provider=$(_get_cloud_fallback_provider)
+      local cloud_model=$(_get_cloud_model "sonnet")
+      echo ""
+      echo "Hybrid Routing (llama-cpp + cloud escalation):"
+      echo "  Local endpoint:   $endpoint"
+      echo "  Local tier:       $(_llamacpp_model_tier)"
+      echo "  Cloud provider:   $cloud_provider"
+      echo "  Cloud model:      $cloud_model"
+      echo ""
+      echo "  gpc  → 🏠 local always  (commit messages)"
+      echo "  gpr  → 🏠 local always  (PR creation)"
+      echo "  gpa  → 🏠 local first   (code review)"
+      echo "         ☁  cloud Sonnet  (Critical+security escalation or local failure)"
+    fi
+    echo ""
     echo "Note: Run 'aiselect' to change provider. Changes apply immediately"
     echo "      to all commands (no restart required)."
     echo "═══════════════════════════════════════════════════════════"
@@ -676,7 +976,7 @@ function aiselect() {
   local github_valid=false
   local opencode_valid=false
   local openrouter_valid=false
-  
+
   # Validate Anthropic (via OpenCode)
   if _validate_anthropic; then
     anthropic_valid=true
@@ -973,8 +1273,12 @@ function aiselect() {
     else
       echo "  [r] OpenRouter                 ${RED}✗${NC}"
     fi
-    
+
     echo "  [q] Quit"
+    echo ""
+    echo "  ℹ  llama.cpp is used automatically by gpa/gpc/gpr when"
+    echo "     the server is running. Use 'aiselect --show' to see"
+    echo "     hybrid routing status."
     echo "═══════════════════════════════════════════════════════════"
     echo ""
     echo -n "Your choice: "

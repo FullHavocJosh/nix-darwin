@@ -1,6 +1,24 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "disabled_providers": ["bedrock", "amazon-bedrock"],
+  "provider": {
+    "llama.cpp": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "llama-server (local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8080/v1"
+      },
+      "models": {
+        "local-coder": {
+          "name": "Qwen2.5-Coder-7B (local)",
+          "limit": {
+            "context": 32768,
+            "output": 8192
+          }
+        }
+      }
+    }
+  },
   "model": "github-copilot/claude-sonnet-4.5",
   "theme": "catppuccin",
   "keybinds": {
