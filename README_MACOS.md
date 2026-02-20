@@ -7,10 +7,22 @@ This guide covers macOS-specific installation and configuration using nix-darwin
 Enable Full Disk Access for Terminal:  
 **System Preferences → Privacy → Full Disk Access → Terminal**
 
+### Install Homebrew
+
 ```bash
-brew install git
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Follow the post-install instructions to add Homebrew to your PATH (printed at the end of the install).
+
+### Install Git, Node.js, and Rosetta
+
+```bash
+brew install git node
 softwareupdate --install-rosetta
 ```
+
+Node.js (and npm) is required for the MCP server deployment that runs automatically during `darwin-rebuild switch`.
 
 ## Installation
 

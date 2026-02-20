@@ -113,13 +113,13 @@
       cd "$MCP_DIR"
 
       # Check if dependencies are installed or need updating
-      if [ ! -d "node_modules" ] || [ "$MCP_TEMPLATE/package.json" -nt "node_modules" ]; then
+      if [ ! -d "node_modules" ] || [ "$MCP_TEMPLATE/package.json" -nt "node_modules" ] || [ "$MCP_TEMPLATE/package-lock.json" -nt "node_modules" ]; then
         echo "Installing MCP server dependencies..."
         npm install || echo "Failed to install MCP server dependencies"
       fi
 
-      # Check if we need to rebuild (source changed or dist doesn't exist)
-      if [ ! -f "$MCP_DIST" ] || [ "$MCP_TEMPLATE/src" -nt "$MCP_DIST" ]; then
+      # Check if we need to rebuild (source changed, lockfile changed, or dist doesn't exist)
+      if [ ! -f "$MCP_DIST" ] || [ "$MCP_TEMPLATE/src" -nt "$MCP_DIST" ] || [ "$MCP_TEMPLATE/package-lock.json" -nt "$MCP_DIST" ]; then
         echo "Building fullhavoc-context-guardian MCP server..."
         npm run build && \
         echo "MCP server deployed and built successfully!" || \
