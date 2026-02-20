@@ -230,7 +230,7 @@ in
       "ansible-language-server"
     ];
     casks = [
-      "aerospace"
+      "nikitabobko/tap/aerospace"
       "alacritty"
       "balenaetcher"
       "betterdisplay"
