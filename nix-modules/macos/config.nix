@@ -32,45 +32,10 @@
       fi
     fi
 
-    # Build and install ferrosonic if not already installed or if source has changed
-    FERROSONIC_DIR="$HOME/ferrosonic"
-    FERROSONIC_BIN="/usr/local/bin/ferrosonic"
     HOMEBREW_PREFIX="/opt/homebrew"
 
     # Add Homebrew bin to PATH for this script
     export PATH="$HOMEBREW_PREFIX/bin:$PATH"
-
-    if command -v cargo &>/dev/null && command -v git &>/dev/null && command -v rustc &>/dev/null; then
-      echo "Checking ferrosonic installation..."
-
-      # Clone or update repository
-      if [ ! -d "$FERROSONIC_DIR" ]; then
-        echo "Cloning ferrosonic repository..."
-        git clone https://github.com/jaidaken/ferrosonic.git "$FERROSONIC_DIR" || echo "Failed to clone ferrosonic"
-      else
-        echo "Updating ferrosonic repository..."
-        cd "$FERROSONIC_DIR" && git pull || echo "Failed to update ferrosonic"
-      fi
-
-      # Build and install if directory exists
-      if [ -d "$FERROSONIC_DIR" ]; then
-        cd "$FERROSONIC_DIR"
-
-        # Check if we need to rebuild (source changed or binary doesn't exist)
-        if [ ! -f "$FERROSONIC_BIN" ] || [ "$FERROSONIC_DIR/src" -nt "$FERROSONIC_BIN" ]; then
-          echo "Building ferrosonic (this may take a few minutes)..."
-          cargo build --release && \
-          echo "Installing ferrosonic to /usr/local/bin..." && \
-          sudo cp target/release/ferrosonic "$FERROSONIC_BIN" && \
-          echo "Ferrosonic installed successfully!" || \
-          echo "Failed to build/install ferrosonic. You can manually run: cd ~/ferrosonic && cargo build --release && sudo cp target/release/ferrosonic /usr/local/bin/"
-        else
-          echo "Ferrosonic is already up to date."
-        fi
-      fi
-    else
-      echo "Skipping ferrosonic installation (cargo, rustc, or git not available in PATH)"
-    fi
 
     # Deploy and build fullhavoc-context-guardian MCP server
     # 
