@@ -82,28 +82,32 @@ function _get_opencode_model() {
   local task_type="${1:-sonnet}"
   local provider=$(_get_ai_provider)
   
-  # Try to discover the latest model dynamically
-  local model=""
-  
-  if [[ "$task_type" == "haiku" ]]; then
-    model=$(_discover_latest_model "$provider" "haiku")
-  elif [[ "$task_type" == "opus" ]]; then
-    model=$(_discover_latest_model "$provider" "opus")
-  else
-    model=$(_discover_latest_model "$provider" "sonnet")
+  # GitHub Copilot: Skip auto-discovery, use hardcoded 4.5 models
+  # (4.6 appears in model list but is not actually supported yet)
+  if [[ "$provider" != "github-copilot" ]]; then
+    # Try to discover the latest model dynamically for other providers
+    local model=""
+    
+    if [[ "$task_type" == "haiku" ]]; then
+      model=$(_discover_latest_model "$provider" "haiku")
+    elif [[ "$task_type" == "opus" ]]; then
+      model=$(_discover_latest_model "$provider" "opus")
+    else
+      model=$(_discover_latest_model "$provider" "sonnet")
+    fi
+    
+    # If discovery succeeded, return the model
+    if [[ -n "$model" ]]; then
+      echo "$model"
+      return 0
+    fi
   fi
   
-  # If discovery succeeded, return the model
-  if [[ -n "$model" ]]; then
-    echo "$model"
-    return 0
-  fi
-  
-  # Fallback to hardcoded models if discovery fails
+  # Fallback to hardcoded models (always used for github-copilot, fallback for others)
   # Note: These fallback values should be updated periodically to match latest available models
   case $provider in
     github-copilot)
-      # GitHub Copilot: Limited to 4.5 models (4.6 not yet available)
+      # GitHub Copilot: Use hardcoded 4.5 models (4.6 listed but not actually supported)
       if [[ "$task_type" == "opus" ]]; then
         echo "github-copilot/claude-opus-4.5"
       elif [[ "$task_type" == "haiku" ]]; then

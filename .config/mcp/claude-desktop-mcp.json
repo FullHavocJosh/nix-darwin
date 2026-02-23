@@ -2,7 +2,7 @@
   "mcpServers": {
     "context-guardian": {
       "command": "node",
-      "args": ["$HOME/context-guardian-mcp-server/dist/index.js"]
+      "args": ["$HOME/fullhavoc-context-guardian-mcp-server/dist/index.js"]
     }
   }
 }
