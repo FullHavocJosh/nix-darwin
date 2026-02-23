@@ -250,7 +250,7 @@
       "type": "local",
       "command": [
         "node",
-        "/Users/jrollet/fullhavoc-context-guardian-mcp-server/dist/index.js"
+        "/Users/havoc/fullhavoc-context-guardian-mcp-server/dist/index.js"
       ]
     },
     "memory": {
