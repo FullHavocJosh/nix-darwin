@@ -193,6 +193,9 @@ in
     ${pkgs.stow}/bin/stow -R . || { echo "Failed to stow dotfiles"; exit 1; }
     echo "Finished Stowing dotfiles..."
 
+    echo "Patching opencode.json with correct home path..."
+    ${pkgs.gnused}/bin/sed -i "s|__HOME__|$HOME|g" "$HOME/.config/opencode/opencode.json"
+
     echo "Setting wallpaper..."
     osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/havoc/.wallpapers/wallhaven-1k9m9w.jpg"'
   '';
