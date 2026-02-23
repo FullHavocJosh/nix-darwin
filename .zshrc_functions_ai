@@ -103,12 +103,13 @@ function _get_opencode_model() {
   # Note: These fallback values should be updated periodically to match latest available models
   case $provider in
     github-copilot)
+      # GitHub Copilot: Limited to 4.5 models (4.6 not yet available)
       if [[ "$task_type" == "opus" ]]; then
-        echo "github-copilot/claude-opus-4.5"  # Latest: Opus 4.5 (semantic versioning)
+        echo "github-copilot/claude-opus-4.5"
       elif [[ "$task_type" == "haiku" ]]; then
-        echo "github-copilot/claude-haiku-4.5"  # Latest: Haiku 4.5
+        echo "github-copilot/claude-haiku-4.5"
       else
-        echo "github-copilot/claude-sonnet-4.5"  # Latest: Sonnet 4.5
+        echo "github-copilot/claude-sonnet-4.5"
       fi
       ;;
     opencode)
@@ -130,12 +131,13 @@ function _get_opencode_model() {
       fi
       ;;
     anthropic)
+      # Anthropic: Uses latest available models (currently 4.6 Sonnet, 4.5 Haiku/Opus)
       if [[ "$task_type" == "haiku" ]]; then
         echo "anthropic/claude-haiku-4-5"
       elif [[ "$task_type" == "opus" ]]; then
         echo "anthropic/claude-opus-4-5"
       else
-        echo "anthropic/claude-sonnet-4-5"
+        echo "anthropic/claude-sonnet-4-6"  # Updated to 4.6
       fi
       ;;
     llama-cpp)
@@ -833,6 +835,7 @@ function _get_cloud_model() {
 
   case $provider in
     github-copilot)
+      # GitHub Copilot: Limited to 4.5 models (4.6 not yet available)
       [[ "$task_type" == "opus"  ]] && echo "github-copilot/claude-opus-4.5"  && return
       [[ "$task_type" == "haiku" ]] && echo "github-copilot/claude-haiku-4.5" && return
       echo "github-copilot/claude-sonnet-4.5"
@@ -848,9 +851,10 @@ function _get_cloud_model() {
       echo "openrouter/anthropic/claude-sonnet-4.5"
       ;;
     anthropic|*)
+      # Anthropic: Uses latest available models (currently 4.6 Sonnet, 4.5 Haiku/Opus)
       [[ "$task_type" == "opus"  ]] && echo "anthropic/claude-opus-4-5"  && return
       [[ "$task_type" == "haiku" ]] && echo "anthropic/claude-haiku-4-5" && return
-      echo "anthropic/claude-sonnet-4-5"
+      echo "anthropic/claude-sonnet-4-6"
       ;;
   esac
 }

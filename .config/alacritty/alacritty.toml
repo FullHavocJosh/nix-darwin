@@ -49,8 +49,8 @@ mouse = "Middle"
 decorations = "None"
 dynamic_title = false
 dynamic_padding = true
-opacity = 1.0
-blur = false
+opacity = 0.8
+blur = true
 
 [scrolling]
 history = 100000
