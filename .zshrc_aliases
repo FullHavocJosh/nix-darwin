@@ -9,6 +9,8 @@ alias sshcaitsg14='ssh -i ~/.ssh/id_ed25519 nesheri@Caits-G14.rollet.family'
 alias sshxps13='ssh -i ~/.ssh/id_ed25519 havoc@xps13.rollet.family'
 alias sshopnsense='ssh -i ~/.ssh/id_ed25519 root@192.168.144.1'
 alias ssh705g4='ssh -i ~/.ssh/id_ed25519 havoc@705g4.rollet.family'
+alias ssh4kfjsn2='ssh -i ~/.ssh/id_ed25519 havoc@4kfjsn2.rollet.family'
+alias ssh2fgjsn2='ssh -i ~/.ssh/id_ed25519 havoc@2fgjsn2.rollet.family'
 alias sshk3sworkervm0='ssh -i ~/.ssh/id_ed25519 havoc@k3sworkervm0.rollet.family'
 alias sshk3sworkervm1='ssh -i ~/.ssh/id_ed25519 havoc@k3sworkervm1.rollet.family'
 

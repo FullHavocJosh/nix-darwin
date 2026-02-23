@@ -40,6 +40,8 @@ declare -A SSH_TARGETS=(
 	["xps13"]="havoc@xps13.rollet.family"
 	["opnsense"]="root@192.168.144.1"
 	["705g4"]="havoc@705g4.rollet.family"
+	["4kfjsn2"]="havoc@4kfjsn2.rollet.family"
+	["2fgjsn2"]="havoc@2fgjsn2.rollet.family"
 	["k3sworkervm0"]="havoc@k3sworkervm0.rollet.family"
 	["k3sworkervm1"]="havoc@k3sworkervm1.rollet.family"
 )
@@ -195,4 +197,4 @@ fi
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "You can now test the connections with your aliases:"
-echo "  sshmacbook, sshg14, sshazeroth, sshtestazeroth, sshmini, sshtruenas, ssh6rx26x1, sshcaitsg14, sshxps13, sshopnsense, ssh705g4, sshk3sworkervm0, sshk3sworkervm1"
+echo "  sshmacbook, sshg14, sshazeroth, sshtestazeroth, sshmini, sshtruenas, ssh6rx26x1, sshcaitsg14, sshxps13, sshopnsense, ssh705g4, ssh4kfjsn2, ssh2fgjsn2, sshk3sworkervm0, sshk3sworkervm1"
