@@ -306,4 +306,35 @@ in
       ];
     };
   };
+
+  # AutoRaise - automatically raises windows on mouse hover
+  launchd.user.agents.autoraise = {
+    serviceConfig = {
+      ProgramArguments = [
+        "/opt/homebrew/bin/autoraise"
+      ];
+      KeepAlive = true;
+      RunAtLoad = true;
+      StandardOutPath = "/tmp/autoraise.log";
+      StandardErrorPath = "/tmp/autoraise.error.log";
+      LimitLoadToSessionType = "Aqua";
+    };
+  };
+
+  # Borders - window border highlighter for AeroSpace
+  launchd.user.agents.borders = {
+    serviceConfig = {
+      ProgramArguments = [
+        "/opt/homebrew/bin/borders"
+        "width=8.0"
+        "hidpi=on"
+        "active_color=glow(0xFFCBA6F7)"
+      ];
+      KeepAlive = true;
+      RunAtLoad = true;
+      StandardOutPath = "/tmp/borders.log";
+      StandardErrorPath = "/tmp/borders.error.log";
+      LimitLoadToSessionType = "Aqua";
+    };
+  };
 }
