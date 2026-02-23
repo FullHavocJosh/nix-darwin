@@ -15,3 +15,4 @@ nix-modules$
 result$
 CRUSH\.md$
 ansible-.*
+org\.nixos\..*\.plist$
