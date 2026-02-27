@@ -27,6 +27,9 @@ outer.right = 16
 "5th-Workspace" = ['secondary']
 [mode.main.binding]
 alt-enter = 'exec-and-forget open -na /Applications/Alacritty.app'
+alt-z = 'exec-and-forget open -na /Applications/Zen Browser.app'
+alt-s = 'exec-and-forget open -na /Applications/Slack.app'
+alt-e = 'exec-and-forget open -na /Applications/Element.app'
 alt-slash = 'layout tiles horizontal vertical'
 alt-comma = 'layout accordion horizontal vertical'
 alt-h = 'focus --boundaries-action wrap-around-the-workspace left'
