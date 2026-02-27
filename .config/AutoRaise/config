@@ -1,5 +1,5 @@
 #AutoRaise config file
 pollMillis=20
-delay=1
-requireMouseStop=false
+delay=2
+requireMouseStop=true
 disableKey=control
