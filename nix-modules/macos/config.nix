@@ -236,7 +236,7 @@
     dock.wvous-tl-corner = 1;
     dock.wvous-tr-corner = 1;
 
-    NSGlobalDomain._HIHideMenuBar = true;
+    NSGlobalDomain._HIHideMenuBar = false;
     menuExtraClock.IsAnalog = false;
     menuExtraClock.ShowAMPM = false;
     menuExtraClock.ShowDate = 0;
