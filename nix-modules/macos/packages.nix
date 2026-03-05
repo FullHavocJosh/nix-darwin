@@ -326,5 +326,17 @@ in
   };
 
   # AutoRaise - automatically raise windows on hover
+  launchd.user.agents.autoraise = {
+    serviceConfig = {
+      ProgramArguments = [
+        "/opt/homebrew/bin/autoraise"
+      ];
+      KeepAlive = true;
+      RunAtLoad = true;
+      StandardOutPath = "/tmp/autoraise.log";
+      StandardErrorPath = "/tmp/autoraise.error.log";
+      LimitLoadToSessionType = "Aqua";
+    };
+  };
 
 }
