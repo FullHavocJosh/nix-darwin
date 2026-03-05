@@ -284,6 +284,11 @@ in
     mkdir -p "$HOME/models"
     (nohup ${llamaModelDownloader} </dev/null >>"$HOME/models/download.log" 2>&1 &)
     echo "[llama-model-downloader] Download check running in background — tail ~/models/download.log"
+
+    # AutoRaise - start via brew services so only homebrew.mxcl.autoraise is
+    # used (avoids duplicate Login Items when org.nixos.* and homebrew.mxcl.*
+    # plists coexist).
+    /opt/homebrew/bin/brew services start autoraise 2>/dev/null || true
   '';
 
   # llama-server launchd agent — shared across personal and work configs
@@ -321,20 +326,6 @@ in
       RunAtLoad = true;
       StandardOutPath = "/tmp/borders.log";
       StandardErrorPath = "/tmp/borders.error.log";
-      LimitLoadToSessionType = "Aqua";
-    };
-  };
-
-  # AutoRaise - automatically raise windows on hover
-  launchd.user.agents.autoraise = {
-    serviceConfig = {
-      ProgramArguments = [
-        "/opt/homebrew/bin/autoraise"
-      ];
-      KeepAlive = true;
-      RunAtLoad = true;
-      StandardOutPath = "/tmp/autoraise.log";
-      StandardErrorPath = "/tmp/autoraise.error.log";
       LimitLoadToSessionType = "Aqua";
     };
   };
