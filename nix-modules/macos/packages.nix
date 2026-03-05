@@ -243,6 +243,7 @@ in
       "hyper"
       "insta360-link-controller"
       "jetbrains-toolbox"
+      "keepingyouawake"
       "kitty"
       "krita"
       "librewolf"
