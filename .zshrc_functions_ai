@@ -782,10 +782,34 @@ function _validate_anthropic() {
   [[ -n "$models" ]]
 }
 
-# Check internet connectivity by pinging 1.1.1.1
+# Check internet connectivity using curl or dig (not ping)
 # Returns 0 if online, 1 if offline
 function _is_online() {
-  ping -c1 -W1 1.1.1.1 >/dev/null 2>&1
+  # Try curl first - makes an HTTP HEAD request to Cloudflare DNS
+  # --max-time 2: timeout after 2 seconds
+  # --connect-timeout 1: connection timeout after 1 second
+  # -s: silent mode
+  # -f: fail silently on HTTP errors
+  if command -v curl &>/dev/null; then
+    curl -sf --max-time 2 --connect-timeout 1 https://1.1.1.1 >/dev/null 2>&1 && return 0
+  fi
+  
+  # Fallback to dig if curl is not available
+  # Query Cloudflare DNS for cloudflare.com
+  # +time=1: timeout after 1 second
+  # +tries=1: only try once
+  if command -v dig &>/dev/null; then
+    dig +time=1 +tries=1 @1.1.1.1 cloudflare.com >/dev/null 2>&1 && return 0
+  fi
+  
+  # If neither curl nor dig is available, fall back to ping
+  # (should rarely happen on modern systems)
+  if command -v ping &>/dev/null; then
+    ping -c1 -W1 1.1.1.1 >/dev/null 2>&1 && return 0
+  fi
+  
+  # No connectivity check method available or all failed
+  return 1
 }
 
 # Helper function to get current AI provider preference

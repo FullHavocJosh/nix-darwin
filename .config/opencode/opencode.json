@@ -20,13 +20,6 @@
     }
   },
   "model": "github-copilot/claude-sonnet-4.5",
-  "theme": "system",
-  "keybinds": {
-    "input_newline": "shift+enter,ctrl+j",
-    "tips_toggle": "<leader>h",
-    "terminal_title_toggle": "<leader>i",
-    "sidebar_toggle": "<leader>b"
-  },
   "tools": {
     "read": true,
     "grep": true,
