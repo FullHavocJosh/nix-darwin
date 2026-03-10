@@ -261,6 +261,7 @@ in
     casks = [
       "battle-net"
       "curseforge"
+      "element"
       "obsidian"
       "ollama-app"
       "plex"
