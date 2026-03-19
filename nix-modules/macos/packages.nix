@@ -265,7 +265,8 @@ in
       "zen"
     ];
     masApps = {
-      "Xcode" = 497799835;
+      # Xcode removed - install manually from Mac App Store or Xcode.app to avoid hangs
+      # Install with: mas install 497799835 (after initial setup)
     };
     onActivation.cleanup = "zap";
     onActivation.autoUpdate = true;
