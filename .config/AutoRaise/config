@@ -1,5 +1,15 @@
 #AutoRaise config file
-pollMillis=20
-delay=2
+pollMillis=50
+delay=1
+focusDelay=0
+scale=1.0
+altTaskSwitcher=false
 requireMouseStop=true
-disableKey=control
+ignoreSpaceChanged=false
+invertDisableKey=false
+invertIgnoreApps=false
+ignoreApps="IntelliJ IDEA,WebStorm"
+ignoreTitles="\\s\\| Microsoft Teams,^window$,..."
+stayFocusedBundleIds="com.apple.SecurityAgent,..."
+disableKey="control"
+mouseDelta=0.1
