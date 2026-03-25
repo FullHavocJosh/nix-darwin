@@ -16,3 +16,4 @@ result$
 CRUSH\.md$
 ansible-.*
 org\.nixos\..*\.plist$
+homebrew\.mxcl\..*\.plist$

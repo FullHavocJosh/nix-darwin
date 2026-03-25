@@ -246,7 +246,6 @@ in
   # Documentation at: mynixos.com and look for nix-services
   system.defaults = {
     dock.persistent-apps = [
-      "/Applications/Alacritty.app"
     ];
   };
   homebrew = {
