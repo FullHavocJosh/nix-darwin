@@ -44,6 +44,7 @@ declare -A SSH_TARGETS=(
 	["2fgjsn2"]="havoc@2fgjsn2.rollet.family"
 	["k3sworkervm0"]="havoc@k3sworkervm0.rollet.family"
 	["k3sworkervm1"]="havoc@k3sworkervm1.rollet.family"
+	["ha"]="root@homeassistant.rollet.family"
 )
 
 echo -e "${YELLOW}This script will copy your SSH public key to the following servers:${NC}"
@@ -197,4 +198,4 @@ fi
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "You can now test the connections with your aliases:"
-echo "  sshmacbook, sshg14, sshazeroth, sshtestazeroth, sshmini, sshtruenas, ssh6rx26x1, sshcaitsg14, sshxps13, sshopnsense, ssh705g4, ssh4kfjsn2, ssh2fgjsn2, sshk3sworkervm0, sshk3sworkervm1"
+echo "  sshmacbook, sshg14, sshazeroth, sshtestazeroth, sshmini, sshtruenas, ssh6rx26x1, sshcaitsg14, sshxps13, sshopnsense, ssh705g4, ssh4kfjsn2, ssh2fgjsn2, sshk3sworkervm0, sshk3sworkervm1, sshha"
