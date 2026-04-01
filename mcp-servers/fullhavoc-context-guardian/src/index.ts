@@ -11,6 +11,10 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import os from "os";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,6 +79,28 @@ async function listContextFiles(dirPath: string): Promise<string[]> {
 
   await walk(dirPath, dirPath);
   return results;
+}
+
+const READ_ONLY_PROFILES = [
+  "ps-prod-ro",
+  "ps-dev-ro",
+  "tm-prod-ro",
+  "tm-dev-ro",
+  "lb-prod-ro",
+  "lb-dev-ro",
+  "int-prod-ro",
+] as const;
+
+type ReadOnlyProfile = (typeof READ_ONLY_PROFILES)[number];
+
+async function awsSsoLogin(profile: ReadOnlyProfile): Promise<string> {
+  const { stdout, stderr } = await execAsync(
+    `aws sso login --profile ${profile}`,
+    {
+      timeout: 120000,
+    },
+  );
+  return stdout || stderr || `SSO login initiated for profile: ${profile}`;
 }
 
 const server = new Server(
@@ -143,6 +169,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["directory"],
         },
       },
+      {
+        name: "aws_sso_login",
+        description:
+          "Trigger AWS SSO login for a read-only AWS profile. Use this before running AWS CLI commands that require authentication. Available profiles: ps-prod-ro, ps-dev-ro, tm-prod-ro, tm-dev-ro, lb-prod-ro, lb-dev-ro, int-prod-ro",
+        inputSchema: {
+          type: "object",
+          properties: {
+            profile: {
+              type: "string",
+              enum: [...READ_ONLY_PROFILES],
+              description:
+                "The read-only AWS profile to authenticate. Must be one of: ps-prod-ro, ps-dev-ro, tm-prod-ro, tm-dev-ro, lb-prod-ro, lb-dev-ro, int-prod-ro",
+            },
+          },
+          required: ["profile"],
+        },
+      },
     ],
   };
 });
@@ -208,6 +251,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             {
               type: "text",
               text: JSON.stringify(files, null, 2),
+            },
+          ],
+        };
+      }
+
+      case "aws_sso_login": {
+        if (!args || typeof args !== "object" || !("profile" in args)) {
+          throw new Error("profile argument is required");
+        }
+        const profile = args.profile as string;
+        if (!READ_ONLY_PROFILES.includes(profile as ReadOnlyProfile)) {
+          throw new Error(
+            `Invalid profile: ${profile}. Must be one of: ${READ_ONLY_PROFILES.join(", ")}`,
+          );
+        }
+        const result = await awsSsoLogin(profile as ReadOnlyProfile);
+        return {
+          content: [
+            {
+              type: "text",
+              text: result,
             },
           ],
         };
