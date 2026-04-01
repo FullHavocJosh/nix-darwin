@@ -1,21 +1,12 @@
-# MacOS-Specific Settings #####################################################
 if [[ "$(uname)" == "Darwin" ]]; then
-  # Only print initialization message in interactive non-tmux shells
   [[ -z "$TMUX" ]] && [[ $- == *i* ]] && echo "ZSH Configuration for MacOS..."
 
-  # Nix
   if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
     . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
   fi
-  # End Nix
 
-  # Path to Nix binaries.
   export PATH=$PATH:"/run/current-system/sw/bin"
-
-  # Path to HomeBrew.
   export PATH=$PATH:"/opt/homebrew/bin:/usr/bin"
-
-  # Path to python and pip.
   export PATH=$PATH:"$HOME/Library/Python/3.9/bin"
   export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
   export no_proxy="*"
@@ -23,37 +14,22 @@ if [[ "$(uname)" == "Darwin" ]]; then
   export LDFLAGS="-L/opt/homebrew/opt/openssl@3/lib"
   export CPPFLAGS="-I/opt/homebrew/opt/openssl@3/include"
   export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
-
-  # Path to terraform.
   export PATH=$PATH:"$HOME/bin"
-
-  # Path to local binaries.
   export PATH=$PATH:"$HOME/.local/bin"
-
-  # Path to go.
   export GOPATH=/bin
   export PATH=$PATH:$GOROOT/bin
   export GOPATH=/opt/homebrew/Cellar/go/1.23.2
   export GOROOT=/opt/homebrew/Cellar/go/1.23.2/libexec
-
-  # Path to tfswitch.
   export PATH=$PATH:"$HOME/opt/homebrew/bin/tfswitch"
-
-  # k9s config directory
   export K9S_CONFIG_DIR="$HOME/.config/k9s"
-
-  # Added by LM Studio CLI (lms)
   export PATH=$PATH:"/Users/jrollet/.lmstudio/bin"
 
-  # Automatically activate Ansible virtual environment
   if [ -d "$HOME/ansible-venv" ]; then
       source "$HOME/ansible-venv/bin/activate"
   else
-      # Only show messages in interactive, non-tmux shells
       [[ -z "$TMUX" ]] && [[ $- == *i* ]] && echo "Creating Ansible virtual environment..."
       python3 -m venv ~/ansible-venv
       source "$HOME/ansible-venv/bin/activate"
       [[ -z "$TMUX" ]] && [[ $- == *i* ]] && echo "Virtual environment created and activated."
   fi
 fi
-

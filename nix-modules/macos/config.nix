@@ -6,8 +6,6 @@
   programs.zsh.enable = true;
   system.stateVersion = 5;
 
-  # Create font aliases by modifying font metadata
-  # This allows Core Text to recognize "JetBrains Mono" as an alias for "JetBrainsMono Nerd Font Mono"
   system.activationScripts.postUserActivation.text = ''
     # Symlink global gitignore from nix-darwin to home directory
     if [ ! -L "$HOME/.gitignore_global" ] || [ "$(readlink "$HOME/.gitignore_global")" != "$HOME/nix-darwin/.gitignore_global" ]; then
@@ -37,18 +35,6 @@
     # Add Homebrew bin to PATH for this script
     export PATH="$HOMEBREW_PREFIX/bin:$PATH"
 
-    # Deploy and build fullhavoc-context-guardian MCP server
-    # 
-    # This MCP server provides context about home infrastructure and AI contexts.
-    # 
-    # Important directories:
-    #   - ~/aicontexts: AI context documentation for various systems
-    #   - ~/home-infrastructure: Infrastructure as Code (K3s, Ansible, Terraform)
-    # 
-    # Network Architecture (see ~/aicontexts/NETWORK-ARCHITECTURE.md):
-    #   - OPNsense Nginx: SSL/TLS termination + ALL security (HSTS, auth, rate limiting, WAF)
-    #   - K8s Nginx Ingress: BASIC LOAD BALANCING ONLY (no SSL, no security, just routing)
-    # 
     MCP_TEMPLATE="$HOME/nix-darwin/mcp-servers/fullhavoc-context-guardian"
     MCP_DIR="$HOME/fullhavoc-context-guardian-mcp-server"
     MCP_DIST="$MCP_DIR/dist/index.js"
@@ -77,13 +63,11 @@
 
       cd "$MCP_DIR"
 
-      # Check if dependencies are installed or need updating
       if [ ! -d "node_modules" ] || [ "$MCP_TEMPLATE/package.json" -nt "node_modules" ] || [ "$MCP_TEMPLATE/package-lock.json" -nt "node_modules" ]; then
         echo "Installing MCP server dependencies..."
         npm install || echo "Failed to install MCP server dependencies"
       fi
 
-      # Check if we need to rebuild (source changed, lockfile changed, or dist doesn't exist)
       if [ ! -f "$MCP_DIST" ] || [ "$MCP_TEMPLATE/src" -nt "$MCP_DIST" ] || [ "$MCP_TEMPLATE/package-lock.json" -nt "$MCP_DIST" ]; then
         echo "Building fullhavoc-context-guardian MCP server..."
         npm run build && \
@@ -98,14 +82,11 @@
 
     echo "Creating font aliases for terminal compatibility..."
 
-    # Create aliased fonts directory
     ALIAS_FONT_DIR="$HOME/Library/Fonts/Aliased"
 
-    # Clean old fonts to force regeneration
     ${pkgs.coreutils}/bin/rm -rf "$ALIAS_FONT_DIR"
     mkdir -p "$ALIAS_FONT_DIR"
 
-    # Function to create font alias
     create_font_alias() {
       local source_font="$1"
       local new_family_name="$2"
@@ -114,7 +95,6 @@
       if [ -f "$source_font" ]; then
         echo "Creating alias: $(basename "$output_font")"
 
-        # Use fonttools to modify font name table
         local temp_dir
         local temp_xml
         local temp_font_base
@@ -123,36 +103,28 @@
         temp_xml="$temp_dir/font.ttx"
         temp_font_base="$temp_dir/font"
 
-        # Extract name table from source font
         ${pkgs.python3Packages.fonttools}/bin/ttx -t name -o "$temp_xml" "$source_font" 2>/dev/null || return 1
 
-        # Modify family name in the XML
-        # nameID 1 = Font Family, nameID 4 = Full Name, nameID 16 = Typographic Family
         ${pkgs.gnused}/bin/sed -i \
           -e "s|JetBrainsMono NFM|$new_family_name|g" \
           -e "s|JetBrainsMono Nerd Font Mono|$new_family_name|g" \
           "$temp_xml" 2>/dev/null || return 1
 
-        # Copy source font to temp location
         ${pkgs.coreutils}/bin/cp "$source_font" "$temp_font_base.ttf"
 
-        # Merge modified name table - this creates font#1.ttf (won't overwrite existing)
+        # ttx creates font#1.ttf when font.ttf already exists
         ${pkgs.python3Packages.fonttools}/bin/ttx -m "$temp_font_base.ttf" "$temp_xml" 2>/dev/null || return 1
 
-        # Move the newly created modified font to output location
-        # ttx creates font#1.ttf when font.ttf already exists
         if [ -f "$temp_font_base#1.ttf" ]; then
           ${pkgs.coreutils}/bin/mv "$temp_font_base#1.ttf" "$output_font"
         else
           ${pkgs.coreutils}/bin/mv "$temp_font_base.ttf" "$output_font"
         fi
 
-        # Clean up
         ${pkgs.coreutils}/bin/rm -rf "$temp_dir"
       fi
     }
 
-    # Create aliases for Regular, Bold, Italic, BoldItalic
     for style in Regular Bold Italic BoldItalic; do
       source="$HOME/Library/Fonts/JetBrainsMonoNerdFontMono-$style.ttf"
       target="$ALIAS_FONT_DIR/JetBrainsMono-$style.ttf"
@@ -164,17 +136,14 @@
 
     echo "Font aliases created. Rebuilding font cache..."
 
-    # Force macOS to rebuild font cache
     ${pkgs.coreutils}/bin/touch "$HOME/Library/Fonts/Aliased"
     /System/Library/Frameworks/ApplicationServices.framework/Frameworks/ATS.framework/Support/atsutil databases -remove 2>/dev/null || true
     /System/Library/Frameworks/ApplicationServices.framework/Frameworks/ATS.framework/Support/atsutil server -shutdown 2>/dev/null || true
     /System/Library/Frameworks/ApplicationServices.framework/Frameworks/ATS.framework/Support/atsutil server -ping 2>/dev/null || true
 
     echo "Checking for macOS system updates..."
-    # Check for available macOS system updates
     UPDATES_AVAILABLE=$(softwareupdate --list 2>&1)
 
-    # Check if updates are available (returns 0 if updates found)
     if echo "$UPDATES_AVAILABLE" | grep -q "Software Update found"; then
       echo "════════════════════════════════════════════════════════════════"
       echo "macOS System Updates Available:"
@@ -198,17 +167,12 @@
     fi
 
     echo "Managing global npm packages..."
-    # Check if npm is available
     if command -v npm &>/dev/null; then
-      # Note: opencode is already provided by Homebrew, no need for opencode-ai npm package
-
-      # Install jsonlint if not already installed
       if ! npm list -g jsonlint &>/dev/null; then
         echo "Installing jsonlint..."
         npm install -g jsonlint 2>&1 | grep -v "npm warn" || echo "Failed to install jsonlint"
       fi
 
-      # Get list of globally installed packages that need updates
       OUTDATED=$(npm outdated -g --json 2>/dev/null || echo "{}")
       if [ -n "$OUTDATED" ] && [ "$OUTDATED" != "{}" ]; then
         OUTDATED_COUNT=$(echo "$OUTDATED" | jq 'length' 2>/dev/null || echo "0")
@@ -220,8 +184,6 @@
             LATEST=$(echo "$OUTDATED" | jq -r ".[\"$pkg\"].latest" 2>/dev/null)
             echo "  Updating $pkg: $CURRENT → $LATEST"
           done
-
-          # Update all global packages
           npm update -g 2>&1 | grep -v "npm warn" || true
           echo "Finished updating global npm packages"
         else

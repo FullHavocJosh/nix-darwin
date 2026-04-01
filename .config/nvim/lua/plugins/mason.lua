@@ -21,86 +21,48 @@ return {
     config = function()
       require("mason-tool-installer").setup({
         ensure_installed = {
-          -- === FORMATTERS ===
-          -- Shell
-          "shfmt", -- Bash/Shell formatter
+          -- Formatters
+          "shfmt",
+          "prettier",
+          "taplo",
+          "stylua",
+          "black",
+          "gofumpt",
+          "goimports",
+          "rubocop",
+          "djlint",
+          "sqlfluff",
 
-          -- Configuration files
-          "prettier", -- JSON/YAML/JS/TS/Markdown formatter
-          "taplo", -- TOML formatter
+          -- Linters
+          "shellcheck",
+          "yamllint",
+          "jsonlint",
+          "luacheck",
+          "ruff",
+          "mypy",
+          "eslint_d",
+          "golangci-lint",
+          "tflint",
+          "tfsec",
+          "ansible-lint",
+          "hadolint",
+          "markdownlint",
 
-          -- Programming languages
-          "stylua", -- Lua formatter
-          "black", -- Python formatter
-          "gofumpt", -- Go formatter (stricter than gofmt)
-          "goimports", -- Go imports formatter
-          "rubocop", -- Ruby formatter and linter
-
-          -- Templates
-          "djlint", -- Jinja2 template formatter
-
-          -- SQL
-          "sqlfluff", -- SQL formatter and linter
-
-          -- === LINTERS ===
-          -- Shell
-          "shellcheck", -- Bash/Shell linter
-
-          -- Configuration files
-          "yamllint", -- YAML linter
-          "jsonlint", -- JSON linter
-
-          -- Programming languages
-          "luacheck", -- Lua linter
-          "ruff", -- Python linter (fast, replaces flake8, pylint, etc.)
-          "mypy", -- Python type checker
-          "eslint_d", -- JavaScript/TypeScript linter
-          "golangci-lint", -- Go meta-linter
-
-          -- Infrastructure as Code
-          "tflint", -- Terraform linter
-          "tfsec", -- Terraform security scanner
-          "ansible-lint", -- Ansible linter
-
-          -- Docker
-          "hadolint", -- Dockerfile linter
-
-          -- Markup
-          "markdownlint", -- Markdown linter
-
-          -- === LSP SERVERS ===
-          -- Shell
+          -- LSP servers
           "bash-language-server",
-
-          -- Configuration files
           "yaml-language-server",
           "json-lsp",
-
-          -- Programming languages
           "lua-language-server",
-          "pyright", -- Python LSP
+          "pyright",
           "typescript-language-server",
-          "gopls", -- Go LSP
-
-          -- Infrastructure as Code
+          "gopls",
           "terraform-ls",
           "ansible-language-server",
-
-          -- Docker
           "dockerfile-language-server",
           "docker-compose-language-service",
-
-          -- Markup
-          "marksman", -- Markdown LSP
-
-          -- Ruby
+          "marksman",
           "solargraph",
-
-          -- XML
           "lemminx",
-
-          -- PowerShell (if on macOS/Linux with pwsh)
-          -- "powershell-editor-services",
         },
         auto_update = false,
         run_on_start = false,

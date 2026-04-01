@@ -1,51 +1,46 @@
 #!/bin/bash
-# Install MCP configurations for OpenCode, Crush, and ClaudeCode
-
 set -e
 
 MCP_CONFIG_DIR="$HOME/.config/mcp"
-CONTEXT_GUARDIAN_DIR="$HOME/context-guardian-mcp-server"
+CONTEXT_GUARDIAN_DIR="$HOME/fullhavoc-context-guardian-mcp-server"
+SERVER_JS="$CONTEXT_GUARDIAN_DIR/dist/index.js"
 
 echo "Installing MCP configurations..."
 
-# Check if MCP server is built
-if [ ! -f "$CONTEXT_GUARDIAN_DIR/dist/index.js" ]; then
+if [ ! -f "$SERVER_JS" ]; then
 	echo "Error: Context Guardian MCP server not built!"
 	echo "Run: cd $CONTEXT_GUARDIAN_DIR && npm install && npm run build"
 	exit 1
 fi
 
-# OpenCode
+install_json() {
+	local src="$1"
+	local dest="$2"
+	mkdir -p "$(dirname "$dest")"
+	sed "s|__HOME__|$HOME|g" "$src" >"$dest"
+}
+
 if command -v opencode &>/dev/null; then
-	mkdir -p "$HOME/.opencode"
-	cp "$MCP_CONFIG_DIR/opencode-mcp.json" "$HOME/.opencode/mcp.json"
+	install_json "$MCP_CONFIG_DIR/opencode-mcp.json" "$HOME/.opencode/mcp.json"
 	echo "✓ OpenCode MCP config installed"
 else
-	echo "⚠ OpenCode not found (install via: brew install opencode)"
+	echo "⚠ OpenCode not found"
 fi
 
-# Crush
 if command -v crush &>/dev/null; then
-	mkdir -p "$HOME/.crush"
-	cp "$MCP_CONFIG_DIR/crush-mcp.json" "$HOME/.crush/mcp.json"
+	install_json "$MCP_CONFIG_DIR/crush-mcp.json" "$HOME/.crush/mcp.json"
 	echo "✓ Crush MCP config installed"
 else
-	echo "⚠ Crush not found (install via: brew install crush)"
+	echo "⚠ Crush not found"
 fi
 
-# ClaudeCode
-if command -v claude-code &>/dev/null; then
-	mkdir -p "$HOME/.claude"
-	cp "$MCP_CONFIG_DIR/claude-desktop-mcp.json" "$HOME/.claude/mcp.json"
-	echo "✓ ClaudeCode MCP config installed"
+if command -v claude &>/dev/null; then
+	claude mcp add context-guardian node "$SERVER_JS" 2>/dev/null && \
+		echo "✓ Claude Code MCP server registered" || \
+		echo "⚠ Claude Code MCP already registered or failed"
 else
-	echo "⚠ ClaudeCode not found (install via: brew install claude-code)"
+	echo "⚠ Claude Code not found"
 fi
 
 echo ""
 echo "MCP configuration complete!"
-echo ""
-echo "To verify, run each tool and check if the context-guardian MCP server is loaded:"
-echo "  - opencode --version"
-echo "  - crush --version"
-echo "  - claude-code --version"

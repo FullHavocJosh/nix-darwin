@@ -1,10 +1,6 @@
 { pkgs, ... }:
 {
 
-  #######################################
-  ### MacOS Settings for Work Devices ###
-  #######################################
-
   system.activationScripts.script.text = ''
     #!/usr/bin/env bash
 
@@ -32,8 +28,6 @@
       if [ "$BEFORE_COUNT" -gt 0 ]; then
         echo "Found $BEFORE_COUNT .terraform directories (''${BEFORE_SIZE} MB)"
 
-        # Remove only .terraform directories (cache) from v3 and v4
-        # Note: .terraform.lock.hcl files are preserved as they should be committed to git
         find "$TERRAFORM_BASE/v3" "$TERRAFORM_BASE/v4" -type d -name ".terraform" -exec rm -rf {} + 2>/dev/null
 
         echo "Cleaned up Terraform cache directories from v3 and v4"
@@ -44,24 +38,17 @@
       echo "Terraform infrastructure directories (v3/v4) not found, skipping cleanup"
     fi
   '';
-  # System Settings for macOS
-  # Documentation at: mynixos.com and look for nix-services
   system.defaults = {
-    # Apps installed via nix package must include ${pkgs.APPNAME}
-    dock.persistent-apps = [
-    ];
+    dock.persistent-apps = [ ];
   };
   homebrew = {
     enable = true;
-    taps = [
-    ];
-    # Install Brew Formulas
+    taps = [ ];
     brews = [
       "act"
       "k9s"
       "kubectl"
     ];
-    # Install Brew Casks
     casks = [
       "citrix-workspace"
       "docker-desktop"
@@ -70,10 +57,7 @@
       "powershell"
       "remote-desktop-manager-free"
     ];
-    # Install App Store Apps, search for ID with "mas search "
-    # You must be logged into the Apps Store, and you must have purchased the app
-    masApps = {
-    };
+    masApps = { };
   };
 
 }

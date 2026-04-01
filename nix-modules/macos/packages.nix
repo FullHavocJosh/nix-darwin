@@ -1,30 +1,5 @@
 { pkgs, lib, ... }:
 let
-  # =============================================================================
-  # llama-server launcher — RAM-aware model selection
-  # =============================================================================
-  #
-  # Reads hw.memsize at service-start time and selects the largest Qwen2.5-Coder
-  # model that fits comfortably in unified memory, leaving ~8–17 GB for the OS.
-  #
-  # Tiers (all use --alias local-coder so shell code never needs to know RAM):
-  #   < 24 GB  →  qwen2.5-coder-7b-instruct-q8_0.gguf   (~8 GB,  M1 16 GB)
-  #   24–30 GB →  qwen2.5-coder-14b-instruct-q8_0.gguf  (~15 GB, M2 Pro 32 GB)
-  #   > 30 GB  →  qwen2.5-coder-32b-instruct-q4_k_m.gguf (~19 GB, M3 Pro 36 GB)
-  #
-  # Models are downloaded automatically on first darwin-rebuild switch via
-  # llamaModelDownloader (postUserActivation). The download runs in the
-  # background so it does not block the rebuild.
-  #
-
-  # =============================================================================
-  # llama-model-downloader — triggered by postUserActivation
-  # =============================================================================
-  #
-  # Detects RAM tier, checks if the model file already exists, and if not,
-  # downloads it from HuggingFace in the background (non-blocking).
-  # A stamp file at ~/models/.downloaded-<filename> prevents re-downloading.
-  #
   llamaModelDownloader = pkgs.writeShellScript "llama-model-downloader" ''
     #!/usr/bin/env bash
     set -euo pipefail
@@ -37,9 +12,7 @@ let
 
     mkdir -p "$MODELS_DIR"
 
-    # ── Model selection ────────────────────────────────────────────────────────
-    # 7B Q8 on all machines: fast enough for interactive pre-commit review
-    # (~15-30s per batch). Larger models (14B/32B) are too slow for gpa.
+    # 7B Q8 on all machines: fast enough for interactive pre-commit review (~15-30s per batch)
     MODEL_FILE="qwen2.5-coder-7b-instruct-q8_0.gguf"
     HF_REPO="bartowski/Qwen2.5-Coder-7B-Instruct-GGUF"
     HF_FILENAME="Qwen2.5-Coder-7B-Instruct-Q8_0.gguf"
@@ -50,13 +23,11 @@ let
     DEST="$MODELS_DIR/$MODEL_FILE"
     STAMP="$MODELS_DIR/.downloaded-$MODEL_FILE"
 
-    # ── Already present — nothing to do ───────────────────────────────────────
     if [ -f "$STAMP" ] && [ -f "$DEST" ]; then
       log "Model already present: $MODEL_FILE ($TIER) — skipping download"
       exit 0
     fi
 
-    # ── Partial download present — resume it ──────────────────────────────────
     RESUME_FLAG=""
     if [ -f "$DEST" ]; then
       log "Partial download found, will attempt resume: $MODEL_FILE"
@@ -67,7 +38,6 @@ let
     log "Source: https://huggingface.co/$HF_REPO/resolve/main/$HF_FILENAME"
     log "Destination: $DEST"
 
-    # curl: -L follow redirects, -f fail on HTTP errors, --retry 5 on transient failures
     if curl -fL ''${RESUME_FLAG} \
         --retry 5 --retry-delay 10 --retry-max-time 3600 \
         --connect-timeout 30 \
@@ -78,7 +48,6 @@ let
       log "Download complete: $MODEL_FILE"
     else
       log "ERROR: Download failed — see $LOG for details"
-      # Remove incomplete file so next run tries again cleanly
       rm -f "$DEST"
       exit 1
     fi
@@ -93,8 +62,6 @@ let
 
     log() { echo "$LOG_PREFIX $*"; }
 
-    # ── Model selection ────────────────────────────────────────────────────────
-    # 7B Q8 on all machines: fast enough for interactive pre-commit review.
     RAM_BYTES=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
     RAM_GB=$(( RAM_BYTES / 1024 / 1024 / 1024 ))
     log "Detected ''${RAM_GB} GB unified memory"
@@ -105,17 +72,12 @@ let
     log "Selected tier: $TIER"
     log "Model file: $MODEL_FILE"
 
-    # ── Verify model file exists ───────────────────────────────────────────────
     if [ ! -f "$MODEL_FILE" ]; then
       log "ERROR: Model file not found: $MODEL_FILE"
-      log "Download it with:"
-      log "  huggingface-cli download Qwen/Qwen2.5-Coder-32B-Instruct-GGUF \\"
-      log "    --include \"qwen2.5-coder-32b-instruct-q4_k_m*.gguf\" --local-dir ~/models/"
       log "llama-server will NOT start until the model file is present."
       exit 1
     fi
 
-    # ── Launch llama-server ────────────────────────────────────────────────────
     log "Starting llama-server..."
     exec /opt/homebrew/bin/llama-server \
       --model        "$MODEL_FILE" \
@@ -131,14 +93,14 @@ in
 {
   environment.systemPackages = with pkgs; [
     nil
-    nixd # Nix language server
+    nixd
     smassh
-    python3Packages.fonttools # For creating font aliases
-    lemminx # XML Language Server
-    rubyPackages.rubocop # Ruby linter/formatter
-    openvpn # OpenVPN client for VPN connections
-    nodejs_22 # Node.js for MCP servers and development
-    typescript # TypeScript compiler
+    python3Packages.fonttools
+    lemminx
+    rubyPackages.rubocop
+    openvpn
+    nodejs_22
+    typescript
   ];
 
   homebrew = {
@@ -187,8 +149,8 @@ in
       "neovide"
       "neovim"
       "nixfmt"
-      "opencode" # OpenCode CLI - now available in homebrew
-      "llama.cpp" # llama.cpp - local LLM inference server for gpa/gpc/gpr
+      "opencode"
+      "llama.cpp"
       "opentofu"
       "prettier"
       "python-lsp-server"
@@ -264,36 +226,20 @@ in
       "zed"
       "zen"
     ];
-    masApps = {
-      # Xcode removed - install manually from Mac App Store or Xcode.app to avoid hangs
-      # Install with: mas install 497799835 (after initial setup)
-    };
+    masApps = { };
     onActivation.cleanup = "zap";
     onActivation.autoUpdate = true;
     onActivation.upgrade = true;
   };
 
-  # Download the correct llama model for this machine's RAM tier on every
-  # darwin-rebuild switch. The downloader is idempotent (stamp file check)
-  # and runs in the background so it never blocks the rebuild.
-  #
-  # Must use postUserActivation (not a named key or postActivation) because only
-  # postUserActivation runs as the logged-in user — named keys run as root.
-  # lib.mkAfter appends to the existing postUserActivation.text in config.nix.
   system.activationScripts.postUserActivation.text = lib.mkAfter ''
-    # Trigger llama model download for this machine's RAM tier (non-blocking)
     mkdir -p "$HOME/models"
     (nohup ${llamaModelDownloader} </dev/null >>"$HOME/models/download.log" 2>&1 &)
     echo "[llama-model-downloader] Download check running in background — tail ~/models/download.log"
 
-    # AutoRaise - start via brew services so only homebrew.mxcl.autoraise is
-    # used (avoids duplicate Login Items when org.nixos.* and homebrew.mxcl.*
-    # plists coexist).
     /opt/homebrew/bin/brew services start autoraise 2>/dev/null || true
   '';
 
-  # llama-server launchd agent — shared across personal and work configs
-  # The wrapper script selects the model at startup based on available RAM.
   launchd.user.agents.llama-server = {
     serviceConfig = {
       ProgramArguments = [
@@ -314,7 +260,6 @@ in
     };
   };
 
-  # Borders - window border highlighter for AeroSpace
   launchd.user.agents.borders = {
     serviceConfig = {
       ProgramArguments = [
