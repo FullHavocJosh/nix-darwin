@@ -89,6 +89,72 @@ let
       --cache-type-k q8_0 \
       --alias        "local-coder"
   '';
+
+  llamaHealthChecker = pkgs.writeShellScript "llama-health-checker" ''
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    SERVICE_NAME="org.nixos.llama-server"
+    PLIST_PATH="$HOME/Library/LaunchAgents/$SERVICE_NAME.plist"
+    HEALTH_URL="http://127.0.0.1:8080/health"
+    LOG_PREFIX="[llama-health-checker]"
+
+    log() { echo "$LOG_PREFIX $*"; }
+
+    # Check if service is loaded in launchd
+    if ! launchctl list "$SERVICE_NAME" &>/dev/null; then
+      log "Service not loaded, attempting to load..."
+      if [ -f "$PLIST_PATH" ]; then
+        launchctl load "$PLIST_PATH" 2>&1 | sed "s/^/$LOG_PREFIX /"
+        sleep 3
+      else
+        log "ERROR: Plist not found at $PLIST_PATH"
+        log "Please rebuild nix-darwin configuration"
+        exit 1
+      fi
+    fi
+
+    # Check if server is responding
+    if ! curl -sf "$HEALTH_URL" -o /dev/null --max-time 2 2>/dev/null; then
+      log "Server not responding, restarting service..."
+      launchctl kickstart -k "gui/$(id -u)/$SERVICE_NAME" 2>&1 | sed "s/^/$LOG_PREFIX /"
+      
+      # Wait for server to start (up to 30 seconds with progress indicator)
+      log "Waiting for server to start (this may take 15-30 seconds)..."
+      for i in {1..30}; do
+        if curl -sf "$HEALTH_URL" -o /dev/null --max-time 2 2>/dev/null; then
+          log "Server is now healthy (started in $i seconds)"
+          exit 0
+        fi
+        if [ $((i % 5)) -eq 0 ]; then
+          log "Still waiting... ($i/30 seconds)"
+        fi
+        sleep 1
+      done
+      
+      log "ERROR: Server did not start within 30 seconds"
+      log "Check /tmp/llama-server.log and /tmp/llama-server.error.log for details"
+      exit 1
+    else
+      log "Server is healthy"
+      exit 0
+    fi
+  '';
+
+  aiselectWrapper = pkgs.writeShellScriptBin "aiselect" ''
+    #!/usr/bin/env bash
+
+    # Ensure llama-server is running before proceeding
+    ${llamaHealthChecker} || {
+      echo "Failed to start llama-server. Check /tmp/llama-server.log for details"
+      exit 1
+    }
+
+    # Add your aiselect implementation here
+    # For now, this is a placeholder that confirms llama-server is running
+    echo "llama-server is running and healthy"
+    echo "TODO: Implement actual aiselect functionality"
+  '';
 in
 {
   environment.systemPackages = with pkgs; [
@@ -101,6 +167,7 @@ in
     openvpn
     nodejs_22
     typescript
+    aiselectWrapper
   ];
 
   homebrew = {
@@ -208,7 +275,6 @@ in
       "keepingyouawake"
       "kitty"
       "krita"
-      "librewolf"
       "lm-studio"
       "neovide-app"
       "plexamp"

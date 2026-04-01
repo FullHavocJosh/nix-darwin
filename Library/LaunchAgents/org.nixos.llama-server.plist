@@ -17,7 +17,7 @@
 	<key>ProgramArguments</key>
 	<array>
 		<string>/bin/bash</string>
-		<string>/nix/store/z62g2i7b6n11airqdwgdnx6znvpwywkf-llama-server-launcher</string>
+		<string>/nix/store/5xny0n97zphmcz73pz1shpcm68wzq94m-llama-server-launcher</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
