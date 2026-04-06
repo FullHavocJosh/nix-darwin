@@ -3,7 +3,7 @@
     "context-guardian": {
       "type": "stdio",
       "command": "node",
-      "args": ["__HOME__/fullhavoc-context-guardian-mcp-server/dist/index.js"]
+      "args": ["__HOME__/mcp-context-guardian-fullhavoc/dist/index.js"]
     }
   }
 }

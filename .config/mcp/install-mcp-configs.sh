@@ -2,7 +2,7 @@
 set -e
 
 MCP_CONFIG_DIR="$HOME/.config/mcp"
-CONTEXT_GUARDIAN_DIR="$HOME/fullhavoc-context-guardian-mcp-server"
+CONTEXT_GUARDIAN_DIR="$HOME/mcp-context-guardian-fullhavoc"
 SERVER_JS="$CONTEXT_GUARDIAN_DIR/dist/index.js"
 
 echo "Installing MCP configurations..."
