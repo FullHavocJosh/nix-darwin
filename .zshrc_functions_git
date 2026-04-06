@@ -1141,20 +1141,27 @@ ${batch_diff}
   local batch_result
   local api_exit_code
 
+  local _route_provider=$(_get_ai_provider)
+  local _route_model=$(_get_opencode_model "$ai_tier")
+
   if [[ "$ai_tier" == "cloud-escalation" ]]; then
-    echo "  ☁  Routing to cloud ($(_get_cloud_fallback_provider) Sonnet) for escalation..." >&2
+    local _cloud=$(_get_cloud_fallback_provider)
+    local _cloud_model=$(_get_cloud_model "sonnet")
+    echo "  ☁  Routing to cloud [$_cloud / $_cloud_model] for escalation..." >&2
     batch_result=$(echo "$full_prompt" | _run_ai_direct_cloud "sonnet" 2>&1)
     api_exit_code=$?
   elif [[ "$ai_tier" == "local" ]]; then
+    echo "  ⚪ Using local model [$_route_provider / $(_llamacpp_model_short)]" >&2
     batch_result=$(echo "$full_prompt" | _run_ai_direct "sonnet" 2>&1)
     api_exit_code=$?
-    # Hard failure on local → automatically fall back to cloud rather than giving up
     if [ $api_exit_code -eq 1 ]; then
-      echo "  ⚠ Local model failed — falling back to cloud ($(_get_cloud_fallback_provider))..." >&2
+      local _cloud=$(_get_cloud_fallback_provider)
+      echo "  ⚠ Local model failed — falling back to cloud [$_cloud]..." >&2
       batch_result=$(echo "$full_prompt" | _run_ai_direct_cloud "sonnet" 2>&1)
       api_exit_code=$?
     fi
   else
+    echo "  🤖 Using [$_route_provider / $_route_model]" >&2
     batch_result=$(echo "$full_prompt" | _run_ai_direct "$ai_tier" 2>&1)
     api_exit_code=$?
   fi
@@ -1565,6 +1572,9 @@ function gpa() {
   # Validate git repository
   _check_git_repo || return 1
 
+  # Ensure an AI provider is configured for this session
+  _ensure_ai_provider || return 1
+
   # Check if there are ANY changes (staged or unstaged)
   if git diff --quiet && git diff --cached --quiet; then
     echo "⚠ No changes to stage or review"
@@ -1842,11 +1852,15 @@ function gpa() {
   echo "ℹ Processing $total_files file(s) in $batch_count batch(es)"
   echo "  Total changes: $total_lines lines"
   local _active_provider=$(_get_ai_provider)
+  local _active_model=$(_get_opencode_model "sonnet")
+  echo "  Provider: $_active_provider"
   if [[ "$tier_override" == "auto" ]]; then
     if [[ "$_active_provider" == "llama-cpp" ]]; then
       echo "  Model: ⚪ $(_llamacpp_model_short) (local) → 🟢 Haiku for medium diffs → 🔵 Sonnet for large diffs → 🔴 Opus for critical or security"
+    elif [[ "$_active_provider" == "claude-code" ]]; then
+      echo "  Model: Auto-detect via claude --print (🟢 Haiku | 🔵 Sonnet | 🔴 Opus), fallback: opencode+github-copilot"
     else
-      echo "  Model: Auto-detect (🟢 Haiku simple | 🔵 Sonnet default | 🔴 Opus critical/large)"
+      echo "  Model: $_active_model (auto-detect: 🟢 Haiku simple | 🔵 Sonnet default | 🔴 Opus critical/large)"
     fi
   else
     local tier_emoji=""
@@ -1855,8 +1869,7 @@ function gpa() {
       sonnet) tier_emoji="🔵" ;;
       haiku) tier_emoji="🟢" ;;
     esac
-    echo "  Model: $tier_emoji $tier_override (forced)"
-    echo "  Using: $(_get_opencode_model "$tier_override")"
+    echo "  Model: $tier_emoji $tier_override (forced) → $(_get_opencode_model "$tier_override")"
   fi
   echo ""
   
@@ -1891,7 +1904,7 @@ function gpa() {
     esac
 
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "$tier_icon $tier_label — Reviewing batch $batch_num of $batch_count..."
+    echo "$tier_icon $tier_label — Reviewing batch $batch_num of $batch_count... [$_active_provider]"
     
     # Review this batch with timeout and retry
     local batch_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "$tier_override")

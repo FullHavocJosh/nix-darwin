@@ -173,7 +173,6 @@ in
   homebrew = {
     enable = true;
     taps = [
-      "warrensbox/tap"
       "nikitabobko/tap"
       "charmbracelet/tap"
       "dimentium/autoraise"
@@ -244,7 +243,6 @@ in
       "terraform-lsp"
       "terraformer"
       "tflint"
-      "warrensbox/tap/tfswitch"
       "tmux"
       "tpm"
       "tree-sitter"
@@ -303,7 +301,10 @@ in
     (nohup ${llamaModelDownloader} </dev/null >>"$HOME/models/download.log" 2>&1 &)
     echo "[llama-model-downloader] Download check running in background — tail ~/models/download.log"
 
-    /opt/homebrew/bin/brew services start autoraise 2>/dev/null || true
+    echo "Patching opencode.json with correct home path..."
+    ${pkgs.gnused}/bin/sed -i "s|__HOME__|$HOME|g" "$HOME/.config/opencode/opencode.json"
+
+    /opt/homebrew/bin/brew services restart autoraise 2>/dev/null || true
   '';
 
   launchd.user.agents.llama-server = {

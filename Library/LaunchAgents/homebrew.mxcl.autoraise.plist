@@ -19,8 +19,8 @@
 	<key>RunAtLoad</key>
 	<true/>
 	<key>StandardErrorPath</key>
-	<string>/Users/jrollet/Library/Logs/AutoRaise.log</string>
+	<string>/Users/havoc/Library/Logs/AutoRaise.log</string>
 	<key>StandardOutPath</key>
-	<string>/Users/jrollet/Library/Logs/AutoRaise.log</string>
+	<string>/Users/havoc/Library/Logs/AutoRaise.log</string>
 </dict>
 </plist>
