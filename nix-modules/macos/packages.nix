@@ -177,6 +177,7 @@ in
       "charmbracelet/tap"
       "dimentium/autoraise"
       "felixkratz/formulae"
+      "warrensbox/tap"
     ];
     brews = [
       "ansible"
@@ -281,6 +282,7 @@ in
       "sf-symbols"
       "shottr"
       "sublime-text"
+      "warrensbox/tap/tfswitch"
       "ungoogled-chromium"
       "vanilla"
       "via"

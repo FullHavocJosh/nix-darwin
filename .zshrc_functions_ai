@@ -702,8 +702,10 @@ function _validate_claude_code() {
   command -v claude &>/dev/null || return 1
   # API key auth
   [[ -n "$ANTHROPIC_API_KEY" ]] && return 0
-  # OAuth session (non-empty sessions directory written by claude auth login)
-  [[ -d "$HOME/.claude/sessions" ]] && [[ -n "$(ls -A "$HOME/.claude/sessions" 2>/dev/null)" ]] && return 0
+  # OAuth session - use `claude auth status` to check if logged in
+  if claude auth status 2>/dev/null | grep -q '"loggedIn": true'; then
+    return 0
+  fi
   return 1
 }
 
