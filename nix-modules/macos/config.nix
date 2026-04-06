@@ -55,6 +55,9 @@
         else
           echo "$MCP_NAME is up to date."
         fi
+        if [ -f "$MCP_DIST" ] && command -v claude &>/dev/null; then
+          claude mcp add --scope user "$MCP_NAME" node "$MCP_DIST" 2>/dev/null || true
+        fi
       done
       [ "$MCP_FOUND" -eq 0 ] && echo "No ~/mcp-* servers found, skipping."
     else
