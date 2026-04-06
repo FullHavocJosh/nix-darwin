@@ -36,8 +36,11 @@
     export PATH="$HOMEBREW_PREFIX/bin:$PATH"
 
     if command -v npm &>/dev/null && command -v node &>/dev/null; then
+      MCP_FOUND=0
       for MCP_DIR in "$HOME"/mcp-*/; do
+        [ -d "$MCP_DIR" ] || continue
         [ -f "$MCP_DIR/package.json" ] || continue
+        MCP_FOUND=1
         MCP_NAME=$(basename "$MCP_DIR")
         MCP_DIST="$MCP_DIR/dist/index.js"
         echo "Checking MCP server: $MCP_NAME"
@@ -53,6 +56,7 @@
           echo "$MCP_NAME is up to date."
         fi
       done
+      [ "$MCP_FOUND" -eq 0 ] && echo "No ~/mcp-* servers found, skipping."
     else
       echo "Skipping MCP server builds (npm or node not available in PATH)"
     fi
