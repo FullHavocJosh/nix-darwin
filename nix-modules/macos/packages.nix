@@ -280,7 +280,6 @@ in
       "qmk-toolbox"
       "sf-symbols"
       "shottr"
-      "stats"
       "sublime-text"
       "ungoogled-chromium"
       "vanilla"

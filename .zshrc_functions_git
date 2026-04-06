@@ -1346,13 +1346,14 @@ function _gpa_interactive_fix() {
   echo "Options:"
   echo "  [Y/Enter] Commit and push changes (gpc)"
   echo "  [r] Review again with 'gpa'"
-  echo "  [n] Cancel - keep staged"
+  echo "  [esc] Cancel - keep staged"
   echo ""
   echo -n "Your choice: "
-  read -r final_choice
-  
-  case "$final_choice" in
-    y | Y | "")
+  _read_key
+  echo ""
+
+  case "$_KEY" in
+    y | Y | $'\n')
       echo ""
       gpc
       return $?
@@ -1405,11 +1406,14 @@ function _gpa_review_batch_with_timeout() {
     local tmp_result=$(mktemp)
     local tmp_pid_file=$(mktemp)
     
-    # Run the review in a background process
+    # Run the review in a background process.
+    # Redirect subshell stdout+stderr to /dev/null: the result travels through
+    # $tmp_result (explicit redirect), so inherited fds are not needed. This also
+    # prevents any streaming text from claude from leaking to the terminal.
     (
-      local result=$(_gpa_review_batch "$batch" "$batch_num" "$total_batches" "$tier_override" 2>&1)
+      local result=$(_gpa_review_batch "$batch" "$batch_num" "$total_batches" "$tier_override" 2>/dev/null)
       echo "$result" > "$tmp_result"
-    ) &
+    ) >/dev/null 2>/dev/null &
     
     local bg_pid=$!
     echo $bg_pid > "$tmp_pid_file"
@@ -1477,8 +1481,9 @@ function _gpa_review_batch_with_timeout() {
         echo "$batch_result"
         return 0
       else
-        # Single extraction strategy (matching _gpa_review_batch)
-        local extracted_json=$(echo "$batch_result" | perl -0777 -pe 's/^[^\[]*(\[.*\])[^\]]*$/$1/s' | head -c 50000)
+        # Extract last JSON array: greedy .* before forces rightmost match,
+        # lazy .*? inside captures minimal content to avoid crossing array boundaries.
+        local extracted_json=$(echo "$batch_result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
         
         if [ -n "$extracted_json" ] && echo "$extracted_json" | jq empty 2>/dev/null; then
           echo "$extracted_json"
@@ -1819,13 +1824,14 @@ function gpa() {
     echo "Options:"
     echo "  [Y/Enter] Proceed to commit and push (gpc)"
     echo "  [r] Re-review all files (clear cache)"
-    echo "  [n] Cancel - keep staged"
+    echo "  [esc] Cancel - keep staged"
     echo ""
     echo -n "Your choice: "
-    read -r skip_choice
-    
-    case "$skip_choice" in
-      y | Y | "")
+    _read_key
+    echo ""
+
+    case "$_KEY" in
+      y | Y | $'\n')
         echo ""
         gpc
         return $?
@@ -1852,16 +1858,9 @@ function gpa() {
   echo "ℹ Processing $total_files file(s) in $batch_count batch(es)"
   echo "  Total changes: $total_lines lines"
   local _active_provider=$(_get_ai_provider)
-  local _active_model=$(_get_opencode_model "sonnet")
-  echo "  Provider: $_active_provider"
+  echo "  Provider: $(_provider_display_name "$_active_provider")"
   if [[ "$tier_override" == "auto" ]]; then
-    if [[ "$_active_provider" == "llama-cpp" ]]; then
-      echo "  Model: ⚪ $(_llamacpp_model_short) (local) → 🟢 Haiku for medium diffs → 🔵 Sonnet for large diffs → 🔴 Opus for critical or security"
-    elif [[ "$_active_provider" == "claude-code" ]]; then
-      echo "  Model: Auto-detect via claude --print (🟢 Haiku | 🔵 Sonnet | 🔴 Opus), fallback: opencode+github-copilot"
-    else
-      echo "  Model: $_active_model (auto-detect: 🟢 Haiku simple | 🔵 Sonnet default | 🔴 Opus critical/large)"
-    fi
+    echo "  Model: Auto-detect ($(_model_tier_display "$_active_provider"))"
   else
     local tier_emoji=""
     case "$tier_override" in
@@ -1907,7 +1906,10 @@ function gpa() {
     echo "$tier_icon $tier_label — Reviewing batch $batch_num of $batch_count... [$_active_provider]"
     
     # Review this batch with timeout and retry
-    local batch_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "$tier_override")
+    # Note: must separate local declaration from assignment to preserve exit code.
+    # In zsh, `local var=$(cmd)` swallows the subshell exit code.
+    local batch_issues
+    batch_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "$tier_override")
     local review_status=$?
     
     if [ $review_status -eq 0 ]; then
@@ -2119,13 +2121,14 @@ function gpa() {
     echo ""
     echo "Options:"
     echo "  [Y/Enter] Commit and push - automatically runs 'gpc'"
-    echo "  [n] Cancel - keep staged but don't proceed"
+    echo "  [esc] Cancel - keep staged but don't proceed"
     echo ""
     echo -n "Your choice: "
-    read -r continue_choice
+    _read_key
+    echo ""
 
-    case "$continue_choice" in
-      y | Y | "")
+    case "$_KEY" in
+      y | Y | $'\n')
         echo ""
         echo "✓ Proceeding to commit and push..."
         echo ""

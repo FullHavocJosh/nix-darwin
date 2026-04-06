@@ -37,6 +37,40 @@ function _discover_latest_model() {
   echo "$base_models" | sort -V | tail -1
 }
 
+# Returns a human-readable provider name with proper capitalisation.
+function _provider_display_name() {
+  case "$1" in
+    claude-code)    echo "Claude Code" ;;
+    github-copilot) echo "GitHub Copilot" ;;
+    opencode)       echo "OpenCode" ;;
+    openrouter)     echo "OpenRouter" ;;
+    llama-cpp)      echo "llama.cpp" ;;
+    *)              echo "$1" ;;
+  esac
+}
+
+# Returns the model tier display string (with version numbers) for a provider.
+# Usage: _model_tier_display <provider>
+function _model_tier_display() {
+  case "$1" in
+    claude-code)
+      echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.6 | 🔴 Opus 4.6"
+      ;;
+    github-copilot)
+      echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.5 | 🔴 Opus 4.5"
+      ;;
+    opencode | openrouter)
+      echo "🟢 Haiku 3.5 | 🔵 Sonnet 4.5 | 🔴 Opus 4.5"
+      ;;
+    llama-cpp)
+      echo "⚪ $(_llamacpp_model_short) (local)"
+      ;;
+    *)
+      echo "🟢 Haiku | 🔵 Sonnet | 🔴 Opus"
+      ;;
+  esac
+}
+
 function _get_opencode_model() {
   local task_type="${1:-sonnet}"
   local provider=$(_get_ai_provider)
@@ -322,7 +356,7 @@ START YOUR RESPONSE NOW WITH [ OR []:"
       # Extract JSON more efficiently - single strategy that handles most cases
       if [[ -n "$result" ]]; then
         # Strategy: Extract from first [ to last ] (handles wrapped JSON)
-        local extracted=$(echo "$result" | perl -0777 -pe 's/^[^\[]*(\[.*\])[^\]]*$/$1/s' | head -c 50000)
+        local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
         
         # Validate it's proper JSON
         if echo "$extracted" | jq empty 2>/dev/null; then
@@ -459,7 +493,7 @@ START YOUR RESPONSE NOW WITH [ OR []:"
       local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
       if [[ -n "$extracted" && "$extracted" != "null" ]]; then
         # Extract JSON array from the response (same strategy as anthropic branch)
-        local json_extracted=$(echo "$extracted" | perl -0777 -pe 's/^[^\[]*(\[.*\])[^\]]*$/$1/s' | head -c 50000)
+        local json_extracted=$(echo "$extracted" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
         if echo "$json_extracted" | jq empty 2>/dev/null; then
           echo "$json_extracted"
           return 0
@@ -493,26 +527,54 @@ Example of CORRECT response format:
 START YOUR RESPONSE NOW WITH [ OR []:"
 
       local result
-      result=$(echo "$json_prompt" | timeout 90s claude --print --output-format text 2>&1)
+      # claude --print streams its response to the real terminal as it generates,
+      # bypassing shell fd redirections in two ways:
+      #   1. open("/dev/tty") — blocked by start_new_session=True (setsid creates a
+      #      new session with no controlling terminal → ENXIO on open)
+      #   2. open(getenv("TTY")) — the $TTY env var holds the explicit device path
+      #      (e.g. /dev/ttys003); even with setsid, opening that path by name works.
+      #      Blocked by removing TTY from the subprocess environment.
+      # capture_output=True also ensures stdout/stderr are pipes, so isatty() is false.
+      result=$(echo "$json_prompt" | timeout 90s python3 -c '
+import subprocess, sys, os
+env = dict(os.environ)
+env.pop("TTY", None)
+r = subprocess.run(
+    ["claude", "--print", "--output-format", "text"],
+    input=sys.stdin.buffer.read(),
+    capture_output=True,
+    start_new_session=True,
+    env=env
+)
+sys.stdout.buffer.write(r.stdout)
+sys.exit(r.returncode)
+' 2>/dev/null)
       local exit_code=$?
       if [ $exit_code -eq 124 ]; then
         echo "Error: claude timeout after 90s" >&2
         return 1
       elif [ $exit_code -ne 0 ]; then
-        echo "Error: claude failed (exit $exit_code), falling back to opencode+github-copilot" >&2
-        result=$(echo "$json_prompt" | timeout 90s opencode run --model "github-copilot/claude-sonnet-4.5" 2>&1)
-        exit_code=$?
-        if [ $exit_code -eq 124 ]; then
-          echo "Error: opencode fallback timeout after 90s" >&2
-          return 1
-        elif [ $exit_code -ne 0 ]; then
-          echo "Error: opencode fallback also failed (exit $exit_code)" >&2
-          return 1
-        fi
+        echo "Error: claude failed (exit $exit_code)" >&2
+        return 1
       fi
 
       if [[ -n "$result" ]]; then
-        local extracted=$(echo "$result" | perl -0777 -pe 's/^[^\[]*(\[.*\])[^\]]*$/$1/s' | head -c 50000)
+        # Try direct parse first (claude followed instructions and returned pure JSON)
+        if echo "$result" | jq empty 2>/dev/null; then
+          echo "$result"
+          return 0
+        fi
+        # Strip markdown code fences and retry
+        local stripped
+        stripped=$(echo "$result" | sed 's/```[a-z]*//g; s/```//g')
+        if echo "$stripped" | jq empty 2>/dev/null; then
+          echo "$stripped"
+          return 0
+        fi
+        # Extract rightmost JSON array (handles preamble like "batch_issues='[]'")
+        # Greedy .* before forces rightmost match; lazy .*? inside avoids over-capturing.
+        local extracted
+        extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
         if echo "$extracted" | jq empty 2>/dev/null; then
           echo "$extracted"
           return 0
@@ -559,7 +621,7 @@ function aidev() {
 
   local provider=$(_get_ai_provider)
 
-  echo "${GREEN}✓${NC} Provider: $provider"
+  echo "${GREEN}✓${NC} Provider: $(_provider_display_name "$provider")"
 
   case "$provider" in
     claude-code)
@@ -805,7 +867,7 @@ START YOUR RESPONSE NOW WITH [ OR []:"
       local exit_code=$?
       [ $exit_code -eq 124 ] && { echo "Error: cloud timeout" >&2; return 1; }
       [ $exit_code -ne 0  ] && { echo "Error: cloud call failed" >&2; return 1; }
-      local extracted=$(echo "$result" | perl -0777 -pe 's/^[^\[]*(\[.*\])[^\]]*$/$1/s' | head -c 50000)
+      local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
       echo "$extracted" | jq empty 2>/dev/null && echo "$extracted" && return 0
       echo "[]"; return 2
       ;;
@@ -848,7 +910,7 @@ function aiselect() {
     echo "═══════════════════════════════════════════════════════════"
     echo "Current AI Configuration"
     echo "═══════════════════════════════════════════════════════════"
-    echo "Active Provider: $current_provider"
+    echo "Active Provider: $(_provider_display_name "$current_provider")"
     echo ""
     echo "Interactive Sessions (aidev):"
     echo "  Mode: Full Claude Code agent with tools"
