@@ -899,6 +899,111 @@ START YOUR RESPONSE NOW WITH [ OR []:"
   esac
 }
 
+# Check Claude service status from status.claude.com
+# Returns 0 if operational, 1 if there are issues
+# Prints status information to stdout
+function _check_claude_status() {
+  # Use -L to follow redirects
+  local status_json=$(curl -sL --max-time 5 https://status.claude.com/api/v2/components.json 2>/dev/null)
+  
+  # If curl failed or returned empty, assume services are operational (fail open)
+  if [[ -z "$status_json" ]] || [[ "$status_json" == *"<html"* ]]; then
+    return 0
+  fi
+  
+  # Extract statuses using jq if available, otherwise use grep
+  local claude_code_status=""
+  local claude_ai_status=""
+  local platform_status=""
+  
+  if command -v jq &>/dev/null; then
+    claude_code_status=$(echo "$status_json" | jq -r '.components[] | select(.name=="Claude Code") | .status' 2>/dev/null)
+    claude_ai_status=$(echo "$status_json" | jq -r '.components[] | select(.name=="claude.ai") | .status' 2>/dev/null)
+    platform_status=$(echo "$status_json" | jq -r '.components[] | select(.name | startswith("platform.claude.com")) | .status' 2>/dev/null)
+  else
+    # Fallback to grep/sed if jq not available
+    claude_code_status=$(echo "$status_json" | grep -o '"name":"Claude Code"[^}]*"status":"[^"]*"' | sed -n 's/.*"status":"\([^"]*\)".*/\1/p')
+    claude_ai_status=$(echo "$status_json" | grep -o '"name":"claude.ai"[^}]*"status":"[^"]*"' | sed -n 's/.*"status":"\([^"]*\)".*/\1/p')
+    platform_status=$(echo "$status_json" | grep -o '"name":"platform.claude.com[^}]*"status":"[^"]*"' | sed -n 's/.*"status":"\([^"]*\)".*/\1/p')
+  fi
+  
+  # Check if any service has issues
+  local has_issues=0
+  local RED='\033[0;31m'
+  local YELLOW='\033[1;33m'
+  local NC='\033[0m'
+  
+  if [[ "$claude_code_status" == "partial_outage" ]] || [[ "$claude_code_status" == "major_outage" ]] || [[ "$claude_code_status" == "degraded_performance" ]]; then
+    echo "  ${RED}⚠${NC}  Claude Code: ${YELLOW}${claude_code_status}${NC}"
+    has_issues=1
+  fi
+  
+  if [[ "$claude_ai_status" == "partial_outage" ]] || [[ "$claude_ai_status" == "major_outage" ]] || [[ "$claude_ai_status" == "degraded_performance" ]]; then
+    echo "  ${RED}⚠${NC}  claude.ai: ${YELLOW}${claude_ai_status}${NC}"
+    has_issues=1
+  fi
+  
+  if [[ "$platform_status" == "partial_outage" ]] || [[ "$platform_status" == "major_outage" ]] || [[ "$platform_status" == "degraded_performance" ]]; then
+    echo "  ${RED}⚠${NC}  platform.claude.com: ${YELLOW}${platform_status}${NC}"
+    has_issues=1
+  fi
+  
+  if [[ $has_issues -eq 1 ]]; then
+    echo "  ${YELLOW}ℹ${NC}  Auth may fail due to service issues. Check https://status.claude.com"
+    return 1
+  fi
+  
+  return 0
+}
+
+# Check GitHub Copilot service status from githubstatus.com
+# Returns 0 if operational, 1 if there are issues
+# Prints status information to stdout
+function _check_github_copilot_status() {
+  local status_json=$(curl -sL --max-time 5 https://www.githubstatus.com/api/v2/components.json 2>/dev/null)
+  
+  # If curl failed or returned empty, assume services are operational (fail open)
+  if [[ -z "$status_json" ]] || [[ "$status_json" == *"<html"* ]]; then
+    return 0
+  fi
+  
+  # Extract statuses using jq if available, otherwise use grep
+  local copilot_status=""
+  local api_status=""
+  
+  if command -v jq &>/dev/null; then
+    copilot_status=$(echo "$status_json" | jq -r '.components[] | select(.name=="Copilot") | .status' 2>/dev/null)
+    api_status=$(echo "$status_json" | jq -r '.components[] | select(.name=="API Requests") | .status' 2>/dev/null)
+  else
+    # Fallback to grep/sed if jq not available
+    copilot_status=$(echo "$status_json" | grep -o '"name":"Copilot"[^}]*"status":"[^"]*"' | sed -n 's/.*"status":"\([^"]*\)".*/\1/p')
+    api_status=$(echo "$status_json" | grep -o '"name":"API Requests"[^}]*"status":"[^"]*"' | sed -n 's/.*"status":"\([^"]*\)".*/\1/p')
+  fi
+  
+  # Check if any service has issues
+  local has_issues=0
+  local RED='\033[0;31m'
+  local YELLOW='\033[1;33m'
+  local NC='\033[0m'
+  
+  if [[ "$copilot_status" == "partial_outage" ]] || [[ "$copilot_status" == "major_outage" ]] || [[ "$copilot_status" == "degraded_performance" ]]; then
+    echo "  ${RED}⚠${NC}  GitHub Copilot: ${YELLOW}${copilot_status}${NC}"
+    has_issues=1
+  fi
+  
+  if [[ "$api_status" == "partial_outage" ]] || [[ "$api_status" == "major_outage" ]] || [[ "$api_status" == "degraded_performance" ]]; then
+    echo "  ${RED}⚠${NC}  GitHub API: ${YELLOW}${api_status}${NC}"
+    has_issues=1
+  fi
+  
+  if [[ $has_issues -eq 1 ]]; then
+    echo "  ${YELLOW}ℹ${NC}  Auth may fail due to service issues. Check https://www.githubstatus.com"
+    return 1
+  fi
+  
+  return 0
+}
+
 function aiselect() {
   local preference_file="$HOME/.ai_provider_preference"
 
@@ -1006,6 +1111,15 @@ function aiselect() {
     fi
   elif command -v claude &>/dev/null; then
     echo "  ${YELLOW}⚠${NC}  Installed but not signed in"
+    
+    # Check Claude service status before attempting login
+    _check_claude_status
+    local status_ok=$?
+    
+    if [[ $status_ok -ne 0 ]]; then
+      echo ""
+    fi
+    
     echo -n "  [enter] Login to Claude Code   [esc] Skip to GitHub Copilot → "
     _read_key; echo ""
     if [[ "$_KEY" != $'\e' ]]; then
@@ -1041,6 +1155,15 @@ function aiselect() {
     fi
   else
     echo "  ${YELLOW}⚠${NC}  Not authenticated"
+    
+    # Check GitHub Copilot service status before attempting login
+    _check_github_copilot_status
+    local status_ok=$?
+    
+    if [[ $status_ok -ne 0 ]]; then
+      echo ""
+    fi
+    
     echo -n "  [enter] Login to GitHub Copilot   [esc] Skip to OpenCode Zen → "
     _read_key; echo ""
     if [[ "$_KEY" != $'\e' ]]; then
