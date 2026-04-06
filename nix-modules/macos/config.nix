@@ -35,49 +35,26 @@
     # Add Homebrew bin to PATH for this script
     export PATH="$HOMEBREW_PREFIX/bin:$PATH"
 
-    MCP_TEMPLATE="$HOME/nix-darwin/mcp-servers/fullhavoc-context-guardian"
-    MCP_DIR="$HOME/fullhavoc-context-guardian-mcp-server"
-    MCP_DIST="$MCP_DIR/dist/index.js"
-    MCP_CONTEXT="$MCP_DIR/infrastructure-context.json"
-
     if command -v npm &>/dev/null && command -v node &>/dev/null; then
-      echo "Deploying fullhavoc-context-guardian MCP server..."
-
-      # Create target directory if it doesn't exist
-      mkdir -p "$MCP_DIR"
-
-      # Sync template to target (preserve infrastructure-context.json if it exists)
-      if [ -f "$MCP_CONTEXT" ]; then
-        # Backup existing context
-        cp "$MCP_CONTEXT" "$MCP_CONTEXT.backup"
-      fi
-
-      # Sync all files from template
-      ${pkgs.rsync}/bin/rsync -av --exclude='node_modules' --exclude='dist' --exclude='.git' \
-        "$MCP_TEMPLATE/" "$MCP_DIR/"
-
-      # Restore context if we backed it up
-      if [ -f "$MCP_CONTEXT.backup" ]; then
-        mv "$MCP_CONTEXT.backup" "$MCP_CONTEXT"
-      fi
-
-      cd "$MCP_DIR"
-
-      if [ ! -d "node_modules" ] || [ "$MCP_TEMPLATE/package.json" -nt "node_modules" ] || [ "$MCP_TEMPLATE/package-lock.json" -nt "node_modules" ]; then
-        echo "Installing MCP server dependencies..."
-        npm install || echo "Failed to install MCP server dependencies"
-      fi
-
-      if [ ! -f "$MCP_DIST" ] || [ "$MCP_TEMPLATE/src" -nt "$MCP_DIST" ] || [ "$MCP_TEMPLATE/package-lock.json" -nt "$MCP_DIST" ]; then
-        echo "Building fullhavoc-context-guardian MCP server..."
-        npm run build && \
-        echo "MCP server deployed and built successfully!" || \
-        echo "Failed to build MCP server. You can manually run: cd ~/fullhavoc-context-guardian-mcp-server && npm install && npm run build"
-      else
-        echo "MCP server is already up to date."
-      fi
+      for MCP_DIR in "$HOME"/mcp-*/; do
+        [ -f "$MCP_DIR/package.json" ] || continue
+        MCP_NAME=$(basename "$MCP_DIR")
+        MCP_DIST="$MCP_DIR/dist/index.js"
+        echo "Checking MCP server: $MCP_NAME"
+        cd "$MCP_DIR"
+        if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ] || [ "package-lock.json" -nt "node_modules" ]; then
+          echo "Installing dependencies for $MCP_NAME..."
+          npm install || echo "Failed to install dependencies for $MCP_NAME"
+        fi
+        if [ ! -f "$MCP_DIST" ] || [ "src" -nt "$MCP_DIST" ] || [ "package-lock.json" -nt "$MCP_DIST" ]; then
+          echo "Building $MCP_NAME..."
+          npm run build && echo "$MCP_NAME built successfully!" || echo "Failed to build $MCP_NAME"
+        else
+          echo "$MCP_NAME is up to date."
+        fi
+      done
     else
-      echo "Skipping MCP server deployment (npm or node not available in PATH)"
+      echo "Skipping MCP server builds (npm or node not available in PATH)"
     fi
 
     echo "Creating font aliases for terminal compatibility..."
