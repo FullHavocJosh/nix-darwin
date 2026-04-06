@@ -42,7 +42,7 @@
         [ -f "$MCP_DIR/package.json" ] || continue
         MCP_FOUND=1
         MCP_NAME=$(basename "$MCP_DIR")
-        MCP_DIST="${MCP_DIR%/}/dist/index.js"
+        MCP_DIST="''${MCP_DIR%/}/dist/index.js"
         echo "Checking MCP server: $MCP_NAME"
         cd "$MCP_DIR"
         if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ] || [ "package-lock.json" -nt "node_modules" ]; then
