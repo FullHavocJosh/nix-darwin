@@ -209,7 +209,9 @@
       "mcp_aws-core-mcp-server_prompt_understanding",
       "grep",
       "Read(~/pscloudops)",
-      "Read(~/nix-darwin)"
+      "Read(~/nix-darwin)",
+      "Read(~/codebase-to-course)",
+      "Read(~/claude-howto)"
     ],
     "deny": []
   },

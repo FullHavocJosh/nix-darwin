@@ -124,7 +124,11 @@
     "edit": "ask",
     "webfetch": "allow",
     "doom_loop": "ask",
-    "external_directory": "ask"
+    "external_directory": {
+      "~/codebase-to-course": "allow",
+      "~/claude-howto": "allow",
+      "*": "ask"
+    }
   },
   "lsp": {
     "ansible": {

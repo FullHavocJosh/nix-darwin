@@ -178,6 +178,7 @@ in
       "dimentium/autoraise"
       "felixkratz/formulae"
       "warrensbox/tap"
+      "Arthur-Ficial/tap"
     ];
     brews = [
       "ansible"
