@@ -56,7 +56,7 @@
           echo "$MCP_NAME is up to date."
         fi
         if [ -f "$MCP_DIST" ] && command -v claude &>/dev/null; then
-          if ! claude mcp list 2>/dev/null | grep -q "^$MCP_NAME:"; then
+          if ! grep -q "\"$MCP_NAME\"" "$HOME/.claude.json" 2>/dev/null; then
             claude mcp add --scope user "$MCP_NAME" node "$MCP_DIST" 2>/dev/null && \
               echo "Registered $MCP_NAME with Claude Code." || \
               echo "Failed to register $MCP_NAME with Claude Code."
