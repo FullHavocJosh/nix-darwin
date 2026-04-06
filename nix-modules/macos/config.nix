@@ -42,7 +42,7 @@
         [ -f "$MCP_DIR/package.json" ] || continue
         MCP_FOUND=1
         MCP_NAME=$(basename "$MCP_DIR")
-        MCP_DIST="$MCP_DIR/dist/index.js"
+        MCP_DIST="${MCP_DIR%/}/dist/index.js"
         echo "Checking MCP server: $MCP_NAME"
         cd "$MCP_DIR"
         if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ] || [ "package-lock.json" -nt "node_modules" ]; then
@@ -56,7 +56,11 @@
           echo "$MCP_NAME is up to date."
         fi
         if [ -f "$MCP_DIST" ] && command -v claude &>/dev/null; then
-          claude mcp add --scope user "$MCP_NAME" node "$MCP_DIST" 2>/dev/null || true
+          if ! claude mcp list 2>/dev/null | grep -q "^$MCP_NAME:"; then
+            claude mcp add --scope user "$MCP_NAME" node "$MCP_DIST" 2>/dev/null && \
+              echo "Registered $MCP_NAME with Claude Code." || \
+              echo "Failed to register $MCP_NAME with Claude Code."
+          fi
         fi
       done
       [ "$MCP_FOUND" -eq 0 ] && echo "No ~/mcp-* servers found, skipping."
