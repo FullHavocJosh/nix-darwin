@@ -3,6 +3,57 @@
 # Helper functions and main workflow commands for git operations
 # =============================================================================
 
+# Helper function: Launch a script in a new terminal window (macOS + Linux)
+# Usage: _launch_terminal_window <script_path> <label>
+# Returns 0 on success, 1 if no terminal could be found
+function _launch_terminal_window() {
+  local script="$1"
+  local label="${2:-terminal window}"
+
+  if [[ "$OSTYPE" == darwin* ]] || [[ "$(uname 2>/dev/null)" == "Darwin" ]]; then
+    # Prefer the terminal we're already running in
+    case "$TERM_PROGRAM" in
+      ghostty)
+        if command -v ghostty &>/dev/null; then
+          nohup ghostty -e "$script" >/dev/null 2>&1 &
+          echo "✓ Launched $label in new Ghostty window"
+          return 0
+        fi
+        ;;
+      iTerm.app)
+        osascript -e "tell application \"iTerm2\" to create window with default profile command \"$script\"" >/dev/null 2>&1
+        echo "✓ Launched $label in new iTerm2 window"
+        return 0
+        ;;
+    esac
+    # Fallbacks: kitty, wezterm, then Terminal.app (always present)
+    if command -v kitty &>/dev/null; then
+      nohup kitty "$script" >/dev/null 2>&1 &
+    elif command -v wezterm &>/dev/null; then
+      nohup wezterm start -- "$script" >/dev/null 2>&1 &
+    else
+      open -a Terminal "$script"
+    fi
+    echo "✓ Launched $label in new terminal window"
+    return 0
+  fi
+
+  # Linux
+  if command -v xdg-terminal-exec &>/dev/null; then
+    nohup xdg-terminal-exec "$script" >/dev/null 2>&1 &
+    echo "✓ Launched $label in new terminal window"
+    return 0
+  elif [ -n "$TERMINAL" ] && command -v "$TERMINAL" &>/dev/null; then
+    nohup "$TERMINAL" -e "$script" >/dev/null 2>&1 &
+    echo "✓ Launched $label in new terminal window"
+    return 0
+  fi
+
+  echo "✗ Could not determine default terminal"
+  echo "  Set \$TERMINAL environment variable or install xdg-terminal-exec"
+  return 1
+}
+
 # Helper function: Check if current directory is a git repository
 function _check_git_repo() {
   if ! git rev-parse --git-dir >/dev/null 2>&1; then
@@ -49,9 +100,6 @@ Files to fix: ${files_array[@]}
 Please review the issues and suggest fixes. I can make the changes in the editor above or you can help automate the fixes.
 EOF
   
-  # Get AI model
-  local model=$(_get_opencode_model "sonnet")
-  
   # Open first file with issues in nvim
   local first_file="${files_array[1]}"
   # If file path is relative, make it absolute from repo root
@@ -69,9 +117,9 @@ EOF
 # Change to repo root
 cd '$repo_root'
 
-# Create tmux session with nvim in top pane and OpenCode in bottom
+# Create tmux session with nvim in top pane and aidev in bottom
 tmux new-session -s '$session_name' -c '$repo_root' "nvim '$first_file'" \\; \\
-  split-window -v -p 30 -c '$repo_root' "bash -c 'echo \"=== OpenCode Linting Assistant ===\"; echo \"\"; opencode --model \"$model\" -p \"\\\$(cat \"$prompt_file\")\"; exec \\\$SHELL'" \\; \\
+  split-window -v -p 30 -c '$repo_root' "bash -c 'echo \"=== aidev Linting Assistant ===\"; echo \"\"; aidev \"\\\$(cat \"$prompt_file\")\"; exec \\\$SHELL'" \\; \\
   select-pane -t 0
 
 # Cleanup temp files after tmux session ends
@@ -80,21 +128,11 @@ STARTUP
   chmod +x "$startup_script"
   
   # Launch in default terminal
-  if command -v xdg-terminal-exec &>/dev/null; then
-    # Use xdg-terminal-exec to launch default terminal
-    nohup xdg-terminal-exec "$startup_script" >/dev/null 2>&1 &
-    echo "✓ Launched editing workspace in new terminal window"
-  elif [ -n "$TERMINAL" ] && command -v "$TERMINAL" &>/dev/null; then
-    # Use $TERMINAL environment variable
-    nohup "$TERMINAL" -e "$startup_script" >/dev/null 2>&1 &
-    echo "✓ Launched editing workspace in new terminal window"
-  else
-    echo "✗ Could not determine default terminal"
-    echo "  Set \$TERMINAL environment variable or install xdg-terminal-exec"
+  if ! _launch_terminal_window "$startup_script" "linting workspace"; then
     rm -f "$prompt_file" "$startup_script"
     return 1
   fi
-  
+
   echo "  Session: $session_name"
   echo "  Files: ${files_array[@]}"
   echo "  Edit the files in the new window, then close it when done."
@@ -257,7 +295,7 @@ function _run_linters() {
         echo ""
         echo "ℹ Opening tmux workspace for manual fixes with AI assistance..."
         echo "  Top pane: nvim with files"
-        echo "  Bottom pane: OpenCode assistant"
+        echo "  Bottom pane: aidev assistant"
         echo ""
         
         # Convert files_with_issues array to newline-separated string
@@ -373,6 +411,16 @@ function _run_linters() {
   return 0
 }
 
+# Helper: return filenames (indented) from staged diff matching a grep pattern
+function _get_matching_files() {
+  local pattern="$1"
+  git diff --cached --name-only | while IFS= read -r file; do
+    if git diff --cached -- "$file" | grep "^+" | grep -v "^+++" | grep -qiE "$pattern"; then
+      echo "    $file"
+    fi
+  done
+}
+
 # Helper function: Check staged changes for secrets/credentials
 # Returns 0 if safe to proceed, 1 if secrets found and user wants to abort
 function _check_for_secrets() {
@@ -400,55 +448,62 @@ function _check_for_secrets() {
   
   # Check for AWS credentials - look for actual AKIA keys or key=value patterns
   if echo "$filtered_lines" | grep -qE "AKIA[0-9A-Z]{16}"; then
-    secrets_report="${secrets_report}  • AWS Access Key (AKIA...)\n"
+    secrets_report="${secrets_report}  • AWS Access Key (AKIA...)\n$(_get_matching_files "AKIA[0-9A-Z]{16}")\n"
     suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -E "AKIA[0-9A-Z]{16}" | head -2)\n"
     secrets_found=true
   fi
-  
+
   if echo "$filtered_lines" | grep -qiE "(aws_access_key_id|aws_secret_access_key)\s*=\s*['\"][A-Za-z0-9/+=]{20,}"; then
-    secrets_report="${secrets_report}  • AWS credentials in config format\n"
+    secrets_report="${secrets_report}  • AWS credentials in config format\n$(_get_matching_files "(aws_access_key_id|aws_secret_access_key)\s*=\s*['\"][A-Za-z0-9/+=]{20,}")\n"
     suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -iE "(aws_access_key_id|aws_secret_access_key)\s*=\s*['\"]" | head -2)\n"
     secrets_found=true
   fi
-  
+
   # Check for API keys - must have key= or key: with actual value
   if echo "$filtered_lines" | grep -qiE "(api[_-]?key|apikey)\s*[=:]\s*['\"][0-9a-zA-Z_\-]{32,}"; then
-    secrets_report="${secrets_report}  • API key\n"
+    secrets_report="${secrets_report}  • API key\n$(_get_matching_files "(api[_-]?key|apikey)\s*[=:]\s*['\"][0-9a-zA-Z_-]{32,}")\n"
     suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -iE "(api[_-]?key|apikey)\s*[=:]\s*['\"][0-9a-zA-Z_\-]{32,}" | head -2)\n"
     secrets_found=true
   fi
-  
+
   # Check for passwords - must be in assignment format
-  if echo "$filtered_lines" | grep -qiE "(password|passwd)\s*[=:]\s*['\"][^'\"]{8,}['\"]"; then
-    secrets_report="${secrets_report}  • Password\n"
-    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -iE "(password|passwd)\s*[=:]\s*['\"]" | head -2)\n"
+  # Filter out false positives: all-uppercase placeholder values (env var names/templates),
+  # values ending in _PLACEHOLDER/_HASH, and lines with variable references ($VAR)
+  local pw_matches=$(echo "$filtered_lines" | \
+    grep -iE "(password|passwd)\s*[=:]\s*['\"][^'\"]{8,}['\"]" | \
+    grep -v '_PLACEHOLDER' | \
+    grep -vE "[=:]\s*['\"][A-Z][A-Z0-9_]{7,}['\"]" | \
+    grep -vE "[=:]\s*['\"]?\\\$[A-Za-z_]")
+  if [ -n "$pw_matches" ]; then
+    secrets_report="${secrets_report}  • Password\n$(_get_matching_files "(password|passwd)\s*[=:]\s*['\"][^'\"]{8,}['\"]")\n"
+    suspicious_lines="${suspicious_lines}$(echo "$pw_matches" | head -2)\n"
     secrets_found=true
   fi
-  
+
   # Check for tokens - must be in assignment format with sufficient length
   if echo "$filtered_lines" | grep -qiE "(secret|token|auth[_-]?token)\s*[=:]\s*['\"][0-9a-zA-Z_\-]{40,}"; then
-    secrets_report="${secrets_report}  • Secret/Token\n"
+    secrets_report="${secrets_report}  • Secret/Token\n$(_get_matching_files "(secret|token|auth[_-]?token)\s*[=:]\s*['\"][0-9a-zA-Z_-]{40,}")\n"
     suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -iE "(secret|token|auth[_-]?token)\s*[=:]\s*['\"]" | head -2)\n"
     secrets_found=true
   fi
-  
+
   # Check for OpenAI/Stripe keys - very specific patterns
   if echo "$filtered_lines" | grep -qE "sk-[a-zA-Z0-9]{32,}|pk-(live|test)_[a-zA-Z0-9]{24,}"; then
-    secrets_report="${secrets_report}  • OpenAI/Stripe API key\n"
+    secrets_report="${secrets_report}  • OpenAI/Stripe API key\n$(_get_matching_files "sk-[a-zA-Z0-9]{32,}|pk-(live|test)_[a-zA-Z0-9]{24,}")\n"
     suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -E "sk-[a-zA-Z0-9]{32,}|pk-(live|test)_" | head -2)\n"
     secrets_found=true
   fi
-  
+
   # Check for GitHub tokens - very specific patterns
   if echo "$filtered_lines" | grep -qE "ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}"; then
-    secrets_report="${secrets_report}  • GitHub token\n"
+    secrets_report="${secrets_report}  • GitHub token\n$(_get_matching_files "ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}")\n"
     suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -E "ghp_|gho_|github_pat_" | head -2)\n"
     secrets_found=true
   fi
-  
+
   # Check for private keys - actual PEM format
   if echo "$filtered_lines" | grep -qE -- "-----BEGIN (RSA |DSA |EC )?PRIVATE KEY-----"; then
-    secrets_report="${secrets_report}  • Private key\n"
+    secrets_report="${secrets_report}  • Private key\n$(_get_matching_files "-----BEGIN (RSA |DSA |EC )?PRIVATE KEY-----")\n"
     suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -E -- "-----BEGIN.*PRIVATE KEY-----" | head -2)\n"
     secrets_found=true
   fi
@@ -709,13 +764,10 @@ function _gpa_create_edit_workspace() {
   local file_name=$(basename "$file_path")
   local session_name="gpa-fix-${file_name}-$$"
   
-  # Create a temporary file with the recommendation for OpenCode
+  # Create a temporary file with the recommendation for aidev
   local rec_file="/tmp/gpa_recommendation_$$.txt"
   echo "$recommendation" > "$rec_file"
-  
-  # Get the OpenCode model for Sonnet (standard tasks)
-  local model=$(_get_opencode_model "sonnet")
-  
+
   # Create a startup script that will run tmux in the new terminal
   local startup_script="/tmp/gpa_startup_$$.sh"
   cat > "$startup_script" <<STARTUP
@@ -723,9 +775,9 @@ function _gpa_create_edit_workspace() {
 # Change to file directory
 cd '$file_dir'
 
-# Create tmux session with nvim in top pane and OpenCode in bottom
+# Create tmux session with nvim in top pane and aidev in bottom
 tmux new-session -s '$session_name' -c '$file_dir' "nvim '$file_path'" \\; \\
-  split-window -v -p 30 -c '$file_dir' "bash -c 'echo \"=== Code Review Fix Assistant ===\"; echo \"\"; echo \"Recommendation:\"; cat \"$rec_file\"; echo \"\"; echo \"Starting OpenCode...\"; echo \"\"; opencode --model \"$model\" -p \"Help me implement this fix: \\\$(cat \\\"$rec_file\\\"). The file to fix is: $file_path\"; exec \\\$SHELL'" \\; \\
+  split-window -v -p 30 -c '$file_dir' "bash -c 'echo \"=== Code Review Fix Assistant ===\"; echo \"\"; echo \"Recommendation:\"; cat \"$rec_file\"; echo \"\"; echo \"Starting aidev...\"; echo \"\"; aidev \"Help me implement this fix: \\\$(cat \\\"$rec_file\\\"). The file to fix is: $file_path\"; exec \\\$SHELL'" \\; \\
   select-pane -t 0
 
 # Cleanup temp files after tmux session ends
@@ -734,40 +786,29 @@ STARTUP
   chmod +x "$startup_script"
   
   # Launch in default terminal
-  if command -v xdg-terminal-exec &>/dev/null; then
-    # Use xdg-terminal-exec to launch default terminal
-    nohup xdg-terminal-exec "$startup_script" >/dev/null 2>&1 &
-    echo "✓ Launched editing workspace in new terminal window"
-  elif [ -n "$TERMINAL" ] && command -v "$TERMINAL" &>/dev/null; then
-    # Use $TERMINAL environment variable
-    nohup "$TERMINAL" -e "$startup_script" >/dev/null 2>&1 &
-    echo "✓ Launched editing workspace in new terminal window"
-  else
-    echo "✗ Could not determine default terminal"
-    echo "  Set \$TERMINAL environment variable or install xdg-terminal-exec"
+  if ! _launch_terminal_window "$startup_script" "editing workspace"; then
     rm -f "$rec_file" "$startup_script"
     return 1
   fi
-  
+
   echo "  Session: $session_name"
   echo "  File: $file_path"
   echo "  Edit the file in the new window, then close it when done."
   echo ""
 }
 
-# Helper function: Use OpenCode to auto-fix a file based on recommendation
+# Helper function: Use aidev to auto-fix a file based on recommendation
 # Usage: _gpa_auto_fix <file_path> <recommendation_text>
 function _gpa_auto_fix() {
   local file_path="$1"
   local recommendation="$2"
-  local model=$(_get_opencode_model "sonnet")
-  
+
   echo ""
-  echo "ℹ Starting OpenCode to automatically fix: $file_path"
+  echo "ℹ Starting aidev to automatically fix: $file_path"
   echo ""
-  
-  # Use OpenCode to fix the file
-  opencode --model "$model" -p "Fix this file based on the following recommendation. Make the necessary changes to address the issue.
+
+  # Use aidev to fix the file
+  aidev -p "Fix this file based on the following recommendation. Make the necessary changes to address the issue.
 
 File: $file_path
 
@@ -775,18 +816,18 @@ Recommendation:
 $recommendation
 
 Please make the changes directly to the file."
-  
+
   local exit_code=$?
-  
+
   if [ $exit_code -eq 0 ]; then
-    # Re-stage the file after OpenCode makes changes
+    # Re-stage the file after aidev makes changes
     git add "$file_path"
     echo ""
-    echo "✓ OpenCode completed. File re-staged."
+    echo "✓ aidev completed. File re-staged."
     return 0
   else
     echo ""
-    echo "⚠ OpenCode session ended. Check if changes were made."
+    echo "⚠ aidev session ended. Check if changes were made."
     return 1
   fi
 }
@@ -1191,6 +1232,79 @@ ${batch_diff}
   return 2
 }
 
+# Helper function: Launch aidev in a new tmux window with all issues as context
+# Usage: _gpa_send_all_to_aidev <structured_issues_json>
+# Returns 0 to re-review, 1 to keep staged
+function _gpa_send_all_to_aidev() {
+  local structured_issues="$1"
+  local issue_count=$(echo "$structured_issues" | jq 'length' 2>/dev/null)
+  local session_name="gpa-aidev-$$"
+
+  # Build prompt file
+  local prompt_file="/tmp/gpa_all_issues_$$.txt"
+  printf "I have %s code review issue(s) in my staged git changes that need to be fixed. Please help me address each one.\n\n" "$issue_count" > "$prompt_file"
+
+  local i=0
+  while [ $i -lt "$issue_count" ]; do
+    local issue=$(echo "$structured_issues" | jq -r ".[$i]" 2>/dev/null)
+    local file=$(echo "$issue" | jq -r '.file // empty' 2>/dev/null)
+    local severity=$(echo "$issue" | jq -r '.severity // empty' 2>/dev/null)
+    local issue_desc=$(echo "$issue" | jq -r '.issue // empty' 2>/dev/null)
+    local recommendation=$(echo "$issue" | jq -r '.recommendation // empty' 2>/dev/null)
+    printf -- "---\nIssue %s of %s\nFile: %s\nSeverity: %s\nIssue: %s\nRecommendation: %s\n\n" \
+      "$((i+1))" "$issue_count" "$file" "$severity" "$issue_desc" "$recommendation" >> "$prompt_file"
+    ((i++))
+  done
+  printf "Please fix all of these issues. After fixing, I'll re-stage the affected files." >> "$prompt_file"
+
+  # Create startup script for new terminal window
+  local startup_script="/tmp/gpa_aidev_startup_$$.sh"
+  local repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+  cat > "$startup_script" <<STARTUP
+#!/usr/bin/env bash
+cd '$repo_root'
+
+tmux new-session -s '$session_name' -c '$repo_root' "bash -c 'echo \"=== aidev: Fix All Issues ===\"; echo \"\"; aidev \"\\\$(cat \\\"$prompt_file\\\")\"; exec \\\$SHELL'"
+
+rm -f '$prompt_file' '$startup_script'
+STARTUP
+  chmod +x "$startup_script"
+
+  # Launch in new terminal window
+  echo ""
+  if ! _launch_terminal_window "$startup_script" "aidev (all issues)"; then
+    rm -f "$prompt_file" "$startup_script"
+    return 1
+  fi
+
+  echo "  Session: $session_name"
+  echo ""
+  echo "═══════════════════════════════════════════════════════════"
+  echo "⏸  Waiting for aidev to finish..."
+  echo "═══════════════════════════════════════════════════════════"
+  echo ""
+  echo "When aidev has finished fixing the issues:"
+  echo "  1. Save any changes in the aidev session"
+  echo "  2. Press Enter here to re-review with gpa"
+  echo "  3. Press ESC to keep staged as-is"
+  echo ""
+  echo -n "Your choice: "
+  _read_key
+  echo ""
+
+  case "$_KEY" in
+    $'\n' | $'\r')
+      echo ""
+      gpa
+      return $?
+      ;;
+    *)
+      echo "ℹ Keeping changes staged."
+      return 0
+      ;;
+  esac
+}
+
 # Helper function: Interactive fix mode for code review suggestions
 # Usage: _gpa_interactive_fix <structured_issues_json>
 function _gpa_interactive_fix() {
@@ -1247,7 +1361,27 @@ function _gpa_interactive_fix() {
   echo ""
   echo "Found $issue_count issue(s) to address."
   echo ""
-  
+  echo "  [Enter] Send all issues to aidev"
+  echo "  [r]     Review issues one by one"
+  echo "  [ESC]   Quit and keep staged"
+  echo ""
+  echo -n "Your choice: "
+  _read_key
+  echo ""
+
+  case "$_KEY" in
+    $'\n' | $'\r')
+      _gpa_send_all_to_aidev "$structured_issues"
+      return $?
+      ;;
+    r | R)
+      ;;
+    *)
+      echo "ℹ Keeping changes staged."
+      return 0
+      ;;
+  esac
+
   # Process each issue
   local issue_index=0
   while [ $issue_index -lt $issue_count ]; do
@@ -1275,8 +1409,8 @@ function _gpa_interactive_fix() {
     echo "$recommendation"
     echo ""
     echo "Options:"
-    echo "  [m] Manual fix - open tmux workspace with nvim + OpenCode"
-    echo "  [a] Auto-fix - let OpenCode fix it automatically"
+    echo "  [m] Manual fix - open tmux workspace with nvim + aidev"
+    echo "  [a] Auto-fix - let aidev fix it automatically"
     echo "  [s] Skip this issue"
     echo "  [q] Quit and proceed to commit"
     echo ""
@@ -1970,37 +2104,24 @@ function gpa() {
               else
                 # Cloud-only mode: escalate to Opus on same provider
                 echo "  Sonnet found Critical severity issues with security implications."
+                echo "  🔴 Automatically escalating to Opus for comprehensive security review..."
                 echo ""
-                echo "  Recommendation: Re-review this batch with Opus (more thorough model)"
-                echo "  for comprehensive security analysis."
-                echo ""
-                echo "  Options:"
-                echo "    [y] Yes - Re-review with Opus (recommended for security)"
-                echo "    [n] No - Continue with Sonnet findings"
-                echo ""
-                echo -n "  Your choice: "
-                read -r escalate_choice
+                local opus_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "opus")
+                local opus_status=$?
 
-                if [[ "$escalate_choice" == "y" || "$escalate_choice" == "Y" ]]; then
-                  echo ""
-                  echo "  🔴 Escalating to Opus for security review..."
-                  local opus_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "opus")
-                  local opus_status=$?
-
-                  if [ $opus_status -eq 0 ] && [ -n "$opus_issues" ] && echo "$opus_issues" | jq empty 2>/dev/null; then
-                    local valid_opus_issues=$(echo "$opus_issues" | jq '[.[] | select(type == "object" and has("file") and has("severity") and has("issue") and has("recommendation"))]' 2>/dev/null)
-                    if [ -n "$valid_opus_issues" ]; then
-                      local opus_issue_count=$(echo "$valid_opus_issues" | jq 'length')
-                      echo "  🔴 Opus review complete: Found $opus_issue_count issue(s)"
-                      valid_batch_issues="$valid_opus_issues"
-                    else
-                      echo "  🔴 Opus review found no additional issues"
-                    fi
+                if [ $opus_status -eq 0 ] && [ -n "$opus_issues" ] && echo "$opus_issues" | jq empty 2>/dev/null; then
+                  local valid_opus_issues=$(echo "$opus_issues" | jq '[.[] | select(type == "object" and has("file") and has("severity") and has("issue") and has("recommendation"))]' 2>/dev/null)
+                  if [ -n "$valid_opus_issues" ]; then
+                    local opus_issue_count=$(echo "$valid_opus_issues" | jq 'length')
+                    echo "  🔴 Opus review complete: Found $opus_issue_count issue(s)"
+                    valid_batch_issues="$valid_opus_issues"
                   else
-                    echo "  ⚠ Opus review failed, keeping Sonnet findings"
+                    echo "  🔴 Opus review found no additional issues"
                   fi
-                  echo ""
+                else
+                  echo "  ⚠ Opus review failed, keeping Sonnet findings"
                 fi
+                echo ""
               fi
             fi
             

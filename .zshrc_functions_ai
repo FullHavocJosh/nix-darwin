@@ -623,22 +623,46 @@ function aidev() {
 
   echo "${GREEN}✓${NC} Provider: $(_provider_display_name "$provider")"
 
+  # Detect -p/--print flag and translate for providers that don't support it.
+  # claude uses -p for headless mode; opencode uses `run` as the subcommand.
+  local print_mode=false
+  local filtered_args=()
+  for arg in "$@"; do
+    if [[ "$arg" == "-p" || "$arg" == "--print" ]]; then
+      print_mode=true
+    else
+      filtered_args+=("$arg")
+    fi
+  done
+
   case "$provider" in
     claude-code)
       echo ""
-      claude "$@"
+      if $print_mode; then
+        claude -p "${filtered_args[@]}"
+      else
+        claude "${filtered_args[@]}"
+      fi
       ;;
     llama-cpp)
       local local_model="llama.cpp/local-coder"
       echo "${GREEN}✓${NC} Model:    ⚪ $(_llamacpp_model_short) → $local_model"
       echo ""
-      opencode --model "$local_model" "$@"
+      if $print_mode; then
+        opencode --model "$local_model" run "${filtered_args[@]}"
+      else
+        opencode --model "$local_model" "${filtered_args[@]}"
+      fi
       ;;
     *)
       local model=$(_get_opencode_model "sonnet")
       echo "${GREEN}✓${NC} Model:    $model"
       echo ""
-      opencode --model "$model" "$@"
+      if $print_mode; then
+        opencode --model "$model" run "${filtered_args[@]}"
+      else
+        opencode --model "$model" "${filtered_args[@]}"
+      fi
       ;;
   esac
 }
