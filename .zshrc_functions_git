@@ -473,7 +473,7 @@ function _check_for_secrets() {
     grep -iE "(password|passwd)\s*[=:]\s*['\"][^'\"]{8,}['\"]" | \
     grep -v '_PLACEHOLDER' | \
     grep -vE "[=:]\s*['\"][A-Z][A-Z0-9_]{7,}['\"]" | \
-    grep -vE "[=:]\s*['\"]?\\\$[A-Za-z_]" | \
+    grep -vE "[=:]\s*['\"]?\\\$\{?[A-Za-z_]" | \
     grep -viE "[=:]\s*['\"]?(changeme|change_me|password|passwd|secret|example|placeholder|foobar|test|dummy|fake|sample|your[-_]?password|mypassword|p@ssw0rd|pass1234)['\"]?\s*$")
   if [ -n "$pw_matches" ]; then
     secrets_report="${secrets_report}  • Password\n$(_get_matching_files "(password|passwd)\s*[=:]\s*['\"][^'\"]{8,}['\"]")\n"
@@ -1143,7 +1143,7 @@ function _gpa_review_batch() {
   local review_prompt="Review the following staged git changes for CRITICAL ISSUES AND WARNINGS ONLY:
 
 🔴 **CRITICAL - Must Fix Before Commit:**
-1. **SECRETS & CREDENTIALS**: API keys, passwords, tokens, private keys, connection strings, AWS credentials, OAuth secrets, certificates
+1. **SECRETS & CREDENTIALS**: API keys, passwords, tokens, private keys, connection strings, AWS credentials, OAuth secrets, certificates. NOTE: Environment variable references like \${VAR_NAME} or \$VAR_NAME are NOT hardcoded credentials — do not flag them.
 2. **Bugs**: Syntax errors, runtime errors, null pointer dereferences, infinite loops
 3. **Security Vulnerabilities**: SQL injection, command injection, XSS, insecure crypto, path traversal
 4. **Data Loss**: Destructive operations without safeguards, missing transactions, race conditions
