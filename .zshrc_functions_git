@@ -1272,36 +1272,21 @@ function _gpa_send_all_to_aidev() {
   done
   printf "Please fix all of these issues. After fixing, I'll re-stage the affected files." >> "$prompt_file"
 
-  # Create startup script for new terminal window
-  local startup_script="/tmp/gpa_aidev_startup_$$.sh"
+  # Run aidev directly in the current terminal
   local repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-  cat > "$startup_script" <<STARTUP
-#!/usr/bin/env bash
-cd '$repo_root'
-
-tmux new-session -s '$session_name' -c '$repo_root' "bash -c 'echo \"=== aidev: Fix All Issues ===\"; echo \"\"; aidev \"\\\$(cat \\\"$prompt_file\\\")\"; exec \\\$SHELL'"
-
-rm -f '$prompt_file' '$startup_script'
-STARTUP
-  chmod +x "$startup_script"
-
-  # Launch in new terminal window
   echo ""
-  if ! _launch_terminal_window "$startup_script" "aidev (all issues)"; then
-    rm -f "$prompt_file" "$startup_script"
-    return 1
-  fi
+  echo "=== aidev: Fix All Issues ==="
+  echo ""
+  (cd "$repo_root" && aidev "$(cat "$prompt_file")")
+  rm -f "$prompt_file"
 
-  echo "  Session: $session_name"
   echo ""
   echo "═══════════════════════════════════════════════════════════"
-  echo "⏸  Waiting for aidev to finish..."
+  echo "aidev session complete."
   echo "═══════════════════════════════════════════════════════════"
   echo ""
-  echo "When aidev has finished fixing the issues:"
-  echo "  1. Save any changes in the aidev session"
-  echo "  2. Press Enter here to re-review with gpa"
-  echo "  3. Press ESC to keep staged as-is"
+  echo "  [Enter] Re-review with gpa"
+  echo "  [ESC]   Keep staged as-is"
   echo ""
   echo -n "Your choice: "
   _read_key
