@@ -13,6 +13,18 @@
       ln -sf "$HOME/nix-darwin/.gitignore_global" "$HOME/.gitignore_global"
     fi
 
+    # Symlink Claude Code skills directory from nix-darwin
+    if [ ! -L "$HOME/.claude/skills" ] || [ "$(readlink "$HOME/.claude/skills")" != "$HOME/nix-darwin/.claude/skills" ]; then
+      echo "Creating symlink for Claude Code skills..."
+      ln -sfn "$HOME/nix-darwin/.claude/skills" "$HOME/.claude/skills"
+    fi
+
+    # Symlink Claude Code settings from nix-darwin
+    if [ ! -L "$HOME/.claude/settings.local.json" ] || [ "$(readlink "$HOME/.claude/settings.local.json")" != "$HOME/nix-darwin/.claude/settings.local.json" ]; then
+      echo "Creating symlink for Claude Code settings..."
+      ln -sf "$HOME/nix-darwin/.claude/settings.local.json" "$HOME/.claude/settings.local.json"
+    fi
+
     # Configure git to use global gitignore
     if command -v git &>/dev/null; then
       CURRENT_EXCLUDES=$(git config --global core.excludesfile 2>/dev/null || echo "")
@@ -161,6 +173,18 @@
         npm install -g jsonlint 2>&1 | grep -v "npm warn" || echo "Failed to install jsonlint"
       fi
 
+      if ! npm list -g context-mode &>/dev/null; then
+        echo "Installing context-mode MCP server..."
+        npm install -g context-mode 2>&1 | grep -v "npm warn" || echo "Failed to install context-mode"
+      fi
+      if command -v context-mode &>/dev/null && command -v claude &>/dev/null; then
+        if ! grep -q '"context-mode"' "$HOME/.claude.json" 2>/dev/null; then
+          claude mcp add --scope user context-mode context-mode 2>/dev/null && \
+            echo "Registered context-mode with Claude Code." || \
+            echo "Failed to register context-mode with Claude Code."
+        fi
+      fi
+
       OUTDATED=$(npm outdated -g --json 2>/dev/null || echo "{}")
       if [ -n "$OUTDATED" ] && [ "$OUTDATED" != "{}" ]; then
         OUTDATED_COUNT=$(echo "$OUTDATED" | jq 'length' 2>/dev/null || echo "0")
@@ -182,6 +206,13 @@
       fi
     else
       echo "npm not found, skipping npm package management"
+    fi
+
+    if command -v uv &>/dev/null; then
+      if ! uv tool list 2>/dev/null | grep -q "^unmcp "; then
+        echo "Installing unmcp CLI tool..."
+        uv tool install unmcp 2>&1 || echo "Failed to install unmcp"
+      fi
     fi
   '';
 
@@ -252,8 +283,6 @@
     WindowManager.EnableStandardClickToShowDesktop = false;
     WindowManager.GloballyEnabled = false;
     WindowManager.AppWindowGroupingBehavior = false;
-
-    universalaccess.mouseDriverCursorSize = 1.25;
 
     NSGlobalDomain.ApplePressAndHoldEnabled = false;
     NSGlobalDomain.NSDocumentSaveNewDocumentsToCloud = true;
