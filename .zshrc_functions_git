@@ -517,15 +517,30 @@ function _check_for_secrets() {
     echo ""
     echo "⚠️  Committing secrets to git is a security risk!"
     echo ""
-    echo -n "Abort commit? [Y/n]: "
+    echo "  [Y/Enter] Ask aidev to review these detections"
+    echo "  [n]       Ignore and proceed with commit"
+    echo "  [esc]     Abort commit"
+    echo ""
+    echo -n "Your choice: "
     read -r abort_choice
-    
-    if [[ "$abort_choice" =~ ^[Yy]$ ]] || [[ -z "$abort_choice" ]]; then
+
+    if [[ "$abort_choice" == $'\e' ]]; then
       echo "✗ Commit aborted. Please review and remove secrets."
       return 1
-    else
+    elif [[ "$abort_choice" =~ ^[Nn]$ ]]; then
       echo "⚠️  Proceeding with commit despite secrets warning!"
       return 0
+    else
+      local aidev_prompt="Secrets detection flagged the following in my staged git changes. Please review whether these are real secrets or false positives, and advise what action to take.
+
+Detections:
+$(echo -e "$secrets_report")
+
+Suspicious lines from diff:
+$(echo -e "$suspicious_lines")"
+      echo ""
+      aidev "$aidev_prompt"
+      return 1
     fi
   fi
   
