@@ -306,8 +306,27 @@ in
     echo "Patching opencode.json with correct home path..."
     ${pkgs.gnused}/bin/sed -i "s|__HOME__|$HOME|g" "$HOME/.config/opencode/opencode.json"
 
-    /opt/homebrew/bin/brew services restart autoraise 2>/dev/null || true
+    # Remove homebrew-managed autoraise plist to prevent conflict with nix-managed org.nixos.autoraise
+    if [ -f "$HOME/Library/LaunchAgents/homebrew.mxcl.autoraise.plist" ]; then
+      launchctl bootout "gui/$(id -u)/homebrew.mxcl.autoraise" 2>/dev/null || true
+      rm -f "$HOME/Library/LaunchAgents/homebrew.mxcl.autoraise.plist"
+    fi
   '';
+
+  launchd.user.agents.autoraise = {
+    serviceConfig = {
+      ProgramArguments = [
+        "/opt/homebrew/opt/autoraise/bin/AutoRaise"
+        "-verbose"
+        "true"
+      ];
+      KeepAlive = true;
+      RunAtLoad = true;
+      StandardOutPath = "/Users/havoc/Library/Logs/AutoRaise.log";
+      StandardErrorPath = "/Users/havoc/Library/Logs/AutoRaise.log";
+      LimitLoadToSessionType = "Aqua";
+    };
+  };
 
   launchd.user.agents.llama-server = {
     serviceConfig = {
