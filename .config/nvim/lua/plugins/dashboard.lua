@@ -9,6 +9,7 @@ return {
       search = "󰱼 ", -- nf-md-text_search
       recent = "󱋢 ", -- nf-md-history
       folder = "󰉋 ", -- nf-md-folder
+      aidev = "󰚩 ", -- nf-md-robot
       config = "󰒓 ", -- nf-md-cog
       session = "󰦛 ", -- nf-md-restore
       lazy = "󰒲 ", -- nf-md-package
@@ -84,6 +85,12 @@ return {
               key = "c",
               desc = "Config",
               action = ":lua Snacks.dashboard.pick('files', {cwd = vim.fn.stdpath('config')})",
+            },
+            {
+              icon = icons.aidev,
+              key = "a",
+              desc = "Claude Code",
+              action = ":ClaudeCode",
             },
             { icon = icons.session, key = "s", desc = "Restore Session", section = "session" },
             { icon = icons.lazy, key = "l", desc = "Lazy", action = ":Lazy", enabled = package.loaded.lazy ~= nil },

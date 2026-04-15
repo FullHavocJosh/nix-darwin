@@ -185,6 +185,27 @@
         fi
       fi
 
+      # Register MCP servers from claude-desktop-mcp.json into Claude Code (global scope)
+      MCP_CONFIG="$HOME/nix-darwin/.config/mcp/claude-desktop-mcp.json"
+      if command -v claude &>/dev/null && command -v jq &>/dev/null && [ -f "$MCP_CONFIG" ]; then
+        echo "Syncing MCP servers from $MCP_CONFIG to Claude Code..."
+        jq -r '.mcpServers | keys[]' "$MCP_CONFIG" | while read -r SERVER_NAME; do
+          if grep -q "\"$SERVER_NAME\"" "$HOME/.claude.json" 2>/dev/null; then
+            echo "  $SERVER_NAME already registered, skipping."
+            continue
+          fi
+
+          COMMAND=$(jq -r ".mcpServers[\"$SERVER_NAME\"].command" "$MCP_CONFIG")
+          ARGS=$(jq -r ".mcpServers[\"$SERVER_NAME\"].args // [] | map(\"'\" + gsub(\"__HOME__\"; \"$HOME\") + \"'\") | join(\" \")" "$MCP_CONFIG")
+          ENV_PAIRS=$(jq -r ".mcpServers[\"$SERVER_NAME\"].env // {} | to_entries | map(\"-e \" + .key + \"=\" + (.value | gsub(\"__HOME__\"; \"$HOME\"))) | join(\" \")" "$MCP_CONFIG")
+
+          CMD="claude mcp add --scope user $SERVER_NAME $ENV_PAIRS -- $COMMAND $ARGS"
+          eval "$CMD" 2>/dev/null && \
+            echo "  Registered $SERVER_NAME with Claude Code." || \
+            echo "  Failed to register $SERVER_NAME with Claude Code."
+        done
+      fi
+
       OUTDATED=$(npm outdated -g --json 2>/dev/null || echo "{}")
       if [ -n "$OUTDATED" ] && [ "$OUTDATED" != "{}" ]; then
         OUTDATED_COUNT=$(echo "$OUTDATED" | jq 'length' 2>/dev/null || echo "0")

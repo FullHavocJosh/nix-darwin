@@ -30,6 +30,8 @@ keymap.set("n", "<leader>ca", "<cmd>Lspsaga code_action<CR>", { desc = "Code act
 keymap.set("n", "<leader>rn", "<cmd>Lspsaga rename<CR>", { desc = "Rename symbol" })
 keymap.set("n", "<leader>d", "<cmd>Lspsaga show_line_diagnostics<CR>", { desc = "Show line diagnostics" })
 
+keymap.set("n", "<leader>cc", "<cmd>ClaudeCode<CR>", { desc = "Open Claude Code" })
+
 keymap.set("n", "<leader>x", ":bdelete<CR>", { desc = "Close current buffer" })
 keymap.set("n", "<Tab>", ":bnext<CR>", { desc = "Next buffer" })
 keymap.set("n", "<S-Tab>", ":bprevious<CR>", { desc = "Previous buffer" })
