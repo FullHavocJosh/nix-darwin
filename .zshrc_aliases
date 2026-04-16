@@ -27,11 +27,11 @@ alias pip="pip3"
 alias python="/usr/bin/python3"
 alias spf="spf -c ~/.config/superfile/config.toml"
 
-alias tfs="tfswitch"
-alias tfi="terraform init"
-alias tfa="terraform apply"
+alias tfs="rm -rf .terraform* ; tfswitch"
+alias tfi="rm -rf .terraform* ; tfswitch ; terraform init -upgrade"
 alias tft="rm -rf .terraform* ; tfswitch ; terraform init -upgrade ; terraform validate ; terraform test"
 alias tfp="rm -rf .terraform* ; tfswitch ; terraform init -upgrade ; terraform validate ; terraform plan"
+alias tfa="rm -rf .terraform* ; tfswitch ; terraform init -upgrade ; terraform validate ; terraform plan ; terraform apply"
 
 alias asl='aws sso login --sso-session aws'
 alias sso='function awslogin() { aws sso login --profile "$1" && export AWS_PROFILE="$1"; }; awslogin'
@@ -43,4 +43,3 @@ alias gpa-clear-cache='_gpa_clear_cache'
 alias gp='git pull && git submodule update --init --recursive'
 
 alias aishow='aiselect --show'
-
