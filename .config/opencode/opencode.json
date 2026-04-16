@@ -292,14 +292,6 @@
         "FASTMCP_LOG_LEVEL": "ERROR",
         "AWS_PROFILE": "services"
       }
-    },
-    "slack": {
-      "type": "local",
-      "command": ["npx", "-y", "@modelcontextprotocol/server-slack"],
-      "environment": {
-        "SLACK_BOT_TOKEN": "__SLACK_BOT_TOKEN__",
-        "SLACK_TEAM_ID": "__SLACK_TEAM_ID__"
-      }
     }
   }
 }

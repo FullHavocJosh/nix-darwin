@@ -10,6 +10,8 @@ A comprehensive, declarative development environment configuration for **macOS**
 - **Multiple Profile Support** - Personal and work configurations with profile-specific packages
 - **Complete Dev Environment** - Shell (zsh), editor (Neovim), terminal (tmux), window management, and more
 - **Security-First Approach** - Smart gitignore patterns, secrets detection, environment variable management
+- **Local LLM Integration** - llama.cpp server with Qwen2.5-Coder running as a launchd service
+- **MCP Server Ecosystem** - Auto-registered Claude Code MCP servers for GitHub, Terraform, AWS, Slack, and more
 
 ## 📋 Quick Start
 
@@ -46,12 +48,17 @@ nix-darwin/
 ├── .config/                            # Application configurations (deployed via stow)
 │   ├── aerospace/                      # AeroSpace (macOS tiling WM)
 │   ├── alacritty/                      # Alacritty terminal config
+│   ├── atuin/                          # Atuin shell history config
+│   ├── AutoRaise/                      # AutoRaise window focus config
 │   ├── btop/                           # btop system monitor
+│   ├── crush/                          # Charm crush config
 │   ├── ghostty/                        # Ghostty terminal config
 │   ├── hypr/                           # Hyprland (Linux) configuration
 │   ├── kitty/                          # Kitty terminal config
-│   ├── nvim/                           # Neovim (LazyVim) configuration
+│   ├── mcp/                            # MCP server definitions (claude-desktop-mcp.json)
+│   ├── nvim/                           # Neovim (LazyVim) configuration (incl. claudecode.nvim)
 │   ├── opencode/                       # OpenCode AI assistant config
+│   ├── superfile/                      # Superfile TUI file manager config
 │   ├── tmux/                           # Tmux multiplexer config
 │   ├── zed/                            # Zed editor config (gitignored - see security section)
 │   └── ...                             # Many more application configs
@@ -116,18 +123,26 @@ Defined in `flake.nix`:
 #### `macos_personal`
 
 - Full personal development environment
-- Gaming and entertainment apps (Steam, Discord, Plex)
-- Personal productivity tools (Obsidian, Proton apps)
+- Gaming and entertainment apps (Steam, Battle.net, Whisky, Plex)
+- Personal productivity tools (Obsidian, Proton Drive/Mail/VPN, Element)
 - **Ollama** local LLM (runs as launchd service on `0.0.0.0:11434`)
-- Custom wallpaper
+- **OpenVPN auto-connect** daemon (`vpn-network-manager`) — connects automatically on untrusted Wi-Fi, disconnects on trusted network ("VoidSlip")
+- Custom wallpaper (set via activation script)
+- User: `/Users/havoc`
 
 #### `macos_work`
 
-- Work-specific tools (Docker Desktop, Remote Desktop Manager)
-- Enterprise apps (Citrix Workspace, LastPass)
+- Work-specific tools (Docker Desktop, Remote Desktop Manager Free)
+- Enterprise apps (Citrix Workspace, LastPass, MQTT Explorer, PowerShell)
 - Kubernetes tools (k9s, kubectl, act)
-- **Terraform cache cleanup** on activation (cleans `.terraform` directories)
-- Different user path (`/Users/jrollet` vs `/Users/havoc`)
+- **Terraform cache cleanup** on activation (cleans `.terraform` directories under `~/pscloudops/terraform-infrastructure`)
+- User: `/Users/jrollet`
+
+#### Shared (all macOS profiles, via `packages.nix`)
+
+- **llama-server** launchd service — runs Qwen2.5-Coder-7B-Q8 via llama.cpp on `127.0.0.1:8080`; model auto-downloaded on activation
+- **AutoRaise** launchd service — focus-follows-mouse for macOS
+- **borders** launchd service — window border highlights (active: purple glow)
 
 **Switch profiles:**
 
@@ -160,9 +175,11 @@ aiselect --show       # Show current provider
 
 **Supported providers:**
 
-- **GitHub Copilot** (default) - Requires `gh auth login`
-- **OpenCode Zen** - Requires `OPENCODE_API_KEY` in `~/.zshrc_envvars`
+- **Claude Code** - Anthropic Claude via Claude Code subscription
+- **GitHub Copilot** - Requires `gh auth login`
+- **OpenCode** - Requires `OPENCODE_API_KEY` in `~/.zshrc_envvars`
 - **OpenRouter** - Requires `OPENROUTER_API_KEY` in `~/.zshrc_envvars`
+- **llama.cpp** - Local inference via the managed llama-server launchd service (no API key required)
 
 ### Key Git Functions
 
@@ -212,15 +229,48 @@ All automatically installed via nix-darwin/package managers:
 - `prettier` - Multi-language formatter
 - `ruff` - Python linter
 - `opencode` - AI code assistant
+- `llama.cpp` (`llama-server`) - Local LLM inference
 - `gh` - GitHub CLI
 - `tmux` - Terminal multiplexer
 - `neovim` - Text editor
+
+## 🤖 Claude Code & MCP Integration
+
+`config.nix` automatically sets up Claude Code on activation:
+
+- **Skills symlink** — `~/.claude/skills` → `~/nix-darwin/.claude/skills`
+- **Settings symlink** — `~/.claude/settings.local.json` → `~/nix-darwin/.claude/settings.local.json`
+- **MCP server auto-registration** — reads `~/.config/mcp/claude-desktop-mcp.json` and registers all servers via `claude mcp add`
+- **Custom MCP servers** — any `~/mcp-*/` directory with a `package.json` is auto-built and registered
+
+### MCP Servers (`.config/mcp/claude-desktop-mcp.json`)
+
+| Server                   | Description                                                     |
+| ------------------------ | --------------------------------------------------------------- |
+| `context-guardian`       | Custom local MCP server (`~/mcp-context-guardian-fullhavoc`)    |
+| `memory`                 | `@modelcontextprotocol/server-memory` — persistent entity graph |
+| `sequential-thinking`    | `@modelcontextprotocol/server-sequential-thinking`              |
+| `github`                 | `@edjl/github-mcp` — GitHub PR/issue integration                |
+| `terraform`              | `terraform-mcp-server` — Terraform registry docs                |
+| `context7`               | `@upstash/context7-mcp` — up-to-date library documentation      |
+| `aws-core-mcp-server`    | `awslabs.core-mcp-server` — AWS service proxy/orchestration     |
+| `aws-terraform-mcp`      | `awslabs.terraform-mcp-server` — AWS Terraform provider docs    |
+| `aws-pricing-mcp-server` | `awslabs.aws-pricing-mcp-server` — AWS pricing API              |
+| `mcp-server-chart`       | `@antv/mcp-server-chart` — chart/diagram generation             |
+| `slack`                  | `@modelcontextprotocol/server-slack` — Slack integration        |
+
+### Neovim Claude Code Plugin
+
+`claudecode.nvim` (`coder/claudecode.nvim`) is installed via LazyVim with vertical diff layout.
+
+---
 
 ## 🛠️ Development Tools
 
 ### Editors & IDEs
 
-- **Neovim** - Primary editor (LazyVim configuration)
+- **Neovim** - Primary editor (LazyVim configuration, with `claudecode.nvim`)
+- **Neovide** - GPU-accelerated Neovim GUI
 - **Zed** - Modern collaborative editor (with nixd/nil LSP)
 - **Sublime Text** - GUI text editor
 - **GoLand** - JetBrains Go IDE (macOS)
@@ -265,11 +315,13 @@ All automatically installed via nix-darwin/package managers:
 - **Ansible** - Configuration management
 - **Docker** - Containerization
 
-### System Monitoring
+### System Monitoring & File Management
 
 - **btop** - Resource monitor
 - **htop** - Process viewer
 - **k9s** - Kubernetes TUI
+- **superfile** - TUI file manager
+- **crush** - Charmbracelet file management tool
 
 ## 📦 Package Management
 
@@ -452,4 +504,4 @@ This repository is provided as-is for personal and educational use.
 
 **Repository:** [FullHavocJosh/nix-darwin](https://github.com/FullHavocJosh/nix-darwin)  
 **Author:** Josh Rollet (havoc)  
-**Last Updated:** February 2, 2026
+**Last Updated:** April 15, 2026

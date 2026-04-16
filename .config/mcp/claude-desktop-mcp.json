@@ -49,14 +49,6 @@
         "FASTMCP_LOG_LEVEL": "ERROR",
         "AWS_PROFILE": "services"
       }
-    },
-    "slack": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-slack"],
-      "env": {
-        "SLACK_BOT_TOKEN": "__SLACK_BOT_TOKEN__",
-        "SLACK_TEAM_ID": "__SLACK_TEAM_ID__"
-      }
     }
   }
 }

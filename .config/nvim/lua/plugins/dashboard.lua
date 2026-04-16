@@ -45,8 +45,35 @@ return {
       return ""
     end
 
+    -- Function to get git diff stat (changed files summary)
+    local function get_git_diff()
+      local git_dir = vim.fn.finddir(".git", vim.fn.getcwd() .. ";")
+      if git_dir == "" then
+        return ""
+      end
+      local lines = {}
+      local staged = vim.fn.system("git diff --cached --stat 2>/dev/null")
+      if staged and staged ~= "" then
+        table.insert(lines, "  Staged:")
+        for _, line in ipairs(vim.split(staged, "\n")) do
+          if line ~= "" then table.insert(lines, "   " .. line) end
+        end
+      end
+      local unstaged = vim.fn.system("git diff --stat 2>/dev/null")
+      if unstaged and unstaged ~= "" then
+        if #lines > 0 then table.insert(lines, "") end
+        table.insert(lines, "  Unstaged:")
+        for _, line in ipairs(vim.split(unstaged, "\n")) do
+          if line ~= "" then table.insert(lines, "   " .. line) end
+        end
+      end
+      if #lines == 0 then return "" end
+      return "\n" .. table.concat(lines, "\n")
+    end
+
     -- Build header with git info
     local git_info = get_git_info()
+    local git_diff = get_git_diff()
     local header_text = [[
  ███╗   ██╗███████╗ ██████╗ ██╗   ██╗██╗███╗   ███╗
  ████╗  ██║██╔════╝██╔═══██╗██║   ██║██║████╗ ████║
@@ -56,8 +83,12 @@ return {
  ╚═╝  ╚═══╝╚══════╝ ╚═════╝   ╚═══╝  ╚═╝╚═╝     ╚═╝
 ]]
     if git_info ~= "" then
-      header_text = header_text .. "\n" .. git_info .. "\n"
+      header_text = header_text .. "\n" .. git_info
     end
+    if git_diff ~= "" then
+      header_text = header_text .. "\n" .. git_diff
+    end
+    header_text = header_text .. "\n"
 
     return {
       dashboard = {
