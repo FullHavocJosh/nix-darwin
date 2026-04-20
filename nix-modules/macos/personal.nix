@@ -197,6 +197,7 @@ in
       "element"
       "obsidian"
       "ollama-app"
+      "orion"
       "plex"
       "plexamp"
       "proton-drive"
