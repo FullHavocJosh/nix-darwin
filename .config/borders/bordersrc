@@ -1,9 +1,0 @@
-#!/bin/bash
-
-options=(
-  width=8.0
-  hidpi=on
-  active_color=glow\(0xFFCBA6F7\)
-)
-
-borders "${options[@]}"

@@ -175,8 +175,6 @@ in
     taps = [
       "nikitabobko/tap"
       "charmbracelet/tap"
-      "dimentium/autoraise"
-      "felixkratz/formulae"
       "warrensbox/tap"
       "Arthur-Ficial/tap"
     ];
@@ -184,10 +182,8 @@ in
       "ansible"
       "ansible-lint"
       "atuin"
-      "dimentium/autoraise/autoraise"
       "awscli"
       "bash-language-server"
-      "felixkratz/formulae/borders"
       "btop"
       "cava"
       "cmake"
@@ -303,30 +299,12 @@ in
     (nohup ${llamaModelDownloader} </dev/null >>"$HOME/models/download.log" 2>&1 &)
     echo "[llama-model-downloader] Download check running in background — tail ~/models/download.log"
 
-    echo "Patching opencode.json with correct home path..."
-    ${pkgs.gnused}/bin/sed -i "s|__HOME__|$HOME|g" "$HOME/.config/opencode/opencode.json"
-
-    # Remove homebrew-managed autoraise plist to prevent conflict with nix-managed org.nixos.autoraise
-    if [ -f "$HOME/Library/LaunchAgents/homebrew.mxcl.autoraise.plist" ]; then
-      launchctl bootout "gui/$(id -u)/homebrew.mxcl.autoraise" 2>/dev/null || true
-      rm -f "$HOME/Library/LaunchAgents/homebrew.mxcl.autoraise.plist"
+    if [ -f "$HOME/.config/opencode/opencode.json" ]; then
+      echo "Patching opencode.json with correct home path..."
+      ${pkgs.gnused}/bin/sed -i "s|__HOME__|$HOME|g" "$HOME/.config/opencode/opencode.json"
     fi
-  '';
 
-  launchd.user.agents.autoraise = {
-    serviceConfig = {
-      ProgramArguments = [
-        "/opt/homebrew/opt/autoraise/bin/AutoRaise"
-        "-verbose"
-        "true"
-      ];
-      KeepAlive = true;
-      RunAtLoad = true;
-      StandardOutPath = "/Users/havoc/Library/Logs/AutoRaise.log";
-      StandardErrorPath = "/Users/havoc/Library/Logs/AutoRaise.log";
-      LimitLoadToSessionType = "Aqua";
-    };
-  };
+  '';
 
   launchd.user.agents.llama-server = {
     serviceConfig = {
@@ -348,20 +326,5 @@ in
     };
   };
 
-  launchd.user.agents.borders = {
-    serviceConfig = {
-      ProgramArguments = [
-        "/opt/homebrew/bin/borders"
-        "width=8.0"
-        "hidpi=on"
-        "active_color=glow(0xFFCBA6F7)"
-      ];
-      KeepAlive = true;
-      RunAtLoad = true;
-      StandardOutPath = "/tmp/borders.log";
-      StandardErrorPath = "/tmp/borders.error.log";
-      LimitLoadToSessionType = "Aqua";
-    };
-  };
-
 }
+

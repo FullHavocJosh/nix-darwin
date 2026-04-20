@@ -49,7 +49,6 @@ nix-darwin/
 │   ├── aerospace/                      # AeroSpace (macOS tiling WM)
 │   ├── alacritty/                      # Alacritty terminal config
 │   ├── atuin/                          # Atuin shell history config
-│   ├── AutoRaise/                      # AutoRaise window focus config
 │   ├── btop/                           # btop system monitor
 │   ├── crush/                          # Charm crush config
 │   ├── ghostty/                        # Ghostty terminal config
@@ -141,8 +140,6 @@ Defined in `flake.nix`:
 #### Shared (all macOS profiles, via `packages.nix`)
 
 - **llama-server** launchd service — runs Qwen2.5-Coder-7B-Q8 via llama.cpp on `127.0.0.1:8080`; model auto-downloaded on activation
-- **AutoRaise** launchd service — focus-follows-mouse for macOS
-- **borders** launchd service — window border highlights (active: purple glow)
 
 **Switch profiles:**
 
