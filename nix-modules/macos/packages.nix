@@ -261,6 +261,7 @@ in
       "betterdisplay"
       "claude"
       "claude-code"
+      "fluxmarkdown"
       "font-hack-nerd-font"
       "font-jetbrains-mono-nerd-font"
       "ghostty"
@@ -327,4 +328,3 @@ in
   };
 
 }
-
