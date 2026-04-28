@@ -1,0 +1,74 @@
+{
+  "lightThemeId": "flexoki-light",
+  "darkThemeId": "flexoki-dark",
+  "approvedDirectories": [
+    "/Users/jrollet",
+    "/Users/jrollet/nix-darwin",
+    "/Users/jrollet/nix-darwin/Library/LaunchAgents"
+  ],
+  "securityScopedBookmarks": [],
+  "notifyOnSubtasks": true,
+  "notifyOnCompletion": true,
+  "notifyOnError": true,
+  "notifyOnQuestion": true,
+  "notificationTemplates": {
+    "completion": {
+      "title": "{agent_name} is ready",
+      "message": "{model_name} completed the task"
+    },
+    "error": {
+      "title": "Tool error",
+      "message": "{last_message}"
+    },
+    "question": {
+      "title": "Input needed",
+      "message": "{last_message}"
+    },
+    "subtask": {
+      "title": "{agent_name} is ready",
+      "message": "{model_name} completed the task"
+    }
+  },
+  "desktopLocalPort": 57123,
+  "zenModel": "minimax-m2.5-free",
+  "desktopWindowState": {
+    "x": 4757,
+    "y": 16,
+    "width": 1242,
+    "height": 1972,
+    "maximized": false,
+    "fullscreen": false
+  },
+  "themeId": "flexoki-dark",
+  "themeVariant": "dark",
+  "useSystemTheme": true,
+  "splashBgLight": "#FFFCF0",
+  "splashFgLight": "#100F0F",
+  "splashBgDark": "#151313",
+  "splashFgDark": "#CECDC3",
+  "lastDirectory": "/Users/jrollet/nix-darwin/Library/LaunchAgents",
+  "homeDirectory": "/Users/jrollet",
+  "showReasoningTraces": false,
+  "projects": [
+    {
+      "id": "path_L1VzZXJzL2pyb2xsZXQ",
+      "path": "/Users/jrollet",
+      "addedAt": 1777308549908,
+      "lastOpenedAt": 1777308549908,
+      "sidebarCollapsed": true
+    },
+    {
+      "id": "path_L1VzZXJzL2pyb2xsZXQvbml4LWRhcndpbg",
+      "path": "/Users/jrollet/nix-darwin",
+      "label": "Nix Darwin",
+      "color": "constant",
+      "addedAt": 1777308610495,
+      "lastOpenedAt": 1777308610496,
+      "sidebarCollapsed": false
+    }
+  ],
+  "activeProjectId": "path_L1VzZXJzL2pyb2xsZXQvbml4LWRhcndpbg",
+  "desktopHosts": [],
+  "desktopDefaultHostId": "local",
+  "desktopInitialHostChoiceCompleted": true
+}

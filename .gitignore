@@ -129,6 +129,10 @@ stow-uninstall-local-ignore
 # Ignore Raycast
 /.config/raycast
 
+# Ignore openchamber auto-generated device identifiers
+.config/openchamber/install-id-*
+.config/openchamber/sessions-directories.json
+
 # Ignore Git
 /.git
 

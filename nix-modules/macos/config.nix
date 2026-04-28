@@ -173,6 +173,11 @@
         npm install -g jsonlint 2>&1 | grep -v "npm warn" || echo "Failed to install jsonlint"
       fi
 
+      if ! npm list -g @tradchenko/claude-sessions &>/dev/null; then
+        echo "Installing claude-sessions..."
+        npm install -g @tradchenko/claude-sessions 2>&1 | grep -v "npm warn" || echo "Failed to install claude-sessions"
+      fi
+
       if ! npm list -g context-mode &>/dev/null; then
         echo "Installing context-mode MCP server..."
         npm install -g context-mode 2>&1 | grep -v "npm warn" || echo "Failed to install context-mode"
@@ -233,6 +238,29 @@
       if ! uv tool list 2>/dev/null | grep -q "^unmcp "; then
         echo "Installing unmcp CLI tool..."
         uv tool install unmcp 2>&1 || echo "Failed to install unmcp"
+      fi
+      if ! uv tool list 2>/dev/null | grep -q "^claude-code-config "; then
+        echo "Installing claude-code-config..."
+        uv tool install claude-code-config 2>&1 || echo "Failed to install claude-code-config"
+      fi
+    fi
+
+    if command -v go &>/dev/null; then
+      if ! command -v claude-session-manager-tui &>/dev/null; then
+        echo "Installing claude-session-manager-tui..."
+        # Pinned to audited commit f114e7d (2026-04-01); no tagged releases exist upstream.
+        # To update: review diff from f114e7d to new commit before changing the hash.
+        go install github.com/borball/claude-session-manager-tui@f114e7d7e0d78e10087692a10724f2a7383edfd3 2>&1 || echo "Failed to install claude-session-manager-tui"
+      fi
+    fi
+
+    if command -v cargo &>/dev/null; then
+      if ! command -v nexus-tui &>/dev/null; then
+        echo "Installing nexus-tui..."
+        # Not on crates.io; pinned to a specific audited commit.
+        # Audited at edd908b: Kubernetes TUI, no network/fs side effects beyond kubeconfig reads.
+        # To update: review the diff from edd908b to the new commit before changing --rev.
+        cargo install --git https://github.com/markx3/nexus-tui --rev edd908b26b4c19d9dd8e5cf3784f60f4b273669d 2>&1 || echo "Failed to install nexus-tui"
       fi
     fi
   '';

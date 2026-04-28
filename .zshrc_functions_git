@@ -1118,6 +1118,30 @@ function _gpa_review_batch() {
   for file in "${batch_files[@]}"; do
     batch_diff="${batch_diff}$(git diff --cached -- "$file")\n"
   done
+
+  # Build surrounding context: 40 lines before/after each changed hunk from the full file
+  # This lets the reviewer see nearby comments/guards without scanning the whole file
+  local batch_context=""
+  for file in "${batch_files[@]}"; do
+    if [[ -f "$file" ]]; then
+      # Extract changed line numbers from the diff hunk headers, then grab context lines
+      local changed_lines
+      changed_lines=$(git diff --cached -- "$file" | grep "^@@" | \
+        sed 's/.*+\([0-9]*\).*/\1/' | head -20)
+      if [[ -n "$changed_lines" ]]; then
+        batch_context="${batch_context}
+=== Surrounding context: $file ===
+"
+        while IFS= read -r start_line; do
+          local ctx_start=$(( start_line > 40 ? start_line - 40 : 1 ))
+          local ctx_end=$(( start_line + 40 ))
+          batch_context="${batch_context}$(awk "NR>=${ctx_start} && NR<=${ctx_end} {print NR\": \"\$0}" "$file")
+---
+"
+        done <<< "$changed_lines"
+      fi
+    fi
+  done
   
   # Count lines in this batch
   local batch_lines=$(echo -e "$batch_diff" | wc -l)
@@ -1171,11 +1195,14 @@ $(printf '%s\n' "${batch_files[@]}")
 
 Git diff:
 ${batch_diff}
-
+${batch_context}
 **IMPORTANT INSTRUCTIONS:**
 - ONLY report 🔴 Critical issues and 🟡 Warnings
 - IGNORE minor suggestions, style preferences, and code quality opinions
 - Focus on things that will actually break, cause security issues, or have serious consequences
+- ONLY flag issues that are INTRODUCED OR WORSENED by lines marked with + in the diff — do NOT flag pre-existing code in unchanged lines
+- The surrounding context is provided so you can see if a nearby comment, guard clause, or existing code ALREADY mitigates the concern — if so, do NOT flag it
+- If the code or a comment already acknowledges a known limitation, do NOT flag it as an issue
 - Output ONLY a JSON array of issues in this exact format:
 [
   {
@@ -1273,8 +1300,22 @@ function _gpa_send_all_to_aidev() {
   done
   printf "Please fix all of these issues. After fixing, I'll re-stage the affected files." >> "$prompt_file"
 
-  # Run aidev directly in the current terminal
+  # Capture staged files and their hashes before running aidev
   local repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+  local staged_files=()
+  while IFS= read -r f; do
+    staged_files+=("$f")
+  done < <(git diff --cached --name-only)
+
+  # Snapshot content hashes of each staged file before aidev runs
+  local -A pre_hashes
+  for f in "${staged_files[@]}"; do
+    local abs="$repo_root/$f"
+    if [[ -f "$abs" ]]; then
+      pre_hashes[$f]=$(shasum -a 256 "$abs" | cut -d' ' -f1)
+    fi
+  done
+
   echo ""
   echo "=== aidev: Fix All Issues ==="
   echo ""
@@ -1296,13 +1337,132 @@ function _gpa_send_all_to_aidev() {
   case "$_KEY" in
     $'\n' | $'\r')
       echo ""
-      gpa
+      # Re-stage all files, but only re-review files aidev actually changed
+      local changed_files=()
+      for f in "${staged_files[@]}"; do
+        local abs="$repo_root/$f"
+        git -C "$repo_root" add "$f" 2>/dev/null
+        local post_hash=""
+        if [[ -f "$abs" ]]; then
+          post_hash=$(shasum -a 256 "$abs" | cut -d' ' -f1)
+        fi
+        if [[ "${pre_hashes[$f]}" != "$post_hash" ]]; then
+          changed_files+=("$f")
+        fi
+      done
+
+      if [[ ${#changed_files[@]} -eq 0 ]]; then
+        echo "ℹ aidev made no file changes — skipping re-review"
+        echo ""
+        echo "Options:"
+        echo "  [Y/Enter] Proceed to commit and push (gpc)"
+        echo "  [r] Force re-review anyway"
+        echo "  [esc] Keep staged"
+        echo ""
+        echo -n "Your choice: "
+        _read_key
+        echo ""
+        case "$_KEY" in
+          y | Y | $'\n') gpc; return $? ;;
+          r | R) gpa; return $? ;;
+          *) echo "ℹ Keeping changes staged."; return 0 ;;
+        esac
+      fi
+
+      echo "ℹ aidev modified ${#changed_files[@]} file(s) — re-reviewing only those"
+      echo ""
+      # Pass the changed files as a filter to a targeted gpa re-review
+      _gpa_review_files "${changed_files[@]}"
       return $?
       ;;
     *)
       echo "ℹ Keeping changes staged."
       return 0
       ;;
+  esac
+}
+
+# Helper function: Run the AI review + interactive fix loop on a specific subset of files
+# Usage: _gpa_review_files file1 file2 ...
+function _gpa_review_files() {
+  local target_files=("$@")
+
+  # Build a batch from only the specified files (as a JSON array)
+  local batch="[]"
+  for f in "${target_files[@]}"; do
+    batch=$(echo "$batch" | jq --arg f "$f" '. += [$f]')
+  done
+
+  local batch_count=1
+  local batch_lines=$(git diff --cached -- "${target_files[@]}" | wc -l | tr -d ' ')
+  local _active_provider=$(_get_ai_provider)
+
+  echo "═══════════════════════════════════════════════════════════"
+  echo "ℹ Re-reviewing ${#target_files[@]} changed file(s)..."
+  echo "═══════════════════════════════════════════════════════════"
+  echo ""
+
+  local tier=$(_gpa_determine_tier "$batch" "$batch_lines" "1")
+  local tier_icon="" tier_label=""
+  case "$tier" in
+    opus)   tier_icon="🔴"; tier_label="Opus" ;;
+    sonnet) tier_icon="🔵"; tier_label="Sonnet" ;;
+    haiku)  tier_icon="🟢"; tier_label="Haiku" ;;
+    *)      tier_icon="🔵"; tier_label="Sonnet" ;;
+  esac
+
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "$tier_icon $tier_label — Reviewing ${#target_files[@]} file(s)... [$_active_provider]"
+
+  local batch_issues
+  batch_issues=$(_gpa_review_batch_with_timeout "$batch" "1" "1" "auto")
+  local review_status=$?
+
+  if [[ $review_status -ne 0 ]] || ! echo "$batch_issues" | jq empty 2>/dev/null; then
+    echo "  ⚠ Review failed or returned invalid JSON"
+    echo ""
+    echo "Options:"
+    echo "  [Y/Enter] Proceed to commit (gpc)"
+    echo "  [esc] Keep staged"
+    echo ""
+    echo -n "Your choice: "
+    _read_key; echo ""
+    case "$_KEY" in
+      y | Y | $'\n') gpc; return $? ;;
+      *) echo "ℹ Keeping changes staged."; return 0 ;;
+    esac
+  fi
+
+  local valid_issues=$(echo "$batch_issues" | jq '[.[] | select(type == "object" and has("file") and has("severity") and has("issue") and has("recommendation"))]' 2>/dev/null)
+  local issue_count=$(echo "$valid_issues" | jq 'length')
+
+  echo ""
+  echo "═══════════════════════════════════════════════════════════"
+  if [[ "$issue_count" -eq 0 ]]; then
+    echo "✓ Re-review complete — no issues found in changed files"
+  else
+    echo "⚠ Re-review found $issue_count remaining issue(s) — showing for reference"
+    echo ""
+    local ci=0
+    while [[ $ci -lt $issue_count ]]; do
+      local iss=$(echo "$valid_issues" | jq -r ".[$ci]" 2>/dev/null)
+      local isev=$(echo "$iss" | jq -r '.severity // empty')
+      local ifile=$(echo "$iss" | jq -r '.file // empty')
+      local idesc=$(echo "$iss" | jq -r '.issue // empty')
+      echo "  [$isev] $ifile — $idesc"
+      ((ci++))
+    done
+  fi
+  echo ""
+  echo "Options:"
+  echo "  [Y/Enter] Commit and push (gpc)"
+  echo "  [esc]     Keep staged — fix manually and re-run gpa"
+  echo ""
+  echo -n "Your choice: "
+  _read_key; echo ""
+  case "$_KEY" in
+    y | Y | $'\n') gpc; return $? ;;
+    *) echo "ℹ Keeping changes staged."; return 0 ;;
   esac
 }
 
