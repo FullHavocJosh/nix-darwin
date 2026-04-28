@@ -1,4 +1,9 @@
-{ pkgs, lib, ... }:
+{
+  pkgs,
+  lib,
+  username,
+  ...
+}:
 let
   llamaModelDownloader = pkgs.writeShellScript "llama-model-downloader" ''
     #!/usr/bin/env bash
@@ -434,8 +439,8 @@ in
       KeepAlive = true;
       ThrottleInterval = 30;
       RunAtLoad = true;
-      StandardOutPath = "$HOME/Library/Logs/openchamber/openchamber.log";
-      StandardErrorPath = "$HOME/Library/Logs/openchamber/openchamber.error.log";
+      StandardOutPath = "/Users/${username}/Library/Logs/openchamber/openchamber.log";
+      StandardErrorPath = "/Users/${username}/Library/Logs/openchamber/openchamber.error.log";
       LimitLoadToSessionType = [
         "Aqua"
         "Background"

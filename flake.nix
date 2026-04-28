@@ -8,9 +8,19 @@
     nix-homebrew.url = "github:zhaofengli-wip/nix-homebrew";
   };
 
-  outputs = inputs@{ self, nixpkgs, nix-darwin, nix-homebrew, ... }:
+  outputs =
+    inputs@{
+      self,
+      nixpkgs,
+      nix-darwin,
+      nix-homebrew,
+      ...
+    }:
     {
       darwinConfigurations."macos_personal" = nix-darwin.lib.darwinSystem {
+        specialArgs = {
+          username = "havoc";
+        };
         modules = [
           ./nix-modules/macos/packages.nix
           ./nix-modules/macos/config.nix
@@ -19,6 +29,9 @@
         ];
       };
       darwinConfigurations."macos_work" = nix-darwin.lib.darwinSystem {
+        specialArgs = {
+          username = "jrollet";
+        };
         modules = [
           ./nix-modules/macos/packages.nix
           ./nix-modules/macos/config.nix
