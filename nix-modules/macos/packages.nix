@@ -403,7 +403,7 @@ in
         ARCH=$(uname -m)
         case "$ARCH" in
           x86_64) OC_ARCH="x86_64"; OC_PINNED_SHA256="ae73f8d11401bc2b87e112a51ba01ea9dab89e7fa4912f654300926cc255c58b" ;;
-          arm64)  OC_ARCH="aarch64"; OC_PINNED_SHA256="bce4d9a29bd64fafa03d32218deae6946b692cb3e007b4d1e46c520817ff560b" ;;
+          arm64)  OC_ARCH="aarch64"; OC_PINNED_SHA256="1a45ea8d10462a80d2cd7a6c15d238c2c1efd62cd81a63e6128469894ae77826" ;;
           *)      echo "ERROR: Unsupported architecture: $ARCH" >&2; exit 1 ;;
         esac
         OPENCHAMBER_DMG_URL="https://github.com/openchamber/openchamber/releases/download/$OC_PINNED_VERSION/OpenChamber_''${OC_VERSION_NUM}_darwin-''${OC_ARCH}.dmg"

@@ -187,9 +187,14 @@ in
   };
   homebrew = {
     enable = true;
-    taps = [ ];
+    taps = [
+      "dopplerhq/cli"
+      "vitobotta/tap"
+    ];
     brews = [
+      "dopplerhq/cli/doppler"
       "k9s"
+      "vitobotta/tap/hetzner_k3s"
     ];
     casks = [
       "battle-net"
