@@ -1,17 +1,17 @@
 if [[ -f "/opt/homebrew/bin/brew" ]]; then
-    eval "$(/opt/homebrew/bin/brew shellenv)"
+  eval "$(/opt/homebrew/bin/brew shellenv)"
 fi
 
 preexec() {
-    echo -ne "\033]0;$1\007"
+  echo -ne "\033]0;$1\007"
 }
 
 precmd() {
-    echo -ne "\033]0;${USER}@${HOST}:${PWD}\007"
+  echo -ne "\033]0;${USER}@${HOST}:${PWD}\007"
 }
 
-if command -v starship &> /dev/null; then
-    eval "$(starship init zsh)"
+if command -v starship &>/dev/null; then
+  eval "$(starship init zsh)"
 fi
 
 # Secrets via Doppler (falls back to ~/.zshrc_envvars and ~/.zshrc_envvars_insecure)
@@ -29,7 +29,6 @@ if command -v doppler &>/dev/null; then
   unset _dp _device_config
 else
   [ -f ~/.zshrc_envvars ] && source ~/.zshrc_envvars
-  [ -f ~/.zshrc_envvars_insecure ] && source ~/.zshrc_envvars_insecure
 fi
 [ -f ~/.zshrc_os_linux ] && source ~/.zshrc_os_linux
 [ -f ~/.zshrc_os_macos ] && source ~/.zshrc_os_macos
