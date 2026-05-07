@@ -140,6 +140,9 @@ in
 
     echo "Setting wallpaper..."
     osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/havoc/.wallpapers/wallhaven-1k9m9w.jpg"'
+
+    echo "Syncing HostName to LocalHostName..."
+    scutil --set HostName "$(scutil --get LocalHostName)"
   '';
 
   launchd.user.agents.ollama = {
@@ -189,11 +192,16 @@ in
     enable = true;
     taps = [
       "dopplerhq/cli"
+      "minio/stable"
       "vitobotta/tap"
     ];
     brews = [
       "dopplerhq/cli/doppler"
+      "helm"
       "k9s"
+      "kubectl"
+      "minio/stable/mc"
+      "tailscale"
       "vitobotta/tap/hetzner_k3s"
     ];
     casks = [

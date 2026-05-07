@@ -474,6 +474,7 @@ function _check_for_secrets() {
     grep -v '_PLACEHOLDER' | \
     grep -vE "[=:]\s*['\"][A-Z][A-Z0-9_]{7,}['\"]" | \
     grep -vE "[=:]\s*['\"]?\\\$\{?[A-Za-z_]" | \
+    grep -vE "[=:]\s*['\"]?\{\{" | \
     grep -viE "[=:]\s*['\"]?(changeme|change_me|password|passwd|secret|example|placeholder|foobar|test|dummy|fake|sample|your[-_]?password|mypassword|p@ssw0rd|pass1234)['\"]?\s*$")
   if [ -n "$pw_matches" ]; then
     secrets_report="${secrets_report}  • Password\n$(_get_matching_files "(password|passwd)\s*[=:]\s*['\"][^'\"]{8,}['\"]")\n"
