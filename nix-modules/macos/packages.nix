@@ -182,7 +182,6 @@ in
     python3Packages.fonttools
     lemminx
     rubyPackages.rubocop
-    openvpn
     nodejs_22
     typescript
     aiselectWrapper

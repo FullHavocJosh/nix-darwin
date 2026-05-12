@@ -1,148 +1,96 @@
 { pkgs, ... }:
-let
-  vpnNetworkManager = pkgs.writeShellScript "vpn-network-manager" ''
-    #!/usr/bin/env bash
-
-    TRUSTED_NETWORKS=("VoidSlip")
-    VPN_CONFIG="/Users/havoc/Library/Mobile Documents/com~apple~CloudDocs/Downloads/OpenVPN_Server___vpn_rollet_family_macbookpro.ovpn"
-    WIFI_INTERFACE="en0"
-    LOG_FILE="/tmp/vpn-network-manager.log"
-    PID_FILE="/tmp/openvpn.pid"
-
-    log() {
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
-    }
-
-    get_current_network() {
-        local network=$(/usr/sbin/networksetup -getairportnetwork "$WIFI_INTERFACE" 2>/dev/null | sed 's/Current Wi-Fi Network: //')
-        if [[ "$network" == "You are not associated with an AirPort network." ]] || [[ -z "$network" ]]; then
-            echo ""
-        else
-            echo "$network"
-        fi
-    }
-
-    is_vpn_running() {
-        if [[ -f "$PID_FILE" ]]; then
-            local pid=$(cat "$PID_FILE")
-            if ps -p "$pid" > /dev/null 2>&1; then
-                return 0
-            else
-                rm -f "$PID_FILE"
-            fi
-        fi
-        return 1
-    }
-
-    is_trusted_network() {
-        local current_network="$1"
-        for trusted in "''${TRUSTED_NETWORKS[@]}"; do
-            if [[ "$current_network" == "$trusted" ]]; then
-                return 0
-            fi
-        done
-        return 1
-    }
-
-    start_vpn() {
-        if is_vpn_running; then
-            log "VPN already running"
-            return 0
-        fi
-
-        if [[ ! -f "$VPN_CONFIG" ]]; then
-            log "ERROR: VPN config file not found: $VPN_CONFIG"
-            return 1
-        fi
-
-        log "Starting VPN connection..."
-        ${pkgs.openvpn}/bin/openvpn --config "$VPN_CONFIG" \
-            --daemon \
-            --writepid "$PID_FILE" \
-            --log "/tmp/openvpn.log" \
-            --script-security 2 \
-            --setenv PATH '/usr/bin:/bin:/usr/sbin:/sbin' \
-            --dhcp-option DNS 192.168.144.1 \
-            --dhcp-option DOMAIN rollet.family \
-            --up '/bin/sh -c "/usr/sbin/networksetup -setdnsservers Wi-Fi 192.168.144.1 && /usr/sbin/networksetup -setsearchdomains Wi-Fi rollet.family"' \
-            --down '/bin/sh -c "/usr/sbin/networksetup -setdnsservers Wi-Fi Empty && /usr/sbin/networksetup -setsearchdomains Wi-Fi Empty"'
-
-        if [[ $? -eq 0 ]]; then
-            log "VPN started successfully with DNS 192.168.144.1 and search domain rollet.family"
-            return 0
-        else
-            log "ERROR: Failed to start VPN"
-            return 1
-        fi
-    }
-
-    stop_vpn() {
-        if ! is_vpn_running; then
-            log "VPN not running"
-            return 0
-        fi
-
-        log "Stopping VPN connection..."
-        local pid=$(cat "$PID_FILE")
-        kill "$pid" 2>/dev/null
-        sleep 2
-
-        if ps -p "$pid" > /dev/null 2>&1; then
-            kill -9 "$pid" 2>/dev/null
-        fi
-
-        rm -f "$PID_FILE"
-        log "VPN stopped"
-    }
-
-    has_network_connection() {
-        local ip=$(ifconfig en0 2>/dev/null | grep "inet " | grep -v "127.0.0.1" | awk '{print $2}')
-        if [[ -n "$ip" ]]; then
-            return 0
-        fi
-        return 1
-    }
-
-    main() {
-        local current_network=$(get_current_network)
-
-        if ! has_network_connection; then
-            log "No network connection on en0"
-            stop_vpn
-            return
-        fi
-
-        if [[ -n "$current_network" ]]; then
-            log "Current WiFi network: $current_network"
-            if is_trusted_network "$current_network"; then
-                log "On trusted network ($current_network) - ensuring VPN is stopped"
-                stop_vpn
-            else
-                log "On untrusted WiFi network ($current_network) - ensuring VPN is running"
-                start_vpn
-            fi
-        else
-            log "On non-WiFi connection (mobile/ethernet) - ensuring VPN is running"
-            start_vpn
-        fi
-    }
-
-    main
-  '';
-in
 {
   system.activationScripts.script.text = ''
-    #!/usr/bin/env bash
-    echo "Stowing dotfiles as user $(whoami)..."
-    cd "/Users/havoc/nix-darwin" || { echo "Failed to cd into /Users/havoc/nix-darwin"; exit 1; }
-    ${pkgs.stow}/bin/stow -R . || { echo "Failed to stow dotfiles"; exit 1; }
-    echo "Finished Stowing dotfiles..."
+            #!/usr/bin/env bash
+            echo "Stowing dotfiles as user $(whoami)..."
+            cd "/Users/havoc/nix-darwin" || { echo "Failed to cd into /Users/havoc/nix-darwin"; exit 1; }
+            ${pkgs.stow}/bin/stow -R . || { echo "Failed to stow dotfiles"; exit 1; }
+            echo "Finished Stowing dotfiles..."
 
-    echo "Setting wallpaper..."
-    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/havoc/.wallpapers/wallhaven-1k9m9w.jpg"'
+            echo "Setting wallpaper..."
+            osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/havoc/.wallpapers/wallhaven-1k9m9w.jpg"'
 
-    echo "Syncing HostName to LocalHostName..."
-    scutil --set HostName "$(scutil --get LocalHostName)"
+            echo "Syncing HostName to LocalHostName..."
+            scutil --set HostName "$(scutil --get LocalHostName)"
+
+            echo "Installing OpenVPN LaunchDaemon..."
+            cat > /Library/LaunchDaemons/homebrew.mxcl.openvpn.plist << 'PLIST'
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+    	<key>KeepAlive</key>
+    	<true/>
+    	<key>Label</key>
+    	<string>homebrew.mxcl.openvpn</string>
+    	<key>ProgramArguments</key>
+    	<array>
+    		<string>/opt/homebrew/opt/openvpn/sbin/openvpn</string>
+    		<string>--config</string>
+    		<string>/opt/homebrew/etc/openvpn/openvpn.conf</string>
+    	</array>
+    	<key>RunAtLoad</key>
+    	<true/>
+    	<key>ThrottleInterval</key>
+    	<integer>30</integer>
+    	<key>WorkingDirectory</key>
+    	<string>/opt/homebrew/etc/openvpn</string>
+    </dict>
+    </plist>
+    PLIST
+            chown root:wheel /Library/LaunchDaemons/homebrew.mxcl.openvpn.plist
+            chmod 644 /Library/LaunchDaemons/homebrew.mxcl.openvpn.plist
+
+            echo "Setting up OpenVPN helper scripts and config..."
+            mkdir -p /opt/homebrew/etc/openvpn
+            chown root:wheel /opt/homebrew/etc/openvpn
+            chmod 755 /opt/homebrew/etc/openvpn
+
+            cat > /opt/homebrew/etc/openvpn/up.sh.new << 'SCRIPT'
+    #!/bin/sh
+    /usr/sbin/networksetup -setdnsservers Wi-Fi 192.168.144.1
+    /usr/sbin/networksetup -setsearchdomains Wi-Fi rollet.family
+    SCRIPT
+            if ! cmp -s /opt/homebrew/etc/openvpn/up.sh.new /opt/homebrew/etc/openvpn/up.sh 2>/dev/null; then
+              mv /opt/homebrew/etc/openvpn/up.sh.new /opt/homebrew/etc/openvpn/up.sh
+              chown root:admin /opt/homebrew/etc/openvpn/up.sh
+              chmod 750 /opt/homebrew/etc/openvpn/up.sh
+            else
+              rm /opt/homebrew/etc/openvpn/up.sh.new
+            fi
+
+            cat > /opt/homebrew/etc/openvpn/down.sh.new << 'SCRIPT'
+    #!/bin/sh
+    /usr/sbin/networksetup -setdnsservers Wi-Fi Empty
+    /usr/sbin/networksetup -setsearchdomains Wi-Fi Empty
+    SCRIPT
+            if ! cmp -s /opt/homebrew/etc/openvpn/down.sh.new /opt/homebrew/etc/openvpn/down.sh 2>/dev/null; then
+              mv /opt/homebrew/etc/openvpn/down.sh.new /opt/homebrew/etc/openvpn/down.sh
+              chown root:admin /opt/homebrew/etc/openvpn/down.sh
+              chmod 750 /opt/homebrew/etc/openvpn/down.sh
+            else
+              rm /opt/homebrew/etc/openvpn/down.sh.new
+            fi
+
+            OVPN_SRC="/Users/havoc/Library/Mobile Documents/com~apple~CloudDocs/Downloads/OpenVPN_Server___vpn_rollet_family_macbookpro.ovpn"
+            if [ -f "$OVPN_SRC" ]; then
+              cp "$OVPN_SRC" /opt/homebrew/etc/openvpn/openvpn.conf.new
+              printf '\nup /opt/homebrew/etc/openvpn/up.sh\ndown /opt/homebrew/etc/openvpn/down.sh\nscript-security 2\n' \
+                >> /opt/homebrew/etc/openvpn/openvpn.conf.new
+              if ! cmp -s /opt/homebrew/etc/openvpn/openvpn.conf.new /opt/homebrew/etc/openvpn/openvpn.conf 2>/dev/null; then
+                echo "OpenVPN config changed, updating and restarting service..."
+                /opt/homebrew/bin/brew services stop openvpn 2>/dev/null || true
+                mv /opt/homebrew/etc/openvpn/openvpn.conf.new /opt/homebrew/etc/openvpn/openvpn.conf
+                chown root:admin /opt/homebrew/etc/openvpn/openvpn.conf
+                chmod 640 /opt/homebrew/etc/openvpn/openvpn.conf
+                /opt/homebrew/bin/brew services start openvpn 2>/dev/null || true
+              else
+                echo "OpenVPN config unchanged, skipping restart."
+                rm /opt/homebrew/etc/openvpn/openvpn.conf.new
+              fi
+            else
+              echo "WARNING: OpenVPN config not found in iCloud Drive, skipping update."
+            fi
   '';
 
   launchd.user.agents.ollama = {
@@ -170,21 +118,6 @@ in
     };
   };
 
-  launchd.daemons.vpn-network-manager = {
-    script = ''
-      ${vpnNetworkManager}
-    '';
-    serviceConfig = {
-      RunAtLoad = true;
-      StandardOutPath = "/tmp/vpn-network-manager-launchd.log";
-      StandardErrorPath = "/tmp/vpn-network-manager-launchd-error.log";
-      WatchPaths = [
-        "/Library/Preferences/SystemConfiguration"
-      ];
-      ThrottleInterval = 10;
-    };
-  };
-
   system.defaults = {
     dock.persistent-apps = [ ];
   };
@@ -198,6 +131,7 @@ in
     brews = [
       "dopplerhq/cli/doppler"
       "helm"
+      "openvpn"
       "k9s"
       "kubectl"
       "minio/stable/mc"
