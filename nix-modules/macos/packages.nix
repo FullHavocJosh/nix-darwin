@@ -224,6 +224,7 @@ in
       "graphviz"
       "hadolint"
       "jq"
+      "jsonlint"
       "kubectl"
       "lazygit"
       "lua-language-server"
@@ -316,7 +317,16 @@ in
     onActivation.upgrade = true;
   };
 
+  # Runs before brew bundle so Homebrew can link without conflict.
+  system.activationScripts.homebrew.text = lib.mkBefore ''
+    if [ -L /opt/homebrew/bin/jsonlint ] && readlink /opt/homebrew/bin/jsonlint | grep -q node_modules; then
+      echo "Removing npm-installed jsonlint symlink (replaced by Homebrew)..."
+      rm -f /opt/homebrew/bin/jsonlint
+    fi
+  '';
+
   system.activationScripts.postUserActivation.text = lib.mkAfter ''
+
     mkdir -p "$HOME/models"
     mkdir -p "$HOME/Library/Logs/openchamber"
     (nohup ${llamaModelDownloader} </dev/null >>"$HOME/models/download.log" 2>&1 &)
@@ -333,10 +343,7 @@ in
     ln -sf "${openchamberLauncher}" "$HOME/.local/bin/openchamber-launcher"
 
     (
-      if command -v openchamber &>/dev/null; then
-        echo "Updating openchamber..."
-        openchamber update || true
-      else
+      if ! command -v openchamber &>/dev/null; then
         echo "Installing openchamber..."
         OPENCHAMBER_INSTALL_SCRIPT=$(mktemp)
         # Pinned to commit 3d548a3a526d8fe86fd76d5fef6426cb173b8e57 — update commit and checksum together when upgrading
@@ -355,7 +362,7 @@ in
         bash "$OPENCHAMBER_INSTALL_SCRIPT"
         rm -f "$OPENCHAMBER_INSTALL_SCRIPT"
       fi
-    ) || echo "WARNING: openchamber install/update failed — continuing activation" >&2
+    ) || echo "WARNING: openchamber install failed — continuing activation" >&2
 
     if ! command -v claude-dashboard &>/dev/null; then
       echo "Installing claude-dashboard..."

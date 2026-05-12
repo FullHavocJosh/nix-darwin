@@ -166,72 +166,34 @@
       echo "Unable to check for macOS updates (may require sudo or network connection)"
     fi
 
-    echo "Managing global npm packages..."
-    if command -v npm &>/dev/null; then
-      if ! npm list -g jsonlint &>/dev/null; then
-        echo "Installing jsonlint..."
-        npm install -g jsonlint 2>&1 | grep -v "npm warn" || echo "Failed to install jsonlint"
+    # Register context-mode with Claude Code if already installed
+    if command -v context-mode &>/dev/null && command -v claude &>/dev/null; then
+      if ! grep -q '"context-mode"' "$HOME/.claude.json" 2>/dev/null; then
+        claude mcp add --scope user context-mode context-mode 2>/dev/null && \
+          echo "Registered context-mode with Claude Code." || \
+          echo "Failed to register context-mode with Claude Code."
       fi
+    fi
 
-      if ! npm list -g @tradchenko/claude-sessions &>/dev/null; then
-        echo "Installing claude-sessions..."
-        npm install -g @tradchenko/claude-sessions 2>&1 | grep -v "npm warn" || echo "Failed to install claude-sessions"
-      fi
-
-      if ! npm list -g context-mode &>/dev/null; then
-        echo "Installing context-mode MCP server..."
-        npm install -g context-mode 2>&1 | grep -v "npm warn" || echo "Failed to install context-mode"
-      fi
-      if command -v context-mode &>/dev/null && command -v claude &>/dev/null; then
-        if ! grep -q '"context-mode"' "$HOME/.claude.json" 2>/dev/null; then
-          claude mcp add --scope user context-mode context-mode 2>/dev/null && \
-            echo "Registered context-mode with Claude Code." || \
-            echo "Failed to register context-mode with Claude Code."
+    # Sync MCP servers from claude-desktop-mcp.json into Claude Code (global scope)
+    MCP_CONFIG="$HOME/nix-darwin/.config/mcp/claude-desktop-mcp.json"
+    if command -v claude &>/dev/null && command -v jq &>/dev/null && [ -f "$MCP_CONFIG" ]; then
+      echo "Syncing MCP servers from $MCP_CONFIG to Claude Code..."
+      jq -r '.mcpServers | keys[]' "$MCP_CONFIG" | while read -r SERVER_NAME; do
+        if grep -q "\"$SERVER_NAME\"" "$HOME/.claude.json" 2>/dev/null; then
+          echo "  $SERVER_NAME already registered, skipping."
+          continue
         fi
-      fi
 
-      # Register MCP servers from claude-desktop-mcp.json into Claude Code (global scope)
-      MCP_CONFIG="$HOME/nix-darwin/.config/mcp/claude-desktop-mcp.json"
-      if command -v claude &>/dev/null && command -v jq &>/dev/null && [ -f "$MCP_CONFIG" ]; then
-        echo "Syncing MCP servers from $MCP_CONFIG to Claude Code..."
-        jq -r '.mcpServers | keys[]' "$MCP_CONFIG" | while read -r SERVER_NAME; do
-          if grep -q "\"$SERVER_NAME\"" "$HOME/.claude.json" 2>/dev/null; then
-            echo "  $SERVER_NAME already registered, skipping."
-            continue
-          fi
+        COMMAND=$(jq -r ".mcpServers[\"$SERVER_NAME\"].command" "$MCP_CONFIG")
+        ARGS=$(jq -r ".mcpServers[\"$SERVER_NAME\"].args // [] | map(\"'\" + gsub(\"__HOME__\"; \"$HOME\") + \"'\") | join(\" \")" "$MCP_CONFIG")
+        ENV_PAIRS=$(jq -r ".mcpServers[\"$SERVER_NAME\"].env // {} | to_entries | map(\"-e \" + .key + \"=\" + (.value | gsub(\"__HOME__\"; \"$HOME\"))) | join(\" \")" "$MCP_CONFIG")
 
-          COMMAND=$(jq -r ".mcpServers[\"$SERVER_NAME\"].command" "$MCP_CONFIG")
-          ARGS=$(jq -r ".mcpServers[\"$SERVER_NAME\"].args // [] | map(\"'\" + gsub(\"__HOME__\"; \"$HOME\") + \"'\") | join(\" \")" "$MCP_CONFIG")
-          ENV_PAIRS=$(jq -r ".mcpServers[\"$SERVER_NAME\"].env // {} | to_entries | map(\"-e \" + .key + \"=\" + (.value | gsub(\"__HOME__\"; \"$HOME\"))) | join(\" \")" "$MCP_CONFIG")
-
-          CMD="claude mcp add --scope user $SERVER_NAME $ENV_PAIRS -- $COMMAND $ARGS"
-          eval "$CMD" 2>/dev/null && \
-            echo "  Registered $SERVER_NAME with Claude Code." || \
-            echo "  Failed to register $SERVER_NAME with Claude Code."
-        done
-      fi
-
-      OUTDATED=$(npm outdated -g --json 2>/dev/null || echo "{}")
-      if [ -n "$OUTDATED" ] && [ "$OUTDATED" != "{}" ]; then
-        OUTDATED_COUNT=$(echo "$OUTDATED" | jq 'length' 2>/dev/null || echo "0")
-
-        if [ "$OUTDATED_COUNT" -gt 0 ] 2>/dev/null; then
-          echo "Found $OUTDATED_COUNT outdated global npm package(s)"
-          echo "$OUTDATED" | jq -r 'keys[]' 2>/dev/null | while read -r pkg; do
-            CURRENT=$(echo "$OUTDATED" | jq -r ".[\"$pkg\"].current" 2>/dev/null)
-            LATEST=$(echo "$OUTDATED" | jq -r ".[\"$pkg\"].latest" 2>/dev/null)
-            echo "  Updating $pkg: $CURRENT → $LATEST"
-          done
-          npm update -g 2>&1 | grep -v "npm warn" || true
-          echo "Finished updating global npm packages"
-        else
-          echo "All global npm packages are up to date"
-        fi
-      else
-        echo "All global npm packages are up to date"
-      fi
-    else
-      echo "npm not found, skipping npm package management"
+        CMD="claude mcp add --scope user $SERVER_NAME $ENV_PAIRS -- $COMMAND $ARGS"
+        eval "$CMD" 2>/dev/null && \
+          echo "  Registered $SERVER_NAME with Claude Code." || \
+          echo "  Failed to register $SERVER_NAME with Claude Code."
+      done
     fi
 
     if command -v uv &>/dev/null; then
