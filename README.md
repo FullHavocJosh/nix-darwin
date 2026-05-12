@@ -125,7 +125,6 @@ Defined in `flake.nix`:
 - Gaming and entertainment apps (Steam, Battle.net, Whisky, Plex)
 - Personal productivity tools (Obsidian, Proton Drive/Mail/VPN, Element)
 - **Ollama** local LLM (runs as launchd service on `0.0.0.0:11434`)
-- **OpenVPN auto-connect** daemon (`vpn-network-manager`) — connects automatically on untrusted Wi-Fi, disconnects on trusted network ("VoidSlip")
 - Custom wallpaper (set via activation script)
 - User: `/Users/havoc`
 
