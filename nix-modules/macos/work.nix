@@ -21,6 +21,7 @@ in
     cp "${wallpaper}" "/Users/Shared/Wallpaper.jpg"
     cp "${wallpaper}" "/Users/Shared/psv_backgroundimage.png"
     osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "${wallpaper}"'
+    killall WallpaperAgent 2>/dev/null || true
     killall Dock
 
     echo "Cleaning up Terraform cache files..."
