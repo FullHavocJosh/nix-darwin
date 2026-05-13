@@ -16,7 +16,7 @@
 
     echo "Setting wallpaper..."
     cp "/Users/jrollet/.wallpapers/wallhaven-7pw1we.jpg" "/Users/Shared/Wallpaper.jpg"
-    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/jrollet/.wallpapers/wallhaven-7pw1we.jpg"'
+    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/jrollet/.wallpapers/wallhaven-gpxl97.jpg"'
     killall Dock
 
     echo "Cleaning up Terraform cache files..."
