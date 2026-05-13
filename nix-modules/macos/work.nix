@@ -40,6 +40,9 @@
       echo "Terraform infrastructure directories (v3/v4) not found, skipping cleanup"
     fi
   '';
+  networking.hostName = "MacBookProM3Pro";
+  networking.computerName = "MacBookProM3Pro";
+
   system.defaults = {
     dock.persistent-apps = [ ];
   };

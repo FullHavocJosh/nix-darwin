@@ -29,11 +29,11 @@ echo ""
 # Define SSH targets extracted from aliases
 # Format: "user@host"
 declare -A SSH_TARGETS=(
-	["macbook"]="havoc@MacBook-Pro.rollet.family"
+	["macbook"]="havoc@MacBookProM2Pro.rollet.family"
 	["g14"]="havoc@Joshs-G14.rollet.family"
 	["azeroth"]="root@azerothcore.rollet.family"
 	["testazeroth"]="root@testing-azerothcore.rollet.family"
-	["mini"]="havoc@macOS-Mac-mini.rollet.family"
+	["mini"]="havoc@macminim1.rollet.family"
 	["truenas"]="admin@truenas.rollet.family"
 	["6rx26x1"]="havoc@6rx26x1.rollet.family"
 	["caitsg14"]="nesheri@Caits-G14.rollet.family"
