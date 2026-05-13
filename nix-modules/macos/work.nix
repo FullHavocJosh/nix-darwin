@@ -1,6 +1,6 @@
 { pkgs, ... }:
 let
-  wallpaper = "/Users/jrollet/.wallpapers/wallhaven-gpxl97.jpg";
+  wallpaper = "/Users/jrollet/.wallpapers/wallhaven-rr13w1.png";
 in
 {
 
@@ -18,7 +18,7 @@ in
     fi
 
     echo "Setting wallpaper..."
-    cp "${wallpaper}" "/Users/Shared/Wallpaper.jpg"
+    cp "${wallpaper}" "/Users/Shared/Wallpaper.png"
     cp "${wallpaper}" "/Users/Shared/psv_backgroundimage.png"
     osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "${wallpaper}"'
     killall WallpaperAgent 2>/dev/null || true
