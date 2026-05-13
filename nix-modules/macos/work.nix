@@ -1,4 +1,7 @@
 { pkgs, ... }:
+let
+  wallpaper = "/Users/jrollet/.wallpapers/wallhaven-gpxl97.jpg";
+in
 {
 
   system.activationScripts.script.text = ''
@@ -15,8 +18,9 @@
     fi
 
     echo "Setting wallpaper..."
-    cp "/Users/jrollet/.wallpapers/wallhaven-7pw1we.jpg" "/Users/Shared/Wallpaper.jpg"
-    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/jrollet/.wallpapers/wallhaven-gpxl97.jpg"'
+    cp "${wallpaper}" "/Users/Shared/Wallpaper.jpg"
+    cp "${wallpaper}" "/Users/Shared/psv_backgroundimage.png"
+    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "${wallpaper}"'
     killall Dock
 
     echo "Cleaning up Terraform cache files..."

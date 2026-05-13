@@ -1,4 +1,7 @@
 { pkgs, ... }:
+let
+  wallpaper = "/Users/havoc/.wallpapers/wallhaven-5yk6k9.jpg";
+in
 {
   system.activationScripts.script.text = ''
     #!/usr/bin/env bash
@@ -8,7 +11,7 @@
     echo "Finished Stowing dotfiles..."
 
     echo "Setting wallpaper..."
-    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "/Users/havoc/.wallpapers/wallhaven-5yk6k9.jpg"'
+    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "${wallpaper}"'
 
     echo "Syncing HostName to LocalHostName..."
     scutil --set HostName "$(scutil --get LocalHostName)"
