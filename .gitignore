@@ -74,6 +74,9 @@ ansible-linux/inventory/staging
 # Ignore k9s clusters
 /.config/k9s/clusters/
 
+# Ignore ArgoCD config (contains session tokens)
+/.config/argocd/config
+
 # Ignore logs and temporary files
 *.log
 *.tmp
