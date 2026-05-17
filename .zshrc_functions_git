@@ -1148,8 +1148,21 @@ function _gpa_review_batch() {
   local batch_lines=$(echo -e "$batch_diff" | wc -l)
   
   # Determine which AI tier to use
+  # First check if a specific model is already selected in opencode.json
+  local selected_model=""
+  local _active_provider=$(_get_ai_provider)
+  if [[ "$_active_provider" == "opencode" ]] || [[ "$_active_provider" == "github-copilot" ]]; then
+    local config_file="$HOME/.config/opencode/opencode.json"
+    if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
+      selected_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
+    fi
+  fi
+  
   local ai_tier="sonnet"
-  if [[ "$tier_override" == "auto" ]]; then
+  if [[ -n "$selected_model" && "$selected_model" != "null" ]]; then
+    # A specific model is selected - use "selected" as the tier marker
+    ai_tier="selected"
+  elif [[ "$tier_override" == "auto" ]]; then
     ai_tier=$(_gpa_determine_tier "$batch_files_json" "$batch_lines" "$total_batches")
   else
     ai_tier="$tier_override"
@@ -1227,7 +1240,14 @@ ${batch_context}
   local api_exit_code
 
   local _route_provider=$(_get_ai_provider)
-  local _route_model=$(_get_opencode_model "$ai_tier")
+  local _route_model
+  
+  # Use selected model if available, otherwise use tier-based selection
+  if [[ "$ai_tier" == "selected" && -n "$selected_model" ]]; then
+    _route_model="$selected_model"
+  else
+    _route_model=$(_get_opencode_model "$ai_tier")
+  fi
 
   if [[ "$ai_tier" == "cloud-escalation" ]]; then
     local _cloud=$(_get_cloud_fallback_provider)
@@ -2155,7 +2175,21 @@ function gpa() {
   echo "  Total changes: $total_lines lines"
   local _active_provider=$(_get_ai_provider)
   echo "  Provider: $(_provider_display_name "$_active_provider")"
-  if [[ "$tier_override" == "auto" ]]; then
+  
+  # Check if a specific model is set in opencode.json
+  local selected_model=""
+  if [[ "$_active_provider" == "opencode" ]] || [[ "$_active_provider" == "github-copilot" ]]; then
+    local config_file="$HOME/.config/opencode/opencode.json"
+    if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
+      selected_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
+    fi
+  fi
+  
+  # Display model information
+  if [[ -n "$selected_model" && "$selected_model" != "null" ]]; then
+    # A specific model is selected - show it regardless of tier_override
+    echo "  Model: $selected_model"
+  elif [[ "$tier_override" == "auto" ]]; then
     echo "  Model: Auto-detect ($(_model_tier_display "$_active_provider"))"
   else
     local tier_emoji=""
@@ -2181,7 +2215,21 @@ function gpa() {
     
     # Determine which tier will be used for this batch (for display purposes)
     local batch_tier="$tier_override"
-    if [[ "$tier_override" == "auto" ]]; then
+    local batch_using_selected_model=false
+    
+    # Check if a specific model is selected
+    if [[ "$_active_provider" == "opencode" ]] || [[ "$_active_provider" == "github-copilot" ]]; then
+      local config_file="$HOME/.config/opencode/opencode.json"
+      if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
+        local check_selected_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
+        if [[ -n "$check_selected_model" && "$check_selected_model" != "null" ]]; then
+          batch_tier="selected"
+          batch_using_selected_model=true
+        fi
+      fi
+    fi
+    
+    if [[ "$batch_using_selected_model" == "false" && "$tier_override" == "auto" ]]; then
       # Pre-calculate tier for display (will be recalculated inside _gpa_review_batch)
       local batch_files_json=$(echo "$batch" | jq -c '.')
       local batch_diff_lines=$(echo "$batch_files_json" | jq -r '.[]' | xargs git diff --cached -- | wc -l)
@@ -2190,13 +2238,19 @@ function gpa() {
     
     # Display tier icon and label
     local tier_icon="" tier_label=""
-    case "$batch_tier" in
-      opus)   tier_icon="🔴" ; tier_label="Opus" ;;
-      sonnet) tier_icon="🔵" ; tier_label="Sonnet" ;;
-      haiku)  tier_icon="🟢" ; tier_label="Haiku" ;;
-      local)  tier_icon="⚪" ; tier_label="$(_llamacpp_model_short)" ;;
-      *)      tier_icon="🔵" ; tier_label="Sonnet" ;;
-    esac
+    if [[ "$batch_using_selected_model" == "true" ]]; then
+      # Show the selected model name
+      tier_icon=""
+      tier_label="$(jq -r '.model' "$config_file" 2>/dev/null)"
+    else
+      case "$batch_tier" in
+        opus)   tier_icon="🔴" ; tier_label="Opus" ;;
+        sonnet) tier_icon="🔵" ; tier_label="Sonnet" ;;
+        haiku)  tier_icon="🟢" ; tier_label="Haiku" ;;
+        local)  tier_icon="⚪" ; tier_label="$(_llamacpp_model_short)" ;;
+        *)      tier_icon="🔵" ; tier_label="Sonnet" ;;
+      esac
+    fi
 
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "$tier_icon $tier_label — Reviewing batch $batch_num of $batch_count... [$_active_provider]"

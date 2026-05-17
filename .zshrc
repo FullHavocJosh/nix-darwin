@@ -27,8 +27,12 @@ if command -v doppler &>/dev/null; then
       --project ${_dp%%:*} --config ${_dp##*:} 2>/dev/null)"
   done
   unset _dp _device_config
+  
+  # Also load OpenCode Zen API key from .env file if it exists
+  [ -f ~/.config/opencode/.env ] && export $(grep -v '^#' ~/.config/opencode/.env | xargs)
 else
   [ -f ~/.zshrc_envvars ] && source ~/.zshrc_envvars
+  [ -f ~/.config/opencode/.env ] && export $(grep -v '^#' ~/.config/opencode/.env | xargs)
 fi
 [ -f ~/.zshrc_os_linux ] && source ~/.zshrc_os_linux
 [ -f ~/.zshrc_os_macos ] && source ~/.zshrc_os_macos

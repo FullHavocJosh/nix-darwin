@@ -655,7 +655,18 @@ function aidev() {
       fi
       ;;
     *)
-      local model=$(_get_opencode_model "sonnet")
+      # Check if a specific model is set in opencode.json
+      local model=""
+      local config_file="$HOME/.config/opencode/opencode.json"
+      if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
+        model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
+      fi
+      
+      # Fallback to discovering latest Sonnet if no model is set
+      if [[ -z "$model" || "$model" == "null" ]]; then
+        model=$(_get_opencode_model "sonnet")
+      fi
+      
       echo "${GREEN}✓${NC} Model:    $model"
       echo ""
       if $print_mode; then
@@ -688,10 +699,10 @@ function _validate_github_copilot() {
 }
 
 function _validate_opencode_zen() {
-  [[ -n "$OPENCODE_API_KEY" ]] && return 0
-  [[ -f ~/.zshrc_envvars ]] && grep -q "OPENCODE_API_KEY" ~/.zshrc_envvars && return 0
-  [[ -f ~/.zshrc_envvars_insecure ]] && grep -q "OPENCODE_API_KEY" ~/.zshrc_envvars_insecure && return 0
-  [[ -f ~/.config/opencode/.env ]] && grep -q "ANTHROPIC_API_KEY" ~/.config/opencode/.env && return 0
+  [[ -n "$OPENCODE_ZEN_API_KEY" ]] && return 0
+  [[ -f ~/.zshrc_envvars ]] && grep -q "OPENCODE_ZEN_API_KEY" ~/.zshrc_envvars && return 0
+  [[ -f ~/.zshrc_envvars_insecure ]] && grep -q "OPENCODE_ZEN_API_KEY" ~/.zshrc_envvars_insecure && return 0
+  [[ -f ~/.config/opencode/.env ]] && grep -q "OPENCODE_ZEN_API_KEY" ~/.config/opencode/.env && return 0
   return 1
 }
 
@@ -1332,7 +1343,7 @@ function aiselect() {
         echo "     doppler secrets --project devices-laptops --config macbookprom2pro"
         echo ""
         echo "Or manually create ~/.config/opencode/.env with:"
-        echo "  ANTHROPIC_API_KEY=your_api_key_here"
+        echo "  OPENCODE_ZEN_API_KEY=your_api_key_here"
         return 1
       fi
       ;;

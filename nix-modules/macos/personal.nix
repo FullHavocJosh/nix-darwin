@@ -35,7 +35,7 @@ in
       DOPPLER_API_KEY=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get OPENCODE_ZEN_API_KEY --project devices-laptops --config macbookprom2pro --plain 2>/dev/null)
       
       if [ -n "$DOPPLER_API_KEY" ]; then
-        echo "ANTHROPIC_API_KEY=$DOPPLER_API_KEY" > "$OPENCODE_ENV_FILE"
+        echo "OPENCODE_ZEN_API_KEY=$DOPPLER_API_KEY" > "$OPENCODE_ENV_FILE"
         chown havoc:staff "$OPENCODE_ENV_FILE"
         chmod 600 "$OPENCODE_ENV_FILE"
         echo "OpenCode Zen API key successfully injected to $OPENCODE_ENV_FILE"
