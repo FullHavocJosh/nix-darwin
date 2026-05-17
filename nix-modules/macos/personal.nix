@@ -95,18 +95,13 @@ in
       "vitobotta/tap/hetzner_k3s"
     ];
     casks = [
-      "battle-net"
-      "curseforge"
       "element"
       "obsidian"
-      "ollama-app"
-      "orion"
       "plex"
       "plexamp"
       "proton-drive"
       "protonvpn"
       "proton-mail"
-      "rustdesk"
       "steam"
       "whisky"
     ];

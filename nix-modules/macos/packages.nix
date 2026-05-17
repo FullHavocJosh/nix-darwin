@@ -173,6 +173,159 @@ let
     echo "llama-server is running and healthy"
     echo "TODO: Implement actual aiselect functionality"
   '';
+
+  claudeTuiSetup = pkgs.writeShellScript "claude-tui-setup" ''
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        SETTINGS_FILE="$HOME/.claude/settings.json"
+        COMMANDS_DIR="$HOME/.claude/commands"
+        SETUP_MARKER="$HOME/.claude/.claudetui-configured"
+
+        # Skip if already configured (marker file exists and settings are valid)
+        if [ -f "$SETUP_MARKER" ] && [ -f "$SETTINGS_FILE" ]; then
+          # Verify settings are still valid
+          if grep -q '"statusLine"' "$SETTINGS_FILE" && \
+             grep -q 'claudetui statusline' "$SETTINGS_FILE" && \
+             [ -L "$COMMANDS_DIR/tui" ]; then
+            echo "[claude-tui] Already configured, skipping setup"
+            exit 0
+          fi
+        fi
+
+        echo "[claude-tui] Configuring Claude Code integration..."
+
+        # Ensure Claude Code directory exists
+        if [ ! -d "$HOME/.claude" ]; then
+          echo "[claude-tui] WARNING: ~/.claude directory not found — Claude Code may not be installed"
+          exit 0
+        fi
+
+        # Ensure claudetui command is available
+        if ! command -v claudetui &>/dev/null; then
+          echo "[claude-tui] WARNING: claudetui command not found — installation may be incomplete"
+          exit 0
+        fi
+
+        # Run setup with full mode (non-interactive)
+        export STATUSLINE_MODE="full"
+        export PATH="/opt/homebrew/bin:$PATH"
+        
+        # Create a temporary script to run setup non-interactively
+        SETUP_SCRIPT=$(mktemp)
+        cat > "$SETUP_SCRIPT" << 'SETUPEOF'
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    SETTINGS_FILE="$HOME/.claude/settings.json"
+    COMMANDS_DIR="$HOME/.claude/commands"
+    INSTALL_DIR="''${INSTALL_DIR:-/opt/homebrew/opt/claude-tui/libexec}"
+
+    # Configure settings.json
+    python3 << 'PYEOF'
+    import json
+    import os
+    from pathlib import Path
+
+    settings_file = os.path.expanduser("~/.claude/settings.json")
+
+    # Load or create settings
+    settings = {}
+    if os.path.exists(settings_file):
+        try:
+            with open(settings_file) as f:
+                settings = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            backup = settings_file + ".backup"
+            if os.path.exists(settings_file):
+                os.rename(settings_file, backup)
+
+    # Configure statusline
+    mode = os.environ.get("STATUSLINE_MODE", "full")
+    statusline_cmd = "claudetui statusline"
+    if mode == "compact":
+        statusline_cmd += " --compact"
+
+    settings["statusLine"] = {
+        "type": "command",
+        "command": statusline_cmd,
+    }
+
+    # Configure hooks
+    hooks = settings.get("hooks", {})
+
+    hook_configs = [
+        {
+            "event": "SessionStart",
+            "matcher": "",
+            "command": "claudetui hook session-heatmap",
+        },
+        {
+            "event": "PreToolUse",
+            "matcher": "Edit|Write",
+            "command": "claudetui hook pre-edit-churn",
+        },
+        {
+            "event": "PostToolUse",
+            "matcher": "Edit|Write",
+            "command": "claudetui hook post-edit-deps",
+        },
+    ]
+
+    for cfg in hook_configs:
+        event = cfg["event"]
+        if event not in hooks:
+            hooks[event] = []
+
+        # Check if hook already exists
+        already_exists = False
+        for rule in hooks[event]:
+            for h in rule.get("hooks", []):
+                if h.get("command") == cfg["command"]:
+                    already_exists = True
+                    break
+            if already_exists:
+                break
+
+        if not already_exists:
+            hooks[event].append({
+                "matcher": cfg["matcher"],
+                "hooks": [{"type": "command", "command": cfg["command"]}],
+            })
+
+    settings["hooks"] = hooks
+
+    # Write settings
+    Path(settings_file).parent.mkdir(parents=True, exist_ok=True)
+    tmp = settings_file + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(settings, f, indent=2)
+        f.write("\n")
+    os.replace(tmp, settings_file)
+    PYEOF
+
+    # Install slash commands
+    mkdir -p "$COMMANDS_DIR"
+
+    # Remove old symlink if present
+    if [ -L "$COMMANDS_DIR/tui" ]; then
+        rm "$COMMANDS_DIR/tui"
+    fi
+
+    # Create new symlink
+    ln -sfn "$INSTALL_DIR/claude-code-commands/tui" "$COMMANDS_DIR/tui"
+
+    echo "[claude-tui] Configuration complete"
+    SETUPEOF
+
+        chmod +x "$SETUP_SCRIPT"
+        bash "$SETUP_SCRIPT"
+        rm -f "$SETUP_SCRIPT"
+
+        # Create marker file
+        touch "$SETUP_MARKER"
+        echo "[claude-tui] Setup completed successfully"
+  '';
 in
 {
   environment.systemPackages = with pkgs; [
@@ -368,6 +521,11 @@ in
       echo "Installing claude-dashboard..."
       brew install seunggabi/tap/claude-dashboard 2>&1 || true
     fi
+
+    # Configure claude-tui for Claude Code
+    (
+      ${claudeTuiSetup}
+    ) || echo "WARNING: claude-tui setup failed — continuing activation" >&2
 
     (
       OPCODE_APP="/Applications/opcode.app"

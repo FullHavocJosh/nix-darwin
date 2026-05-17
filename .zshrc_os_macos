@@ -23,12 +23,17 @@ if [[ "$(uname)" == "Darwin" ]]; then
   [[ -f "$HOME/home-infrastructure/hetzner-k3s/kubeconfig" ]] && export KUBECONFIG="$HOME/home-infrastructure/hetzner-k3s/kubeconfig"
   export PATH=$PATH:"$HOME/.lmstudio/bin"
 
-  if [ -d "$HOME/ansible-venv" ]; then
-      source "$HOME/ansible-venv/bin/activate"
-  else
-      [[ -z "$TMUX" ]] && [[ $- == *i* ]] && echo "Creating Ansible virtual environment..."
-      python3 -m venv ~/ansible-venv
-      source "$HOME/ansible-venv/bin/activate"
-      [[ -z "$TMUX" ]] && [[ $- == *i* ]] && echo "Virtual environment created and activated."
-  fi
+  # Ansible venv - activate manually with 'ansible-venv-activate' when needed
+  # This prevents the old Python 3.9 from taking precedence over system Python
+  ansible-venv-activate() {
+    if [ -d "$HOME/ansible-venv" ]; then
+        source "$HOME/ansible-venv/bin/activate"
+        echo "Ansible venv activated (Python $(python --version))"
+    else
+        echo "Creating Ansible virtual environment..."
+        python3 -m venv ~/ansible-venv
+        source "$HOME/ansible-venv/bin/activate"
+        echo "Virtual environment created and activated."
+    fi
+  }
 fi
