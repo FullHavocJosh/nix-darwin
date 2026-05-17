@@ -70,6 +70,7 @@ ansible-linux/inventory/staging
 # Ignore opencode folders
 /.opencode
 /.config/opencode/commands/
+/.config/opencode/.env
 
 # Ignore k9s clusters
 /.config/k9s/clusters/

@@ -691,6 +691,7 @@ function _validate_opencode_zen() {
   [[ -n "$OPENCODE_API_KEY" ]] && return 0
   [[ -f ~/.zshrc_envvars ]] && grep -q "OPENCODE_API_KEY" ~/.zshrc_envvars && return 0
   [[ -f ~/.zshrc_envvars_insecure ]] && grep -q "OPENCODE_API_KEY" ~/.zshrc_envvars_insecure && return 0
+  [[ -f ~/.config/opencode/.env ]] && grep -q "ANTHROPIC_API_KEY" ~/.config/opencode/.env && return 0
   return 1
 }
 
@@ -1104,8 +1105,9 @@ function aiselect() {
   }
 
   echo "═══════════════════════════════════════════════════════════"
-  echo "AI Provider Setup"
+  echo "AI Provider Selection"
   echo "═══════════════════════════════════════════════════════════"
+  echo ""
 
   # Offline: skip straight to llama-cpp
   if ! _is_online; then
@@ -1122,138 +1124,244 @@ function aiselect() {
     fi
   fi
 
-  # ── Step 1/4: Claude Code ──────────────────────────────────────
-  echo ""
-  echo "[ 1/4 ] Claude Code"
+  # Check availability of all providers
+  local claude_code_status="${RED}✗${NC}"
+  local claude_code_available=false
   if _validate_claude_code; then
-    echo "  ${GREEN}✓${NC} Session found"
-    echo -n "  [enter] Use Claude Code   [esc] Check GitHub Copilot → "
-    _read_key; echo ""
-    if [[ "$_KEY" != $'\e' ]]; then
-      _aiselect_commit "claude-code"
-      echo ""
-      echo "═══════════════════════════════════════════════════════════"
-      return 0
-    fi
+    claude_code_status="${GREEN}✓${NC}"
+    claude_code_available=true
   elif command -v claude &>/dev/null; then
-    echo "  ${YELLOW}⚠${NC}  Installed but not signed in"
-    
-    # Check Claude service status before attempting login
-    _check_claude_status
-    local status_ok=$?
-    
-    if [[ $status_ok -ne 0 ]]; then
-      echo ""
-    fi
-    
-    echo -n "  [enter] Login to Claude Code   [esc] Skip to GitHub Copilot → "
-    _read_key; echo ""
-    if [[ "$_KEY" != $'\e' ]]; then
-      echo ""
-      claude auth login
-      echo ""
-      if _validate_claude_code; then
-        echo "  ${GREEN}✓${NC} Login successful — proceeding with Claude Code"
-        _aiselect_commit "claude-code"
-        echo ""
-        echo "═══════════════════════════════════════════════════════════"
-        return 0
-      else
-        echo "  ${RED}✗${NC} Login incomplete — continuing to GitHub Copilot"
-      fi
-    fi
-  else
-    echo "  ${YELLOW}⚠${NC}  Not installed (brew install --cask claude-code)"
+    claude_code_status="${YELLOW}⚠${NC}"
   fi
 
-  # ── Step 2/4: GitHub Copilot ───────────────────────────────────
-  echo ""
-  echo "[ 2/4 ] GitHub Copilot"
+  local github_copilot_status="${RED}✗${NC}"
+  local github_copilot_available=false
   if _validate_github_copilot; then
-    echo "  ${GREEN}✓${NC} Session found"
-    echo -n "  [enter] Use GitHub Copilot   [esc] Check OpenCode Zen → "
-    _read_key; echo ""
-    if [[ "$_KEY" != $'\e' ]]; then
-      _aiselect_commit "github-copilot"
-      echo ""
-      echo "═══════════════════════════════════════════════════════════"
-      return 0
-    fi
-  else
-    echo "  ${YELLOW}⚠${NC}  Not authenticated"
-    
-    # Check GitHub Copilot service status before attempting login
-    _check_github_copilot_status
-    local status_ok=$?
-    
-    if [[ $status_ok -ne 0 ]]; then
-      echo ""
-    fi
-    
-    echo -n "  [enter] Login to GitHub Copilot   [esc] Skip to OpenCode Zen → "
-    _read_key; echo ""
-    if [[ "$_KEY" != $'\e' ]]; then
-      echo ""
-      if command -v open &>/dev/null; then
-        open "https://github.com/login/device"
+    github_copilot_status="${GREEN}✓${NC}"
+    github_copilot_available=true
+  fi
+
+  local opencode_zen_status="${RED}✗${NC}"
+  local opencode_zen_available=false
+  if _validate_opencode_zen; then
+    opencode_zen_status="${GREEN}✓${NC}"
+    opencode_zen_available=true
+  fi
+
+  local llamacpp_status="${RED}✗${NC}"
+  local llamacpp_available=false
+  if _validate_llamacpp; then
+    llamacpp_status="${GREEN}✓${NC}"
+    llamacpp_available=true
+  fi
+
+  # Display menu
+  echo "Select AI Provider:"
+  echo ""
+  echo "  1) $claude_code_status Claude Code (Anthropic)"
+  echo "  2) $github_copilot_status GitHub Copilot"
+  echo "  3) $opencode_zen_status OpenCode Zen (API key)"
+  echo "  4) $llamacpp_status llama.cpp (local)"
+  echo ""
+  echo -n "Selection (1-4): "
+  read -r choice
+  echo ""
+
+  case "$choice" in
+    1)
+      # Claude Code
+      if $claude_code_available; then
+        _aiselect_commit "claude-code"
+        echo "${GREEN}✓${NC} Using Claude Code"
+        echo "═══════════════════════════════════════════════════════════"
+        return 0
+      elif command -v claude &>/dev/null; then
+        echo "Claude Code installed but not authenticated."
+        
+        # Check Claude service status before attempting login
+        _check_claude_status
+        
+        echo ""
+        echo -n "Login to Claude Code? [y/N]: "
+        read -r confirm
+        if [[ "$confirm" =~ ^[Yy]$ ]]; then
+          echo ""
+          claude auth login
+          echo ""
+          if _validate_claude_code; then
+            echo "${GREEN}✓${NC} Login successful"
+            _aiselect_commit "claude-code"
+            echo "═══════════════════════════════════════════════════════════"
+            return 0
+          else
+            echo "${RED}✗${NC} Login failed or incomplete"
+            return 1
+          fi
+        else
+          echo "Cancelled."
+          return 1
+        fi
+      else
+        echo "${RED}✗${NC} Claude Code not installed"
+        echo "Install with: brew install --cask claude-code"
+        return 1
       fi
-      opencode auth login
-      echo ""
-      if _validate_github_copilot; then
-        echo "  ${GREEN}✓${NC} Login successful — proceeding with GitHub Copilot"
+      ;;
+    
+    2)
+      # GitHub Copilot
+      if $github_copilot_available; then
         _aiselect_commit "github-copilot"
+        echo "${GREEN}✓${NC} Using GitHub Copilot"
+        echo "═══════════════════════════════════════════════════════════"
+        return 0
+      else
+        echo "GitHub Copilot not authenticated."
+        
+        # Check GitHub Copilot service status
+        _check_github_copilot_status
+        
+        echo ""
+        echo -n "Login to GitHub Copilot? [y/N]: "
+        read -r confirm
+        if [[ "$confirm" =~ ^[Yy]$ ]]; then
+          echo ""
+          if command -v open &>/dev/null; then
+            open "https://github.com/login/device"
+          fi
+          opencode auth login
+          echo ""
+          if _validate_github_copilot; then
+            echo "${GREEN}✓${NC} Login successful"
+            _aiselect_commit "github-copilot"
+            echo "═══════════════════════════════════════════════════════════"
+            return 0
+          else
+            echo "${RED}✗${NC} Login failed or incomplete"
+            return 1
+          fi
+        else
+          echo "Cancelled."
+          return 1
+        fi
+      fi
+      ;;
+    
+    3)
+      # OpenCode Zen
+      if $opencode_zen_available; then
+        _aiselect_commit "opencode"
+        
+        # Interactive model selection for OpenCode Zen
+        echo "═══════════════════════════════════════════════════════════"
+        echo "OpenCode Zen Model Selection"
+        echo "═══════════════════════════════════════════════════════════"
+        echo ""
+        echo "Select model category:"
+        echo "  1) Claude Models (Paid)"
+        echo "  2) Free Models"
+        echo ""
+        echo -n "Selection (1-2): "
+        read -r category_choice
+        
+        local selected_model=""
+        
+        if [[ "$category_choice" == "1" ]]; then
+          echo ""
+          echo "Select Claude model:"
+          echo "  1) Claude Opus 4.7 (Latest, most capable)"
+          echo "  2) Claude Sonnet 4.6 (Latest, balanced)"
+          echo "  3) Claude Haiku 4.5 (Latest, fast)"
+          echo ""
+          echo -n "Selection (1-3): "
+          read -r model_choice
+          
+          case "$model_choice" in
+            1) selected_model="opencode/claude-opus-4.7" ;;
+            2) selected_model="opencode/claude-sonnet-4.6" ;;
+            3) selected_model="opencode/claude-haiku-4.5" ;;
+            *) selected_model="opencode/claude-sonnet-4.6" ;;
+          esac
+        elif [[ "$category_choice" == "2" ]]; then
+          echo ""
+          echo "Select free model:"
+          echo "  1) Big Pickle (Free)"
+          echo "  2) DeepSeek V4 Flash (Free)"
+          echo "  3) MiniMax M2.5 (Free)"
+          echo "  4) Nemotron 3 Super (Free)"
+          echo ""
+          echo -n "Selection (1-4): "
+          read -r model_choice
+          
+          case "$model_choice" in
+            1) selected_model="opencode/big-pickle" ;;
+            2) selected_model="opencode/deepseek-v4-flash-free" ;;
+            3) selected_model="opencode/minimax-m2.5-free" ;;
+            4) selected_model="opencode/nemotron-3-super-free" ;;
+            *) selected_model="opencode/big-pickle" ;;
+          esac
+        else
+          # Default to Sonnet if invalid choice
+          selected_model="opencode/claude-sonnet-4.6"
+        fi
+        
+        # Update OpenCode config with selected model
+        if command -v jq &>/dev/null; then
+          local config_file="$HOME/.config/opencode/opencode.json"
+          if [[ -f "$config_file" ]]; then
+            cp "$config_file" "$config_file.backup"
+            jq --arg model "$selected_model" '.model = $model' "$config_file" > "$config_file.tmp"
+            mv "$config_file.tmp" "$config_file"
+            echo ""
+            echo "${GREEN}✓${NC} Model set to: $selected_model"
+            echo "${GREEN}✓${NC} Config updated: $config_file"
+          fi
+        fi
+        
         echo ""
         echo "═══════════════════════════════════════════════════════════"
         return 0
       else
-        echo "  ${RED}✗${NC} Login incomplete — continuing to OpenCode Zen"
+        echo "${RED}✗${NC} OpenCode Zen API key not found"
+        echo ""
+        echo "API key should be automatically injected from Doppler during"
+        echo "system activation. If missing, ensure:"
+        echo "  1. You've run: darwin-rebuild switch"
+        echo "  2. Doppler is authenticated: doppler login"
+        echo "  3. Secret exists in Doppler:"
+        echo "     doppler secrets --project devices-laptops --config macbookprom2pro"
+        echo ""
+        echo "Or manually create ~/.config/opencode/.env with:"
+        echo "  ANTHROPIC_API_KEY=your_api_key_here"
+        return 1
       fi
-    fi
-  fi
-
-  # ── Step 3/4: OpenCode Zen (API key) ───────────────────────────
-  echo ""
-  echo "[ 3/4 ] OpenCode Zen (API key)"
-  if _validate_opencode_zen; then
-    echo "  ${GREEN}✓${NC} API key found"
-    echo -n "  [enter] Use OpenCode Zen   [esc] Check OpenRouter → "
-    _read_key; echo ""
-    if [[ "$_KEY" != $'\e' ]]; then
-      _aiselect_commit "opencode"
-      echo ""
-      echo "═══════════════════════════════════════════════════════════"
-      return 0
-    fi
-  else
-    echo "  ${YELLOW}⚠${NC}  No OPENCODE_API_KEY found — add to ~/.zshrc_envvars to enable"
-  fi
-
-  # ── Step 4/4: OpenRouter (API key) ─────────────────────────────
-  echo ""
-  echo "[ 4/4 ] OpenRouter (API key)"
-  if _validate_openrouter; then
-    echo "  ${GREEN}✓${NC} API key found"
-    echo -n "  [enter] Use OpenRouter   [esc] No more providers → "
-    _read_key; echo ""
-    if [[ "$_KEY" != $'\e' ]]; then
-      _aiselect_commit "openrouter"
-      echo ""
-      echo "═══════════════════════════════════════════════════════════"
-      return 0
-    fi
-  else
-    echo "  ${YELLOW}⚠${NC}  No OPENROUTER_API_KEY found — add to ~/.zshrc_envvars to enable"
-  fi
-
-  # ── No providers available ─────────────────────────────────────
-  echo ""
-  echo "${RED}✗${NC} No AI providers available."
-  echo "   To add API key access, set in ~/.zshrc_envvars (git-ignored, chmod 600):"
-  echo "     export OPENCODE_API_KEY=\"...\""
-  echo "     export OPENROUTER_API_KEY=\"...\""
-  echo "═══════════════════════════════════════════════════════════"
-  return 1
-
+      ;;
+    
+    4)
+      # llama.cpp
+      if $llamacpp_available; then
+        _aiselect_commit "llama-cpp"
+        echo "${GREEN}✓${NC} Using llama.cpp (local)"
+        echo "═══════════════════════════════════════════════════════════"
+        return 0
+      else
+        echo "${RED}✗${NC} llama-server not running"
+        echo ""
+        echo "Start llama-server first:"
+        echo "  • Using Ollama app (starts automatically)"
+        echo "  • Or manually: llama-server --host 127.0.0.1 --port 8080"
+        echo ""
+        echo "Default endpoint: http://127.0.0.1:8080"
+        echo "Set custom endpoint: export LLAMACPP_HOST=http://your-host:port"
+        return 1
+      fi
+      ;;
+    
+    *)
+      echo "${RED}✗${NC} Invalid selection"
+      return 1
+      ;;
+  esac
 }
 
 # Security audit function for AI configuration files
