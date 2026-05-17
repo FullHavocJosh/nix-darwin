@@ -344,7 +344,6 @@ in
     enable = true;
     taps = [
       "nikitabobko/tap"
-      "charmbracelet/tap"
       "warrensbox/tap"
       "Arthur-Ficial/tap"
       "xykong/tap"
