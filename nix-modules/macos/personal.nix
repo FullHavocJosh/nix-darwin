@@ -29,33 +29,55 @@ in
       # Create directory as user
       mkdir -p "$OPENCODE_DATA_DIR"
       
-      # Fetch OPENCODE_ZEN_API_KEY from Doppler as user
-      # Project: devices-laptops, Config: macbookprom2pro
-      # Use sudo -u to run as havoc with their HOME environment
-      DOPPLER_API_KEY=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get OPENCODE_ZEN_API_KEY --project devices-laptops --config macbookprom2pro --plain 2>/dev/null)
+      # Determine Doppler config based on hostname
+      # MacBookPro -> macbookprom2pro, MacMiniM1 -> macminim1
+      HOSTNAME=$(scutil --get LocalHostName)
+      case "$HOSTNAME" in
+        MacBookPro*)
+          DOPPLER_CONFIG_NAME="macbookprom2pro"
+          ;;
+        MacMiniM1*)
+          DOPPLER_CONFIG_NAME="macminim1"
+          ;;
+        *)
+          echo "Warning: Unknown hostname '$HOSTNAME'. Cannot determine Doppler config."
+          DOPPLER_CONFIG_NAME=""
+          ;;
+      esac
       
-      if [ -n "$DOPPLER_API_KEY" ]; then
-        # Read existing auth.json if it exists, otherwise start with empty object
-        if [ -f "$OPENCODE_AUTH_FILE" ]; then
-          EXISTING_AUTH=$(cat "$OPENCODE_AUTH_FILE")
-        else
-          EXISTING_AUTH="{}"
-        fi
-        
-        # Inject OpenCode Zen credentials into auth.json using jq
-        # Keep existing providers (like github-copilot) and add/update opencode provider
-        # Note: Must use "type": "api" and "key" (not "apiKey") to match OpenCode CLI format
-        echo "$EXISTING_AUTH" | ${pkgs.jq}/bin/jq --arg key "$DOPPLER_API_KEY" \
-          '.opencode = {"type": "api", "key": $key}' \
-          > "$OPENCODE_AUTH_FILE"
-        
-        chown havoc:staff "$OPENCODE_AUTH_FILE"
-        chmod 600 "$OPENCODE_AUTH_FILE"
-        echo "OpenCode Zen API key successfully injected to $OPENCODE_AUTH_FILE"
+      if [ -z "$DOPPLER_CONFIG_NAME" ]; then
+        echo "Skipping OpenCode Zen API key injection due to unknown hostname."
       else
-        echo "Warning: Failed to fetch OPENCODE_ZEN_API_KEY from Doppler."
-        echo "Make sure you're authenticated with: doppler login"
-        echo "And verify the secret exists in project 'devices-laptops', config 'macbookprom2pro'"
+        echo "Using Doppler config: $DOPPLER_CONFIG_NAME for hostname: $HOSTNAME"
+        
+        # Fetch OPENCODE_ZEN_API_KEY from Doppler as user
+        # Project: devices-laptops, Config: determined by hostname
+        # Use sudo -u to run as havoc with their HOME environment
+        DOPPLER_API_KEY=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get OPENCODE_ZEN_API_KEY --project devices-laptops --config "$DOPPLER_CONFIG_NAME" --plain 2>/dev/null)
+      
+        if [ -n "$DOPPLER_API_KEY" ]; then
+          # Read existing auth.json if it exists, otherwise start with empty object
+          if [ -f "$OPENCODE_AUTH_FILE" ]; then
+            EXISTING_AUTH=$(cat "$OPENCODE_AUTH_FILE")
+          else
+            EXISTING_AUTH="{}"
+          fi
+          
+          # Inject OpenCode Zen credentials into auth.json using jq
+          # Keep existing providers (like github-copilot) and add/update opencode provider
+          # Note: Must use "type": "api" and "key" (not "apiKey") to match OpenCode CLI format
+          echo "$EXISTING_AUTH" | ${pkgs.jq}/bin/jq --arg key "$DOPPLER_API_KEY" \
+            '.opencode = {"type": "api", "key": $key}' \
+            > "$OPENCODE_AUTH_FILE"
+          
+          chown havoc:staff "$OPENCODE_AUTH_FILE"
+          chmod 600 "$OPENCODE_AUTH_FILE"
+          echo "OpenCode Zen API key successfully injected to $OPENCODE_AUTH_FILE"
+        else
+          echo "Warning: Failed to fetch OPENCODE_ZEN_API_KEY from Doppler."
+          echo "Make sure you're authenticated with: doppler login"
+          echo "And verify the secret exists in project 'devices-laptops', config '$DOPPLER_CONFIG_NAME'"
+        fi
       fi
     else
       echo "Warning: Doppler CLI not found at $DOPPLER_BIN or config missing. OpenCode Zen API key not injected."
