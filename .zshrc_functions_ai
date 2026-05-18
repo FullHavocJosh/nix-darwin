@@ -75,6 +75,18 @@ function _get_opencode_model() {
   local task_type="${1:-sonnet}"
   local provider=$(_get_ai_provider)
 
+  # First check if a specific model is selected in opencode.json
+  if [[ "$provider" == "opencode" ]] || [[ "$provider" == "github-copilot" ]]; then
+    local config_file="$HOME/.config/opencode/opencode.json"
+    if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
+      local selected_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
+      if [[ -n "$selected_model" && "$selected_model" != "null" ]]; then
+        echo "$selected_model"
+        return 0
+      fi
+    fi
+  fi
+
   # GitHub Copilot: skip auto-discovery (4.6 listed but not actually supported)
   if [[ "$provider" != "github-copilot" ]]; then
     local model=""
@@ -167,30 +179,20 @@ function _run_ai_plain() {
       ;;
       
     opencode)
-      if [[ -z "$OPENCODE_API_KEY" ]]; then
-        echo "Error: OPENCODE_API_KEY not set" >&2
+      # Use OpenCode CLI for all opencode provider requests
+      # This handles authentication and API endpoints correctly
+      local result
+      result=$(echo "$prompt" | timeout 90s opencode run --model "$model" 2>&1)
+      local exit_code=$?
+      if [ $exit_code -eq 124 ]; then
+        echo "Error: OpenCode command timeout after 90s" >&2
+        return 1
+      elif [ $exit_code -ne 0 ]; then
+        echo "Error: OpenCode command failed (exit code: $exit_code)" >&2
         return 1
       fi
-      
-      local model_name="${model#opencode/}"
-      local result=$(curl -s https://api.opencode.ai/v1/chat/completions \
-        --max-time 60 \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $OPENCODE_API_KEY" \
-        -d "{
-          \"model\": \"$model_name\",
-          \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
-          \"max_tokens\": 200000
-        }" 2>/dev/null)
-      
-      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
-      if [[ -n "$extracted" && "$extracted" != "null" ]]; then
-        echo "$extracted"
-        return 0
-      fi
-      
-      echo "Error: OpenCode API returned invalid response" >&2
-      return 1
+      echo "$result"
+      return 0
       ;;
       
     openrouter)
@@ -376,43 +378,42 @@ START YOUR RESPONSE NOW WITH [ OR []:"
       ;;
       
     opencode)
-      # Use curl with OpenCode API
-      if [[ -z "$OPENCODE_API_KEY" ]]; then
-        echo "Error: OPENCODE_API_KEY not set" >&2
+      # Use OpenCode CLI for all opencode provider requests
+      local model_name="$model"
+      local json_prompt="$prompt
+
+CRITICAL INSTRUCTIONS - READ CAREFULLY:
+You MUST respond with ONLY a JSON array. Do not include:
+- Any conversational text before the JSON
+- Any explanations after the JSON  
+- Any markdown code blocks or backticks
+- Any commentary or notes
+
+Your entire response must be valid JSON starting with [ and ending with ].
+If there are no issues to report, respond with exactly: []
+"
+      
+      local result
+      result=$(echo "$json_prompt" | timeout 90s opencode run --model "$model" 2>&1)
+      local exit_code=$?
+      
+      if [ $exit_code -eq 124 ]; then
+        echo "Error: OpenCode timeout after 90s" >&2
+        return 1
+      elif [ $exit_code -ne 0 ]; then
+        echo "Error: OpenCode failed (exit $exit_code)" >&2
         return 1
       fi
       
-      local model_name="${model#opencode/}"
-      
-      local result=$(curl -s https://api.opencode.ai/v1/chat/completions \
-        --max-time 60 \
-        --connect-timeout 10 \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $OPENCODE_API_KEY" \
-        -d "{
-          \"model\": \"$model_name\",
-          \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
-          \"max_tokens\": 200000
-        }" 2>/dev/null)
-      
-      local curl_exit=$?
-      
-      if [ $curl_exit -eq 28 ]; then
-        echo "Error: OpenCode API timeout after 60s" >&2
-        return 1
-      elif [ $curl_exit -ne 0 ]; then
-        echo "Error: OpenCode API network error (curl exit code: $curl_exit)" >&2
-        return 1
-      fi
-      
-      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
-      if [[ -n "$extracted" && "$extracted" != "null" ]]; then
+      # Extract JSON array from response
+      local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
+      if echo "$extracted" | jq empty 2>/dev/null; then
         echo "$extracted"
         return 0
       fi
       
-      echo "Error: OpenCode API returned invalid response" >&2
-      return 1
+      echo "[]"
+      return 2
       ;;
       
     openrouter)
@@ -856,16 +857,13 @@ function _run_ai_plain_cloud() {
       echo "$result"
       ;;
     opencode)
-      [[ -z "$OPENCODE_API_KEY" ]] && { echo "Error: OPENCODE_API_KEY not set" >&2; return 1; }
-      local model_name="${model#opencode/}"
-      local result=$(curl -s https://api.opencode.ai/v1/chat/completions \
-        --max-time 60 --connect-timeout 10 \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $OPENCODE_API_KEY" \
-        -d "{\"model\":\"$model_name\",\"messages\":[{\"role\":\"user\",\"content\":$(echo "$prompt" | jq -Rs .)}],\"max_tokens\":200000}" 2>/dev/null)
-      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
-      [[ -n "$extracted" && "$extracted" != "null" ]] && echo "$extracted" && return 0
-      echo "Error: OpenCode cloud API returned invalid response" >&2; return 1
+      # Use OpenCode CLI for all opencode provider requests
+      local result
+      result=$(echo "$prompt" | timeout 90s opencode run --model "$model" 2>&1)
+      local exit_code=$?
+      [ $exit_code -eq 124 ] && { echo "Error: OpenCode timeout after 90s" >&2; return 1; }
+      [ $exit_code -ne 0  ] && { echo "Error: OpenCode failed (exit $exit_code)" >&2; return 1; }
+      echo "$result"
       ;;
     openrouter)
       [[ -z "$OPENROUTER_API_KEY" ]] && { echo "Error: OPENROUTER_API_KEY not set" >&2; return 1; }
@@ -910,16 +908,26 @@ START YOUR RESPONSE NOW WITH [ OR []:"
       echo "[]"; return 2
       ;;
     opencode)
-      [[ -z "$OPENCODE_API_KEY" ]] && { echo "Error: OPENCODE_API_KEY not set" >&2; return 1; }
-      local model_name="${model#opencode/}"
-      local result=$(curl -s https://api.opencode.ai/v1/chat/completions \
-        --max-time 60 --connect-timeout 10 \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $OPENCODE_API_KEY" \
-        -d "{\"model\":\"$model_name\",\"messages\":[{\"role\":\"user\",\"content\":$(echo "$json_prompt" | jq -Rs .)}],\"max_tokens\":200000}" 2>/dev/null)
-      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
-      [[ -n "$extracted" && "$extracted" != "null" ]] && echo "$extracted" && return 0
-      echo "[]"; return 1
+      # Use OpenCode CLI for all opencode provider requests
+      local result
+      result=$(echo "$json_prompt" | timeout 90s opencode run --model "$model" 2>&1)
+      local exit_code=$?
+      [ $exit_code -eq 124 ] && { echo "Error: OpenCode timeout" >&2; return 1; }
+      [ $exit_code -ne 0  ] && { echo "Error: OpenCode call failed" >&2; return 1; }
+      local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
+      echo "$extracted" | jq empty 2>/dev/null && echo "$extracted" && return 0
+      echo "[]"; return 2
+      ;;
+    opencode)
+      # Use OpenCode CLI for all opencode provider requests
+      local result
+      result=$(echo "$json_prompt" | timeout 90s opencode run --model "$model" 2>&1)
+      local exit_code=$?
+      [ $exit_code -eq 124 ] && { echo "Error: OpenCode timeout" >&2; return 1; }
+      [ $exit_code -ne 0  ] && { echo "Error: OpenCode call failed" >&2; return 1; }
+      local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
+      echo "$extracted" | jq empty 2>/dev/null && echo "$extracted" && return 0
+      echo "[]"; return 2
       ;;
     openrouter)
       [[ -z "$OPENROUTER_API_KEY" ]] && { echo "Error: OPENROUTER_API_KEY not set" >&2; return 1; }
@@ -1454,9 +1462,9 @@ function ai_security_audit() {
   
   echo ""
   
-  if [[ -n "$OPENCODE_API_KEY" ]]; then
+  if [[ -n "$OPENCODE_ZEN_API_KEY" ]]; then
     echo "Environment variables:"
-    echo "  ${GREEN}✓${NC} OPENCODE_API_KEY is set"
+    echo "  ${GREEN}✓${NC} OPENCODE_ZEN_API_KEY is set"
   fi
   
   if [[ -n "$OPENROUTER_API_KEY" ]]; then

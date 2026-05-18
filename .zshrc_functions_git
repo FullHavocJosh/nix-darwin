@@ -558,12 +558,29 @@ function gpc() {
     # Commit messages are always generated locally when using llama-cpp —
     # they are short, formulaic, and never worth a cloud API call.
     local active_provider=$(_get_ai_provider)
+    
+    # Check if a specific model is selected
+    local selected_model=""
     local model_tier="haiku"
-    local model_name=$(_get_opencode_model "$model_tier")
+    if [[ "$active_provider" == "opencode" ]] || [[ "$active_provider" == "github-copilot" ]]; then
+      local config_file="$HOME/.config/opencode/opencode.json"
+      if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
+        selected_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
+      fi
+    fi
+    
+    local model_name
+    if [[ -n "$selected_model" && "$selected_model" != "null" ]]; then
+      model_name="$selected_model"
+    else
+      model_name=$(_get_opencode_model "$model_tier")
+    fi
 
     echo ""
     if [[ "$active_provider" == "llama-cpp" ]]; then
       echo "⚪ $(_llamacpp_model_short) — Generating commit message locally..."
+    elif [[ -n "$selected_model" && "$selected_model" != "null" ]]; then
+      echo "Generating commit message with $selected_model..."
     else
       echo "🟢 Generating commit message with Haiku..."
     fi
