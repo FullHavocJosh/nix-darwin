@@ -1,5 +1,41 @@
 # MCP Server Configuration for OpenCode, Crush, and ClaudeCode
 
+## Pending Doppler Secrets — MCP Servers
+
+The following MCP servers were added to `~/.config/opencode/opencode.json` but require
+secrets to be provisioned in Doppler before they will function. Each row lists the
+environment variable name, the Doppler project and config it belongs in, and a description.
+
+### `homelab-infra` project · `local` config
+
+| Environment Variable  | MCP Server | Description                                                |
+| --------------------- | ---------- | ---------------------------------------------------------- |
+| `HETZNER_API_TOKEN`   | `hetzner`  | Hetzner Cloud API token — Console → Security → API Tokens  |
+| `OPNSENSE_HOST`       | `opnsense` | OPNsense firewall URL, e.g. `https://192.168.1.1`          |
+| `OPNSENSE_API_KEY`    | `opnsense` | OPNsense API key — System → Access → Users → API Keys      |
+| `OPNSENSE_API_SECRET` | `opnsense` | OPNsense API secret (paired with `OPNSENSE_API_KEY`)       |
+| `TRUENAS_URL`         | `truenas`  | TrueNAS base URL, e.g. `https://truenas.local`             |
+| `TRUENAS_API_KEY`     | `truenas`  | TrueNAS API key — Credentials → API Keys                   |
+| `AWX_URL`             | `awx`      | AWX/AAP/Ansible Tower base URL, e.g. `https://awx.homelab` |
+| `AWX_TOKEN`           | `awx`      | AWX personal access token — User → Tokens                  |
+
+### `ai-tools` project · `local` config
+
+| Environment Variable | MCP Server        | Description                                                    |
+| -------------------- | ----------------- | -------------------------------------------------------------- |
+| `TFC_TOKEN`          | `terraform-cloud` | HCP Terraform / Terraform Cloud user or team API token         |
+| `TFE_TOKEN`          | `terraform-hcp`   | Same token as `TFC_TOKEN` — used by the HashiCorp Docker image |
+
+### Notes
+
+- `OPNSENSE_API_KEY` and `OPNSENSE_API_SECRET` already exist in `~/.zshrc_envvars`
+  (fallback file). Migrate them to Doppler project `homelab-infra:local` to complete the chain.
+- `TRUENAS_API_KEY` already exists in `~/.zshrc_envvars`. Same — migrate to `homelab-infra:local`.
+- `TFC_TOKEN` and `TFE_TOKEN` can be the same value if using a single HCP Terraform account.
+- `OPNSENSE_VERIFY_SSL` is hardcoded to `false` in the MCP config; no secret needed.
+- The `awx` server installs from GitHub on first run (`SurgeX-Labs/awx-mcp-server`). Pin to a
+  specific commit in `opencode.json` once the integration is stable.
+
 This directory contains MCP (Model Context Protocol) server configurations for AI coding assistants.
 
 ## Overview

@@ -4,7 +4,11 @@
   "approvedDirectories": [
     "/Users/jrollet",
     "/Users/jrollet/nix-darwin",
-    "/Users/jrollet/nix-darwin/Library/LaunchAgents"
+    "/Users/jrollet/nix-darwin/Library/LaunchAgents",
+    "/Users/havoc/home-infrastructure",
+    "/Users/havoc/fullhavoc-context-guardian-mcp-server",
+    "/Users/havoc/nix-darwin",
+    "/Users/havoc"
   ],
   "securityScopedBookmarks": [],
   "notifyOnSubtasks": true,
@@ -46,29 +50,91 @@
   "splashFgLight": "#100F0F",
   "splashBgDark": "#151313",
   "splashFgDark": "#CECDC3",
-  "lastDirectory": "/Users/jrollet/nix-darwin/Library/LaunchAgents",
-  "homeDirectory": "/Users/jrollet",
+  "lastDirectory": "/Users/havoc/home-infrastructure",
+  "homeDirectory": "/Users/havoc",
   "showReasoningTraces": false,
   "projects": [
     {
-      "id": "path_L1VzZXJzL2pyb2xsZXQ",
-      "path": "/Users/jrollet",
-      "addedAt": 1777308549908,
-      "lastOpenedAt": 1777308549908,
-      "sidebarCollapsed": true
+      "id": "path_L1VzZXJzL2hhdm9jL2hvbWUtaW5mcmFzdHJ1Y3R1cmU",
+      "path": "/Users/havoc/home-infrastructure",
+      "label": "Home Infrastructure",
+      "icon": "server",
+      "color": "number",
+      "addedAt": 1779135506512,
+      "lastOpenedAt": 1779141885528,
+      "iconBackground": null
     },
     {
-      "id": "path_L1VzZXJzL2pyb2xsZXQvbml4LWRhcndpbg",
-      "path": "/Users/jrollet/nix-darwin",
+      "id": "path_L1VzZXJzL2hhdm9jL2Z1bGxoYXZvYy1jb250ZXh0LWd1YXJkaWFuLW1jcC1zZXJ2ZXI",
+      "path": "/Users/havoc/fullhavoc-context-guardian-mcp-server",
+      "label": "Fullhavoc Context Guardian Mcp Server",
+      "icon": "shield",
+      "color": "string",
+      "addedAt": 1779135526119,
+      "lastOpenedAt": 1779141942504,
+      "iconBackground": null
+    },
+    {
+      "id": "path_L1VzZXJzL2hhdm9jL25peC1kYXJ3aW4",
+      "path": "/Users/havoc/nix-darwin",
       "label": "Nix Darwin",
-      "color": "constant",
-      "addedAt": 1777308610495,
-      "lastOpenedAt": 1777308610496,
-      "sidebarCollapsed": false
+      "icon": "terminal",
+      "color": "keyword",
+      "addedAt": 1779135544122,
+      "lastOpenedAt": 1779141885056,
+      "iconBackground": null
     }
   ],
-  "activeProjectId": "path_L1VzZXJzL2pyb2xsZXQvbml4LWRhcndpbg",
   "desktopHosts": [],
   "desktopDefaultHostId": "local",
-  "desktopInitialHostChoiceCompleted": true
+  "desktopInitialHostChoiceCompleted": true,
+  "reportUsage": false,
+  "activeProjectId": "path_L1VzZXJzL2hhdm9jL2Z1bGxoYXZvYy1jb250ZXh0LWd1YXJkaWFuLW1jcC1zZXJ2ZXI",
+  "filesViewShowGitignored": false,
+  "defaultModel": "opencode/claude-sonnet-4-6",
+  "favoriteModels": [
+    {
+      "providerID": "opencode",
+      "modelID": "big-pickle"
+    },
+    {
+      "providerID": "opencode",
+      "modelID": "minimax-m2.5-free"
+    },
+    {
+      "providerID": "opencode",
+      "modelID": "claude-opus-4-7"
+    },
+    {
+      "providerID": "opencode",
+      "modelID": "qwen3.6-plus-free"
+    },
+    {
+      "providerID": "opencode",
+      "modelID": "deepseek-v4-flash-free"
+    },
+    {
+      "providerID": "github-copilot",
+      "modelID": "claude-haiku-4.5"
+    },
+    {
+      "providerID": "github-copilot",
+      "modelID": "claude-sonnet-4.5"
+    },
+    {
+      "providerID": "opencode",
+      "modelID": "claude-sonnet-4-6"
+    }
+  ],
+  "recentModels": [
+    {
+      "providerID": "opencode",
+      "modelID": "claude-sonnet-4-6"
+    }
+  ],
+  "defaultAgent": "plan",
+  "autoDeleteAfterDays": 90,
+  "autoDeleteEnabled": true,
+  "pwaAppName": "OpenChamber - AI Coding Assistant",
+  "opencodeBinary": ""
 }

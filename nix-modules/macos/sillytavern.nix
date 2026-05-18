@@ -35,21 +35,23 @@ in
     fi
   '';
 
-  launchd.user.agents.sillytavern = {
-    serviceConfig = {
-      ProgramArguments = [
-        "/opt/homebrew/opt/node@22/bin/node"
-        "/Users/havoc/SillyTavern/server.js"
-      ];
-      WorkingDirectory = "/Users/havoc/SillyTavern";
-      KeepAlive = true;
-      RunAtLoad = true;
-      StandardOutPath = "/tmp/sillytavern.log";
-      StandardErrorPath = "/tmp/sillytavern.error.log";
-      LimitLoadToSessionType = [
-        "Aqua"
-        "Background"
-      ];
-    };
-  };
+  # Service disabled -- installation/update scripts above are kept intact.
+  # Uncomment to re-enable the launchd agent:
+  # launchd.user.agents.sillytavern = {
+  #   serviceConfig = {
+  #     ProgramArguments = [
+  #       "/opt/homebrew/opt/node@22/bin/node"
+  #       "/Users/havoc/SillyTavern/server.js"
+  #     ];
+  #     WorkingDirectory = "/Users/havoc/SillyTavern";
+  #     KeepAlive = true;
+  #     RunAtLoad = true;
+  #     StandardOutPath = "/tmp/sillytavern.log";
+  #     StandardErrorPath = "/tmp/sillytavern.error.log";
+  #     LimitLoadToSessionType = [
+  #       "Aqua"
+  #       "Background"
+  #     ];
+  #   };
+  # };
 }
