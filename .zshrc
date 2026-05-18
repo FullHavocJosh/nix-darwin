@@ -27,19 +27,9 @@ if command -v doppler &>/dev/null; then
       --project ${_dp%%:*} --config ${_dp##*:} 2>/dev/null)"
   done
   
-  # Explicitly fetch OPENCODE_ZEN_API_KEY from Doppler (devices-laptops project)
-  export OPENCODE_ZEN_API_KEY=$(doppler secrets get OPENCODE_ZEN_API_KEY \
-    --project devices-laptops --config "${_device_config}" --plain 2>/dev/null)
-  
   unset _dp _device_config
 else
   [ -f ~/.zshrc_envvars ] && source ~/.zshrc_envvars
-  # Load from .env file as fallback
-  if [ -f ~/.config/opencode/.env ]; then
-    set -a
-    source ~/.config/opencode/.env
-    set +a
-  fi
 fi
 [ -f ~/.zshrc_os_linux ] && source ~/.zshrc_os_linux
 [ -f ~/.zshrc_os_macos ] && source ~/.zshrc_os_macos

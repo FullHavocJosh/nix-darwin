@@ -64,10 +64,7 @@
       }
     },
     "opencode": {
-      "comment": "OpenCode Zen - Claude models (paid) and free models only",
-      "options": {
-        "apiKey": "${OPENCODE_ZEN_API_KEY}"
-      },
+      "comment": "OpenCode Zen - Claude models (paid) and free models only. Authentication handled via auth.json",
       "models": {
         "claude-opus-4.7": {
           "name": "Claude Opus 4.7"
