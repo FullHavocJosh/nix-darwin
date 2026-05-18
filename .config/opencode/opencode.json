@@ -211,7 +211,7 @@
       }
     }
   },
-  "model": "opencode/nemotron-3-super-free",
+  "model": "opencode/minimax-m2.5-free",
   "tools": {
     "read": true,
     "grep": true,
