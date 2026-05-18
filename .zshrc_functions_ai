@@ -68,7 +68,7 @@ function _model_tier_display() {
   
   case "$provider" in
     claude-code)
-      echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.6 | 🔴 Opus 4.6"
+      echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.6 | 🔴 Opus 4.7"
       ;;
     github-copilot)
       echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.5"
@@ -169,7 +169,7 @@ function _get_opencode_model() {
       if [[ "$task_type" == "haiku" ]]; then
         echo "claude-haiku-4-5"
       elif [[ "$task_type" == "opus" ]]; then
-        echo "claude-opus-4-6"
+        echo "claude-opus-4-7"
       else
         echo "claude-sonnet-4-6"
       fi

@@ -573,7 +573,15 @@ function gpc() {
     if [[ "$active_provider" == "opencode" ]] || [[ "$active_provider" == "github-copilot" ]]; then
       local config_file="$HOME/.config/opencode/opencode.json"
       if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
-        selected_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
+        local config_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
+        # Only use the model if it matches the current provider
+        if [[ -n "$config_model" && "$config_model" != "null" ]]; then
+          if [[ "$active_provider" == "opencode" && "$config_model" == opencode/* ]]; then
+            selected_model="$config_model"
+          elif [[ "$active_provider" == "github-copilot" && "$config_model" == github-copilot/* ]]; then
+            selected_model="$config_model"
+          fi
+        fi
       fi
     fi
     
@@ -2261,14 +2269,29 @@ function gpa() {
   if [[ "$_active_provider" == "opencode" ]] || [[ "$_active_provider" == "github-copilot" ]]; then
     local config_file="$HOME/.config/opencode/opencode.json"
     if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
-      selected_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
+      local config_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
+      # Only use the model if it matches the current provider
+      if [[ -n "$config_model" && "$config_model" != "null" ]]; then
+        if [[ "$_active_provider" == "opencode" && "$config_model" == opencode/* ]]; then
+          selected_model="$config_model"
+        elif [[ "$_active_provider" == "github-copilot" && "$config_model" == github-copilot/* ]]; then
+          selected_model="$config_model"
+        fi
+      fi
     fi
   fi
   
   # Display model information
   if [[ -n "$selected_model" && "$selected_model" != "null" ]]; then
-    # A specific model is selected - show it regardless of tier_override
-    echo "  Model: $selected_model"
+    # A specific model is selected - show it with tier indicators if applicable
+    if _supports_multi_tier; then
+      # Multi-tier provider - show available tiers
+      echo "  Model: $selected_model (Selected)"
+      echo "        Available: $(_model_tier_display "$_active_provider")"
+    else
+      # Single-model provider (free tier or llama.cpp) - just show the model
+      echo "  Model: $(_model_tier_display "$_active_provider")"
+    fi
   elif [[ "$tier_override" == "auto" ]]; then
     echo "  Model: Auto-detect ($(_model_tier_display "$_active_provider"))"
   else
@@ -2302,9 +2325,13 @@ function gpa() {
       local config_file="$HOME/.config/opencode/opencode.json"
       if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
         local check_selected_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
+        # Only use the model if it matches the current provider
         if [[ -n "$check_selected_model" && "$check_selected_model" != "null" ]]; then
-          batch_tier="selected"
-          batch_using_selected_model=true
+          if [[ "$_active_provider" == "opencode" && "$check_selected_model" == opencode/* ]] || \
+             [[ "$_active_provider" == "github-copilot" && "$check_selected_model" == github-copilot/* ]]; then
+            batch_tier="selected"
+            batch_using_selected_model=true
+          fi
         fi
       fi
     fi
