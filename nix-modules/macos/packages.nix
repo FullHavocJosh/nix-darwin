@@ -149,6 +149,10 @@ let
   openchamberLauncher = pkgs.writeShellScript "openchamber-launcher-wrapper" ''
     #!/usr/bin/env bash
     source "$HOME/.zshrc_envvars" 2>/dev/null || true
+
+    # Add Homebrew to PATH for openchamber to find node
+    export PATH="/opt/homebrew/bin:/opt/homebrew/opt/node@22/bin:$PATH"
+
     PASSWORD_FILE="$HOME/.config/openchamber/.ui-password"
     if [ ! -f "$PASSWORD_FILE" ] || [ ! -s "$PASSWORD_FILE" ]; then
       echo '[openchamber] ERROR: password file missing or empty at ~/.config/openchamber/.ui-password — refusing to start' >&2
@@ -156,7 +160,16 @@ let
     fi
     UI_PASSWORD=$(cat "$PASSWORD_FILE")
     export OPENCHAMBER_UI_PASSWORD="$UI_PASSWORD"
-    exec "$HOME/.local/bin/openchamber" --foreground --host 127.0.0.1 --port 3000
+
+    # Use Homebrew openchamber if available, otherwise fall back to npm-installed version
+    if [ -x "/opt/homebrew/bin/openchamber" ]; then
+      exec /opt/homebrew/bin/openchamber --foreground --host 0.0.0.0 --port 3000
+    elif [ -x "$HOME/.local/bin/openchamber" ]; then
+      exec "$HOME/.local/bin/openchamber" --foreground --host 0.0.0.0 --port 3000
+    else
+      echo '[openchamber] ERROR: openchamber binary not found in /opt/homebrew/bin or ~/.local/bin' >&2
+      exit 1
+    fi
   '';
 
   aiselectWrapper = pkgs.writeShellScriptBin "aiselect" ''
@@ -386,6 +399,7 @@ in
       "neovide"
       "neovim"
       "nixfmt"
+      "node@22"
       "opencode"
       "llama.cpp"
       "opentofu"
@@ -497,6 +511,9 @@ in
     (
       if ! command -v openchamber &>/dev/null; then
         echo "Installing openchamber..."
+        # Use Node.js v22 from Homebrew for better-sqlite3 compatibility
+        export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
+        
         OPENCHAMBER_INSTALL_SCRIPT=$(mktemp)
         # Pinned to commit 3d548a3a526d8fe86fd76d5fef6426cb173b8e57 — update commit and checksum together when upgrading
         curl -fsSL https://raw.githubusercontent.com/openchamber/openchamber/3d548a3a526d8fe86fd76d5fef6426cb173b8e57/scripts/install.sh -o "$OPENCHAMBER_INSTALL_SCRIPT"
