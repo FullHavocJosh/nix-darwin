@@ -556,8 +556,20 @@ function gpc() {
   # Check if there are staged changes
   if ! git diff --cached --quiet; then
     # Commit messages use Haiku when available for efficiency
-    # Single-model providers (llama.cpp, OpenCode free tier) use their only model
+    # Special case: OpenCode Zen free models -> use llama.cpp if available to save API credits
     local active_provider=$(_get_ai_provider)
+    local override_provider=""
+    
+    # If using OpenCode Zen with a free model, try to use llama.cpp instead
+    if [[ "$active_provider" == "opencode" ]] && _is_opencode_free_model; then
+      if _validate_llamacpp 2>/dev/null; then
+        override_provider="llama-cpp"
+        echo "ℹ Using llama.cpp for commit message (saving OpenCode Zen free tier credits)"
+      fi
+    fi
+    
+    # Use override provider if set, otherwise use active provider
+    local provider_for_commit="${override_provider:-$active_provider}"
     
     # Determine appropriate model tier for commit messages
     local model_tier="haiku"
@@ -569,33 +581,41 @@ function gpc() {
     fi
     
     # Check if a specific model is selected via config
+    # Only check config if NOT using override provider (llama.cpp fallback)
     local selected_model=""
-    if [[ "$active_provider" == "opencode" ]] || [[ "$active_provider" == "github-copilot" ]]; then
-      local config_file="$HOME/.config/opencode/opencode.json"
-      if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
-        local config_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
-        # Only use the model if it matches the current provider
-        if [[ -n "$config_model" && "$config_model" != "null" ]]; then
-          if [[ "$active_provider" == "opencode" && "$config_model" == opencode/* ]]; then
-            selected_model="$config_model"
-          elif [[ "$active_provider" == "github-copilot" && "$config_model" == github-copilot/* ]]; then
-            selected_model="$config_model"
+    if [[ -z "$override_provider" ]]; then
+      if [[ "$active_provider" == "opencode" ]] || [[ "$active_provider" == "github-copilot" ]]; then
+        local config_file="$HOME/.config/opencode/opencode.json"
+        if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
+          local config_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
+          # Only use the model if it matches the current provider
+          if [[ -n "$config_model" && "$config_model" != "null" ]]; then
+            if [[ "$active_provider" == "opencode" && "$config_model" == opencode/* ]]; then
+              selected_model="$config_model"
+            elif [[ "$active_provider" == "github-copilot" && "$config_model" == github-copilot/* ]]; then
+              selected_model="$config_model"
+            fi
           fi
         fi
       fi
     fi
     
+    # Get model name for display purposes
     local model_name
     if [[ -n "$selected_model" && "$selected_model" != "null" ]]; then
       model_name="$selected_model"
+    elif [[ "$provider_for_commit" == "llama-cpp" ]] || [[ "$provider_for_commit" == "llama.cpp" ]]; then
+      # For llama.cpp, get the short model name directly
+      model_name=$(_llamacpp_model_short)
     else
+      # For other providers, get the model using the current provider
       model_name=$(_get_opencode_model "$model_tier")
     fi
 
     echo ""
     # Show provider and model being used
     local provider_display
-    case "$active_provider" in
+    case "$provider_for_commit" in
       github-copilot)
         provider_display="GitHub Copilot"
         ;;
@@ -609,12 +629,12 @@ function gpc() {
         provider_display="Claude Code"
         ;;
       *)
-        provider_display="$active_provider"
+        provider_display="$provider_for_commit"
         ;;
     esac
     
-    if [[ "$active_provider" == "llama-cpp" ]] || [[ "$active_provider" == "llama.cpp" ]]; then
-      echo "⚪ $provider_display | $(_llamacpp_model_short) — Generating commit message..."
+    if [[ "$provider_for_commit" == "llama-cpp" ]] || [[ "$provider_for_commit" == "llama.cpp" ]]; then
+      echo "⚪ $provider_display | $model_name — Generating commit message..."
     elif [[ -n "$selected_model" && "$selected_model" != "null" ]]; then
       echo "🟢 $provider_display | $selected_model — Generating commit message..."
     else
@@ -634,6 +654,14 @@ function gpc() {
     local retry_count=0
     local commit_msg=""
     local generation_succeeded=false
+    
+    # Temporarily switch provider if override is set
+    local session_file="/tmp/.ai_provider_session_$(id -u)"
+    local saved_provider=""
+    if [[ -n "$override_provider" ]]; then
+      saved_provider=$(cat "$session_file" 2>/dev/null || echo "")
+      echo "$override_provider" > "$session_file"
+    fi
     
     while [ $retry_count -lt $max_retries ]; do
       # Use AI to generate commit message
@@ -803,6 +831,15 @@ function gpc() {
       generation_succeeded=true
       break
     done
+    
+    # Restore original provider if it was overridden
+    if [[ -n "$override_provider" ]]; then
+      if [[ -n "$saved_provider" ]]; then
+        echo "$saved_provider" > "$session_file"
+      else
+        rm -f "$session_file"
+      fi
+    fi
     
     # Check if we exhausted retries
     if [ "$generation_succeeded" != true ]; then

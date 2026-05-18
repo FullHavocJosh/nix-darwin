@@ -1251,19 +1251,26 @@ function aiselect() {
   echo "═══════════════════════════════════════════════════════════"
   echo ""
 
-  # Offline: skip straight to llama-cpp
+  # Offline: inform user about limitations
   if ! _is_online; then
     echo "${YELLOW}⚠${NC}  No internet connection detected."
+    echo ""
+    echo "Cloud AI providers require internet. Available options:"
+    echo "  • Wait for internet connection to be restored"
     if _validate_llamacpp; then
-      echo "${GREEN}✓${NC} Using llama-cpp (local, offline)"
-      _aiselect_commit "llama-cpp"
-      echo "═══════════════════════════════════════════════════════════"
-      return 0
+      echo "  • llama.cpp is running and can be used for gpc/gpa (limited)"
+      echo ""
+      echo "Note: llama.cpp cannot run full OpenCode sessions (context limit)"
+      echo "      but works for git commit messages and simple code review."
     else
-      echo "${RED}✗${NC} Offline and llama-server is not running. Cannot proceed."
-      echo "═══════════════════════════════════════════════════════════"
-      return 1
+      echo "  • Start llama-server for offline git commit message generation"
+      echo ""
+      echo "To start llama-server:"
+      echo "  brew services start llama-cpp"
     fi
+    echo ""
+    echo "═══════════════════════════════════════════════════════════"
+    return 1
   fi
 
   # Check availability of all providers
@@ -1290,22 +1297,17 @@ function aiselect() {
     opencode_zen_available=true
   fi
 
-  local llamacpp_status="${RED}✗${NC}"
-  local llamacpp_available=false
-  if _validate_llamacpp; then
-    llamacpp_status="${GREEN}✓${NC}"
-    llamacpp_available=true
-  fi
-
   # Display menu
   echo "Select AI Provider:"
   echo ""
   echo "  1) $claude_code_status Claude Code (Anthropic)"
   echo "  2) $github_copilot_status GitHub Copilot"
   echo "  3) $opencode_zen_status OpenCode Zen (API key)"
-  echo "  4) $llamacpp_status llama.cpp (local)"
   echo ""
-  echo -n "Selection (1-4): "
+  echo "Note: llama.cpp is automatically used for commit messages (gpc)"
+  echo "      when OpenCode Zen free models are selected."
+  echo ""
+  echo -n "Selection (1-3): "
   read -r choice
   echo ""
 
@@ -1475,26 +1477,6 @@ function aiselect() {
         echo ""
         echo "Or manually create ~/.config/opencode/.env with:"
         echo "  OPENCODE_ZEN_API_KEY=your_api_key_here"
-        return 1
-      fi
-      ;;
-    
-    4)
-      # llama.cpp
-      if $llamacpp_available; then
-        _aiselect_commit "llama-cpp"
-        echo "${GREEN}✓${NC} Using llama.cpp (local)"
-        echo "═══════════════════════════════════════════════════════════"
-        return 0
-      else
-        echo "${RED}✗${NC} llama-server not running"
-        echo ""
-        echo "Start llama-server first:"
-        echo "  • Using Ollama app (starts automatically)"
-        echo "  • Or manually: llama-server --host 127.0.0.1 --port 8080"
-        echo ""
-        echo "Default endpoint: http://127.0.0.1:8080"
-        echo "Set custom endpoint: export LLAMACPP_HOST=http://your-host:port"
         return 1
       fi
       ;;

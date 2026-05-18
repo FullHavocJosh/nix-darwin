@@ -71,7 +71,9 @@ let
     RAM_GB=$(( RAM_BYTES / 1024 / 1024 / 1024 ))
     log "Detected ''${RAM_GB} GB unified memory"
     MODEL_FILE="$MODELS_DIR/qwen2.5-coder-7b-instruct-q8_0.gguf"
-    CTX_SIZE=32768
+    # Context size: 48K is optimal for 16GB RAM (model=7.5GB + ctx=6GB + system=2.5GB)
+    # Supports OpenCode's ~38K token system prompt while maintaining good performance
+    CTX_SIZE=49152
     TIER="7B Q8 (''${RAM_GB} GB device)"
 
     log "Selected tier: $TIER"
@@ -85,14 +87,16 @@ let
 
     log "Starting llama-server..."
     exec /opt/homebrew/bin/llama-server \
-      --model        "$MODEL_FILE" \
-      --host         "0.0.0.0" \
-      --port         "8080" \
-      --ctx-size     "$CTX_SIZE" \
-      --n-gpu-layers 99 \
-      --flash-attn on \
-      --cache-type-k q8_0 \
-      --alias        "local-coder"
+      --model          "$MODEL_FILE" \
+      --host           "0.0.0.0" \
+      --port           "8080" \
+      --ctx-size       "$CTX_SIZE" \
+      --rope-scaling   linear \
+      --rope-freq-scale 0.666667 \
+      --n-gpu-layers   99 \
+      --flash-attn     on \
+      --cache-type-k   q8_0 \
+      --alias          "local-coder"
   '';
 in
 {

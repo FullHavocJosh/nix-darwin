@@ -11,7 +11,7 @@
         "local-coder": {
           "name": "Qwen2.5-Coder-7B (remote)",
           "limit": {
-            "context": 32768,
+            "context": 49152,
             "output": 8192
           }
         }
@@ -290,5 +290,5 @@
       }
     }
   },
-  "model": "opencode/claude-sonnet-4-6"
+  "model": "opencode/deepseek-v4-flash-free"
 }
