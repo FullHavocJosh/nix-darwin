@@ -75,18 +75,6 @@ function _get_opencode_model() {
   local task_type="${1:-sonnet}"
   local provider=$(_get_ai_provider)
 
-  # First check if a specific model is selected in opencode.json
-  if [[ "$provider" == "opencode" ]] || [[ "$provider" == "github-copilot" ]]; then
-    local config_file="$HOME/.config/opencode/opencode.json"
-    if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
-      local selected_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
-      if [[ -n "$selected_model" && "$selected_model" != "null" ]]; then
-        echo "$selected_model"
-        return 0
-      fi
-    fi
-  fi
-
   # GitHub Copilot: skip auto-discovery (4.6 listed but not actually supported)
   if [[ "$provider" != "github-copilot" ]]; then
     local model=""
@@ -105,21 +93,29 @@ function _get_opencode_model() {
 
   case $provider in
     github-copilot)
+      # GitHub Copilot: Only Sonnet 4.5 and Haiku 4.5 available (tested)
+      # Opus models NOT available - fall back to Sonnet
       if [[ "$task_type" == "opus" ]]; then
-        echo "github-copilot/claude-opus-4.5"
+        # Opus not available - fall back to Sonnet 4.5
+        echo "github-copilot/claude-sonnet-4.5"
       elif [[ "$task_type" == "haiku" ]]; then
         echo "github-copilot/claude-haiku-4.5"
       else
+        # Sonnet 4.6 not available - use 4.5
         echo "github-copilot/claude-sonnet-4.5"
       fi
       ;;
     opencode)
+      # OpenCode Zen: Use latest available Claude models with hyphens (claude-haiku-4-5)
+      # Note: Models available via API but may not appear in `opencode models` due to CLI bug
       if [[ "$task_type" == "haiku" ]]; then
-        echo "opencode/claude-3-5-haiku"
+        echo "opencode/claude-haiku-4-5"
       elif [[ "$task_type" == "opus" ]]; then
-        echo "opencode/claude-opus-4.5"
+        # Latest Opus: 4.7 > 4.6 > 4.5
+        echo "opencode/claude-opus-4-7"
       else
-        echo "opencode/claude-sonnet-4.5"
+        # Latest Sonnet: 4.6 > 4.5 > 4
+        echo "opencode/claude-sonnet-4-6"
       fi
       ;;
     openrouter)
@@ -140,8 +136,8 @@ function _get_opencode_model() {
         echo "claude-sonnet-4-6"
       fi
       ;;
-    llama-cpp)
-      echo "llama-cpp/local-coder"
+    llama-cpp|llama.cpp)
+      echo "llama.cpp/local-coder"
       ;;
     *)
       echo "github-copilot/claude-sonnet-4.5"

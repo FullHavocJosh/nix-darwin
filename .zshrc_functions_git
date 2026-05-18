@@ -645,9 +645,25 @@ function gpc() {
         continue
       fi
       
+      # Clean ANSI codes and OpenCode prompts for error checking
+      local ai_output_clean=$(_clean_opencode_output "$ai_output")
+      
+      # Debug output if DEBUG_GPC is set
+      if [[ -n "$DEBUG_GPC" ]]; then
+        echo "" >&2
+        echo "=== DEBUG: Raw AI Output ===" >&2
+        echo "$ai_output" | head -10 >&2
+        echo "=== DEBUG: Cleaned Output ===" >&2
+        echo "$ai_output_clean" | head -10 >&2
+        echo "===========================" >&2
+        echo "" >&2
+      fi
+      
       # Check if output contains error messages (case-insensitive)
-      if echo "$ai_output" | grep -qi "^Error:"; then
-        _prompt_ai_error_action "AI returned error message" "Commit message generation"
+      if echo "$ai_output_clean" | grep -qi "^Error:"; then
+        # Show first few lines of actual error for debugging
+        local error_preview=$(echo "$ai_output_clean" | grep -i "^Error:" | head -3)
+        _prompt_ai_error_action "AI returned error message: $error_preview" "Commit message generation"
         local action=$?
         
         case $action in
@@ -678,8 +694,8 @@ function gpc() {
         continue
       fi
       
-      # Extract last non-empty line as commit message
-      commit_msg=$(echo "$ai_output" | grep -v '^$' | tail -1)
+      # Extract last non-empty line as commit message (use cleaned output)
+      commit_msg=$(echo "$ai_output_clean" | grep -v '^$' | tail -1)
 
       # Check if we got a valid response
       if [ -z "$commit_msg" ]; then

@@ -36,6 +36,8 @@
           ./nix-modules/macos/packages.nix
           ./nix-modules/macos/config.nix
           ./nix-modules/macos/personal.nix
+          ./nix-modules/macos/llamacpp.nix
+          ./nix-modules/macos/openchamber.nix
           ./nix-modules/macos/sillytavern.nix
           nix-homebrew.darwinModules.nix-homebrew
         ];

@@ -44,8 +44,9 @@ in
         
         # Inject OpenCode Zen credentials into auth.json using jq
         # Keep existing providers (like github-copilot) and add/update opencode provider
+        # Note: Must use "type": "api" and "key" (not "apiKey") to match OpenCode CLI format
         echo "$EXISTING_AUTH" | ${pkgs.jq}/bin/jq --arg key "$DOPPLER_API_KEY" \
-          '.opencode = {"type": "apiKey", "apiKey": $key}' \
+          '.opencode = {"type": "api", "key": $key}' \
           > "$OPENCODE_AUTH_FILE"
         
         chown havoc:staff "$OPENCODE_AUTH_FILE"
