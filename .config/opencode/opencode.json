@@ -289,5 +289,6 @@
         "AWS_PROFILE": "services"
       }
     }
-  }
+  },
+  "model": "opencode/claude-sonnet-4-6"
 }
