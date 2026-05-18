@@ -26,16 +26,15 @@ if command -v doppler &>/dev/null; then
     eval "$(doppler secrets download --no-file --format shell \
       --project ${_dp%%:*} --config ${_dp##*:} 2>/dev/null)"
   done
-  unset _dp _device_config
   
-  # Also load OpenCode Zen API key from .env file if it exists
-  if [ -f ~/.config/opencode/.env ]; then
-    set -a
-    source ~/.config/opencode/.env
-    set +a
-  fi
+  # Explicitly fetch OPENCODE_ZEN_API_KEY from Doppler (devices-laptops project)
+  export OPENCODE_ZEN_API_KEY=$(doppler secrets get OPENCODE_ZEN_API_KEY \
+    --project devices-laptops --config "${_device_config}" --plain 2>/dev/null)
+  
+  unset _dp _device_config
 else
   [ -f ~/.zshrc_envvars ] && source ~/.zshrc_envvars
+  # Load from .env file as fallback
   if [ -f ~/.config/opencode/.env ]; then
     set -a
     source ~/.config/opencode/.env
