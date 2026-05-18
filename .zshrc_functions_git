@@ -555,13 +555,21 @@ function gpc() {
 
   # Check if there are staged changes
   if ! git diff --cached --quiet; then
-    # Commit messages are always generated locally when using llama-cpp —
-    # they are short, formulaic, and never worth a cloud API call.
+    # Commit messages use Haiku when available for efficiency
+    # Single-model providers (llama.cpp, OpenCode free tier) use their only model
     local active_provider=$(_get_ai_provider)
     
-    # Check if a specific model is selected
-    local selected_model=""
+    # Determine appropriate model tier for commit messages
     local model_tier="haiku"
+    
+    # Check if provider supports multi-tier (will return false for free models and llama.cpp)
+    if ! _supports_multi_tier; then
+      # Single model only - use whatever is available
+      model_tier="sonnet"  # _get_opencode_model will handle free/llama.cpp cases
+    fi
+    
+    # Check if a specific model is selected via config
+    local selected_model=""
     if [[ "$active_provider" == "opencode" ]] || [[ "$active_provider" == "github-copilot" ]]; then
       local config_file="$HOME/.config/opencode/opencode.json"
       if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
@@ -1114,7 +1122,9 @@ function _gpa_determine_tier() {
   local total_batch_count="${3:-1}"
 
   local provider=$(_get_ai_provider)
-  if [[ "$provider" == "llama-cpp" ]]; then
+  
+  # llama.cpp: Hybrid escalation strategy
+  if [[ "$provider" == "llama-cpp" ]] || [[ "$provider" == "llama.cpp" ]]; then
     # For small diffs, keep local. For larger diffs, escalate to cloud.
     if [ "$total_batch_count" -ge 5 ]; then
       echo "sonnet"  # large diff — cloud quality
@@ -1126,24 +1136,41 @@ function _gpa_determine_tier() {
     return 0
   fi
 
-  # Cloud providers: check for critical file paths that should use Opus
-  local critical_paths=("security" "auth" "payment" "encryption" "credential" "secret" "iam" "policy" "kms")
-  local batch_files_str=$(echo "$batch_files_json" | jq -r '.[]' | tr '\n' ' ')
+  # OpenCode with free model: Always use the configured free model
+  if [[ "$provider" == "opencode" ]] && _is_opencode_free_model; then
+    echo "free"  # Special marker for free model
+    return 0
+  fi
+
+  # Check if provider supports multiple tiers
+  if ! _supports_multi_tier; then
+    # Single model only (shouldn't happen for cloud providers, but safety check)
+    echo "sonnet"
+    return 0
+  fi
+
+  # Multi-tier providers: Intelligent tier selection based on complexity
   
-  for critical_path in "${critical_paths[@]}"; do
-    if echo "$batch_files_str" | grep -qi "$critical_path"; then
+  # Check for critical file paths that should use Opus (if available)
+  if _supports_opus; then
+    local critical_paths=("security" "auth" "payment" "encryption" "credential" "secret" "iam" "policy" "kms")
+    local batch_files_str=$(echo "$batch_files_json" | jq -r '.[]' | tr '\n' ' ')
+    
+    for critical_path in "${critical_paths[@]}"; do
+      if echo "$batch_files_str" | grep -qi "$critical_path"; then
+        echo "opus"
+        return 0
+      fi
+    done
+    
+    # Check for large batches (>500 lines) - use Opus for better accuracy
+    if [ "$batch_lines" -gt 500 ]; then
       echo "opus"
       return 0
     fi
-  done
-  
-  # Check for large batches (>500 lines) - use Opus for better accuracy
-  if [ "$batch_lines" -gt 500 ]; then
-    echo "opus"
-    return 0
   fi
   
-  # Default to sonnet
+  # Default to sonnet for code review
   echo "sonnet"
   return 0
 }
@@ -2340,6 +2367,14 @@ function gpa() {
           tier_icon="⚪"
           tier_label="$(_llamacpp_model_short)"
           full_model_display="$provider_display | $tier_label"
+          ;;
+        free)
+          tier_icon="⚪"
+          local free_model=$(_get_opencode_model)
+          local free_model_name="${free_model#opencode/}"
+          # Capitalize and format nicely
+          tier_label=$(echo "$free_model_name" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2))}1')
+          full_model_display="$provider_display | $free_model (Free)"
           ;;
         *)      
           tier_icon="🔵"

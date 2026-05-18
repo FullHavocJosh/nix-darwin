@@ -64,17 +64,31 @@ function _provider_display_name() {
 # Returns the model tier display string (with version numbers) for a provider.
 # Usage: _model_tier_display <provider>
 function _model_tier_display() {
-  case "$1" in
+  local provider="${1:-$(_get_ai_provider)}"
+  
+  case "$provider" in
     claude-code)
       echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.6 | 🔴 Opus 4.6"
       ;;
     github-copilot)
-      echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.5 | 🔴 Opus 4.5"
+      echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.5"
       ;;
-    opencode | openrouter)
+    opencode)
+      # Check if using a free model
+      if _is_opencode_free_model; then
+        local model=$(_get_current_opencode_model)
+        local model_name="${model#opencode/}"
+        # Capitalize first letter and replace hyphens with spaces
+        model_name=$(echo "$model_name" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2))}1')
+        echo "⚪ $model_name (Free)"
+      else
+        echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.6 | 🔴 Opus 4.7"
+      fi
+      ;;
+    openrouter)
       echo "🟢 Haiku 3.5 | 🔵 Sonnet 4.5 | 🔴 Opus 4.5"
       ;;
-    llama-cpp)
+    llama-cpp|llama.cpp)
       echo "⚪ $(_llamacpp_model_short) (local)"
       ;;
     *)
@@ -86,6 +100,18 @@ function _model_tier_display() {
 function _get_opencode_model() {
   local task_type="${1:-sonnet}"
   local provider=$(_get_ai_provider)
+
+  # Special case: OpenCode with free model - always return the configured free model
+  if [[ "$provider" == "opencode" ]] && _is_opencode_free_model; then
+    _get_current_opencode_model
+    return 0
+  fi
+
+  # Special case: llama.cpp - always return the local model
+  if [[ "$provider" == "llama-cpp" ]] || [[ "$provider" == "llama.cpp" ]]; then
+    echo "llama.cpp/local-coder"
+    return 0
+  fi
 
   # GitHub Copilot: skip auto-discovery (4.6 listed but not actually supported)
   if [[ "$provider" != "github-copilot" ]]; then
@@ -153,6 +179,90 @@ function _get_opencode_model() {
       ;;
     *)
       echo "github-copilot/claude-sonnet-4.5"
+      ;;
+  esac
+}
+
+# Check if the current OpenCode Zen model is a free tier model
+# Returns 0 (true) if free model, 1 (false) if Claude/paid model
+function _is_opencode_free_model() {
+  local provider=$(_get_ai_provider)
+  [[ "$provider" != "opencode" ]] && return 1
+  
+  local config_file="$HOME/.config/opencode/opencode.json"
+  [[ ! -f "$config_file" ]] && return 1
+  
+  local model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
+  [[ -z "$model" ]] && return 1
+  
+  # Check if model is one of the free models
+  case "$model" in
+    opencode/big-pickle|\
+    opencode/deepseek-v4-flash-free|\
+    opencode/minimax-m2.5-free|\
+    opencode/minimax-m2.7-free|\
+    opencode/nemotron-3-super-free|\
+    opencode/qwen3.6-plus-free)
+      return 0  # Is a free model
+      ;;
+    *)
+      return 1  # Is a Claude/paid model
+      ;;
+  esac
+}
+
+# Get the current OpenCode model from config
+# Returns the model string or empty if not found
+function _get_current_opencode_model() {
+  local provider=$(_get_ai_provider)
+  [[ "$provider" != "opencode" ]] && return 1
+  
+  local config_file="$HOME/.config/opencode/opencode.json"
+  [[ ! -f "$config_file" ]] && return 1
+  
+  jq -r '.model // empty' "$config_file" 2>/dev/null
+}
+
+# Check if provider supports multiple model tiers (Haiku/Sonnet/Opus)
+# Returns 0 if multi-tier support available, 1 if single model only
+function _supports_multi_tier() {
+  local provider=$(_get_ai_provider)
+  
+  case "$provider" in
+    claude-code|github-copilot)
+      return 0  # Supports Haiku/Sonnet (GitHub) or Haiku/Sonnet/Opus (Claude Code)
+      ;;
+    opencode)
+      # OpenCode supports multi-tier ONLY if using a Claude model (not free)
+      _is_opencode_free_model && return 1 || return 0
+      ;;
+    llama-cpp|llama.cpp)
+      return 1  # Single model only
+      ;;
+    *)
+      return 1  # Unknown provider, assume single model
+      ;;
+  esac
+}
+
+# Check if provider supports Opus tier
+# Returns 0 if Opus available, 1 if not
+function _supports_opus() {
+  local provider=$(_get_ai_provider)
+  
+  case "$provider" in
+    claude-code)
+      return 0  # Claude Code supports Opus
+      ;;
+    github-copilot)
+      return 1  # GitHub Copilot does NOT support Opus
+      ;;
+    opencode)
+      # OpenCode Zen supports Opus only with Claude models
+      _is_opencode_free_model && return 1 || return 0
+      ;;
+    *)
+      return 1  # Default: no Opus
       ;;
   esac
 }
