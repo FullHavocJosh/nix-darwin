@@ -8,7 +8,8 @@
     "/Users/havoc/home-infrastructure",
     "/Users/havoc/fullhavoc-context-guardian-mcp-server",
     "/Users/havoc/nix-darwin",
-    "/Users/havoc"
+    "/Users/havoc",
+    "/Users/havoc/mcp-context-guardian-fullhavoc"
   ],
   "securityScopedBookmarks": [],
   "notifyOnSubtasks": true,
@@ -50,7 +51,7 @@
   "splashFgLight": "#100F0F",
   "splashBgDark": "#151313",
   "splashFgDark": "#CECDC3",
-  "lastDirectory": "/Users/havoc/home-infrastructure",
+  "lastDirectory": "/Users/havoc/mcp-context-guardian-fullhavoc",
   "homeDirectory": "/Users/havoc",
   "showReasoningTraces": false,
   "projects": [
@@ -62,17 +63,8 @@
       "color": "number",
       "addedAt": 1779135506512,
       "lastOpenedAt": 1779141885528,
-      "iconBackground": null
-    },
-    {
-      "id": "path_L1VzZXJzL2hhdm9jL2Z1bGxoYXZvYy1jb250ZXh0LWd1YXJkaWFuLW1jcC1zZXJ2ZXI",
-      "path": "/Users/havoc/fullhavoc-context-guardian-mcp-server",
-      "label": "Fullhavoc Context Guardian Mcp Server",
-      "icon": "shield",
-      "color": "string",
-      "addedAt": 1779135526119,
-      "lastOpenedAt": 1779141942504,
-      "iconBackground": null
+      "iconBackground": null,
+      "sidebarCollapsed": false
     },
     {
       "id": "path_L1VzZXJzL2hhdm9jL25peC1kYXJ3aW4",
@@ -82,14 +74,24 @@
       "color": "keyword",
       "addedAt": 1779135544122,
       "lastOpenedAt": 1779141885056,
-      "iconBackground": null
+      "iconBackground": null,
+      "sidebarCollapsed": false
+    },
+    {
+      "id": "path_L1VzZXJzL2hhdm9jL21jcC1jb250ZXh0LWd1YXJkaWFuLWZ1bGxoYXZvYw",
+      "path": "/Users/havoc/mcp-context-guardian-fullhavoc",
+      "label": "Mcp Context Guardian Fullhavoc",
+      "color": "primary",
+      "addedAt": 1779144979823,
+      "lastOpenedAt": 1779144979823,
+      "sidebarCollapsed": false
     }
   ],
   "desktopHosts": [],
   "desktopDefaultHostId": "local",
   "desktopInitialHostChoiceCompleted": true,
   "reportUsage": false,
-  "activeProjectId": "path_L1VzZXJzL2hhdm9jL2Z1bGxoYXZvYy1jb250ZXh0LWd1YXJkaWFuLW1jcC1zZXJ2ZXI",
+  "activeProjectId": "path_L1VzZXJzL2hhdm9jL21jcC1jb250ZXh0LWd1YXJkaWFuLWZ1bGxoYXZvYw",
   "filesViewShowGitignored": false,
   "defaultModel": "opencode/claude-sonnet-4-6",
   "favoriteModels": [
