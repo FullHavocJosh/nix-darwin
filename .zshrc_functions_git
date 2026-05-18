@@ -577,12 +577,32 @@ function gpc() {
     fi
 
     echo ""
-    if [[ "$active_provider" == "llama-cpp" ]]; then
-      echo "⚪ $(_llamacpp_model_short) — Generating commit message locally..."
+    # Show provider and model being used
+    local provider_display
+    case "$active_provider" in
+      github-copilot)
+        provider_display="GitHub Copilot"
+        ;;
+      opencode)
+        provider_display="OpenCode Zen"
+        ;;
+      llama-cpp|llama.cpp)
+        provider_display="llama.cpp"
+        ;;
+      claude-code)
+        provider_display="Claude Code"
+        ;;
+      *)
+        provider_display="$active_provider"
+        ;;
+    esac
+    
+    if [[ "$active_provider" == "llama-cpp" ]] || [[ "$active_provider" == "llama.cpp" ]]; then
+      echo "⚪ $provider_display | $(_llamacpp_model_short) — Generating commit message..."
     elif [[ -n "$selected_model" && "$selected_model" != "null" ]]; then
-      echo "Generating commit message with $selected_model..."
+      echo "🟢 $provider_display | $selected_model — Generating commit message..."
     else
-      echo "🟢 Generating commit message with Haiku..."
+      echo "🟢 $provider_display | $model_name — Generating commit message..."
     fi
 
     # Get the diff of staged changes
@@ -2269,24 +2289,69 @@ function gpa() {
       batch_tier=$(_gpa_determine_tier "$batch_files_json" "$batch_diff_lines" "$batch_count")
     fi
     
-    # Display tier icon and label
-    local tier_icon="" tier_label=""
+    # Display tier icon and label with provider and model info
+    local tier_icon="" tier_label="" full_model_display=""
+    local provider_display
+    case "$_active_provider" in
+      github-copilot)
+        provider_display="GitHub Copilot"
+        ;;
+      opencode)
+        provider_display="OpenCode Zen"
+        ;;
+      llama-cpp|llama.cpp)
+        provider_display="llama.cpp"
+        ;;
+      claude-code)
+        provider_display="Claude Code"
+        ;;
+      *)
+        provider_display="$_active_provider"
+        ;;
+    esac
+    
     if [[ "$batch_using_selected_model" == "true" ]]; then
       # Show the selected model name
+      local selected_model_name=$(jq -r '.model' "$config_file" 2>/dev/null)
       tier_icon=""
-      tier_label="$(jq -r '.model' "$config_file" 2>/dev/null)"
+      tier_label="$selected_model_name"
+      full_model_display="$provider_display | $selected_model_name"
     else
       case "$batch_tier" in
-        opus)   tier_icon="🔴" ; tier_label="Opus" ;;
-        sonnet) tier_icon="🔵" ; tier_label="Sonnet" ;;
-        haiku)  tier_icon="🟢" ; tier_label="Haiku" ;;
-        local)  tier_icon="⚪" ; tier_label="$(_llamacpp_model_short)" ;;
-        *)      tier_icon="🔵" ; tier_label="Sonnet" ;;
+        opus)   
+          tier_icon="🔴"
+          tier_label="Opus"
+          local opus_model=$(_get_opencode_model "opus")
+          full_model_display="$provider_display | $opus_model"
+          ;;
+        sonnet) 
+          tier_icon="🔵"
+          tier_label="Sonnet"
+          local sonnet_model=$(_get_opencode_model "sonnet")
+          full_model_display="$provider_display | $sonnet_model"
+          ;;
+        haiku)  
+          tier_icon="🟢"
+          tier_label="Haiku"
+          local haiku_model=$(_get_opencode_model "haiku")
+          full_model_display="$provider_display | $haiku_model"
+          ;;
+        local)  
+          tier_icon="⚪"
+          tier_label="$(_llamacpp_model_short)"
+          full_model_display="$provider_display | $tier_label"
+          ;;
+        *)      
+          tier_icon="🔵"
+          tier_label="Sonnet"
+          local default_model=$(_get_opencode_model "sonnet")
+          full_model_display="$provider_display | $default_model"
+          ;;
       esac
     fi
 
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "$tier_icon $tier_label — Reviewing batch $batch_num of $batch_count... [$_active_provider]"
+    echo "$tier_icon $tier_label — Reviewing batch $batch_num of $batch_count... [$full_model_display]"
     
     # Review this batch with timeout and retry
     # Note: must separate local declaration from assignment to preserve exit code.
