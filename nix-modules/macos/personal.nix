@@ -122,9 +122,6 @@ in
     ];
     brews = [
       "dopplerhq/cli/doppler"
-      "helm"
-      "k9s"
-      "kubectl"
       "minio/stable/mc"
       "tailscale"
       "vitobotta/tap/hetzner_k3s"
@@ -137,8 +134,6 @@ in
       "proton-drive"
       "protonvpn"
       "proton-mail"
-      "steam"
-      "whisky"
     ];
     masApps = { };
   };

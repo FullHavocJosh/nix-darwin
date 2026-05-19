@@ -56,8 +56,6 @@ in
     taps = [ ];
     brews = [
       "act"
-      "k9s"
-      "kubectl"
     ];
     casks = [
       "citrix-workspace"

@@ -246,6 +246,7 @@ in
       "hadolint"
       "jq"
       "jsonlint"
+      "k9s"
       "kubectl"
       "lazygit"
       "lua-language-server"

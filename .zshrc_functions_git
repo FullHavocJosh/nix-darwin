@@ -665,7 +665,13 @@ function gpc() {
     
     while [ $retry_count -lt $max_retries ]; do
       # Use AI to generate commit message
-      local ai_output=$(echo "Review the following git diff and generate a concise, single-sentence commit message that describes the changes. The message should be in imperative mood (e.g., 'Add feature' not 'Added feature'). Maximum 72 characters. Return ONLY the commit message, nothing else.\n\n$diff_output" | _run_ai_plain "haiku" 2>&1)
+      # GitHub Copilot: use sonnet-4.5 (4-6 only available via Claude-Code or OpenCode Zen)
+      # Other providers: use haiku for efficiency
+      local commit_model_tier="haiku"
+      if [[ "$provider_for_commit" == "github-copilot" ]]; then
+        commit_model_tier="sonnet"
+      fi
+      local ai_output=$(echo "Review the following git diff and generate a concise, single-sentence commit message that describes the changes. The message should be in imperative mood (e.g., 'Add feature' not 'Added feature'). Maximum 72 characters. Return ONLY the commit message, nothing else.\n\n$diff_output" | _run_ai_plain "$commit_model_tier" 2>&1)
       local ai_exit=$?
       
       # Check if AI command succeeded
