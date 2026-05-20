@@ -1264,8 +1264,42 @@ function aiselect() {
   local session_file="/tmp/.ai_provider_session_$(id -u)"
 
   _aiselect_commit() {
-    echo "$1" > "$preference_file"
-    echo "$1" > "$session_file"
+    local new_provider="$1"
+    echo "$new_provider" > "$preference_file"
+    echo "$new_provider" > "$session_file"
+    
+    # Clear opencode.json model if it doesn't match the new provider
+    # This prevents stale model configs from interfering with provider switching
+    local config_file="$HOME/.config/opencode/opencode.json"
+    if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
+      local current_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
+      if [[ -n "$current_model" && "$current_model" != "null" ]]; then
+        # Check if model matches new provider
+        local model_matches=false
+        case "$new_provider" in
+          github-copilot)
+            [[ "$current_model" == github-copilot/* ]] && model_matches=true
+            ;;
+          opencode)
+            [[ "$current_model" == opencode/* ]] && model_matches=true
+            ;;
+          claude-code)
+            # Claude Code doesn't use opencode.json, clear it
+            model_matches=false
+            ;;
+          llama-cpp)
+            [[ "$current_model" == llama.cpp/* || "$current_model" == llama-cpp/* ]] && model_matches=true
+            ;;
+        esac
+        
+        # Clear mismatched model from config
+        if ! $model_matches; then
+          cp "$config_file" "$config_file.backup"
+          jq 'del(.model)' "$config_file" > "$config_file.tmp"
+          mv "$config_file.tmp" "$config_file"
+        fi
+      fi
+    fi
   }
 
   echo "═══════════════════════════════════════════════════════════"
