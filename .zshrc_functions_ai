@@ -773,8 +773,19 @@ function aidev() {
         opencode --model "$local_model" "${filtered_args[@]}"
       fi
       ;;
-    *)
-      # Check if a specific model is set in opencode.json
+    github-copilot)
+      # GitHub Copilot via OpenCode
+      local model=$(_get_opencode_model "sonnet")
+      echo "${GREEN}✓${NC} Model:    $model"
+      echo ""
+      if $print_mode; then
+        opencode --model "$model" run "${filtered_args[@]}"
+      else
+        opencode --model "$model" "${filtered_args[@]}"
+      fi
+      ;;
+    opencode)
+      # OpenCode Zen - check if a specific model is set in opencode.json
       local model=""
       local config_file="$HOME/.config/opencode/opencode.json"
       if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
@@ -787,6 +798,17 @@ function aidev() {
       fi
       
       echo "${GREEN}✓${NC} Model:    $model"
+      echo ""
+      if $print_mode; then
+        opencode --model "$model" run "${filtered_args[@]}"
+      else
+        opencode --model "$model" "${filtered_args[@]}"
+      fi
+      ;;
+    *)
+      # Unknown provider - fall back to github-copilot
+      local model=$(_get_opencode_model "sonnet")
+      echo "${GREEN}✓${NC} Model:    $model (fallback)"
       echo ""
       if $print_mode; then
         opencode --model "$model" run "${filtered_args[@]}"
