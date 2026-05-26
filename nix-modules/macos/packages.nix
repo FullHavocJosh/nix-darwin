@@ -347,52 +347,56 @@ in
     fi
   '';
 
-  system.activationScripts.postUserActivation.text = lib.mkAfter ''
-
-    if [ -f "$HOME/.config/opencode/opencode.json" ]; then
-      echo "Patching opencode.json with correct home path..."
-      ${pkgs.gnused}/bin/sed -i "s|__HOME__|$HOME|g" "$HOME/.config/opencode/opencode.json"
-    fi
-
-    if ! command -v claude-dashboard &>/dev/null; then
-      echo "Installing claude-dashboard..."
-      brew install seunggabi/tap/claude-dashboard 2>&1 || true
-    fi
-
-    # Configure claude-tui for Claude Code
-    (
-      ${claudeTuiSetup}
-    ) || echo "WARNING: claude-tui setup failed — continuing activation" >&2
-
-    (
-      OPCODE_APP="/Applications/opcode.app"
-      if [ ! -d "$OPCODE_APP" ]; then
-        echo "Installing Opcode desktop app..."
-        # Pinned version — update OPCODE_PINNED_VERSION and OPCODE_PINNED_SHA256 together when upgrading.
-        # Recompute checksum with: curl -fsSL <dmg-url> | shasum -a 256
-        OPCODE_PINNED_VERSION="v0.2.0"
-        OPCODE_PINNED_SHA256="9868d20b46fa3fba134049e931ef745571805b0e1919e7bad807ca454f5932f8"
-        OPCODE_DMG_URL="https://github.com/winfunc/opcode/releases/download/$OPCODE_PINNED_VERSION/opcode_''${OPCODE_PINNED_VERSION}_macos_universal.dmg"
-        echo "Downloading Opcode $OPCODE_PINNED_VERSION..."
-        OPCODE_TMPDIR=$(mktemp -d)
-        curl -fsSL "$OPCODE_DMG_URL" -o "$OPCODE_TMPDIR/opcode.dmg"
-        OPCODE_ACTUAL=$(shasum -a 256 "$OPCODE_TMPDIR/opcode.dmg" | awk '{print $1}')
-        if [ "$OPCODE_ACTUAL" != "$OPCODE_PINNED_SHA256" ]; then
-          echo "ERROR: Opcode DMG checksum mismatch — aborting install" >&2
-          rm -rf "$OPCODE_TMPDIR"
-          exit 1
+  system.activationScripts.packagesUserConfig.text = lib.mkAfter ''
+        # Run user-specific package configuration as the primary user
+        USER_NAME="$(id -un)"
+        USER_HOME="$HOME"
+        
+        sudo -u "$USER_NAME" bash <<'USERSCRIPT'
+        if [ -f "$HOME/.config/opencode/opencode.json" ]; then
+          echo "Patching opencode.json with correct home path..."
+          ${pkgs.gnused}/bin/sed -i "s|__HOME__|$HOME|g" "$HOME/.config/opencode/opencode.json"
         fi
-        MOUNT="$OPCODE_TMPDIR/mnt"
-        mkdir -p "$MOUNT"
-        hdiutil attach "$OPCODE_TMPDIR/opcode.dmg" -nobrowse -mountpoint "$MOUNT" || { echo "ERROR: Failed to mount Opcode DMG" >&2; rm -rf "$OPCODE_TMPDIR"; exit 1; }
-        [ -d "$MOUNT/opcode.app" ] || { echo "ERROR: opcode.app not found in mounted DMG at $MOUNT" >&2; hdiutil detach "$MOUNT" -quiet; rm -rf "$OPCODE_TMPDIR"; exit 1; }
-        cp -R "$MOUNT/opcode.app" /Applications/
-        hdiutil detach "$MOUNT" -quiet
-        rm -rf "$OPCODE_TMPDIR"
-        echo "Opcode desktop app installed."
-      fi
-    ) || echo "WARNING: Opcode install failed — continuing activation" >&2
 
+        if ! command -v claude-dashboard &>/dev/null; then
+          echo "Installing claude-dashboard..."
+          brew install seunggabi/tap/claude-dashboard 2>&1 || true
+        fi
+
+        # Configure claude-tui for Claude Code
+        (
+          ${claudeTuiSetup}
+        ) || echo "WARNING: claude-tui setup failed — continuing activation" >&2
+
+        (
+          OPCODE_APP="/Applications/opcode.app"
+          if [ ! -d "$OPCODE_APP" ]; then
+            echo "Installing Opcode desktop app..."
+            # Pinned version — update OPCODE_PINNED_VERSION and OPCODE_PINNED_SHA256 together when upgrading.
+            # Recompute checksum with: curl -fsSL <dmg-url> | shasum -a 256
+            OPCODE_PINNED_VERSION="v0.2.0"
+            OPCODE_PINNED_SHA256="9868d20b46fa3fba134049e931ef745571805b0e1919e7bad807ca454f5932f8"
+            OPCODE_DMG_URL="https://github.com/winfunc/opcode/releases/download/$OPCODE_PINNED_VERSION/opcode_''${OPCODE_PINNED_VERSION}_macos_universal.dmg"
+            echo "Downloading Opcode $OPCODE_PINNED_VERSION..."
+            OPCODE_TMPDIR=$(mktemp -d)
+            curl -fsSL "$OPCODE_DMG_URL" -o "$OPCODE_TMPDIR/opcode.dmg"
+            OPCODE_ACTUAL=$(shasum -a 256 "$OPCODE_TMPDIR/opcode.dmg" | awk '{print $1}')
+            if [ "$OPCODE_ACTUAL" != "$OPCODE_PINNED_SHA256" ]; then
+              echo "ERROR: Opcode DMG checksum mismatch — aborting install" >&2
+              rm -rf "$OPCODE_TMPDIR"
+              exit 1
+            fi
+            MOUNT="$OPCODE_TMPDIR/mnt"
+            mkdir -p "$MOUNT"
+            hdiutil attach "$OPCODE_TMPDIR/opcode.dmg" -nobrowse -mountpoint "$MOUNT" || { echo "ERROR: Failed to mount Opcode DMG" >&2; rm -rf "$OPCODE_TMPDIR"; exit 1; }
+            [ -d "$MOUNT/opcode.app" ] || { echo "ERROR: opcode.app not found in mounted DMG at $MOUNT" >&2; hdiutil detach "$MOUNT" -quiet; rm -rf "$OPCODE_TMPDIR"; exit 1; }
+            cp -R "$MOUNT/opcode.app" /Applications/
+            hdiutil detach "$MOUNT" -quiet
+            rm -rf "$OPCODE_TMPDIR"
+            echo "Opcode desktop app installed."
+          fi
+        ) || echo "WARNING: Opcode install failed — continuing activation" >&2
+    USERSCRIPT
   '';
 
 }

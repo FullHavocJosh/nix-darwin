@@ -104,7 +104,7 @@ in
     "llama.cpp"
   ];
 
-  system.activationScripts.postUserActivation.text = lib.mkAfter ''
+  system.activationScripts.llamacppUserConfig.text = lib.mkAfter ''
     mkdir -p "$HOME/models"
     (nohup ${llamaModelDownloader} </dev/null >>"$HOME/models/download.log" 2>&1 &)
     echo "[llama-model-downloader] Download check running in background — tail ~/models/download.log"

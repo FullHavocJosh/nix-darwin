@@ -32,7 +32,7 @@ let
   '';
 in
 {
-  system.activationScripts.postUserActivation.text = lib.mkAfter ''
+  system.activationScripts.openchamberUserConfig.text = lib.mkAfter ''
 
     mkdir -p "$HOME/Library/Logs/openchamber"
 
