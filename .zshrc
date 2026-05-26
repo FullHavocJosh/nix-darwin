@@ -33,6 +33,8 @@ else
 fi
 [ -f ~/.zshrc_os_linux ] && source ~/.zshrc_os_linux
 [ -f ~/.zshrc_os_macos ] && source ~/.zshrc_os_macos
+[ -f ~/.zshrc_personal ] && source ~/.zshrc_personal
+[ -f ~/.zshrc_work ] && source ~/.zshrc_work
 [ -f ~/.zshrc_shell ] && source ~/.zshrc_shell
 [ -f ~/.zshrc_aliases ] && source ~/.zshrc_aliases
 [ -f ~/.zshrc_functions_ai ] && source ~/.zshrc_functions_ai

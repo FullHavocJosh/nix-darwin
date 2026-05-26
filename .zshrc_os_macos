@@ -20,7 +20,6 @@ if [[ "$(uname)" == "Darwin" ]]; then
   export PATH=$PATH:$GOPATH/bin
   export PATH=$PATH:"$HOME/opt/homebrew/bin/tfswitch"
   export K9S_CONFIG_DIR="$HOME/.config/k9s"
-  [[ -f "$HOME/home-infrastructure/hetzner-k3s/kubeconfig" ]] && export KUBECONFIG="$HOME/home-infrastructure/hetzner-k3s/kubeconfig"
   export PATH=$PATH:"$HOME/.lmstudio/bin"
 
   # Ansible venv - activate manually with 'ansible-venv-activate' when needed
