@@ -81,9 +81,11 @@
       "id": "path_L1VzZXJzL2hhdm9jL21jcC1jb250ZXh0LWd1YXJkaWFuLWZ1bGxoYXZvYw",
       "path": "/Users/havoc/mcp-context-guardian-fullhavoc",
       "label": "Mcp Context Guardian Fullhavoc",
-      "color": "primary",
+      "icon": "shield",
+      "color": "error",
       "addedAt": 1779144979823,
       "lastOpenedAt": 1779144979823,
+      "iconBackground": null,
       "sidebarCollapsed": false
     }
   ],
@@ -137,6 +139,13 @@
   "defaultAgent": "plan",
   "autoDeleteAfterDays": 90,
   "autoDeleteEnabled": true,
-  "pwaAppName": "OpenChamber - AI Coding Assistant",
-  "opencodeBinary": ""
+  "pwaAppName": "OpenChamber",
+  "opencodeBinary": "",
+  "timeFormatPreference": "12h",
+  "weekStartPreference": "monday",
+  "monoFont": "jetbrains-mono",
+  "uiFont": "system",
+  "showExpandedEditTools": true,
+  "showExpandedBashTools": true,
+  "showSplitAssistantMessageActions": true
 }
