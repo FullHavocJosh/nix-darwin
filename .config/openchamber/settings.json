@@ -51,7 +51,7 @@
   "splashFgLight": "#100F0F",
   "splashBgDark": "#151313",
   "splashFgDark": "#CECDC3",
-  "lastDirectory": "/Users/havoc/mcp-context-guardian-fullhavoc",
+  "lastDirectory": "/Users/havoc/nix-darwin",
   "homeDirectory": "/Users/havoc",
   "showReasoningTraces": false,
   "projects": [
@@ -73,7 +73,7 @@
       "icon": "terminal",
       "color": "keyword",
       "addedAt": 1779135544122,
-      "lastOpenedAt": 1779141885056,
+      "lastOpenedAt": 1779818080970,
       "iconBackground": null,
       "sidebarCollapsed": false
     },
@@ -93,7 +93,7 @@
   "desktopDefaultHostId": "local",
   "desktopInitialHostChoiceCompleted": true,
   "reportUsage": false,
-  "activeProjectId": "path_L1VzZXJzL2hhdm9jL21jcC1jb250ZXh0LWd1YXJkaWFuLWZ1bGxoYXZvYw",
+  "activeProjectId": "path_L1VzZXJzL2hhdm9jL25peC1kYXJ3aW4",
   "filesViewShowGitignored": false,
   "defaultModel": "opencode/claude-sonnet-4-6",
   "favoriteModels": [
