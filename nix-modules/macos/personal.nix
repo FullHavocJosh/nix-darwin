@@ -3,6 +3,8 @@ let
   wallpaper = "/Users/havoc/.wallpapers/wallhaven-5yk6k9.jpg";
 in
 {
+  system.primaryUser = "havoc";
+
   system.activationScripts.script.text = ''
         #!/usr/bin/env bash
         echo "Stowing dotfiles as user $(whoami)..."
