@@ -1,9 +1,8 @@
-# GUI applications for laptop only
+# GUI applications for laptop and work
 # Desktop is SSH-only (TUI tools from packages-tui.nix)
-# Work has its own enterprise GUI apps in work.nix
+# TUI/CLI apps shared across all profiles are in packages-tui.nix
 { pkgs, ... }:
 {
-  # GUI applications for laptop only (desktop is SSH-only with TUI tools)
   homebrew = {
     enable = true;
     casks = [
@@ -47,7 +46,6 @@
       "qmk-toolbox"
       "sf-symbols"
       "shottr"
-      "warrensbox/tap/tfswitch"
       "vanilla"
       "via"
       "vial"

@@ -214,9 +214,7 @@ in
   homebrew = {
     enable = true;
     taps = [
-      "nikitabobko/tap"
       "warrensbox/tap"
-      "Arthur-Ficial/tap"
       "xykong/tap"
       "slima4/claude-tui"
       "seunggabi/tap"
@@ -284,6 +282,7 @@ in
       "terraform-lsp"
       "terraformer"
       "tflint"
+      "warrensbox/tap/tfswitch"
       "tmux"
       "tpm"
       "tree-sitter"

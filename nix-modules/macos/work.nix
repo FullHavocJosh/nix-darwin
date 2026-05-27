@@ -81,25 +81,23 @@ in
       "awscli"
     ];
     casks = [
-      # Already managed
+      # Work-specific applications only
+      # GUI apps shared with laptop are in packages-gui.nix
+      # TUI/CLI apps shared across all profiles are in packages-tui.nix
+
       "citrix-workspace"
       "docker-desktop"
       "lastpass"
       "mqtt-explorer"
       "powershell"
       "remote-desktop-manager-free"
-
-      # Newly added - previously unmanaged but available as casks
-      "chromium"
       "datagrip"
       "google-chrome"
-      "neovide"
       "onedrive"
       "opcode"
       "rode-central"
       "slack"
       "teamviewer-host"
-      "zen" # Zen Browser
       "zoom"
     ];
     masApps = { };

@@ -49,6 +49,7 @@
         };
         modules = [
           ./nix-modules/macos/packages-tui.nix
+          ./nix-modules/macos/packages-gui.nix
           ./nix-modules/macos/config.nix
           ./nix-modules/macos/work.nix
           nix-homebrew.darwinModules.nix-homebrew

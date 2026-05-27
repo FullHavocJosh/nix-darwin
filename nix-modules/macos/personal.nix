@@ -154,6 +154,10 @@ in
       "vitobotta/tap/hetzner_k3s"
     ];
     casks = [
+      # Personal-specific applications only
+      # GUI apps shared with laptop are in packages-gui.nix
+      # TUI/CLI apps shared across all profiles are in packages-tui.nix
+
       "element"
       "obsidian"
       "plex"
