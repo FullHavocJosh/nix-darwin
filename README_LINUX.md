@@ -124,7 +124,7 @@ makepkg -si
 ```
 
 ```bash
-yay -S borders crush opencode shfmt hadolint-bin opentofu-bin
+yay -S borders opencode shfmt hadolint-bin opentofu-bin
 sudo pacman -S ansible-language-server
 ```
 

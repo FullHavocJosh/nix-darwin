@@ -78,6 +78,7 @@ in
     taps = [ ];
     brews = [
       "act"
+      "awscli"
     ];
     casks = [
       "citrix-workspace"

@@ -43,10 +43,10 @@ Omarchy configuration files are organized with a clean separation between defaul
 
 ### AI & Development
 
-| Keybind             | Application | Command            | Notes                                                              |
-| ------------------- | ----------- | ------------------ | ------------------------------------------------------------------ |
-| `SUPER+SHIFT+A`     | AI Dev      | `aidev` function   | Interactive menu: OpenCode (Copilot) or Crush (Bedrock/OpenRouter) |
-| `SUPER+SHIFT+ALT+A` | OpenRouter  | openrouter.ai/chat | AI chat interface as PWA                                           |
+| Keybind             | Application | Command            | Notes                                |
+| ------------------- | ----------- | ------------------ | ------------------------------------ |
+| `SUPER+SHIFT+A`     | AI Dev      | `aidev` function   | Interactive menu: OpenCode (Copilot) |
+| `SUPER+SHIFT+ALT+A` | OpenRouter  | openrouter.ai/chat | AI chat interface as PWA             |
 
 ### Productivity Web Apps (PWA Mode)
 
@@ -176,9 +176,7 @@ open    # xdg-open (background process)
 
 **aidev** - AI Coding Assistant Selector
 
-- Interactive menu to choose between:
-  - **OpenCode** (GitHub Copilot + AWS Bedrock)
-  - **Crush** (AWS Bedrock + OpenRouter)
+- Launches OpenCode (GitHub Copilot + AWS Bedrock)
 - Handles authentication checks
 - Auto-detects available providers
 

@@ -181,7 +181,6 @@ npm run build
 ### Supported Tools
 
 - **OpenCode** (`opencode`) - AI coding assistant via Homebrew
-- **Crush** (`crush`) - AI shell assistant via Homebrew
 - **ClaudeCode** (`claude-code`) - Anthropic's CLI tool via Homebrew
 
 ### What It Enforces

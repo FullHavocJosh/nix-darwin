@@ -22,7 +22,8 @@
           username = "havoc";
         };
         modules = [
-          ./nix-modules/macos/packages.nix
+          ./nix-modules/macos/packages-tui.nix
+          ./nix-modules/macos/packages-gui.nix
           ./nix-modules/macos/config.nix
           ./nix-modules/macos/personal.nix
           nix-homebrew.darwinModules.nix-homebrew
@@ -33,7 +34,7 @@
           username = "havoc";
         };
         modules = [
-          ./nix-modules/macos/packages.nix
+          ./nix-modules/macos/packages-tui.nix
           ./nix-modules/macos/config.nix
           ./nix-modules/macos/personal.nix
           ./nix-modules/macos/llamacpp.nix
@@ -47,7 +48,7 @@
           username = "jrollet";
         };
         modules = [
-          ./nix-modules/macos/packages.nix
+          ./nix-modules/macos/packages-tui.nix
           ./nix-modules/macos/config.nix
           ./nix-modules/macos/work.nix
           nix-homebrew.darwinModules.nix-homebrew

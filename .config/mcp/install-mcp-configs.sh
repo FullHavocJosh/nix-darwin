@@ -27,16 +27,9 @@ else
 	echo "⚠ OpenCode not found"
 fi
 
-if command -v crush &>/dev/null; then
-	install_json "$MCP_CONFIG_DIR/crush-mcp.json" "$HOME/.crush/mcp.json"
-	echo "✓ Crush MCP config installed"
-else
-	echo "⚠ Crush not found"
-fi
-
 if command -v claude &>/dev/null; then
-	claude mcp add context-guardian node "$SERVER_JS" 2>/dev/null && \
-		echo "✓ Claude Code MCP server registered" || \
+	claude mcp add context-guardian node "$SERVER_JS" 2>/dev/null &&
+		echo "✓ Claude Code MCP server registered" ||
 		echo "⚠ Claude Code MCP already registered or failed"
 else
 	echo "⚠ Claude Code not found"

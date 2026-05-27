@@ -1,3 +1,5 @@
+# TUI/CLI packages shared across ALL profiles (laptop, desktop, work)
+# GUI applications are in packages-gui.nix (laptop only)
 {
   pkgs,
   lib,
@@ -223,13 +225,11 @@ in
       "ansible"
       "ansible-lint"
       "atuin"
-      "awscli"
       "bash-language-server"
       "btop"
       "cava"
       "cmake"
       "coreutils"
-      "charmbracelet/tap/crush"
       "djlint"
       "dockerfile-language-server"
       "exiftool"
@@ -299,39 +299,8 @@ in
       "slima4/claude-tui/claude-tui"
     ];
     casks = [
-      "nikitabobko/tap/aerospace"
-      "alacritty"
-      "balenaetcher"
-      "betterdisplay"
-      "claude"
-      "claude-code"
-      "xykong/tap/flux-markdown"
-      "font-hack-nerd-font"
-      "font-jetbrains-mono-nerd-font"
-      "ghostty"
-      "goland"
-      "hyper"
-      "insta360-link-controller"
-      "jetbrains-toolbox"
-      "keepingyouawake"
-      "kitty"
-      "krita"
-      "lm-studio"
-      "neovide-app"
-      "plexamp"
-      "proton-pass"
-      "qmk-toolbox"
-      "sf-symbols"
-      "shottr"
-      "sublime-text"
-      "warrensbox/tap/tfswitch"
-      "ungoogled-chromium"
-      "vanilla"
-      "via"
-      "vial"
-      "vlc"
-      "zed"
-      "zen"
+      # No GUI apps in shared packages - moved to laptop.nix for laptop profile only
+      # Desktop is SSH-only with TUI tools, work has its own GUI apps
     ];
     masApps = { };
     onActivation.cleanup = "zap";

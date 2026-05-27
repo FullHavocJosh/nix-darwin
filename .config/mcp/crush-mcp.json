@@ -1,9 +1,0 @@
-{
-  "servers": {
-    "context-guardian": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["__HOME__/mcp-context-guardian-fullhavoc/dist/index.js"]
-    }
-  }
-}

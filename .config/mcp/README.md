@@ -1,4 +1,4 @@
-# MCP Server Configuration for OpenCode, Crush, and ClaudeCode
+# MCP Server Configuration for OpenCode and ClaudeCode
 
 ## Pending Doppler Secrets — MCP Servers
 
@@ -66,11 +66,6 @@ npm run build
 
 - **Binary**: `opencode` (installed via Homebrew)
 - **Config**: `~/.opencode/mcp.json`
-
-### Crush
-
-- **Binary**: `crush` (installed via Homebrew)
-- **Config**: `~/.crush/mcp.json`
 
 ### ClaudeCode
 

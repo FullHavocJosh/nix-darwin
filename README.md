@@ -50,7 +50,6 @@ nix-darwin/
 │   ├── alacritty/                      # Alacritty terminal config
 │   ├── atuin/                          # Atuin shell history config
 │   ├── btop/                           # btop system monitor
-│   ├── crush/                          # Charm crush config
 │   ├── ghostty/                        # Ghostty terminal config
 │   ├── hypr/                           # Hyprland (Linux) configuration
 │   ├── kitty/                          # Kitty terminal config
@@ -317,7 +316,6 @@ All automatically installed via nix-darwin/package managers:
 - **htop** - Process viewer
 - **k9s** - Kubernetes TUI
 - **superfile** - TUI file manager
-- **crush** - Charmbracelet file management tool
 
 ## 📦 Package Management
 

@@ -49,6 +49,67 @@
         "FASTMCP_LOG_LEVEL": "ERROR",
         "AWS_PROFILE": "services"
       }
+    },
+    "context-mode": {
+      "command": "context-mode"
+    },
+    "terraform-cloud": {
+      "command": "uvx",
+      "args": ["terraform-cloud-mcp"],
+      "env": {
+        "TFC_TOKEN": "${TFC_TOKEN}"
+      }
+    },
+    "terraform-hcp": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "TFE_TOKEN",
+        "hashicorp/terraform-mcp-server:latest"
+      ],
+      "env": {
+        "TFE_TOKEN": "${TFE_TOKEN}"
+      }
+    },
+    "hetzner": {
+      "command": "npx",
+      "args": ["-y", "@lazyants/hetzner-mcp-server"],
+      "env": {
+        "HETZNER_API_TOKEN": "${HETZNER_API_TOKEN}"
+      }
+    },
+    "opnsense": {
+      "command": "npx",
+      "args": ["-y", "@richard-stovall/opnsense-mcp-server"],
+      "env": {
+        "OPNSENSE_HOST": "${OPNSENSE_HOST}",
+        "OPNSENSE_API_KEY": "${OPNSENSE_API_KEY}",
+        "OPNSENSE_API_SECRET": "${OPNSENSE_API_SECRET}",
+        "OPNSENSE_VERIFY_SSL": "false"
+      }
+    },
+    "truenas": {
+      "command": "uvx",
+      "args": ["truenas-mcp-server"],
+      "env": {
+        "TRUENAS_URL": "${TRUENAS_URL}",
+        "TRUENAS_API_KEY": "${TRUENAS_API_KEY}"
+      }
+    },
+    "awx": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/SurgeX-Labs/awx-mcp-server.git@40870878846c10c8433894a2fbd1be5641ea357d",
+        "awx-mcp-server"
+      ],
+      "env": {
+        "AWX_URL": "${AWX_URL}",
+        "AWX_TOKEN": "${AWX_TOKEN}"
+      }
     }
   }
 }
