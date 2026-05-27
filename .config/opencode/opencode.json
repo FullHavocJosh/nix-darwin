@@ -355,6 +355,15 @@
         "AWX_URL": "${AWX_URL}",
         "AWX_TOKEN": "${AWX_TOKEN}"
       }
+    },
+    "atlassian": {
+      "type": "local",
+      "command": ["npx", "-y", "jira-mcp"],
+      "environment": {
+        "JIRA_INSTANCE_URL": "https://smartpager.atlassian.net",
+        "JIRA_USER_EMAIL": "${ATLASSIAN_EMAIL}",
+        "JIRA_API_KEY": "${ATLASSIAN_API_TOKEN}"
+      }
     }
   },
   "model": "opencode/big-pickle"
