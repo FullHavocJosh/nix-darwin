@@ -365,6 +365,5 @@
         "JIRA_API_KEY": "${ATLASSIAN_API_TOKEN}"
       }
     }
-  },
-  "model": "opencode/minimax-m2.5-free"
+  }
 }

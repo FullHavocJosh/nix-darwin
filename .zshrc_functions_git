@@ -139,6 +139,29 @@ STARTUP
   echo ""
 }
 
+# Helper function: Check if a file contains Helm template syntax
+# Usage: _is_helm_template <file_path>
+# Returns 0 if file is a Helm template, 1 otherwise
+function _is_helm_template() {
+  local file="$1"
+  
+  # Check if file is in a Helm chart templates directory (path-based detection)
+  # This works even if the file path is relative
+  if [[ "$file" == *"/charts/"*"/templates/"* ]] || [[ "$file" == *"/helm/"*"/templates/"* ]]; then
+    return 0
+  fi
+  
+  # Check file content for Helm template syntax (only if file exists)
+  if [ -f "$file" ]; then
+    # Look for common Helm template patterns
+    if grep -qE '\{\{-?\s*(include|define|template|if|range|with|\.Values\.|\.Release\.|\.Chart\.|toYaml|nindent)' "$file" 2>/dev/null; then
+      return 0
+    fi
+  fi
+  
+  return 1
+}
+
 # Helper function: Run linters on staged files
 # Returns 0 if all linters pass or user wants to continue, 1 if user wants to abort
 function _run_linters() {
@@ -218,6 +241,13 @@ function _run_linters() {
         fi
         ;;
       *.js|*.jsx|*.ts|*.tsx|*.json|*.md|*.yml|*.yaml|*.css|*.html)
+        # Skip Prettier for Helm chart templates
+        if [[ "$file" == *.yml ]] || [[ "$file" == *.yaml ]]; then
+          if _is_helm_template "$file"; then
+            continue  # Skip linting for Helm templates
+          fi
+        fi
+        
         if $has_prettier; then
           if ! prettier --check "$file" 2>/dev/null; then
             lint_report="${lint_report}🟡 $file: prettier formatting issues\n"
@@ -359,6 +389,14 @@ function _run_linters() {
               fi
               ;;
             *.js|*.jsx|*.ts|*.tsx|*.json|*.md|*.yml|*.yaml|*.css|*.html)
+              # Skip Prettier for Helm chart templates
+              if [[ "$file" == *.yml ]] || [[ "$file" == *.yaml ]]; then
+                if _is_helm_template "$file"; then
+                  echo "  ⊳ Skipping Helm template: $file"
+                  continue
+                fi
+              fi
+              
               if $has_prettier; then
                 echo "  Formatting $file with prettier..."
                 if prettier --write "$file" 2>&1; then
