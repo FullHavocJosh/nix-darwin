@@ -71,11 +71,11 @@ let
     RAM_GB=$(( RAM_BYTES / 1024 / 1024 / 1024 ))
     log "Detected ''${RAM_GB} GB unified memory"
     MODEL_FILE="$MODELS_DIR/qwen2.5-coder-7b-instruct-q8_0.gguf"
-    # Context size: 32K (native training context) with Q4_0 cache for optimal quality
-    # Model trained on 32K context - llama.cpp caps at training limit for safety
-    # 32K tokens ≈ 24K words ≈ 96K chars (sufficient for 2-4 large files + conversation)
-    # Memory: model=7.5GB + 32K Q4_0 cache=3GB + system=2.5GB = ~13GB total
-    CTX_SIZE=32768
+    # Context size: 96K with Q4_0 cache and RoPE scaling for large codebases
+    # Qwen 2.5 Coder trained on 32K, extended to 96K via linear RoPE scaling
+    # Memory: model=7.5GB + 96K Q4_0 cache=6GB + system=2.5GB = ~14GB total
+    # 96K tokens ≈ 72K words ≈ 288K chars (handles large multi-file contexts)
+    CTX_SIZE=98304
     TIER="7B Q8 (''${RAM_GB} GB device)"
 
     log "Selected tier: $TIER"
