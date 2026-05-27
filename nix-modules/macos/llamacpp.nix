@@ -93,6 +93,7 @@ let
       --host            "0.0.0.0" \
       --port            "8080" \
       --ctx-size        "$CTX_SIZE" \
+      --override-kv     "qwen2.context_length=int:131072" \
       --rope-scaling    linear \
       --rope-freq-scale 0.666667 \
       --n-gpu-layers    99 \
