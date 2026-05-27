@@ -299,8 +299,9 @@ in
       "slima4/claude-tui/claude-tui"
     ];
     casks = [
-      # No GUI apps in shared packages - moved to laptop.nix for laptop profile only
-      # Desktop is SSH-only with TUI tools, work has its own GUI apps
+      # Fonts (shared by all profiles for terminal/TUI consistency)
+      "font-hack-nerd-font"
+      "font-jetbrains-mono-nerd-font"
     ];
     masApps = { };
     onActivation.cleanup = "zap";

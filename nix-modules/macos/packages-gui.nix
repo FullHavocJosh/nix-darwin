@@ -39,8 +39,6 @@
       "balenaetcher"
       "betterdisplay"
       "xykong/tap/flux-markdown"
-      "font-hack-nerd-font"
-      "font-jetbrains-mono-nerd-font"
       "insta360-link-controller"
       "keepingyouawake"
       "neovide-app"
