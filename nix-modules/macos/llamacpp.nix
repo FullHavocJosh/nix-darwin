@@ -71,10 +71,11 @@ let
     RAM_GB=$(( RAM_BYTES / 1024 / 1024 / 1024 ))
     log "Detected ''${RAM_GB} GB unified memory"
     MODEL_FILE="$MODELS_DIR/qwen2.5-coder-7b-instruct-q8_0.gguf"
-    # Context size: 96K with Q4_0 cache for 16GB RAM (model=7.5GB + ctx=6GB + system=2.5GB)
-    # Q4_0 KV cache uses half the memory of Q8_0, allowing 2x context size
-    # 96K effective context with RoPE scaling supports large codebases and long conversations
-    CTX_SIZE=98304
+    # Context size: 32K (native training context) with Q4_0 cache for optimal quality
+    # Model trained on 32K context - llama.cpp caps at training limit for safety
+    # 32K tokens ≈ 24K words ≈ 96K chars (sufficient for 2-4 large files + conversation)
+    # Memory: model=7.5GB + 32K Q4_0 cache=3GB + system=2.5GB = ~13GB total
+    CTX_SIZE=32768
     TIER="7B Q8 (''${RAM_GB} GB device)"
 
     log "Selected tier: $TIER"
@@ -92,7 +93,6 @@ let
       --host            "0.0.0.0" \
       --port            "8080" \
       --ctx-size        "$CTX_SIZE" \
-      --override-kv     "llama.context_length=int:131072" \
       --rope-scaling    linear \
       --rope-freq-scale 0.666667 \
       --n-gpu-layers    99 \
