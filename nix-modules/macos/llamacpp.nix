@@ -71,11 +71,11 @@ let
     RAM_GB=$(( RAM_BYTES / 1024 / 1024 / 1024 ))
     log "Detected ''${RAM_GB} GB unified memory"
     MODEL_FILE="$MODELS_DIR/qwen2.5-coder-7b-instruct-q8_0.gguf"
-    # Context size: 96K with Q4_0 cache and RoPE scaling for large codebases
-    # Qwen 2.5 Coder trained on 32K, extended to 96K via linear RoPE scaling
-    # Memory: model=7.5GB + 96K Q4_0 cache=6GB + system=2.5GB = ~14GB total
-    # 96K tokens ≈ 72K words ≈ 288K chars (handles large multi-file contexts)
-    CTX_SIZE=98304
+    # Context size: 32K (native training context) with Q8_0 cache for maximum quality
+    # 32K is the model's native training limit - no RoPE scaling needed
+    # Memory: model=7.5GB + 32K Q8_0 cache=6GB + system=2.5GB = ~14GB total
+    # Q8_0 cache provides better quality than Q4_0 at cost of 2x memory
+    CTX_SIZE=32768
     TIER="7B Q8 (''${RAM_GB} GB device)"
 
     log "Selected tier: $TIER"
@@ -93,12 +93,10 @@ let
       --host            "0.0.0.0" \
       --port            "8080" \
       --ctx-size        "$CTX_SIZE" \
-      --override-kv     "qwen2.context_length=int:131072" \
-      --rope-scaling    linear \
-      --rope-freq-scale 0.666667 \
       --n-gpu-layers    99 \
       --flash-attn      on \
-      --cache-type-k    q4_0 \
+      --cache-type-k    q8_0 \
+      --cache-type-v    q8_0 \
       --alias           "local-coder"
   '';
 in
