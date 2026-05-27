@@ -2101,8 +2101,12 @@ function gpa() {
     trap _gpa_cleanup EXIT
   fi
 
-  # Check if there are ANY changes (staged or unstaged)
-  if git diff --quiet && git diff --cached --quiet; then
+  # Check if there are ANY changes (staged, unstaged, or untracked)
+  local has_unstaged=$(git diff --quiet; echo $?)
+  local has_staged=$(git diff --cached --quiet; echo $?)
+  local has_untracked=$(git ls-files --others --exclude-standard | wc -l | tr -d ' ')
+  
+  if [[ "$has_unstaged" -eq 0 ]] && [[ "$has_staged" -eq 0 ]] && [[ "$has_untracked" -eq 0 ]]; then
     echo "⚠ No changes to stage or review"
     return 1
   fi
@@ -2197,21 +2201,21 @@ function gpa() {
       ((i++))
     done
     echo ""
-    echo "  esc) Exit"
+    echo "  q) Exit"
     echo ""
     
     if [ "$staged_count" -gt 0 ]; then
-      echo -n "Enter numbers, 'a' for all, Enter to continue with staged, or ESC to exit: "
+      echo -n "Enter numbers, 'a' for all, Enter to continue with staged, or 'q' to exit: "
     else
-      echo -n "Enter numbers separated by spaces (e.g., '1 3 5'), 'a' for all, or ESC to exit: "
+      echo -n "Enter numbers separated by spaces (e.g., '1 3 5'), 'a' for all, or 'q' to exit: "
     fi
     
     # Read the entire line with full readline support (backspace, arrow keys, etc.)
     local selection
     read -r selection
     
-    # Check for Escape sequence at start (if user typed ESC + Enter)
-    if [[ "$selection" == $'\x1b'* ]]; then
+    # Check for quit command
+    if [[ "$selection" == "q" ]] || [[ "$selection" == "quit" ]] || [[ "$selection" == $'\x1b'* ]]; then
       echo "✓ Cancelled"
       return 0
     fi
