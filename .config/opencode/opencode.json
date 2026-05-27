@@ -11,7 +11,7 @@
         "local-coder": {
           "name": "Qwen2.5-Coder-7B (remote)",
           "limit": {
-            "context": 32768,
+            "context": 81920,
             "output": 8192
           }
         }
