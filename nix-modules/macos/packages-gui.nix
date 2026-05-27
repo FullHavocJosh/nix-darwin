@@ -18,37 +18,26 @@
       # AI Tools
       "claude"
       "claude-code"
-      "lm-studio"
 
       # Development IDEs
       "goland"
       "jetbrains-toolbox"
-      "sublime-text"
-      "zed"
 
       # Browsers
       "ungoogled-chromium"
       "zen"
 
       # Graphics & Media
-      "krita"
       "vlc"
 
       # Utilities
       "balenaetcher"
-      "betterdisplay"
       "xykong/tap/flux-markdown"
       "insta360-link-controller"
       "keepingyouawake"
       "neovide-app"
-      "plexamp"
-      "proton-pass"
-      "qmk-toolbox"
       "sf-symbols"
       "shottr"
-      "vanilla"
-      "via"
-      "vial"
     ];
   };
 }

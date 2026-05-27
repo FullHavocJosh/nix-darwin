@@ -282,7 +282,6 @@ in
       "terraform-lsp"
       "terraformer"
       "tflint"
-      "warrensbox/tap/tfswitch"
       "tmux"
       "tpm"
       "tree-sitter"
@@ -298,6 +297,9 @@ in
       "slima4/claude-tui/claude-tui"
     ];
     casks = [
+      # CLI Tools
+      "warrensbox/tap/tfswitch"
+
       # Fonts (shared by all profiles for terminal/TUI consistency)
       "font-hack-nerd-font"
       "font-jetbrains-mono-nerd-font"

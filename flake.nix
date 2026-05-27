@@ -24,6 +24,7 @@
         modules = [
           ./nix-modules/macos/packages-tui.nix
           ./nix-modules/macos/packages-gui.nix
+          ./nix-modules/macos/packages-laptop-only.nix
           ./nix-modules/macos/config.nix
           ./nix-modules/macos/personal.nix
           nix-homebrew.darwinModules.nix-homebrew
