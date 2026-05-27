@@ -17,7 +17,7 @@ let
 
     mkdir -p "$MODELS_DIR"
 
-    # 7B Q8 on all machines: fast enough for interactive pre-commit review (~15-30s per batch)
+    # Qwen 2.5 Coder 7B Q8 for coding tasks (GPA/GPC functions)
     MODEL_FILE="qwen2.5-coder-7b-instruct-q8_0.gguf"
     HF_REPO="bartowski/Qwen2.5-Coder-7B-Instruct-GGUF"
     HF_FILENAME="Qwen2.5-Coder-7B-Instruct-Q8_0.gguf"
@@ -71,9 +71,10 @@ let
     RAM_GB=$(( RAM_BYTES / 1024 / 1024 / 1024 ))
     log "Detected ''${RAM_GB} GB unified memory"
     MODEL_FILE="$MODELS_DIR/qwen2.5-coder-7b-instruct-q8_0.gguf"
-    # Context size: 48K is optimal for 16GB RAM (model=7.5GB + ctx=6GB + system=2.5GB)
-    # Supports OpenCode's ~38K token system prompt while maintaining good performance
-    CTX_SIZE=49152
+    # Context size: 96K with Q4_0 cache for 16GB RAM (model=7.5GB + ctx=6GB + system=2.5GB)
+    # Q4_0 KV cache uses half the memory of Q8_0, allowing 2x context size
+    # 96K effective context with RoPE scaling supports large codebases and long conversations
+    CTX_SIZE=98304
     TIER="7B Q8 (''${RAM_GB} GB device)"
 
     log "Selected tier: $TIER"
@@ -85,18 +86,19 @@ let
       exit 1
     fi
 
-    log "Starting llama-server..."
+    log "Starting llama-server for coding (GPA/GPC functions)..."
     exec /opt/homebrew/bin/llama-server \
-      --model          "$MODEL_FILE" \
-      --host           "0.0.0.0" \
-      --port           "8080" \
-      --ctx-size       "$CTX_SIZE" \
-      --rope-scaling   linear \
+      --model           "$MODEL_FILE" \
+      --host            "0.0.0.0" \
+      --port            "8080" \
+      --ctx-size        "$CTX_SIZE" \
+      --override-kv     "llama.context_length=int:131072" \
+      --rope-scaling    linear \
       --rope-freq-scale 0.666667 \
-      --n-gpu-layers   99 \
-      --flash-attn     on \
-      --cache-type-k   q8_0 \
-      --alias          "local-coder"
+      --n-gpu-layers    99 \
+      --flash-attn      on \
+      --cache-type-k    q4_0 \
+      --alias           "local-coder"
   '';
 in
 {
