@@ -556,15 +556,35 @@ function gpc() {
   # Check if there are staged changes
   if ! git diff --cached --quiet; then
     # Commit messages use Haiku when available for efficiency
-    # Special case: OpenCode Zen free models -> use llama.cpp if available to save API credits
+    # Try llama.cpp first if available, fall back to selected provider
     local active_provider=$(_get_ai_provider)
     local override_provider=""
     
-    # If using OpenCode Zen with a free model, try to use llama.cpp instead
-    if [[ "$active_provider" == "opencode" ]] && _is_opencode_free_model; then
+    # Always try llama.cpp first for all providers (saves API costs and uses local resources)
+    # Only exception: if already using llama.cpp, don't override
+    if [[ "$active_provider" != "llama-cpp" ]] && [[ "$active_provider" != "llama.cpp" ]]; then
       if _validate_llamacpp 2>/dev/null; then
         override_provider="llama-cpp"
-        echo "ℹ Using llama.cpp for commit message (saving OpenCode Zen free tier credits)"
+        
+        # Show different message based on original provider
+        case "$active_provider" in
+          opencode)
+            if _is_opencode_free_model; then
+              echo "ℹ Using llama.cpp for commit message (saving OpenCode Zen free tier credits)"
+            else
+              echo "ℹ Using llama.cpp for commit message (fallback: OpenCode Zen)"
+            fi
+            ;;
+          github-copilot)
+            echo "ℹ Using llama.cpp for commit message (fallback: GitHub Copilot)"
+            ;;
+          claude-code)
+            echo "ℹ Using llama.cpp for commit message (fallback: Claude Code)"
+            ;;
+          *)
+            echo "ℹ Using llama.cpp for commit message (fallback: $active_provider)"
+            ;;
+        esac
       fi
     fi
     
@@ -2026,6 +2046,60 @@ function gpa() {
 
   # Ensure an AI provider is configured for this session
   _ensure_ai_provider || return 1
+
+  # Try llama.cpp first if available, fall back to selected provider
+  local active_provider=$(_get_ai_provider)
+  local override_provider=""
+  local session_file="/tmp/.ai_provider_session_$(id -u)"
+  local saved_provider=""
+  
+  # Always try llama.cpp first for all providers (saves API costs and uses local resources)
+  # Only exception: if already using llama.cpp, don't override
+  if [[ "$active_provider" != "llama-cpp" ]] && [[ "$active_provider" != "llama.cpp" ]]; then
+    if _validate_llamacpp 2>/dev/null; then
+      override_provider="llama-cpp"
+      
+      # Show different message based on original provider
+      case "$active_provider" in
+        opencode)
+          if _is_opencode_free_model; then
+            echo "ℹ Using llama.cpp for code review (saving OpenCode Zen free tier credits)"
+          else
+            echo "ℹ Using llama.cpp for code review (fallback: OpenCode Zen)"
+          fi
+          ;;
+        github-copilot)
+          echo "ℹ Using llama.cpp for code review (fallback: GitHub Copilot)"
+          ;;
+        claude-code)
+          echo "ℹ Using llama.cpp for code review (fallback: Claude Code)"
+          ;;
+        *)
+          echo "ℹ Using llama.cpp for code review (fallback: $active_provider)"
+          ;;
+      esac
+    fi
+  fi
+  
+  # Setup cleanup function for provider restoration
+  function _gpa_cleanup() {
+    if [[ -n "$override_provider" ]]; then
+      if [[ -n "$saved_provider" ]]; then
+        echo "$saved_provider" > "$session_file"
+      else
+        rm -f "$session_file"
+      fi
+    fi
+  }
+  
+  # Use override provider if set, otherwise use active provider
+  # This needs to be temporarily set for the session
+  if [[ -n "$override_provider" ]]; then
+    saved_provider=$(cat "$session_file" 2>/dev/null || echo "")
+    echo "$override_provider" > "$session_file"
+    # Set trap to restore provider on function exit
+    trap _gpa_cleanup EXIT
+  fi
 
   # Check if there are ANY changes (staged or unstaged)
   if git diff --quiet && git diff --cached --quiet; then
