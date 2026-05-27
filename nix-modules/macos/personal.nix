@@ -15,9 +15,6 @@ in
     echo "Setting wallpaper..."
     osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "${wallpaper}"'
 
-    echo "Syncing HostName to LocalHostName..."
-    scutil --set HostName "$(scutil --get LocalHostName)"
-
     # Configure kubectl for personal devices only
     echo "Configuring kubectl for hetzner-cluster..."
     USER_HOME="/Users/havoc"
