@@ -365,5 +365,6 @@
         "JIRA_API_KEY": "${ATLASSIAN_API_TOKEN}"
       }
     }
-  }
+  },
+  "model": "opencode/deepseek-v4-flash-free"
 }
