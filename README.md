@@ -1,11 +1,11 @@
 # Nix-Darwin Cross-Platform Dotfiles
 
-A comprehensive, declarative development environment configuration for **macOS** (using nix-darwin) and **Linux** (Arch/Omarchy), with powerful AI-assisted Git workflow automation.
+A comprehensive, declarative development environment configuration for **macOS** (using nix-darwin), with powerful AI-assisted Git workflow automation.
 
 ## 🎯 What This Repository Provides
 
 - **Declarative System Configuration** - Reproducible development environments across machines
-- **Cross-Platform Support** - macOS (nix-darwin) and Linux (Arch/Omarchy)
+- **Cross-Platform Support** - macOS (nix-darwin) and Linux
 - **AI-Powered Git Workflows** - Automated code review, commit messages, and PR generation
 - **Multiple Profile Support** - Personal and work configurations with profile-specific packages
 - **Complete Dev Environment** - Shell (zsh), editor (Neovim), terminal (tmux), window management, and more
@@ -18,8 +18,6 @@ A comprehensive, declarative development environment configuration for **macOS**
 Choose your platform:
 
 - **[macOS Setup Guide](README_MACOS.md)** - nix-darwin configuration for macOS
-- **[Linux Setup Guide](README_LINUX.md)** - Arch Linux with Omarchy (Hyprland) desktop
-- **[Omarchy Configuration Guide](README_OMARCHY.md)** - Detailed Hyprland/Omarchy customization
 
 ## 🏗️ Repository Structure
 
@@ -27,8 +25,6 @@ Choose your platform:
 nix-darwin/
 ├── README.md                           # This file - Main documentation
 ├── README_MACOS.md                     # macOS-specific installation guide
-├── README_LINUX.md                     # Linux-specific installation guide
-├── README_OMARCHY.md                   # Omarchy (Hyprland) configuration details
 ├── flake.nix                           # Nix flake - Defines system profiles
 ├── .gitignore                          # Security-focused ignore patterns
 ├── .stow-local-ignore                  # Stow exclusions
@@ -42,8 +38,7 @@ nix-darwin/
 ├── scripts/                            # Utility scripts
 │   ├── truenas-smb-monitor.sh          # TrueNAS SMB service monitor
 │   ├── install-nerd-fonts.sh          # Nerd Fonts installer
-│   ├── setup-ssh-keys.sh               # SSH key setup automation
-│   └── add-omarchy-themes-as-submodules.sh  # Omarchy theme manager
+│   └── setup-ssh-keys.sh               # SSH key setup automation
 │
 ├── .config/                            # Application configurations (deployed via stow)
 │   ├── aerospace/                      # AeroSpace (macOS tiling WM)
@@ -51,7 +46,6 @@ nix-darwin/
 │   ├── atuin/                          # Atuin shell history config
 │   ├── btop/                           # btop system monitor
 │   ├── ghostty/                        # Ghostty terminal config
-│   ├── hypr/                           # Hyprland (Linux) configuration
 │   ├── kitty/                          # Kitty terminal config
 │   ├── mcp/                            # MCP server definitions (claude-desktop-mcp.json)
 │   ├── nvim/                           # Neovim (LazyVim) configuration (incl. claudecode.nvim)
@@ -67,7 +61,7 @@ nix-darwin/
 ├── .zshrc_functions_ai                 # AI provider selection & management
 ├── .zshrc_os_macos                     # macOS-specific shell config
 ├── .zshrc_os_linux                     # Linux-specific shell config
-├── .zshrc_os_linux_omarchy_*           # Omarchy-specific shell config
+├── .zshrc_os_linux_omarchy_*           # Linux shell configs
 ├── .zshrc_envvars_insecure             # Non-sensitive environment variables (tracked)
 └── .zshrc_envvars                      # Sensitive environment variables (gitignored)
 ```
@@ -146,14 +140,11 @@ darwin-rebuild switch --flake ~/nix-darwin#macos_personal
 darwin-rebuild switch --flake ~/nix-darwin#macos_work
 ```
 
-### Linux (Omarchy)
+### Linux
 
 Single profile focused on personal development and desktop environment.
 
-- Full Hyprland desktop (managed by Omarchy)
-- Manual package installation (pacman, AUR, flatpak, cargo, npm, go)
 - Deployed via GNU Stow
-- See [README_LINUX.md](README_LINUX.md) for details
 
 ## 🤖 AI-Powered Git Workflow
 
@@ -279,7 +270,7 @@ All automatically installed via nix-darwin/package managers:
 ### Window Management
 
 - **AeroSpace** - macOS tiling window manager
-- **Hyprland** - Linux Wayland compositor (via Omarchy)
+- **Hyprland** - Linux Wayland compositor
 
 ### Shell
 
@@ -341,19 +332,9 @@ nix flake update
 darwin-rebuild switch --flake ~/nix-darwin#macos_personal
 ```
 
-### Linux (Arch/Omarchy)
+### Linux
 
-**Package managers:**
-
-- `pacman` - Official Arch packages
-- `yay` - AUR helper
-- `flatpak` - Sandboxed GUI apps
-- `cargo` - Rust crates
-- `npm` - Node.js packages
-- `go install` - Go tools
-- `pipx` - Isolated Python tools
-
-See [README_LINUX.md](README_LINUX.md) for installation commands.
+Package management depends on the distribution.
 
 ## 🚀 Deployment with GNU Stow
 
@@ -423,20 +404,11 @@ darwin-rebuild switch --flake ~/nix-darwin#macos_personal --show-trace
 export PATH="$HOME/.local/bin:$HOME/go/bin:$HOME/.cargo/bin:$HOME/.npm-global/bin:$PATH"
 ```
 
-**Zinit not loading:**
-
-```bash
-git clone https://github.com/zdharma-continuum/zinit.git ~/.local/share/zinit/zinit.git
-```
-
 **Tmux plugins not installed:**
 
 - Press `Prefix + I` in tmux
 
-**Hyprland not starting:**
 
-- Ensure you're using Wayland, not X11
-- Check `~/.config/hypr/hyprland.conf`
 
 ## 🔄 Updating This Configuration
 
@@ -461,18 +433,11 @@ cd ~/nix-darwin
 stow -R . -t ~  # Re-stow (replaces existing symlinks)
 ```
 
-### Update Omarchy Themes
 
-```bash
-cd ~/nix-darwin
-git submodule update --remote --merge
-```
 
 ## 📚 Additional Documentation
 
 - **[macOS Setup Guide](README_MACOS.md)** - Detailed macOS installation steps
-- **[Linux Setup Guide](README_LINUX.md)** - Complete Linux/Omarchy setup
-- **[Omarchy Configuration](README_OMARCHY.md)** - Hyprland customization details
 - **[TrueNAS SMB Monitor](scripts/README_TRUENAS.md)** - TrueNAS service monitoring
 
 ## 🤝 Contributing
@@ -490,7 +455,7 @@ This repository is provided as-is for personal and educational use.
 ## 🙏 Acknowledgments
 
 - [nix-darwin](https://github.com/LnL7/nix-darwin) - macOS system configuration
-- [Omarchy](https://omarchy.org) - Hyprland-based desktop environment
+
 - [LazyVim](https://www.lazyvim.org/) - Neovim configuration framework
 - [GNU Stow](https://www.gnu.org/software/stow/) - Symlink farm manager
 

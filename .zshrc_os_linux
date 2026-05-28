@@ -20,18 +20,14 @@ if [[ "$(uname)" == "Linux" ]]; then
   SAVEHIST=1000
   setopt SHARE_HISTORY
 
-  # Omarchy-specific configuration ############################################
-  # Only load if on Omarchy Linux (detected by presence of omarchy files)
-  if [[ -d "$HOME/.local/share/omarchy" ]]; then
-    # Only print initialization message in interactive non-tmux shells
-    [[ -z "$TMUX" ]] && [[ $- == *i* ]] && echo "Loading Omarchy-specific configuration..."
+  # Load Linux shell configs
+  [ -f ~/.zshrc_os_linux_omarchy_shell ] && source ~/.zshrc_os_linux_omarchy_shell
+  [ -f ~/.zshrc_os_linux_omarchy_aliases ] && source ~/.zshrc_os_linux_omarchy_aliases
+  [ -f ~/.zshrc_os_linux_omarchy_functions ] && source ~/.zshrc_os_linux_omarchy_functions
+  [ -f ~/.zshrc_os_linux_omarchy_init ] && source ~/.zshrc_os_linux_omarchy_init
+  [ -f ~/.zshrc_os_linux_omarchy_keybindings ] && source ~/.zshrc_os_linux_omarchy_keybindings
 
-    # Source Omarchy zsh configs
-    [ -f ~/.zshrc_os_linux_omarchy_shell ] && source ~/.zshrc_os_linux_omarchy_shell
-    [ -f ~/.zshrc_os_linux_omarchy_aliases ] && source ~/.zshrc_os_linux_omarchy_aliases
-    [ -f ~/.zshrc_os_linux_omarchy_functions ] && source ~/.zshrc_os_linux_omarchy_functions
-    [ -f ~/.zshrc_os_linux_omarchy_init ] && source ~/.zshrc_os_linux_omarchy_init
-    [ -f ~/.zshrc_os_linux_omarchy_keybindings ] && source ~/.zshrc_os_linux_omarchy_keybindings
-  fi
+  # opencode
+  export PATH="$HOME/.opencode/bin:$PATH"
 fi
 

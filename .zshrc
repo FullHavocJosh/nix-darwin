@@ -66,3 +66,5 @@ export PATH="$PATH:/Users/havoc/.lmstudio/bin"
 export PATH="/opt/homebrew/opt/node@24/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
 export PATH="$HOME/.cargo/bin:$PATH"
+
+
