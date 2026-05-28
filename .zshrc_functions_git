@@ -453,7 +453,7 @@ function _run_linters() {
 function _get_matching_files() {
   local pattern="$1"
   git diff --cached --name-only | while IFS= read -r file; do
-    if git diff --cached -- "$file" | grep "^+" | grep -v "^+++" | grep -qiE "$pattern"; then
+    if git diff --cached -- "$file" | grep "^+" | grep -v "^+++" | grep -qiE -- "$pattern"; then
       echo "    $file"
     fi
   done
@@ -487,20 +487,20 @@ function _check_for_secrets() {
   # Check for AWS credentials - look for actual AKIA keys or key=value patterns
   if echo "$filtered_lines" | grep -qE "AKIA[0-9A-Z]{16}"; then
     secrets_report="${secrets_report}  • AWS Access Key (AKIA...)\n$(_get_matching_files "AKIA[0-9A-Z]{16}")\n"
-    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -E "AKIA[0-9A-Z]{16}" | head -2)\n"
+    suspicious_lines="${suspicious_lines}$(echo "$added_lines" | grep -B5 -E "AKIA[0-9A-Z]{16}" | head -14)\n"
     secrets_found=true
   fi
 
   if echo "$filtered_lines" | grep -qiE "(aws_access_key_id|aws_secret_access_key)\s*=\s*['\"][A-Za-z0-9/+=]{20,}"; then
     secrets_report="${secrets_report}  • AWS credentials in config format\n$(_get_matching_files "(aws_access_key_id|aws_secret_access_key)\s*=\s*['\"][A-Za-z0-9/+=]{20,}")\n"
-    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -iE "(aws_access_key_id|aws_secret_access_key)\s*=\s*['\"]" | head -2)\n"
+    suspicious_lines="${suspicious_lines}$(echo "$added_lines" | grep -iB5 -E "(aws_access_key_id|aws_secret_access_key)\s*=\s*['\"]" | head -14)\n"
     secrets_found=true
   fi
 
   # Check for API keys - must have key= or key: with actual value
   if echo "$filtered_lines" | grep -qiE "(api[_-]?key|apikey)\s*[=:]\s*['\"][0-9a-zA-Z_\-]{32,}"; then
     secrets_report="${secrets_report}  • API key\n$(_get_matching_files "(api[_-]?key|apikey)\s*[=:]\s*['\"][0-9a-zA-Z_-]{32,}")\n"
-    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -iE "(api[_-]?key|apikey)\s*[=:]\s*['\"][0-9a-zA-Z_\-]{32,}" | head -2)\n"
+    suspicious_lines="${suspicious_lines}$(echo "$added_lines" | grep -iB5 -E "(api[_-]?key|apikey)\s*[=:]\s*['\"][0-9a-zA-Z_\-]{32,}" | head -14)\n"
     secrets_found=true
   fi
 
@@ -516,35 +516,35 @@ function _check_for_secrets() {
     grep -viE "[=:]\s*['\"]?(changeme|change_me|password|passwd|secret|example|placeholder|foobar|test|dummy|fake|sample|your[-_]?password|mypassword|p@ssw0rd|pass1234)['\"]?\s*$")
   if [ -n "$pw_matches" ]; then
     secrets_report="${secrets_report}  • Password\n$(_get_matching_files "(password|passwd)\s*[=:]\s*['\"][^'\"]{8,}['\"]")\n"
-    suspicious_lines="${suspicious_lines}$(echo "$pw_matches" | head -2)\n"
+    suspicious_lines="${suspicious_lines}$(echo "$added_lines" | grep -iB5 -E "(password|passwd)\s*[=:]\s*['\"][^'\"]{8,}['\"]" | head -14)\n"
     secrets_found=true
   fi
 
   # Check for tokens - must be in assignment format with sufficient length
   if echo "$filtered_lines" | grep -qiE "(secret|token|auth[_-]?token)\s*[=:]\s*['\"][0-9a-zA-Z_\-]{40,}"; then
     secrets_report="${secrets_report}  • Secret/Token\n$(_get_matching_files "(secret|token|auth[_-]?token)\s*[=:]\s*['\"][0-9a-zA-Z_-]{40,}")\n"
-    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -iE "(secret|token|auth[_-]?token)\s*[=:]\s*['\"]" | head -2)\n"
+    suspicious_lines="${suspicious_lines}$(echo "$added_lines" | grep -iB5 -E "(secret|token|auth[_-]?token)\s*[=:]\s*['\"]" | head -14)\n"
     secrets_found=true
   fi
 
   # Check for OpenAI/Stripe keys - very specific patterns
   if echo "$filtered_lines" | grep -qE "sk-[a-zA-Z0-9]{32,}|pk-(live|test)_[a-zA-Z0-9]{24,}"; then
     secrets_report="${secrets_report}  • OpenAI/Stripe API key\n$(_get_matching_files "sk-[a-zA-Z0-9]{32,}|pk-(live|test)_[a-zA-Z0-9]{24,}")\n"
-    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -E "sk-[a-zA-Z0-9]{32,}|pk-(live|test)_" | head -2)\n"
+    suspicious_lines="${suspicious_lines}$(echo "$added_lines" | grep -B5 -E "sk-[a-zA-Z0-9]{32,}|pk-(live|test)_" | head -14)\n"
     secrets_found=true
   fi
 
   # Check for GitHub tokens - very specific patterns
   if echo "$filtered_lines" | grep -qE "ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}"; then
     secrets_report="${secrets_report}  • GitHub token\n$(_get_matching_files "ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}")\n"
-    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -E "ghp_|gho_|github_pat_" | head -2)\n"
+    suspicious_lines="${suspicious_lines}$(echo "$added_lines" | grep -B5 -E "ghp_|gho_|github_pat_" | head -14)\n"
     secrets_found=true
   fi
 
   # Check for private keys - actual PEM format
   if echo "$filtered_lines" | grep -qE -- "-----BEGIN (RSA |DSA |EC )?PRIVATE KEY-----"; then
     secrets_report="${secrets_report}  • Private key\n$(_get_matching_files "-----BEGIN (RSA |DSA |EC )?PRIVATE KEY-----")\n"
-    suspicious_lines="${suspicious_lines}$(echo "$filtered_lines" | grep -E -- "-----BEGIN.*PRIVATE KEY-----" | head -2)\n"
+    suspicious_lines="${suspicious_lines}$(echo "$added_lines" | grep -B5 -E -- "-----BEGIN.*PRIVATE KEY-----" | head -14)\n"
     secrets_found=true
   fi
   
@@ -555,32 +555,75 @@ function _check_for_secrets() {
     echo "Potential secrets found:"
     echo -e "$secrets_report"
     echo ""
-    echo "⚠️  Committing secrets to git is a security risk!"
+    echo "ℹ Analyzing detections..."
     echo ""
-    echo "  [Y/Enter] Ask aidev to review these detections"
-    echo "  [n]       Ignore and proceed with commit"
-    echo "  [esc]     Abort commit"
-    echo ""
-    echo -n "Your choice: "
-    read -r abort_choice
+    local review_result=$(echo "Secrets detection flagged the following in my staged git changes. Review the full context of each match (including nearby comments) and determine whether these are real secrets or false positives.
 
-    if [[ "$abort_choice" == $'\e' ]]; then
-      echo "✗ Commit aborted. Please review and remove secrets."
-      return 1
-    elif [[ "$abort_choice" =~ ^[Nn]$ ]]; then
-      echo "⚠️  Proceeding with commit despite secrets warning!"
-      return 0
-    else
-      local aidev_prompt="Secrets detection flagged the following in my staged git changes. Please review whether these are real secrets or false positives, and advise what action to take.
+IMPORTANT: End your analysis with exactly one of these on its own line:
+- VERDICT: ALL_CLEAR (if all detections are false positives)
+- VERDICT: NEEDS_REVIEW (if any detection is a real secret)
 
 Detections:
 $(echo -e "$secrets_report")
 
-Suspicious lines from diff:
-$(echo -e "$suspicious_lines")"
+Context from diff (matching lines with surrounding lines for context):
+$(echo -e "$suspicious_lines")" | _run_ai_plain "sonnet" 2>&1)
+    local exit_code=$?
+    if [ $exit_code -eq 0 ] && [ -n "$review_result" ]; then
+      echo "═══════════════════════════════════════════════════════════"
+      echo "$review_result"
+      echo "═══════════════════════════════════════════════════════════"
+
+      local verdict=$(echo "$review_result" | grep -oE 'VERDICT: (ALL_CLEAR|NEEDS_REVIEW)' | tail -1)
+
+      if [[ "$verdict" == "VERDICT: ALL_CLEAR" ]]; then
+        echo ""
+        echo "✓ AI analysis confirms all detections are false positives. Proceeding."
+        echo "$review_result" > /tmp/gpa_secrets_verdict.txt
+        return 0
+      fi
+
       echo ""
-      aidev "$aidev_prompt"
-      return 1
+      echo "  [Enter] Open in OpenCode for interactive review"
+      echo "  [i]     Ignore and proceed with commit"
+      echo "  [esc]   Abort commit"
+      echo ""
+      echo -n "Your choice: "
+      read -r post_review_choice
+      case "$post_review_choice" in
+        $'\e')
+          echo "✗ Commit aborted."
+          return 1
+          ;;
+        [Ii])
+          echo "⚠️  Proceeding with commit despite secrets warning!"
+          return 0
+          ;;
+        *)
+          echo ""
+          local prompt_file="/tmp/gpa_secrets_review_$$.txt"
+          {
+            echo "Secrets detection flagged the following in my staged git changes. Please review the full context and advise whether these are real secrets or false positives."
+            echo ""
+            echo "Detections:"
+            echo -e "$secrets_report"
+            echo ""
+            echo "Suspicious lines from diff:"
+            echo -e "$suspicious_lines"
+            echo ""
+            echo "AI initial analysis:"
+            echo "$review_result"
+          } > "$prompt_file"
+          local repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+          local model=$(jq -r '.model // empty' ~/.config/opencode/opencode.json 2>/dev/null)
+          (cd "$repo_root" && opencode --model "$model" --prompt "I have staged git changes with potential secrets. Read $prompt_file for the full context and help me review whether these are real secrets or false positives.")
+          rm -f "$prompt_file"
+          return 1
+          ;;
+      esac
+    else
+      echo "⚠ AI review failed. You can proceed manually."
+      return 0
     fi
   fi
   
@@ -1388,8 +1431,21 @@ function _gpa_review_batch() {
 🟡 **Warnings**: Overly permissive IAM (wildcards in production), missing encryption, expensive resources without justification"
   fi
   
+  # Include secrets analysis verdict if available
+  local secrets_context=""
+  if [[ -f /tmp/gpa_secrets_verdict.txt ]]; then
+    if [[ -s /tmp/gpa_secrets_verdict.txt ]]; then
+      secrets_context="
+
+PRIOR SECURITY ANALYSIS — Secrets detection already analyzed the following items and determined they are FALSE POSITIVES. Do NOT re-flag these:
+$(cat /tmp/gpa_secrets_verdict.txt | head -30)
+
+Secrets in your diff that match these patterns have ALREADY been verified as safe (placeholder examples, runtime-generated values, or template variable references). If a detection matches one of these, do NOT include it in your output."
+    fi
+  fi
+
   # Build full prompt
-  local full_prompt="${review_prompt}
+  local full_prompt="${review_prompt}${secrets_context}
 
 Batch ${batch_number} of ${total_batches} (${batch_lines} lines)
 
@@ -1406,6 +1462,7 @@ ${batch_context}
 - ONLY flag issues that are INTRODUCED OR WORSENED by lines marked with + in the diff — do NOT flag pre-existing code in unchanged lines
 - The surrounding context is provided so you can see if a nearby comment, guard clause, or existing code ALREADY mitigates the concern — if so, do NOT flag it
 - If the code or a comment already acknowledges a known limitation, do NOT flag it as an issue
+- If a prior security analysis has already confirmed an item is a false positive, do NOT flag it
 - Output ONLY a JSON array of issues in this exact format:
 [
   {
@@ -1529,7 +1586,9 @@ function _gpa_send_all_to_aidev() {
   echo ""
   echo "=== aidev: Fix All Issues ==="
   echo ""
-  (cd "$repo_root" && aidev "$(cat "$prompt_file")")
+  local model=$(jq -r '.model // empty' ~/.config/opencode/opencode.json 2>/dev/null)
+  [ -z "$model" ] && model=$(_get_opencode_model "sonnet")
+  (cd "$repo_root" && opencode --model "$model" --prompt "I have $issue_count code review issue(s) in my staged git changes that need to be fixed. Read $prompt_file for full details and help me fix them.")
   rm -f "$prompt_file"
 
   echo ""
@@ -1538,7 +1597,7 @@ function _gpa_send_all_to_aidev() {
   echo "═══════════════════════════════════════════════════════════"
   echo ""
   echo "  [Enter] Re-review with gpa"
-  echo "  [ESC]   Keep staged as-is"
+  echo "  [esc]   Keep staged as-is"
   echo ""
   echo -n "Your choice: "
   _read_key
@@ -1565,9 +1624,9 @@ function _gpa_send_all_to_aidev() {
         echo "ℹ aidev made no file changes — skipping re-review"
         echo ""
         echo "Options:"
-        echo "  [Y/Enter] Proceed to commit and push (gpc)"
-        echo "  [r] Force re-review anyway"
-        echo "  [esc] Keep staged"
+        echo "  [Enter] Commit and push (gpc)"
+        echo "  [r]     Force re-review"
+        echo "  [esc]   Keep staged"
         echo ""
         echo -n "Your choice: "
         _read_key
@@ -1632,8 +1691,8 @@ function _gpa_review_files() {
     echo "  ⚠ Review failed or returned invalid JSON"
     echo ""
     echo "Options:"
-    echo "  [Y/Enter] Proceed to commit (gpc)"
-    echo "  [esc] Keep staged"
+    echo "  [Enter] Commit and push (gpc)"
+    echo "  [esc]   Keep staged"
     echo ""
     echo -n "Your choice: "
     _read_key; echo ""
@@ -1665,8 +1724,8 @@ function _gpa_review_files() {
   fi
   echo ""
   echo "Options:"
-  echo "  [Y/Enter] Commit and push (gpc)"
-  echo "  [esc]     Keep staged — fix manually and re-run gpa"
+  echo "  [Enter] Commit and push (gpc)"
+  echo "  [esc]   Keep staged — fix manually and re-run gpa"
   echo ""
   echo -n "Your choice: "
   _read_key; echo ""
@@ -1687,7 +1746,7 @@ function _gpa_interactive_fix() {
     echo ""
     echo "Options:"
     echo "  [e] Edit all staged files manually"
-    echo "  [c] Continue to commit anyway"
+    echo "  [i] Ignore and proceed to commit"
     echo "  [q] Quit and keep changes staged"
     echo ""
     echo -n "Your choice: "
@@ -1709,7 +1768,7 @@ function _gpa_interactive_fix() {
         echo "✓ Files edited. Run 'gpa' again to review."
         return 0
         ;;
-      c | C)
+      i | I)
         gpc
         return $?
         ;;
@@ -1734,7 +1793,7 @@ function _gpa_interactive_fix() {
   echo ""
   echo "  [Enter] Send all issues to aidev"
   echo "  [r]     Review issues one by one"
-  echo "  [ESC]   Quit and keep staged"
+  echo "  [esc]   Quit and keep staged"
   echo ""
   echo -n "Your choice: "
   _read_key
@@ -1849,9 +1908,9 @@ function _gpa_interactive_fix() {
   echo "═══════════════════════════════════════════════════════════"
   echo ""
   echo "Options:"
-  echo "  [Y/Enter] Commit and push changes (gpc)"
-  echo "  [r] Review again with 'gpa'"
-  echo "  [esc] Cancel - keep staged"
+  echo "  [Enter] Commit and push (gpc)"
+  echo "  [r]     Review again with gpa"
+  echo "  [esc]   Cancel - keep staged"
   echo ""
   echo -n "Your choice: "
   _read_key
@@ -2027,9 +2086,9 @@ function _prompt_ai_error_action() {
   echo "  Context: $context" >&2
   echo "" >&2
   echo "Options:" >&2
-  echo "  [ENTER] Retry - Try the operation again" >&2
-  echo "  [c] Continue - Skip this step and continue" >&2
-  echo "  [ESC] Cancel - Abort the operation" >&2
+  echo "  [Enter] Retry" >&2
+  echo "  [i]     Ignore and continue" >&2
+  echo "  [esc]   Cancel" >&2
   echo "" >&2
   echo -n "Your choice: " >&2
   
@@ -2041,8 +2100,8 @@ function _prompt_ai_error_action() {
     ""|$'\n')  # ENTER key
       return 0  # Retry
       ;;
-    c|C)
-      return 1  # Continue
+      i|I)
+      return 1  # Ignore
       ;;
     $'\e'|q|Q)  # ESC or q
       return 2  # Cancel
@@ -2085,59 +2144,8 @@ function gpa() {
   # Ensure an AI provider is configured for this session
   _ensure_ai_provider || return 1
 
-  # Try llama.cpp first if available, fall back to selected provider
-  local active_provider=$(_get_ai_provider)
-  local override_provider=""
-  local session_file="/tmp/.ai_provider_session_$(id -u)"
-  local saved_provider=""
-  
-  # Always try llama.cpp first for all providers (saves API costs and uses local resources)
-  # Only exception: if already using llama.cpp, don't override
-  if [[ "$active_provider" != "llama-cpp" ]] && [[ "$active_provider" != "llama.cpp" ]]; then
-    if _validate_llamacpp 2>/dev/null; then
-      override_provider="llama-cpp"
-      
-      # Show different message based on original provider
-      case "$active_provider" in
-        opencode)
-          if _is_opencode_free_model; then
-            echo "ℹ Using llama.cpp for code review (saving OpenCode Zen free tier credits)"
-          else
-            echo "ℹ Using llama.cpp for code review (fallback: OpenCode Zen)"
-          fi
-          ;;
-        github-copilot)
-          echo "ℹ Using llama.cpp for code review (fallback: GitHub Copilot)"
-          ;;
-        claude-code)
-          echo "ℹ Using llama.cpp for code review (fallback: Claude Code)"
-          ;;
-        *)
-          echo "ℹ Using llama.cpp for code review (fallback: $active_provider)"
-          ;;
-      esac
-    fi
-  fi
-  
-  # Setup cleanup function for provider restoration
-  function _gpa_cleanup() {
-    if [[ -n "$override_provider" ]]; then
-      if [[ -n "$saved_provider" ]]; then
-        echo "$saved_provider" > "$session_file"
-      else
-        rm -f "$session_file"
-      fi
-    fi
-  }
-  
-  # Use override provider if set, otherwise use active provider
-  # This needs to be temporarily set for the session
-  if [[ -n "$override_provider" ]]; then
-    saved_provider=$(cat "$session_file" 2>/dev/null || echo "")
-    echo "$override_provider" > "$session_file"
-    # Set trap to restore provider on function exit
-    trap _gpa_cleanup EXIT
-  fi
+  # Use the aiselect'd provider for code review
+  # (removed llama.cpp override — Qwen doesn't work inside opencode sessions)
 
   # Check if there are ANY changes (staged, unstaged, or untracked)
   local has_unstaged=$(git diff --quiet; echo $?)
@@ -2385,9 +2393,9 @@ function gpa() {
     echo "✓ All staged files have been previously reviewed with no changes"
     echo ""
     echo "Options:"
-    echo "  [Y/Enter] Proceed to commit and push (gpc)"
-    echo "  [r] Re-review all files (clear cache)"
-    echo "  [esc] Cancel - keep staged"
+    echo "  [Enter] Commit and push (gpc)"
+    echo "  [r]     Re-review all files (clear cache)"
+    echo "  [esc]   Cancel - keep staged"
     echo ""
     echo -n "Your choice: "
     _read_key
@@ -2610,7 +2618,8 @@ function gpa() {
                 local cloud_provider=$(_get_cloud_fallback_provider)
                 echo "  Local model found Critical+security issues."
                 echo ""
-                echo "  Recommendation: Re-review with cloud ($cloud_provider Sonnet)"
+                local cloud_source_model=$(_get_opencode_model "sonnet")
+                echo "  Recommendation: Re-review with cloud ($cloud_provider $cloud_source_model)"
                 echo "  for authoritative security analysis."
                 echo ""
                 echo "  Options:"
@@ -2622,7 +2631,7 @@ function gpa() {
 
                 if [[ "$escalate_choice" == "y" || "$escalate_choice" == "Y" ]]; then
                   echo ""
-                  echo "  ☁  Escalating to $cloud_provider Sonnet..."
+                  echo "  ☁  Escalating to $cloud_provider $cloud_source_model..."
                   local cloud_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "cloud-escalation")
                   local cloud_status=$?
 
@@ -2638,23 +2647,36 @@ function gpa() {
                 fi
               else
                 # Cloud-only mode: escalate to Opus on same provider
-                echo "  Sonnet found Critical severity issues with security implications."
-                echo "  🔴 Automatically escalating to Opus for comprehensive security review..."
-                echo ""
-                local opus_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "opus")
-                local opus_status=$?
-
-                if [ $opus_status -eq 0 ] && [ -n "$opus_issues" ] && echo "$opus_issues" | jq empty 2>/dev/null; then
-                  local valid_opus_issues=$(echo "$opus_issues" | jq '[.[] | select(type == "object" and has("file") and has("severity") and has("issue") and has("recommendation"))]' 2>/dev/null)
-                  if [ -n "$valid_opus_issues" ]; then
-                    local opus_issue_count=$(echo "$valid_opus_issues" | jq 'length')
-                    echo "  🔴 Opus review complete: Found $opus_issue_count issue(s)"
-                    valid_batch_issues="$valid_opus_issues"
-                  else
-                    echo "  🔴 Opus review found no additional issues"
-                  fi
+                local source_model_name
+                if [[ "$batch_using_selected_model" == "true" ]]; then
+                  source_model_name=$(jq -r '.model // "unknown"' "$config_file" 2>/dev/null)
+                elif [[ -n "$tier_label" ]]; then
+                  source_model_name="$tier_label"
                 else
-                  echo "  ⚠ Opus review failed, keeping Sonnet findings"
+                  source_model_name="$batch_tier"
+                fi
+                local target_model_name=$(_get_opencode_model "opus")
+                if [[ "$target_model_name" == "$source_model_name" || "$target_model_name" == "$(jq -r '.model // "unknown"' "$config_file" 2>/dev/null)" ]]; then
+                  echo "  ⚠ No better model available for escalation (target == source). Keeping $source_model_name findings."
+                else
+                  echo "  $source_model_name found Critical severity issues with security implications."
+                  echo "  🔴 Automatically escalating to $target_model_name for comprehensive security review..."
+                  echo ""
+                  local opus_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "opus")
+                  local opus_status=$?
+
+                  if [ $opus_status -eq 0 ] && [ -n "$opus_issues" ] && echo "$opus_issues" | jq empty 2>/dev/null; then
+                    local valid_opus_issues=$(echo "$opus_issues" | jq '[.[] | select(type == "object" and has("file") and has("severity") and has("issue") and has("recommendation"))]' 2>/dev/null)
+                    if [ -n "$valid_opus_issues" ]; then
+                      local opus_issue_count=$(echo "$valid_opus_issues" | jq 'length')
+                      echo "  🔴 $target_model_name review complete: Found $opus_issue_count issue(s)"
+                      valid_batch_issues="$valid_opus_issues"
+                    else
+                      echo "  🔴 $target_model_name review found no additional issues"
+                    fi
+                  else
+                    echo "  ⚠ Escalation review failed, keeping $source_model_name findings"
+                  fi
                 fi
                 echo ""
               fi
@@ -2699,9 +2721,9 @@ function gpa() {
     echo "  - Rate limiting"
     echo ""
     echo "Options:"
-    echo "  [ENTER] Retry - Run code review again"
-    echo "  [c] Continue - Proceed without AI review"
-    echo "  [ESC] Cancel - Abort and keep changes staged"
+    echo "  [Enter] Retry"
+    echo "  [i]     Ignore and proceed"
+    echo "  [esc]   Cancel"
     echo ""
     echo -n "Your choice: "
     read -r skip_review
@@ -2714,7 +2736,7 @@ function gpa() {
         gpa "$@"
         return $?
         ;;
-      c|C)  # Continue without review
+      i|I)  # Ignore
         echo "✓ Continuing without AI review"
         ;;
       $'\e'|q|Q|*)  # ESC or invalid - Cancel
@@ -2735,9 +2757,9 @@ function gpa() {
     echo "This means issues may have been found but weren't captured."
     echo ""
     echo "Options:"
-    echo "  [ENTER] Retry - Re-run review on failed batches"
-    echo "  [c] Continue - Ignore and proceed to commit"
-    echo "  [ESC] Cancel - Exit and keep changes staged"
+    echo "  [Enter] Retry"
+    echo "  [i]     Ignore and proceed"
+    echo "  [esc]   Cancel"
     echo ""
     echo -n "Your choice: "
     read -r soft_fail_choice
@@ -2750,7 +2772,7 @@ function gpa() {
         gpa "$@"
         return $?
         ;;
-      c|C)  # Continue
+      i|I)  # Ignore
         echo "✓ Ignoring unparseable responses and continuing"
         ;;
       $'\e'|q|Q|*)  # ESC or invalid - Cancel
@@ -2776,8 +2798,8 @@ function gpa() {
     
     echo ""
     echo "Options:"
-    echo "  [Y/Enter] Commit and push - automatically runs 'gpc'"
-    echo "  [esc] Cancel - keep staged but don't proceed"
+    echo "  [Enter] Commit and push (gpc)"
+    echo "  [esc]   Cancel - keep staged"
     echo ""
     echo -n "Your choice: "
     _read_key
@@ -2817,8 +2839,10 @@ function gpa() {
     echo "Entering interactive fix mode..."
     echo ""
     _gpa_interactive_fix "$all_issues"
+    rm -f /tmp/gpa_secrets_verdict.txt
     return $?
   fi
+  rm -f /tmp/gpa_secrets_verdict.txt
 }
 
 # Git PR - Create new branch and draft pull request
