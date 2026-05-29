@@ -33,7 +33,11 @@
   },
   "formatter": {
     "prettier": {
-      "command": ["prettier", "--write", "$FILE"],
+      "command": [
+        "prettier",
+        "--write",
+        "$FILE"
+      ],
       "extensions": [
         ".js",
         ".jsx",
@@ -48,28 +52,66 @@
       ]
     },
     "nixfmt": {
-      "command": ["nixfmt", "$FILE"],
-      "extensions": [".nix"]
+      "command": [
+        "nixfmt",
+        "$FILE"
+      ],
+      "extensions": [
+        ".nix"
+      ]
     },
     "terraform": {
-      "command": ["terraform", "fmt", "$FILE"],
-      "extensions": [".tf", ".tfvars"]
+      "command": [
+        "terraform",
+        "fmt",
+        "$FILE"
+      ],
+      "extensions": [
+        ".tf",
+        ".tfvars"
+      ]
     },
     "shfmt": {
-      "command": ["shfmt", "-w", "$FILE"],
-      "extensions": [".sh", ".bash", ".zsh"]
+      "command": [
+        "shfmt",
+        "-w",
+        "$FILE"
+      ],
+      "extensions": [
+        ".sh",
+        ".bash",
+        ".zsh"
+      ]
     },
     "stylua": {
-      "command": ["stylua", "$FILE"],
-      "extensions": [".lua"]
+      "command": [
+        "stylua",
+        "$FILE"
+      ],
+      "extensions": [
+        ".lua"
+      ]
     },
     "ruff": {
-      "command": ["ruff", "format", "$FILE"],
-      "extensions": [".py", ".pyi"]
+      "command": [
+        "ruff",
+        "format",
+        "$FILE"
+      ],
+      "extensions": [
+        ".py",
+        ".pyi"
+      ]
     },
     "gofmt": {
-      "command": ["gofmt", "-w", "$FILE"],
-      "extensions": [".go"]
+      "command": [
+        "gofmt",
+        "-w",
+        "$FILE"
+      ],
+      "extensions": [
+        ".go"
+      ]
     },
     "powershell": {
       "command": [
@@ -79,23 +121,52 @@
         "-ScriptDefinition",
         "$(cat $FILE)"
       ],
-      "extensions": [".ps1", ".psm1"]
+      "extensions": [
+        ".ps1",
+        ".psm1"
+      ]
     },
     "rubocop": {
-      "command": ["rubocop", "-a", "$FILE"],
-      "extensions": [".rb"]
+      "command": [
+        "rubocop",
+        "-a",
+        "$FILE"
+      ],
+      "extensions": [
+        ".rb"
+      ]
     },
     "xmllint": {
-      "command": ["xmllint", "--format", "$FILE"],
-      "extensions": [".xml"]
+      "command": [
+        "xmllint",
+        "--format",
+        "$FILE"
+      ],
+      "extensions": [
+        ".xml"
+      ]
     },
     "taplo": {
-      "command": ["taplo", "format", "$FILE"],
-      "extensions": [".toml"]
+      "command": [
+        "taplo",
+        "format",
+        "$FILE"
+      ],
+      "extensions": [
+        ".toml"
+      ]
     },
     "djlint": {
-      "command": ["djlint", "--reformat", "$FILE"],
-      "extensions": [".j2", ".jinja", ".jinja2"]
+      "command": [
+        "djlint",
+        "--reformat",
+        "$FILE"
+      ],
+      "extensions": [
+        ".j2",
+        ".jinja",
+        ".jinja2"
+      ]
     }
   },
   "permission": {
@@ -129,52 +200,119 @@
   },
   "lsp": {
     "ansible": {
-      "command": ["ansible-language-server", "--stdio"],
-      "extensions": [".yml", ".yaml"]
+      "command": [
+        "ansible-language-server",
+        "--stdio"
+      ],
+      "extensions": [
+        ".yml",
+        ".yaml"
+      ]
     },
     "bash": {
-      "command": ["bash-language-server", "start"],
-      "extensions": [".sh", ".bash", ".zsh"]
+      "command": [
+        "bash-language-server",
+        "start"
+      ],
+      "extensions": [
+        ".sh",
+        ".bash",
+        ".zsh"
+      ]
     },
     "dockerfile": {
-      "command": ["docker-langserver", "--stdio"],
-      "extensions": [".dockerfile"]
+      "command": [
+        "docker-langserver",
+        "--stdio"
+      ],
+      "extensions": [
+        ".dockerfile"
+      ]
     },
     "go": {
-      "command": ["gopls"],
-      "extensions": [".go"]
+      "command": [
+        "gopls"
+      ],
+      "extensions": [
+        ".go"
+      ]
     },
     "json": {
-      "command": ["vscode-json-language-server", "--stdio"],
-      "extensions": [".json", ".jsonc"]
+      "command": [
+        "vscode-json-language-server",
+        "--stdio"
+      ],
+      "extensions": [
+        ".json",
+        ".jsonc"
+      ]
     },
     "lua": {
-      "command": ["lua-language-server"],
-      "extensions": [".lua"]
+      "command": [
+        "lua-language-server"
+      ],
+      "extensions": [
+        ".lua"
+      ]
     },
     "nix": {
-      "command": ["nil"],
-      "extensions": [".nix"]
+      "command": [
+        "nil"
+      ],
+      "extensions": [
+        ".nix"
+      ]
     },
     "python": {
-      "command": ["pylsp"],
-      "extensions": [".py", ".pyi"]
+      "command": [
+        "pylsp"
+      ],
+      "extensions": [
+        ".py",
+        ".pyi"
+      ]
     },
     "rust": {
-      "command": ["rust-analyzer"],
-      "extensions": [".rs"]
+      "command": [
+        "rust-analyzer"
+      ],
+      "extensions": [
+        ".rs"
+      ]
     },
     "terraform": {
-      "command": ["terraform-ls", "serve"],
-      "extensions": [".tf", ".tfvars"]
+      "command": [
+        "terraform-ls",
+        "serve"
+      ],
+      "extensions": [
+        ".tf",
+        ".tfvars"
+      ]
     },
     "typescript": {
-      "command": ["typescript-language-server", "--stdio"],
-      "extensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]
+      "command": [
+        "typescript-language-server",
+        "--stdio"
+      ],
+      "extensions": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".mjs",
+        ".cjs"
+      ]
     },
     "yaml": {
-      "command": ["yaml-language-server", "--stdio"],
-      "extensions": [".yml", ".yaml"]
+      "command": [
+        "yaml-language-server",
+        "--stdio"
+      ],
+      "extensions": [
+        ".yml",
+        ".yaml"
+      ]
     },
     "powershell": {
       "command": [
@@ -184,19 +322,38 @@
         "-Command",
         "$PSES_BUNDLE_PATH = (Get-ChildItem -Path ~/.vscode/extensions/ms-vscode.powershell-*/modules/PowerShellEditorServices | Select-Object -First 1).FullName; Import-Module \"$PSES_BUNDLE_PATH/PowerShellEditorServices.psd1\"; Start-EditorServices -HostName 'OpenCode' -HostProfileId 'OpenCode' -HostVersion '1.0.0' -BundledModulesPath $PSES_BUNDLE_PATH -LogLevel Normal -LogPath /tmp/pses.log -SessionDetailsPath /tmp/session.json -FeatureFlags @() -AdditionalModules @() -Stdio"
       ],
-      "extensions": [".ps1", ".psm1", ".psd1"]
+      "extensions": [
+        ".ps1",
+        ".psm1",
+        ".psd1"
+      ]
     },
     "ruby": {
-      "command": ["solargraph", "stdio"],
-      "extensions": [".rb"]
+      "command": [
+        "solargraph",
+        "stdio"
+      ],
+      "extensions": [
+        ".rb"
+      ]
     },
     "xml": {
-      "command": ["lemminx"],
-      "extensions": [".xml"]
+      "command": [
+        "lemminx"
+      ],
+      "extensions": [
+        ".xml"
+      ]
     },
     "toml": {
-      "command": ["taplo", "lsp", "stdio"],
-      "extensions": [".toml"]
+      "command": [
+        "taplo",
+        "lsp",
+        "stdio"
+      ],
+      "extensions": [
+        ".toml"
+      ]
     }
   },
   "agent": {
@@ -248,45 +405,74 @@
     },
     "memory": {
       "type": "local",
-      "command": ["npx", "@modelcontextprotocol/server-memory"]
+      "command": [
+        "npx",
+        "@modelcontextprotocol/server-memory"
+      ]
     },
     "sequential-thinking": {
       "type": "local",
-      "command": ["npx", "@modelcontextprotocol/server-sequential-thinking"]
+      "command": [
+        "npx",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
     },
     "github": {
       "type": "local",
-      "command": ["npx", "@edjl/github-mcp"]
+      "command": [
+        "npx",
+        "@edjl/github-mcp"
+      ]
     },
     "terraform": {
       "type": "local",
-      "command": ["npx", "terraform-mcp-server"]
+      "command": [
+        "npx",
+        "terraform-mcp-server"
+      ]
     },
     "context7": {
       "type": "local",
-      "command": ["npx", "-y", "@upstash/context7-mcp"]
+      "command": [
+        "npx",
+        "-y",
+        "@upstash/context7-mcp"
+      ]
     },
     "aws-core-mcp-server": {
       "type": "local",
-      "command": ["uvx", "awslabs.core-mcp-server@latest"],
+      "command": [
+        "uvx",
+        "awslabs.core-mcp-server@latest"
+      ],
       "environment": {
         "FASTMCP_LOG_LEVEL": "ERROR"
       }
     },
     "aws-terraform-mcp": {
       "type": "local",
-      "command": ["uvx", "awslabs.terraform-mcp-server@latest"],
+      "command": [
+        "uvx",
+        "awslabs.terraform-mcp-server@latest"
+      ],
       "environment": {
         "FASTMCP_LOG_LEVEL": "ERROR"
       }
     },
     "mcp-server-chart": {
       "type": "local",
-      "command": ["npx", "-y", "@antv/mcp-server-chart"]
+      "command": [
+        "npx",
+        "-y",
+        "@antv/mcp-server-chart"
+      ]
     },
     "aws-pricing-mcp-server": {
       "type": "local",
-      "command": ["uvx", "awslabs.aws-pricing-mcp-server@latest"],
+      "command": [
+        "uvx",
+        "awslabs.aws-pricing-mcp-server@latest"
+      ],
       "environment": {
         "FASTMCP_LOG_LEVEL": "ERROR",
         "AWS_PROFILE": "services"
@@ -294,11 +480,16 @@
     },
     "context-mode": {
       "type": "local",
-      "command": ["context-mode"]
+      "command": [
+        "context-mode"
+      ]
     },
     "terraform-cloud": {
       "type": "local",
-      "command": ["uvx", "terraform-cloud-mcp"],
+      "command": [
+        "uvx",
+        "terraform-cloud-mcp"
+      ],
       "environment": {
         "TFC_TOKEN": "${TFC_TOKEN}"
       }
@@ -320,14 +511,22 @@
     },
     "hetzner": {
       "type": "local",
-      "command": ["npx", "-y", "@lazyants/hetzner-mcp-server"],
+      "command": [
+        "npx",
+        "-y",
+        "@lazyants/hetzner-mcp-server"
+      ],
       "environment": {
         "HETZNER_API_TOKEN": "${HETZNER_API_TOKEN}"
       }
     },
     "opnsense": {
       "type": "local",
-      "command": ["npx", "-y", "@richard-stovall/opnsense-mcp-server"],
+      "command": [
+        "npx",
+        "-y",
+        "@richard-stovall/opnsense-mcp-server"
+      ],
       "environment": {
         "OPNSENSE_HOST": "${OPNSENSE_HOST}",
         "OPNSENSE_API_KEY": "${OPNSENSE_API_KEY}",
@@ -337,7 +536,10 @@
     },
     "truenas": {
       "type": "local",
-      "command": ["uvx", "truenas-mcp-server"],
+      "command": [
+        "uvx",
+        "truenas-mcp-server"
+      ],
       "environment": {
         "TRUENAS_URL": "${TRUENAS_URL}",
         "TRUENAS_API_KEY": "${TRUENAS_API_KEY}"
@@ -358,7 +560,11 @@
     },
     "atlassian": {
       "type": "local",
-      "command": ["npx", "-y", "jira-mcp"],
+      "command": [
+        "npx",
+        "-y",
+        "jira-mcp"
+      ],
       "environment": {
         "JIRA_INSTANCE_URL": "https://smartpager.atlassian.net",
         "JIRA_USER_EMAIL": "${ATLASSIAN_EMAIL}",
