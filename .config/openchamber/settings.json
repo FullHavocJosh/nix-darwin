@@ -44,8 +44,8 @@
     "maximized": false,
     "fullscreen": false
   },
-  "themeId": "flexoki-dark",
-  "themeVariant": "dark",
+  "themeId": "flexoki-light",
+  "themeVariant": "light",
   "useSystemTheme": true,
   "splashBgLight": "#FFFCF0",
   "splashFgLight": "#100F0F",
