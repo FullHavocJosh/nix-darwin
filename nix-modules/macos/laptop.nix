@@ -1,5 +1,5 @@
 { pkgs, ... }:
 {
-  networking.hostName = "MacBookProM2Pro";
-  networking.computerName = "MacBookProM2Pro";
+  networking.hostName = "MacBookM2Pro";
+  networking.computerName = "MacBookM2Pro";
 }
