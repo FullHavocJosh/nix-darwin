@@ -368,6 +368,10 @@
     "doppler": {
       "type": "local",
       "command": ["npx", "-y", "@dopplerhq/mcp-server"]
+    },
+    "prettier": {
+      "type": "local",
+      "command": ["npx", "-y", "@prettier/mcp"]
     }
   }
 }

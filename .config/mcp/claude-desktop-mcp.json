@@ -114,6 +114,10 @@
     "doppler": {
       "command": "npx",
       "args": ["-y", "@dopplerhq/mcp-server"]
+    },
+    "prettier": {
+      "command": "npx",
+      "args": ["-y", "@prettier/mcp"]
     }
   }
 }
