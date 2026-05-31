@@ -110,6 +110,10 @@
         "AWX_URL": "${AWX_URL}",
         "AWX_TOKEN": "${AWX_TOKEN}"
       }
+    },
+    "doppler": {
+      "command": "npx",
+      "args": ["-y", "@dopplerhq/mcp-server"]
     }
   }
 }
