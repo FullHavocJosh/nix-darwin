@@ -54,7 +54,6 @@ function _provider_display_name() {
   case "$1" in
     claude-code)    echo "Claude Code" ;;
     github-copilot) echo "GitHub Copilot" ;;
-    anthropic)      echo "Anthropic" ;;
     opencode)       echo "OpenCode" ;;
     openrouter)     echo "OpenRouter" ;;
     llama-cpp)      echo "llama.cpp" ;;
@@ -69,7 +68,7 @@ function _model_tier_display() {
   
   case "$provider" in
     claude-code)
-      echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.6 | 🔴 Opus 4.7"
+      echo "🟢 Haiku 4.5 (Copilot) | 🔵 Sonnet 4.5 (Copilot) | 🔴 Opus 4.7 (Anthropic)"
       ;;
     github-copilot)
       echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.5"
@@ -85,9 +84,6 @@ function _model_tier_display() {
       else
         echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.6 | 🔴 Opus 4.7"
       fi
-      ;;
-    anthropic)
-      echo "🟢 Haiku 4.5 (Copilot) | 🔵 Sonnet 4.5 (Copilot) | 🔴 Opus 4.7 (Anthropic)"
       ;;
     openrouter)
       echo "🟢 Haiku 3.5 | 🔵 Sonnet 4.5 | 🔴 Opus 4.5"
@@ -118,8 +114,8 @@ function _get_opencode_model() {
   fi
 
   # GitHub Copilot: skip auto-discovery (4.6 listed but not actually supported)
-  # Anthropic hybrid: skip auto-discovery so hybrid routing (haiku/sonnet→Copilot, opus→Anthropic) is used
-  if [[ "$provider" != "github-copilot" ]] && [[ "$provider" != "anthropic" ]]; then
+  # Claude Code: skip auto-discovery so hybrid routing (haiku/sonnet→Copilot, opus→Anthropic) is used
+  if [[ "$provider" != "github-copilot" ]] && [[ "$provider" != "claude-code" ]]; then
     local model=""
     if [[ "$task_type" == "haiku" ]]; then
       model=$(_discover_latest_model "$provider" "haiku")
@@ -171,19 +167,14 @@ function _get_opencode_model() {
       fi
       ;;
     claude-code)
-      if [[ "$task_type" == "haiku" ]]; then
-        echo "claude-haiku-4-5"
-      elif [[ "$task_type" == "opus" ]]; then
+      # Haiku/Sonnet route via GitHub Copilot (saves Anthropic credits); Opus stays on Anthropic
+      if [[ "$task_type" == "opus" ]]; then
         echo "claude-opus-4-7"
+      elif [[ "$task_type" == "haiku" ]]; then
+        echo "github-copilot/claude-haiku-4.5"
       else
-        echo "claude-sonnet-4-6"
+        echo "github-copilot/claude-sonnet-4.5"
       fi
-      ;;
-    anthropic)
-      # Hybrid: haiku/sonnet → GitHub Copilot (free), opus → Anthropic (direct)
-      [[ "$task_type" == "opus"  ]] && echo "anthropic/claude-opus-4-7"       && return
-      [[ "$task_type" == "haiku" ]] && echo "github-copilot/claude-haiku-4.5" && return
-      echo "github-copilot/claude-sonnet-4.5"
       ;;
     llama-cpp|llama.cpp)
       echo "llama.cpp/local-coder"
@@ -240,8 +231,8 @@ function _supports_multi_tier() {
   local provider=$(_get_ai_provider)
   
   case "$provider" in
-    claude-code|github-copilot|anthropic)
-      return 0  # Supports Haiku/Sonnet (GitHub/Anthropic hybrid) or Haiku/Sonnet/Opus (Claude Code)
+    claude-code|github-copilot)
+      return 0  # Supports Haiku/Sonnet/Opus (claude-code) or Haiku/Sonnet (github-copilot)
       ;;
     opencode)
       # OpenCode supports multi-tier ONLY if using a Claude model (not free)
@@ -268,9 +259,6 @@ function _supports_opus() {
     github-copilot)
       return 1  # GitHub Copilot does NOT support Opus
       ;;
-    anthropic)
-      return 0  # Anthropic supports Opus (haiku/sonnet route via Copilot, opus uses Anthropic)
-      ;;
     opencode)
       # OpenCode Zen supports Opus only with Claude models
       _is_opencode_free_model && return 1 || return 0
@@ -295,8 +283,7 @@ function _run_ai_plain() {
   
   # Make direct API call based on provider
   case $provider in
-    github-copilot|anthropic)
-      # anthropic hybrid: _get_opencode_model already resolved haiku/sonnet → github-copilot/*, opus → anthropic/*
+    github-copilot)
       local result
       result=$(echo "$prompt" | timeout 90s opencode run --model "$model" 2>&1)
       local exit_code=$?
@@ -357,21 +344,27 @@ function _run_ai_plain() {
       ;;
       
     claude-code)
-      local result
-      result=$(echo "$prompt" | timeout 90s claude --print --output-format text 2>&1)
-      local exit_code=$?
-      if [ $exit_code -eq 124 ]; then
-        echo "Error: claude timeout after 90s" >&2
-        return 1
-      elif [ $exit_code -ne 0 ]; then
-        echo "Error: claude failed (exit $exit_code), falling back to opencode+github-copilot" >&2
-        result=$(echo "$prompt" | timeout 90s opencode run --model "github-copilot/claude-sonnet-4.5" 2>&1)
+      local result exit_code
+      if [[ "$model" == github-copilot/* ]]; then
+        # Haiku/Sonnet: route via opencode+Copilot to save Anthropic credits
+        result=$(echo "$prompt" | timeout 90s opencode run --model "$model" 2>&1)
         exit_code=$?
         if [ $exit_code -eq 124 ]; then
-          echo "Error: opencode fallback timeout after 90s" >&2
+          echo "Error: OpenCode command timeout after 90s" >&2
           return 1
         elif [ $exit_code -ne 0 ]; then
-          echo "Error: opencode fallback also failed (exit $exit_code)" >&2
+          echo "Error: OpenCode command failed (exit code: $exit_code)" >&2
+          return 1
+        fi
+      else
+        # Opus: use Anthropic directly via claude --print
+        result=$(echo "$prompt" | timeout 90s claude --print --output-format text 2>&1)
+        exit_code=$?
+        if [ $exit_code -eq 124 ]; then
+          echo "Error: claude timeout after 90s" >&2
+          return 1
+        elif [ $exit_code -ne 0 ]; then
+          echo "Error: claude failed (exit $exit_code)" >&2
           return 1
         fi
       fi
@@ -448,8 +441,7 @@ function _run_ai_direct() {
   
   # Make direct API call based on provider
   case $provider in
-    github-copilot|anthropic)
-      # anthropic hybrid: _get_opencode_model resolved haiku/sonnet → github-copilot/*, opus → anthropic/*
+    github-copilot)
       local model_name="$model"
       local json_prompt="$prompt
 
@@ -661,16 +653,30 @@ Example of CORRECT response format:
 
 START YOUR RESPONSE NOW WITH [ OR []:"
 
-      local result
-      # claude --print streams its response to the real terminal as it generates,
-      # bypassing shell fd redirections in two ways:
-      #   1. open("/dev/tty") — blocked by start_new_session=True (setsid creates a
-      #      new session with no controlling terminal → ENXIO on open)
-      #   2. open(getenv("TTY")) — the $TTY env var holds the explicit device path
-      #      (e.g. /dev/ttys003); even with setsid, opening that path by name works.
-      #      Blocked by removing TTY from the subprocess environment.
-      # capture_output=True also ensures stdout/stderr are pipes, so isatty() is false.
-      result=$(echo "$json_prompt" | timeout 90s python3 -c '
+      local result exit_code
+      if [[ "$model" == github-copilot/* ]]; then
+        # Haiku/Sonnet: route via opencode+Copilot to save Anthropic credits
+        result=$(echo "$json_prompt" | timeout 90s opencode run --model "$model" 2>&1)
+        exit_code=$?
+        if [ $exit_code -eq 124 ]; then
+          echo "Error: OpenCode command timeout after 90s" >&2
+          return 1
+        elif [ $exit_code -ne 0 ]; then
+          echo "Error: OpenCode command failed (exit code: $exit_code)" >&2
+          return 1
+        fi
+        local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
+        if echo "$extracted" | jq empty 2>/dev/null; then
+          echo "$extracted"
+          return 0
+        fi
+        echo "Error: Could not parse AI response as JSON" >&2
+        echo "[]"
+        return 2
+      else
+        # Opus: use Anthropic directly via claude --print
+        # claude --print bypasses shell fd redirections — use python3 wrapper to suppress tty output
+        result=$(echo "$json_prompt" | timeout 90s python3 -c '
 import subprocess, sys, os
 env = dict(os.environ)
 env.pop("TTY", None)
@@ -684,43 +690,35 @@ r = subprocess.run(
 sys.stdout.buffer.write(r.stdout)
 sys.exit(r.returncode)
 ' 2>/dev/null)
-      local exit_code=$?
-      if [ $exit_code -eq 124 ]; then
-        echo "Error: claude timeout after 90s" >&2
-        return 1
-      elif [ $exit_code -ne 0 ]; then
-        echo "Error: claude failed (exit $exit_code)" >&2
+        exit_code=$?
+        if [ $exit_code -eq 124 ]; then
+          echo "Error: claude timeout after 90s" >&2
+          return 1
+        elif [ $exit_code -ne 0 ]; then
+          echo "Error: claude failed (exit $exit_code)" >&2
+          return 1
+        fi
+        if [[ -n "$result" ]]; then
+          if echo "$result" | jq empty 2>/dev/null; then
+            echo "$result"; return 0
+          fi
+          local stripped
+          stripped=$(echo "$result" | sed 's/```[a-z]*//g; s/```//g')
+          if echo "$stripped" | jq empty 2>/dev/null; then
+            echo "$stripped"; return 0
+          fi
+          local extracted
+          extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
+          if echo "$extracted" | jq empty 2>/dev/null; then
+            echo "$extracted"; return 0
+          fi
+          echo "Error: Could not parse AI response as JSON" >&2
+          echo "[]"
+          return 2
+        fi
+        echo "Error: claude returned empty response" >&2
         return 1
       fi
-
-      if [[ -n "$result" ]]; then
-        # Try direct parse first (claude followed instructions and returned pure JSON)
-        if echo "$result" | jq empty 2>/dev/null; then
-          echo "$result"
-          return 0
-        fi
-        # Strip markdown code fences and retry
-        local stripped
-        stripped=$(echo "$result" | sed 's/```[a-z]*//g; s/```//g')
-        if echo "$stripped" | jq empty 2>/dev/null; then
-          echo "$stripped"
-          return 0
-        fi
-        # Extract rightmost JSON array (handles preamble like "batch_issues='[]'")
-        # Greedy .* before forces rightmost match; lazy .*? inside avoids over-capturing.
-        local extracted
-        extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
-        if echo "$extracted" | jq empty 2>/dev/null; then
-          echo "$extracted"
-          return 0
-        fi
-        echo "Error: Could not parse AI response as JSON" >&2
-        echo "[]"
-        return 2
-      fi
-
-      echo "Error: claude returned empty response" >&2
-      return 1
       ;;
 
     *)
@@ -935,7 +933,6 @@ function _validate_provider() {
   case "$1" in
     claude-code)    _validate_claude_code ;;
     github-copilot) _validate_github_copilot ;;
-    anthropic)      _validate_github_copilot ;;  # anthropic hybrid requires Copilot for haiku/sonnet
     opencode)       _validate_opencode_zen ;;
     openrouter)     _validate_openrouter ;;
     llama-cpp)      _validate_llamacpp ;;
