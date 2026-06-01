@@ -276,3 +276,5 @@ stow-uninstall-local-ignore
 # =============================================================================
 ignore.txt
 *.local
+
+**/.claude/settings.local.json
