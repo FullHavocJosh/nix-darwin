@@ -2132,6 +2132,12 @@ function gpa() {
         ;;
     esac
   done
+
+  # GitHub Copilot does not support Opus — block explicit --tier=opus
+  if [[ "$tier_override" == "opus" && "$(_get_ai_provider)" == "github-copilot" ]]; then
+    echo "✗ Opus is not available with GitHub Copilot. Use haiku or sonnet."
+    return 1
+  fi
   
   # Save current shell options and disable tracing
   local prev_opts=$-

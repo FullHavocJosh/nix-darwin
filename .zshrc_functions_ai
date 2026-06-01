@@ -54,6 +54,7 @@ function _provider_display_name() {
   case "$1" in
     claude-code)    echo "Claude Code" ;;
     github-copilot) echo "GitHub Copilot" ;;
+    anthropic)      echo "Anthropic" ;;
     opencode)       echo "OpenCode" ;;
     openrouter)     echo "OpenRouter" ;;
     llama-cpp)      echo "llama.cpp" ;;
@@ -85,6 +86,9 @@ function _model_tier_display() {
         echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.6 | 🔴 Opus 4.7"
       fi
       ;;
+    anthropic)
+      echo "🟢 Haiku 4.5 (Copilot) | 🔵 Sonnet 4.5 (Copilot) | 🔴 Opus 4.7 (Anthropic)"
+      ;;
     openrouter)
       echo "🟢 Haiku 3.5 | 🔵 Sonnet 4.5 | 🔴 Opus 4.5"
       ;;
@@ -114,7 +118,8 @@ function _get_opencode_model() {
   fi
 
   # GitHub Copilot: skip auto-discovery (4.6 listed but not actually supported)
-  if [[ "$provider" != "github-copilot" ]]; then
+  # Anthropic hybrid: skip auto-discovery so hybrid routing (haiku/sonnet→Copilot, opus→Anthropic) is used
+  if [[ "$provider" != "github-copilot" ]] && [[ "$provider" != "anthropic" ]]; then
     local model=""
     if [[ "$task_type" == "haiku" ]]; then
       model=$(_discover_latest_model "$provider" "haiku")
@@ -174,6 +179,12 @@ function _get_opencode_model() {
         echo "claude-sonnet-4-6"
       fi
       ;;
+    anthropic)
+      # Hybrid: haiku/sonnet → GitHub Copilot (free), opus → Anthropic (direct)
+      [[ "$task_type" == "opus"  ]] && echo "anthropic/claude-opus-4-7"       && return
+      [[ "$task_type" == "haiku" ]] && echo "github-copilot/claude-haiku-4.5" && return
+      echo "github-copilot/claude-sonnet-4.5"
+      ;;
     llama-cpp|llama.cpp)
       echo "llama.cpp/local-coder"
       ;;
@@ -229,8 +240,8 @@ function _supports_multi_tier() {
   local provider=$(_get_ai_provider)
   
   case "$provider" in
-    claude-code|github-copilot)
-      return 0  # Supports Haiku/Sonnet (GitHub) or Haiku/Sonnet/Opus (Claude Code)
+    claude-code|github-copilot|anthropic)
+      return 0  # Supports Haiku/Sonnet (GitHub/Anthropic hybrid) or Haiku/Sonnet/Opus (Claude Code)
       ;;
     opencode)
       # OpenCode supports multi-tier ONLY if using a Claude model (not free)
@@ -257,6 +268,9 @@ function _supports_opus() {
     github-copilot)
       return 1  # GitHub Copilot does NOT support Opus
       ;;
+    anthropic)
+      return 0  # Anthropic supports Opus (haiku/sonnet route via Copilot, opus uses Anthropic)
+      ;;
     opencode)
       # OpenCode Zen supports Opus only with Claude models
       _is_opencode_free_model && return 1 || return 0
@@ -281,7 +295,8 @@ function _run_ai_plain() {
   
   # Make direct API call based on provider
   case $provider in
-    github-copilot)
+    github-copilot|anthropic)
+      # anthropic hybrid: _get_opencode_model already resolved haiku/sonnet → github-copilot/*, opus → anthropic/*
       local result
       result=$(echo "$prompt" | timeout 90s opencode run --model "$model" 2>&1)
       local exit_code=$?
@@ -295,7 +310,7 @@ function _run_ai_plain() {
       echo "$result"
       return 0
       ;;
-      
+
     opencode)
       # Use OpenCode CLI for all opencode provider requests
       # This handles authentication and API endpoints correctly
@@ -433,14 +448,15 @@ function _run_ai_direct() {
   
   # Make direct API call based on provider
   case $provider in
-    github-copilot)
+    github-copilot|anthropic)
+      # anthropic hybrid: _get_opencode_model resolved haiku/sonnet → github-copilot/*, opus → anthropic/*
       local model_name="$model"
       local json_prompt="$prompt
 
 CRITICAL INSTRUCTIONS - READ CAREFULLY:
 You MUST respond with ONLY a JSON array. Do not include:
 - Any conversational text before the JSON
-- Any explanations after the JSON  
+- Any explanations after the JSON
 - Any markdown code blocks or backticks
 - Any commentary or notes
 
@@ -458,10 +474,10 @@ Here are the issues I found:
 Let me know if you need anything else!
 
 START YOUR RESPONSE NOW WITH [ OR []:"
-      
+
       local result=$(echo "$json_prompt" | timeout 90s opencode run --model "$model_name" 2>&1)
       local exit_code=$?
-      
+
       if [ $exit_code -eq 124 ]; then
         echo "Error: OpenCode command timeout after 90s" >&2
         return 1
@@ -472,29 +488,29 @@ START YOUR RESPONSE NOW WITH [ OR []:"
         fi
         return 1
       fi
-      
+
       # Extract JSON more efficiently - single strategy that handles most cases
       if [[ -n "$result" ]]; then
         # Strategy: Extract from first [ to last ] (handles wrapped JSON)
         local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
-        
+
         # Validate it's proper JSON
         if echo "$extracted" | jq empty 2>/dev/null; then
           echo "$extracted"
           return 0
         fi
-        
+
         # Soft failure: Could not parse response
         # Exit code 2 = unparseable output (user should be warned)
         echo "Error: Could not parse AI response as JSON" >&2
         echo "[]"
         return 2
       fi
-      
+
       echo "Error: OpenCode returned empty response" >&2
       return 1
       ;;
-      
+
     opencode)
       # Use OpenCode CLI for all opencode provider requests
       local model_name="$model"
@@ -919,6 +935,7 @@ function _validate_provider() {
   case "$1" in
     claude-code)    _validate_claude_code ;;
     github-copilot) _validate_github_copilot ;;
+    anthropic)      _validate_github_copilot ;;  # anthropic hybrid requires Copilot for haiku/sonnet
     opencode)       _validate_opencode_zen ;;
     openrouter)     _validate_openrouter ;;
     llama-cpp)      _validate_llamacpp ;;
