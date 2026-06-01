@@ -52,10 +52,9 @@ function _discover_latest_model() {
 # Returns a human-readable provider name with proper capitalisation.
 function _provider_display_name() {
   case "$1" in
-    claude-code)    echo "Claude Code" ;;
+    claude-code)    echo "Anthropic" ;;
     github-copilot) echo "GitHub Copilot" ;;
     opencode)       echo "OpenCode" ;;
-    openrouter)     echo "OpenRouter" ;;
     llama-cpp)      echo "llama.cpp" ;;
     *)              echo "$1" ;;
   esac
@@ -84,9 +83,6 @@ function _model_tier_display() {
       else
         echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.6 | 🔴 Opus 4.7"
       fi
-      ;;
-    openrouter)
-      echo "🟢 Haiku 3.5 | 🔵 Sonnet 4.5 | 🔴 Opus 4.5"
       ;;
     llama-cpp|llama.cpp)
       echo "⚪ $(_llamacpp_model_short) (local)"
@@ -155,15 +151,6 @@ function _get_opencode_model() {
       else
         # Latest Sonnet: 4.6 > 4.5 > 4
         echo "opencode/claude-sonnet-4-6"
-      fi
-      ;;
-    openrouter)
-      if [[ "$task_type" == "haiku" ]]; then
-        echo "openrouter/anthropic/claude-3.5-haiku"
-      elif [[ "$task_type" == "opus" ]]; then
-        echo "openrouter/anthropic/claude-opus-4.5"
-      else
-        echo "openrouter/anthropic/claude-sonnet-4.5"
       fi
       ;;
     claude-code)
@@ -313,34 +300,6 @@ function _run_ai_plain() {
       fi
       echo "$result"
       return 0
-      ;;
-      
-    openrouter)
-      if [[ -z "$OPENROUTER_API_KEY" ]]; then
-        echo "Error: OPENROUTER_API_KEY not set" >&2
-        return 1
-      fi
-      
-      local model_name="${model#openrouter/}"
-      local result=$(curl -s https://openrouter.ai/api/v1/chat/completions \
-        --max-time 60 \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $OPENROUTER_API_KEY" \
-        -H "HTTP-Referer: https://github.com/user/zsh-functions" \
-        -d "{
-          \"model\": \"$model_name\",
-          \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
-          \"max_tokens\": 200000
-        }" 2>/dev/null)
-      
-      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
-      if [[ -n "$extracted" && "$extracted" != "null" ]]; then
-        echo "$extracted"
-        return 0
-      fi
-      
-      echo "Error: OpenRouter API returned invalid response" >&2
-      return 1
       ;;
       
     claude-code)
@@ -540,47 +499,6 @@ If there are no issues to report, respond with exactly: []
       
       echo "[]"
       return 2
-      ;;
-      
-    openrouter)
-      # Use curl with OpenRouter API
-      if [[ -z "$OPENROUTER_API_KEY" ]]; then
-        echo "Error: OPENROUTER_API_KEY not set" >&2
-        return 1
-      fi
-      
-      local model_name="${model#openrouter/}"
-      
-      local result=$(curl -s https://openrouter.ai/api/v1/chat/completions \
-        --max-time 60 \
-        --connect-timeout 10 \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $OPENROUTER_API_KEY" \
-        -H "HTTP-Referer: https://github.com/user/zsh-functions" \
-        -d "{
-          \"model\": \"$model_name\",
-          \"messages\": [{\"role\": \"user\", \"content\": $(echo "$prompt" | jq -Rs .)}],
-          \"max_tokens\": 200000
-        }" 2>/dev/null)
-      
-      local curl_exit=$?
-      
-      if [ $curl_exit -eq 28 ]; then
-        echo "Error: OpenRouter API timeout after 60s" >&2
-        return 1
-      elif [ $curl_exit -ne 0 ]; then
-        echo "Error: OpenRouter API network error (curl exit code: $curl_exit)" >&2
-        return 1
-      fi
-      
-      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
-      if [[ -n "$extracted" && "$extracted" != "null" ]]; then
-        echo "$extracted"
-        return 0
-      fi
-      
-      echo "Error: OpenRouter API returned invalid response" >&2
-      return 1
       ;;
       
     llama-cpp)
@@ -866,13 +784,6 @@ function _validate_opencode_zen() {
   return 1
 }
 
-function _validate_openrouter() {
-  [[ -n "$OPENROUTER_API_KEY" ]] && return 0
-  [[ -f ~/.zshrc_envvars ]] && grep -q "OPENROUTER_API_KEY" ~/.zshrc_envvars && return 0
-  [[ -f ~/.zshrc_envvars_insecure ]] && grep -q "OPENROUTER_API_KEY" ~/.zshrc_envvars_insecure && return 0
-  return 1
-}
-
 function _llamacpp_model_tier() {
   local ram_bytes ram_gb
   ram_bytes=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
@@ -934,7 +845,6 @@ function _validate_provider() {
     claude-code)    _validate_claude_code ;;
     github-copilot) _validate_github_copilot ;;
     opencode)       _validate_opencode_zen ;;
-    openrouter)     _validate_openrouter ;;
     llama-cpp)      _validate_llamacpp ;;
     *)              return 1 ;;
   esac
@@ -985,11 +895,6 @@ function _get_cloud_model() {
       [[ "$task_type" == "haiku" ]] && echo "opencode/claude-3-5-haiku"        && return
       echo "opencode/claude-sonnet-4.5"
       ;;
-    openrouter)
-      [[ "$task_type" == "opus"  ]] && echo "openrouter/anthropic/claude-opus-4.5"   && return
-      [[ "$task_type" == "haiku" ]] && echo "openrouter/anthropic/claude-3.5-haiku"  && return
-      echo "openrouter/anthropic/claude-sonnet-4.5"
-      ;;
     anthropic|*)
       [[ "$task_type" == "opus"  ]] && echo "anthropic/claude-opus-4-5"  && return
       [[ "$task_type" == "haiku" ]] && echo "anthropic/claude-haiku-4-5" && return
@@ -1023,19 +928,6 @@ function _run_ai_plain_cloud() {
       [ $exit_code -eq 124 ] && { echo "Error: OpenCode timeout after 90s" >&2; return 1; }
       [ $exit_code -ne 0  ] && { echo "Error: OpenCode failed (exit $exit_code)" >&2; return 1; }
       echo "$result"
-      ;;
-    openrouter)
-      [[ -z "$OPENROUTER_API_KEY" ]] && { echo "Error: OPENROUTER_API_KEY not set" >&2; return 1; }
-      local model_name="${model#openrouter/}"
-      local result=$(curl -s https://openrouter.ai/api/v1/chat/completions \
-        --max-time 60 --connect-timeout 10 \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $OPENROUTER_API_KEY" \
-        -H "HTTP-Referer: https://github.com/user/zsh-functions" \
-        -d "{\"model\":\"$model_name\",\"messages\":[{\"role\":\"user\",\"content\":$(echo "$prompt" | jq -Rs .)}],\"max_tokens\":200000}" 2>/dev/null)
-      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
-      [[ -n "$extracted" && "$extracted" != "null" ]] && echo "$extracted" && return 0
-      echo "Error: OpenRouter cloud API returned invalid response" >&2; return 1
       ;;
   esac
 }
@@ -1076,30 +968,6 @@ START YOUR RESPONSE NOW WITH [ OR []:"
       local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
       echo "$extracted" | jq empty 2>/dev/null && echo "$extracted" && return 0
       echo "[]"; return 2
-      ;;
-    opencode)
-      # Use OpenCode CLI for all opencode provider requests
-      local result
-      result=$(echo "$json_prompt" | timeout 90s opencode run --model "$model" 2>&1)
-      local exit_code=$?
-      [ $exit_code -eq 124 ] && { echo "Error: OpenCode timeout" >&2; return 1; }
-      [ $exit_code -ne 0  ] && { echo "Error: OpenCode call failed" >&2; return 1; }
-      local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
-      echo "$extracted" | jq empty 2>/dev/null && echo "$extracted" && return 0
-      echo "[]"; return 2
-      ;;
-    openrouter)
-      [[ -z "$OPENROUTER_API_KEY" ]] && { echo "Error: OPENROUTER_API_KEY not set" >&2; return 1; }
-      local model_name="${model#openrouter/}"
-      local result=$(curl -s https://openrouter.ai/api/v1/chat/completions \
-        --max-time 60 --connect-timeout 10 \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $OPENROUTER_API_KEY" \
-        -H "HTTP-Referer: https://github.com/user/zsh-functions" \
-        -d "{\"model\":\"$model_name\",\"messages\":[{\"role\":\"user\",\"content\":$(echo "$json_prompt" | jq -Rs .)}],\"max_tokens\":200000}" 2>/dev/null)
-      local extracted=$(echo "$result" | jq -r '.choices[0].message.content' 2>/dev/null)
-      [[ -n "$extracted" && "$extracted" != "null" ]] && echo "$extracted" && return 0
-      echo "[]"; return 1
       ;;
   esac
 }
@@ -1370,23 +1238,24 @@ function aiselect() {
   # Display menu
   echo "Select AI Provider:"
   echo ""
-  echo "  1) $claude_code_status Claude Code (Anthropic)"
+  echo "  1) $claude_code_status Anthropic"
   echo "  2) $github_copilot_status GitHub Copilot"
   echo "  3) $opencode_zen_status OpenCode Zen (API key)"
   echo ""
   echo "Note: llama.cpp is automatically used for commit messages (gpc)"
   echo "      when OpenCode Zen free models are selected."
   echo ""
-  echo -n "Selection (1-3): "
-  read -r choice
+  echo -n "Selection (1-3) [Enter = Anthropic, auto-selects in 5s]: "
+  read -t 5 -r choice
   echo ""
+  [[ -z "$choice" ]] && choice="1"
 
   case "$choice" in
     1)
-      # Claude Code
+      # Anthropic
       if $claude_code_available; then
         _aiselect_commit "claude-code"
-        echo "${GREEN}✓${NC} Using Claude Code"
+        echo "${GREEN}✓${NC} Using Anthropic"
         echo "═══════════════════════════════════════════════════════════"
         return 0
       elif command -v claude &>/dev/null; then

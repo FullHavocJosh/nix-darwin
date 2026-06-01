@@ -660,7 +660,7 @@ function gpc() {
             echo "ℹ Using llama.cpp for commit message (fallback: GitHub Copilot)"
             ;;
           claude-code)
-            echo "ℹ Using llama.cpp for commit message (fallback: Claude Code)"
+            echo "ℹ Using llama.cpp for commit message (fallback: Anthropic)"
             ;;
           *)
             echo "ℹ Using llama.cpp for commit message (fallback: $active_provider)"
@@ -727,13 +727,13 @@ function gpc() {
         provider_display="llama.cpp"
         ;;
       claude-code)
-        provider_display="Claude Code"
+        provider_display="Anthropic"
         ;;
       *)
         provider_display="$provider_for_commit"
         ;;
     esac
-    
+
     if [[ "$provider_for_commit" == "llama-cpp" ]] || [[ "$provider_for_commit" == "llama.cpp" ]]; then
       echo "⚪ $provider_display | $model_name — Generating commit message..."
     elif [[ -n "$selected_model" && "$selected_model" != "null" ]]; then
@@ -2530,7 +2530,7 @@ function gpa() {
         provider_display="llama.cpp"
         ;;
       claude-code)
-        provider_display="Claude Code"
+        provider_display="Anthropic"
         ;;
       *)
         provider_display="$_active_provider"
