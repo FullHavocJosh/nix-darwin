@@ -222,6 +222,7 @@ in
     brews = [
       "ansible"
       "ansible-lint"
+      "argocd"
       "atuin"
       "bash-language-server"
       "btop"
@@ -242,6 +243,7 @@ in
       "gopls"
       "graphviz"
       "hadolint"
+      "helm"
       "jq"
       "jsonlint"
       "k9s"
@@ -306,6 +308,7 @@ in
     ];
     masApps = { };
     onActivation.cleanup = "zap";
+    onActivation.extraFlags = [ "--force" ];
     onActivation.autoUpdate = true;
     onActivation.upgrade = true;
   };
