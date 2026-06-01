@@ -19,7 +19,7 @@ alias nxvim="cd ~/nix-darwin && ~/.config/tmux/plugins/tpm/scripts/install_plugi
 alias devim='~/.config/tmux/plugins/tpm/scripts/install_plugins.sh && (tmux has-session -t $(basename $(pwd)) 2>/dev/null && tmux attach -t $(basename $(pwd)) || (tmux new-session -s $(basename $(pwd)) -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys "nvim" Enter \; select-pane -t 1 \; send-keys "aiselect && aidev" Enter \; select-pane -t 2 \; send-keys "git status" Enter \; select-pane -t 1 \; attach))'
 alias psvim="cd ~/pscloudops/ && ~/.config/tmux/plugins/tpm/scripts/install_plugins.sh && (tmux has-session -t pscloudops 2>/dev/null && tmux attach -t pscloudops || (tmux new-session -s pscloudops -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys 'nvim' Enter \; select-pane -t 1 \; send-keys 'aiselect && aidev' Enter \; select-pane -t 2 \; send-keys 'git status' Enter \; select-pane -t 1 \; attach))"
 alias hivim="cd ~/home-infrastructure && ~/.config/tmux/plugins/tpm/scripts/install_plugins.sh && (tmux has-session -t home-infrastructure 2>/dev/null && tmux attach -t home-infrastructure || (tmux new-session -s home-infrastructure -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys 'nvim' Enter \; select-pane -t 1 \; send-keys 'aiselect && aidev' Enter \; select-pane -t 2 \; send-keys 'git status' Enter \; select-pane -t 1 \; attach))"
-alias itvim="cd ~/home-infrastructure/Infrastructure-Terrakube && ~/.config/tmux/plugins/tpm/scripts/install_plugins.sh && (tmux has-session -t Infrastructure-Terrakube 2>/dev/null && tmux attach -t Infrastructure-Terrakube || (tmux new-session -s Infrastructure-Terrakube -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys 'nvim' Enter \; select-pane -t 1 \; send-keys 'aiselect && aidev' Enter \; select-pane -t 2 \; send-keys 'git status' Enter \; select-pane -t 1 \; attach))"
+alias itvim="cd ~/Infrastructure-Terrakube && ~/.config/tmux/plugins/tpm/scripts/install_plugins.sh && (tmux has-session -t Infrastructure-Terrakube 2>/dev/null && tmux attach -t Infrastructure-Terrakube || (tmux new-session -s Infrastructure-Terrakube -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys 'nvim' Enter \; select-pane -t 1 \; send-keys 'aiselect && aidev' Enter \; select-pane -t 2 \; send-keys 'git status' Enter \; select-pane -t 1 \; attach))"
 
 alias clear="clear ; clear ; clear"
 alias eza="eza -la"
@@ -42,6 +42,6 @@ alias ssoexport='eval "$(aws configure export-credentials --profile $AWS_PROFILE
 
 alias gpr='gpr_func'
 alias gpa-clear-cache='_gpa_clear_cache'
-alias gp='git pull && git submodule update --remote --init --recursive'
+alias gp='git pull && git submodule update --init --recursive'
 
 alias aishow='aiselect --show'
