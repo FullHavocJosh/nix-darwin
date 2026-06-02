@@ -54,14 +54,14 @@ in
       mkdir -p "$OPENCODE_DATA_DIR"
       
       # Determine Doppler config based on hostname
-      # MacBookPro -> macbookprom2pro, MacMiniM1 -> macminim1
+      # MacBookPro -> root_macbook, MacMiniM1 -> root_macmini
       HOSTNAME=$(scutil --get LocalHostName)
       case "$HOSTNAME" in
         MacBookPro*)
-          DOPPLER_CONFIG_NAME="macbookprom2pro"
+          DOPPLER_CONFIG_NAME="root_macbook"
           ;;
         MacMiniM1*)
-          DOPPLER_CONFIG_NAME="macminim1"
+          DOPPLER_CONFIG_NAME="root_macmini"
           ;;
         *)
           echo "Warning: Unknown hostname '$HOSTNAME'. Cannot determine Doppler config."
@@ -75,9 +75,9 @@ in
         echo "Using Doppler config: $DOPPLER_CONFIG_NAME for hostname: $HOSTNAME"
         
         # Fetch OPENCODE_ZEN_API_KEY from Doppler as user
-        # Project: devices-laptops, Config: determined by hostname
+        # Project: FullHavocJosh, Config: determined by hostname
         # Use sudo -u to run as havoc with their HOME environment
-        DOPPLER_API_KEY=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get OPENCODE_ZEN_API_KEY --project devices-laptops --config "$DOPPLER_CONFIG_NAME" --plain 2>/dev/null)
+        DOPPLER_API_KEY=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get OPENCODE_ZEN_API_KEY --project FullHavocJosh --config "$DOPPLER_CONFIG_NAME" --plain 2>/dev/null)
       
         if [ -n "$DOPPLER_API_KEY" ]; then
           # Read existing auth.json if it exists, otherwise start with empty object
@@ -100,7 +100,7 @@ in
         else
           echo "Warning: Failed to fetch OPENCODE_ZEN_API_KEY from Doppler."
           echo "Make sure you're authenticated with: doppler login"
-          echo "And verify the secret exists in project 'devices-laptops', config '$DOPPLER_CONFIG_NAME'"
+          echo "And verify the secret exists in project 'FullHavocJosh', config '$DOPPLER_CONFIG_NAME'"
         fi
       fi
     else

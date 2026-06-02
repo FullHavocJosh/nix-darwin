@@ -6,20 +6,30 @@ The following MCP servers were added to `~/.config/opencode/opencode.json` but r
 secrets to be provisioned in Doppler before they will function. Each row lists the
 environment variable name, the Doppler project and config it belongs in, and a description.
 
-### `homelab-infra` project · `local` config
+### `FullHavocJosh` project · `root_opnsense` config
 
 | Environment Variable  | MCP Server | Description                                                |
 | --------------------- | ---------- | ---------------------------------------------------------- |
-| `HETZNER_API_TOKEN`   | `hetzner`  | Hetzner Cloud API token — Console → Security → API Tokens  |
 | `OPNSENSE_HOST`       | `opnsense` | OPNsense firewall URL, e.g. `https://192.168.1.1`          |
 | `OPNSENSE_API_KEY`    | `opnsense` | OPNsense API key — System → Access → Users → API Keys      |
 | `OPNSENSE_API_SECRET` | `opnsense` | OPNsense API secret (paired with `OPNSENSE_API_KEY`)       |
+
+### `FullHavocJosh` project · `root_truenas` config
+
+| Environment Variable  | MCP Server | Description                                                |
+| --------------------- | ---------- | ---------------------------------------------------------- |
 | `TRUENAS_URL`         | `truenas`  | TrueNAS base URL, e.g. `https://truenas.local`             |
 | `TRUENAS_API_KEY`     | `truenas`  | TrueNAS API key — Credentials → API Keys                   |
-| `AWX_URL`             | `awx`      | AWX/AAP/Ansible Tower base URL, e.g. `https://awx.homelab` |
-| `AWX_TOKEN`           | `awx`      | AWX personal access token — User → Tokens                  |
 
-### `ai-tools` project · `local` config
+### `FullHavocJosh` project · `root_macmini` / `root_macbook` config
+
+| Environment Variable  | MCP Server | Description                                                 |
+| --------------------- | ---------- | ----------------------------------------------------------- |
+| `HETZNER_API_TOKEN`   | `hetzner`  | Hetzner Cloud API token — Console → Security → API Tokens   |
+| `AWX_URL`             | `awx`      | AWX/AAP/Ansible Tower base URL, e.g. `https://awx.homelab`  |
+| `AWX_TOKEN`           | `awx`      | AWX personal access token — User → Tokens                   |
+
+### `FullHavocJosh` project · `root` config
 
 | Environment Variable | MCP Server        | Description                                                    |
 | -------------------- | ----------------- | -------------------------------------------------------------- |
@@ -28,9 +38,8 @@ environment variable name, the Doppler project and config it belongs in, and a d
 
 ### Notes
 
-- `OPNSENSE_API_KEY` and `OPNSENSE_API_SECRET` already exist in `~/.zshrc_envvars`
-  (fallback file). Migrate them to Doppler project `homelab-infra:local` to complete the chain.
-- `TRUENAS_API_KEY` already exists in `~/.zshrc_envvars`. Same — migrate to `homelab-infra:local`.
+- `OPNSENSE_API_KEY` and `OPNSENSE_API_SECRET` already exist in `root_opnsense` in Doppler.
+- `TRUENAS_API_KEY` already exists in `root_truenas` in Doppler.
 - `TFC_TOKEN` and `TFE_TOKEN` can be the same value if using a single HCP Terraform account.
 - `OPNSENSE_VERIFY_SSL` is hardcoded to `false` in the MCP config; no secret needed.
 - The `awx` server installs from GitHub on first run (`SurgeX-Labs/awx-mcp-server`). Pin to a
