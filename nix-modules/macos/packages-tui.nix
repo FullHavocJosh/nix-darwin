@@ -301,6 +301,7 @@ in
     casks = [
       # CLI Tools
       "warrensbox/tap/tfswitch"
+      "claude-code"
 
       # Fonts (shared by all profiles for terminal/TUI consistency)
       "font-hack-nerd-font"
@@ -335,11 +336,6 @@ in
         if ! command -v claude-dashboard &>/dev/null; then
           echo "Installing claude-dashboard..."
           brew install seunggabi/tap/claude-dashboard 2>&1 || true
-        fi
-
-        if ! command -v claude &>/dev/null; then
-          echo "Installing Claude Code CLI..."
-          /opt/homebrew/bin/npm install -g @anthropic-ai/claude-code 2>&1 || echo "WARNING: Claude Code install failed — continuing activation" >&2
         fi
 
         # Configure claude-tui for Claude Code
