@@ -35,7 +35,7 @@
     }
   },
   "desktopLocalPort": 57123,
-  "zenModel": "minimax-m2.5-free",
+  "zenModel": "big-pickle",
   "desktopWindowState": {
     "x": 1512,
     "y": 47,

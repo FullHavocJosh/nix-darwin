@@ -111,8 +111,9 @@ in
     echo "[llama-model-downloader] Download check running in background — tail ~/models/download.log"
   '';
 
-  launchd.user.agents.llama-server = {
+  launchd.daemons.llama-server = {
     serviceConfig = {
+      UserName = username;
       ProgramArguments = [
         "/bin/bash"
         "${llamaServerLauncher}"
@@ -121,13 +122,6 @@ in
       RunAtLoad = true;
       StandardOutPath = "/tmp/llama-server.log";
       StandardErrorPath = "/tmp/llama-server.error.log";
-      LimitLoadToSessionType = [
-        "Aqua"
-        "Background"
-        "LoginWindow"
-        "StandardIO"
-        "System"
-      ];
     };
   };
 }

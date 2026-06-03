@@ -103,8 +103,9 @@ in
 
   '';
 
-  launchd.user.agents.openchamber = {
+  launchd.daemons.openchamber = {
     serviceConfig = {
+      UserName = username;
       # The wrapper script reads the password at runtime — never a static string in ps aux output.
       ProgramArguments = [
         "/bin/bash"
@@ -115,13 +116,6 @@ in
       RunAtLoad = true;
       StandardOutPath = "/Users/${username}/Library/Logs/openchamber/openchamber.log";
       StandardErrorPath = "/Users/${username}/Library/Logs/openchamber/openchamber.error.log";
-      LimitLoadToSessionType = [
-        "Aqua"
-        "Background"
-        "LoginWindow"
-        "StandardIO"
-        "System"
-      ];
     };
   };
 }
