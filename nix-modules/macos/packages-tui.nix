@@ -337,6 +337,11 @@ in
           brew install seunggabi/tap/claude-dashboard 2>&1 || true
         fi
 
+        if ! command -v claude &>/dev/null; then
+          echo "Installing Claude Code CLI..."
+          /opt/homebrew/bin/npm install -g @anthropic-ai/claude-code 2>&1 || echo "WARNING: Claude Code install failed — continuing activation" >&2
+        fi
+
         # Configure claude-tui for Claude Code
         (
           ${claudeTuiSetup}

@@ -88,7 +88,7 @@ let
     fi
 
     log "Starting llama-server for coding (GPA/GPC functions)..."
-    exec /opt/homebrew/bin/llama-server \
+    exec llama-server \
       --model           "$MODEL_FILE" \
       --host            "0.0.0.0" \
       --port            "8080" \
@@ -101,8 +101,8 @@ let
   '';
 in
 {
-  homebrew.brews = [
-    "llama.cpp"
+  environment.systemPackages = with pkgs; [
+    llama-cpp
   ];
 
   system.activationScripts.llamacppUserConfig.text = lib.mkAfter ''
