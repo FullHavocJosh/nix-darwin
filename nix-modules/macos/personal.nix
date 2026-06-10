@@ -155,6 +155,7 @@ in
       # GUI apps shared with laptop are in packages-gui.nix
       # TUI/CLI apps shared across all profiles are in packages-tui.nix
 
+      "ollama-app"
       "element"
       "obsidian"
       "plex"
