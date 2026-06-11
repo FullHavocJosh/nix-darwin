@@ -54,10 +54,10 @@ in
       mkdir -p "$OPENCODE_DATA_DIR"
       
       # Determine Doppler config based on hostname
-      # MacBookM2Pro/MacBookM3Pro -> root_macbook, MacMiniM1 -> root_macmini
+      # MacBookM2Pro -> root_macbook, MacMiniM1 -> root_macmini
       HOSTNAME=$(scutil --get LocalHostName)
       case "$HOSTNAME" in
-        MacBookM2Pro*|MacBookM3Pro*)
+        MacBookM2Pro*)
           DOPPLER_CONFIG_NAME="root_macbook"
           ;;
         MacMiniM1*)
