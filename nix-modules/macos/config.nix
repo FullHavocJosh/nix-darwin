@@ -1,10 +1,38 @@
-{ pkgs, config, ... }:
+{
+  pkgs,
+  lib,
+  config,
+  ...
+}:
 {
   nixpkgs.config.allowUnfree = true;
   nixpkgs.hostPlatform = "aarch64-darwin";
   nix.settings.experimental-features = "nix-command flakes";
   programs.zsh.enable = true;
   system.stateVersion = 5;
+
+  # Prepend tap trust setup to the homebrew activation script so it runs BEFORE brew bundle.
+  # Writes ~/.homebrew/trust.json directly (no brew binary needed, runs as root).
+  system.activationScripts.homebrew.text = lib.mkBefore ''
+        USER_HOME=$(eval echo ~${config.system.primaryUser})
+        TRUST_FILE="$USER_HOME/.homebrew/trust.json"
+        mkdir -p "$USER_HOME/.homebrew"
+        /usr/bin/python3 -c "
+    import json, os
+    tf = '$TRUST_FILE'
+    taps = 'dopplerhq/cli minio/stable seunggabi/tap slima4/claude-tui vitobotta/tap warrensbox/tap xykong/tap'.split()
+    try:
+        with open(tf) as f:
+            d = json.load(f)
+    except (OSError, ValueError):
+        d = {}
+    d['trustedtaps'] = sorted(set(d.get('trustedtaps', []) + taps))
+    with open(tf, 'w') as f:
+        json.dump(d, f, indent=2)
+        f.write('\n')
+    "
+        chown ${config.system.primaryUser} "$TRUST_FILE"
+  '';
 
   system.activationScripts.userConfig.text = ''
         # Run user-specific configuration as the primary user
@@ -51,13 +79,6 @@
 
         # Add Homebrew bin to PATH for this script
         export PATH="$HOMEBREW_PREFIX/bin:$PATH"
-
-        # Trust all configured Homebrew taps to suppress "Skipping because not trusted" warnings
-        if command -v brew &>/dev/null; then
-          for tap in dopplerhq/cli minio/stable vitobotta/tap slima4/claude-tui warrensbox/tap xykong/tap seunggabi/tap; do
-            brew trust "$tap" 2>/dev/null || true
-          done
-        fi
 
         if command -v npm &>/dev/null && command -v node &>/dev/null; then
           MCP_FOUND=0
