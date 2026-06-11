@@ -308,7 +308,7 @@ in
       "font-jetbrains-mono-nerd-font"
     ];
     masApps = { };
-    onActivation.cleanup = "zap";
+    onActivation.cleanup = "none";
     onActivation.extraFlags = [ "--force" ];
     onActivation.autoUpdate = true;
     onActivation.upgrade = true;
