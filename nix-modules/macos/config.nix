@@ -52,6 +52,13 @@
         # Add Homebrew bin to PATH for this script
         export PATH="$HOMEBREW_PREFIX/bin:$PATH"
 
+        # Trust all configured Homebrew taps to suppress "Skipping because not trusted" warnings
+        if command -v brew &>/dev/null; then
+          for tap in dopplerhq/cli minio/stable vitobotta/tap slima4/claude-tui warrensbox/tap xykong/tap seunggabi/tap; do
+            brew trust "$tap" 2>/dev/null || true
+          done
+        fi
+
         if command -v npm &>/dev/null && command -v node &>/dev/null; then
           MCP_FOUND=0
           for MCP_DIR in "$HOME"/mcp-*/; do
