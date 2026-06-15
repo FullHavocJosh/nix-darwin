@@ -375,6 +375,9 @@
     }
   },
   "skills": {
-    "paths": ["/Users/havoc/model-skills-fullhavoc"]
+    "paths": [
+      "/Users/havoc/model-skills-fullhavoc",
+      "/Users/jrollet/model-skills-perfectserve"
+    ]
   }
 }

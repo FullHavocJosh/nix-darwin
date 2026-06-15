@@ -46,17 +46,56 @@
           ln -sf "$HOME/nix-darwin/.gitignore_global" "$HOME/.gitignore_global"
         fi
 
-        # Symlink Claude Code skills — prefer model-skills repos over nix-darwin fallback
-        CLAUDE_SKILLS_SRC="$HOME/nix-darwin/.claude/skills"
-        if [ -d "$HOME/model-skills-fullhavoc" ]; then
-          CLAUDE_SKILLS_SRC="$HOME/model-skills-fullhavoc"
-        elif [ -d "$HOME/model-skills-perfectserve" ]; then
-          CLAUDE_SKILLS_SRC="$HOME/model-skills-perfectserve"
-        fi
-        if [ ! -L "$HOME/.claude/skills" ] || [ "$(readlink "$HOME/.claude/skills")" != "$CLAUDE_SKILLS_SRC" ]; then
-          echo "Creating symlink for Claude Code skills → $CLAUDE_SKILLS_SRC"
-          ln -sfn "$CLAUDE_SKILLS_SRC" "$HOME/.claude/skills"
-        fi
+        # Symlink Claude Code skills — each skill subdirectory gets its own symlink in ~/.claude/skills/
+        # Claude Code scans ~/.claude/skills/ for direct subdirs with SKILL.md, not nested repos.
+        # Skills are sourced from model-skills repos (preferred) or nix-darwin fallback.
+        mkdir -p "$HOME/.claude/skills"
+        _link_skills_from_repo() {
+          local repo="$1"
+          [ -d "$repo" ] || return 0
+          for skill_dir in "$repo"/*/; do
+            [ -f "$skill_dir/SKILL.md" ] || continue
+            local skill_name
+            skill_name=$(basename "$skill_dir")
+            local target="$HOME/.claude/skills/$skill_name"
+            if [ ! -L "$target" ] || [ "$(readlink "$target")" != "$skill_dir" ]; then
+              echo "Linking Claude skill: $skill_name → $skill_dir"
+              ln -sfn "$skill_dir" "$target"
+            fi
+          done
+        }
+        # Remove stale/broken skill symlinks that no longer exist in any repo
+        for existing_link in "$HOME/.claude/skills"/*/; do
+          [ -L "''${existing_link%/}" ] || continue
+          if [ ! -f "''${existing_link}SKILL.md" ]; then
+            echo "Removing stale Claude skill symlink: $(basename "''${existing_link%/}")"
+            rm "''${existing_link%/}"
+          fi
+        done
+        _link_skills_from_repo "$HOME/model-skills-fullhavoc"
+        _link_skills_from_repo "$HOME/model-skills-perfectserve"
+        _link_skills_from_repo "$HOME/nix-darwin/.claude/skills"
+        unset -f _link_skills_from_repo
+
+        # Symlink Claude Code commands from model-skills repos into ~/.claude/commands/
+        mkdir -p "$HOME/.claude/commands"
+        _link_commands_from_repo() {
+          local repo="$1"
+          [ -d "$repo/.claude/commands" ] || return 0
+          for cmd_file in "$repo/.claude/commands"/*.md; do
+            [ -f "$cmd_file" ] || continue
+            local cmd_name
+            cmd_name=$(basename "$cmd_file")
+            local target="$HOME/.claude/commands/$cmd_name"
+            if [ ! -L "$target" ] || [ "$(readlink "$target")" != "$cmd_file" ]; then
+              echo "Linking Claude command: $cmd_name"
+              ln -sfn "$cmd_file" "$target"
+            fi
+          done
+        }
+        _link_commands_from_repo "$HOME/model-skills-fullhavoc"
+        _link_commands_from_repo "$HOME/model-skills-perfectserve"
+        unset -f _link_commands_from_repo
 
         # Symlink Claude Code settings from nix-darwin
         if [ ! -L "$HOME/.claude/settings.local.json" ] || [ "$(readlink "$HOME/.claude/settings.local.json")" != "$HOME/nix-darwin/.claude/settings.local.json" ]; then
