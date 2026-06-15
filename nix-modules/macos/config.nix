@@ -34,7 +34,7 @@
         chown ${config.system.primaryUser} "$TRUST_FILE"
   '';
 
-  system.activationScripts.userConfig.text = ''
+  system.activationScripts.script.text = lib.mkAfter ''
         # Run user-specific configuration as the primary user
         USER_NAME="${config.system.primaryUser}"
         USER_HOME=$(eval echo ~$USER_NAME)
