@@ -349,7 +349,7 @@
         fi
 
         if command -v cargo &>/dev/null; then
-          if ! command -v nexus-tui &>/dev/null; then
+          if ! command -v nexus &>/dev/null; then
             echo "Installing nexus-tui..."
             # Not on crates.io; pinned to a specific audited commit.
             # Audited at edd908b: Kubernetes TUI, no network/fs side effects beyond kubeconfig reads.
