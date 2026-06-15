@@ -48,11 +48,13 @@
 
         # Symlink Claude Code skills — each skill subdirectory gets its own symlink in ~/.claude/skills/
         # Claude Code scans ~/.claude/skills/ for direct subdirs with SKILL.md, not nested repos.
-        # Skills are sourced from model-skills repos (preferred) or nix-darwin fallback.
+        # Skills are sourced from model-skills repos only; ~/.claude/skills/ is the target, never a source.
         mkdir -p "$HOME/.claude/skills"
         _link_skills_from_repo() {
           local repo="$1"
+          # Never recurse into ~/.claude/skills itself — that is our target, not a source
           [ -d "$repo" ] || return 0
+          [ "$(cd "$repo" && pwd -P)" = "$(cd "$HOME/.claude/skills" && pwd -P)" ] && return 0
           for skill_dir in "$repo"/*/; do
             [ -f "$skill_dir/SKILL.md" ] || continue
             local skill_name
@@ -74,7 +76,6 @@
         done
         _link_skills_from_repo "$HOME/model-skills-fullhavoc"
         _link_skills_from_repo "$HOME/model-skills-perfectserve"
-        _link_skills_from_repo "$HOME/nix-darwin/.claude/skills"
         unset -f _link_skills_from_repo
 
         # Symlink Claude Code commands from model-skills repos into ~/.claude/commands/
