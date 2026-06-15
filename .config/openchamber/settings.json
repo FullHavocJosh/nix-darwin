@@ -73,7 +73,7 @@
       "icon": "terminal",
       "color": "keyword",
       "addedAt": 1779135544122,
-      "lastOpenedAt": 1779818080970,
+      "lastOpenedAt": 1781525515365,
       "iconBackground": null,
       "sidebarCollapsed": true
     },
@@ -93,7 +93,7 @@
   "desktopDefaultHostId": "local",
   "desktopInitialHostChoiceCompleted": true,
   "reportUsage": false,
-  "activeProjectId": "path_L1VzZXJzL2hhdm9jL2hvbWUtaW5mcmFzdHJ1Y3R1cmU",
+  "activeProjectId": "path_L1VzZXJzL2hhdm9jL25peC1kYXJ3aW4",
   "filesViewShowGitignored": false,
   "defaultModel": "opencode/claude-sonnet-4-6",
   "favoriteModels": [
