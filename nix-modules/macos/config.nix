@@ -46,10 +46,16 @@
           ln -sf "$HOME/nix-darwin/.gitignore_global" "$HOME/.gitignore_global"
         fi
 
-        # Symlink Claude Code skills directory from nix-darwin
-        if [ ! -L "$HOME/.claude/skills" ] || [ "$(readlink "$HOME/.claude/skills")" != "$HOME/nix-darwin/.claude/skills" ]; then
-          echo "Creating symlink for Claude Code skills..."
-          ln -sfn "$HOME/nix-darwin/.claude/skills" "$HOME/.claude/skills"
+        # Symlink Claude Code skills — prefer model-skills repos over nix-darwin fallback
+        CLAUDE_SKILLS_SRC="$HOME/nix-darwin/.claude/skills"
+        if [ -d "$HOME/model-skills-fullhavoc" ]; then
+          CLAUDE_SKILLS_SRC="$HOME/model-skills-fullhavoc"
+        elif [ -d "$HOME/model-skills-perfectserve" ]; then
+          CLAUDE_SKILLS_SRC="$HOME/model-skills-perfectserve"
+        fi
+        if [ ! -L "$HOME/.claude/skills" ] || [ "$(readlink "$HOME/.claude/skills")" != "$CLAUDE_SKILLS_SRC" ]; then
+          echo "Creating symlink for Claude Code skills → $CLAUDE_SKILLS_SRC"
+          ln -sfn "$CLAUDE_SKILLS_SRC" "$HOME/.claude/skills"
         fi
 
         # Symlink Claude Code settings from nix-darwin
@@ -79,6 +85,86 @@
 
         # Add Homebrew bin to PATH for this script
         export PATH="$HOMEBREW_PREFIX/bin:$PATH"
+
+        # Update all tracked repos to latest main, preserving local branch/changes
+        if command -v git &>/dev/null; then
+          _update_repo_main() {
+            local repo_path="$1"
+            local repo_name
+            repo_name=$(basename "$repo_path")
+
+            if [ ! -d "$repo_path/.git" ]; then
+              echo "  $repo_name: not present, skipping."
+              return 0
+            fi
+
+            echo "── $repo_name ──"
+
+            local current_branch
+            current_branch=$(git -C "$repo_path" symbolic-ref --short HEAD 2>/dev/null)
+            if [ -z "$current_branch" ]; then
+              echo "  Detached HEAD, skipping."
+              return 0
+            fi
+
+            local stash_created=0
+            if ! git -C "$repo_path" diff --quiet HEAD 2>/dev/null; then
+              git -C "$repo_path" stash push -m "darwin-rebuild auto-stash $(date +%Y%m%d-%H%M%S)" \
+                && stash_created=1 \
+                && echo "  Stashed uncommitted changes."
+            fi
+
+            local main_branch
+            if git -C "$repo_path" rev-parse --verify main &>/dev/null; then
+              main_branch="main"
+            elif git -C "$repo_path" rev-parse --verify master &>/dev/null; then
+              main_branch="master"
+            else
+              echo "  No main/master branch found, skipping."
+              [ "$stash_created" -eq 1 ] && git -C "$repo_path" stash pop
+              return 0
+            fi
+
+            if [ "$current_branch" != "$main_branch" ]; then
+              git -C "$repo_path" checkout "$main_branch" || {
+                echo "  Failed to checkout $main_branch, aborting."
+                [ "$stash_created" -eq 1 ] && git -C "$repo_path" stash pop
+                return 1
+              }
+            fi
+
+            git -C "$repo_path" pull \
+              && git -C "$repo_path" submodule update --init --recursive \
+              || echo "  Warning: pull failed for $repo_name (SSH agent may not be available)."
+
+            if [ "$current_branch" != "$main_branch" ]; then
+              git -C "$repo_path" checkout "$current_branch" \
+                || echo "  Warning: failed to return to $current_branch."
+            fi
+
+            if [ "$stash_created" -eq 1 ]; then
+              git -C "$repo_path" stash pop \
+                || echo "  Warning: stash pop failed — run: git -C '$repo_path' stash pop"
+            fi
+
+            echo "  Done."
+          }
+
+          echo "Updating tracked repositories to latest main..."
+          for TRACKED_REPO in \
+            "$HOME/nix-darwin" \
+            "$HOME/home-infrastructure" \
+            "$HOME/mcp-context-guardian-fullhavoc" \
+            "$HOME/mcp-context-guardian-perfectserve" \
+            "$HOME/model-skills-fullhavoc" \
+            "$HOME/model-skills-perfectserve" \
+            "$HOME/Infrastructure-Terrakube" \
+            "$HOME/Infrastructure-Ansible"; do
+            _update_repo_main "$TRACKED_REPO"
+          done
+          unset -f _update_repo_main
+          echo "Finished updating repositories."
+        fi
 
         if command -v npm &>/dev/null && command -v node &>/dev/null; then
           MCP_FOUND=0
@@ -226,6 +312,19 @@
             eval "$CMD" 2>/dev/null && \
               echo "  Registered $SERVER_NAME with Claude Code." || \
               echo "  Failed to register $SERVER_NAME with Claude Code."
+          done
+        fi
+
+        # Inject model-skills repo paths into OpenCode skills.paths if not already present
+        OPENCODE_CONFIG="$HOME/.config/opencode/opencode.json"
+        if command -v jq &>/dev/null && [ -f "$OPENCODE_CONFIG" ]; then
+          for SKILLS_REPO in "$HOME/model-skills-fullhavoc" "$HOME/model-skills-perfectserve"; do
+            [ -d "$SKILLS_REPO" ] || continue
+            if ! jq -e --arg p "$SKILLS_REPO" '(.skills.paths // []) | contains([$p])' "$OPENCODE_CONFIG" &>/dev/null; then
+              UPDATED=$(jq --arg p "$SKILLS_REPO" '.skills.paths = ((.skills.paths // []) + [$p] | unique)' "$OPENCODE_CONFIG")
+              printf '%s\n' "$UPDATED" > "$OPENCODE_CONFIG"
+              echo "Added $SKILLS_REPO to OpenCode skills.paths"
+            fi
           done
         fi
 
