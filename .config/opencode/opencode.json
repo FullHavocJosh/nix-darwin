@@ -373,5 +373,8 @@
       "type": "local",
       "command": ["npx", "-y", "@prettier/mcp"]
     }
+  },
+  "skills": {
+    "paths": ["/Users/havoc/model-skills-fullhavoc"]
   }
 }
