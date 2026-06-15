@@ -84,7 +84,7 @@
         HOMEBREW_PREFIX="/opt/homebrew"
 
         # Add Homebrew bin to PATH for this script
-        export PATH="$HOMEBREW_PREFIX/bin:$PATH"
+        export PATH="$HOMEBREW_PREFIX/bin:$HOME/.cargo/bin:$HOME/go/bin:$PATH"
 
         # Update all tracked repos to latest main, preserving local branch/changes
         if command -v git &>/dev/null; then

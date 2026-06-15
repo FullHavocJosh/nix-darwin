@@ -13,7 +13,8 @@ in
     echo "Finished Stowing dotfiles..."
 
     echo "Setting wallpaper..."
-    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "${wallpaper}"'
+    launchctl asuser "$(id -u -- havoc)" osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "${wallpaper}"' 2>/dev/null || \
+      echo "Wallpaper: System Events not yet running, will apply on next login."
 
     # Configure kubectl for personal devices only
     echo "Configuring kubectl for hetzner-cluster..."
