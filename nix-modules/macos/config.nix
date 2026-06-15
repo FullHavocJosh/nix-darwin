@@ -39,7 +39,7 @@
         USER_NAME="${config.system.primaryUser}"
         USER_HOME=$(eval echo ~$USER_NAME)
         
-        sudo -u "$USER_NAME" bash <<'USERSCRIPT'
+        sudo --set-home -u "$USER_NAME" bash <<'USERSCRIPT'
         # Symlink global gitignore from nix-darwin to home directory
         if [ ! -L "$HOME/.gitignore_global" ] || [ "$(readlink "$HOME/.gitignore_global")" != "$HOME/nix-darwin/.gitignore_global" ]; then
           echo "Creating symlink for global gitignore..."
