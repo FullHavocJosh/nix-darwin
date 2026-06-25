@@ -18,16 +18,13 @@ in
       ${pkgs.gnused}/bin/sed -i "s|__HOME__|$HOME|g" "$HOME/.config/opencode/opencode.json"
     fi
 
-    # Configure kubectl for work profile only
     echo "Configuring kubectl for work environment..."
     USER_HOME="/Users/jrollet"
     KUBECONFIG_FILE="$USER_HOME/.kube/ps.config"
     ZSHRC_WORK="$USER_HOME/.zshrc_work"
 
     if [ -f "$KUBECONFIG_FILE" ]; then
-      # Create/update .zshrc_work with kubectl configuration
       cat > "$ZSHRC_WORK" <<'EOF'
-    # Work kubectl configuration - managed by nix-darwin
     export KUBECONFIG="$HOME/.kube/ps.config"
     export K9S_CONFIG_DIR="$HOME/.config/k9s"
     EOF
@@ -49,7 +46,6 @@ in
     echo "Cleaning up Terraform cache files..."
     TERRAFORM_BASE="/Users/jrollet/pscloudops/terraform-infrastructure"
 
-    # Count and show size before cleanup
     if [ -d "$TERRAFORM_BASE/v3" ] || [ -d "$TERRAFORM_BASE/v4" ]; then
       BEFORE_SIZE=$(find "$TERRAFORM_BASE/v3" "$TERRAFORM_BASE/v4" -type d -name ".terraform" -exec du -sk {} \; 2>/dev/null | awk '{sum+=$1} END {print sum/1024}')
       BEFORE_COUNT=$(find "$TERRAFORM_BASE/v3" "$TERRAFORM_BASE/v4" -type d -name ".terraform" 2>/dev/null | wc -l | tr -d ' ')
@@ -81,10 +77,6 @@ in
       "awscli"
     ];
     casks = [
-      # Work-specific applications only
-      # GUI apps shared with laptop are in packages-gui.nix
-      # TUI/CLI apps shared across all profiles are in packages-tui.nix
-
       "citrix-workspace"
       "docker-desktop"
       "lastpass"

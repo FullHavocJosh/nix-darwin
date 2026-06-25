@@ -17,7 +17,6 @@
   '';
 
   # Prepend tap trust setup to the homebrew activation script so it runs BEFORE brew bundle.
-  # Writes ~/.homebrew/trust.json directly (no brew binary needed, runs as root).
   system.activationScripts.homebrew.text = lib.mkBefore ''
         USER_HOME=$(eval echo ~${config.system.primaryUser})
         TRUST_FILE="$USER_HOME/.homebrew/trust.json"
@@ -60,13 +59,11 @@
         USER_HOME=$(eval echo ~$USER_NAME)
         
         sudo --set-home -u "$USER_NAME" bash <<'USERSCRIPT'
-        # Symlink global gitignore from nix-darwin to home directory
         if [ ! -L "$HOME/.gitignore_global" ] || [ "$(readlink "$HOME/.gitignore_global")" != "$HOME/nix-darwin/.gitignore_global" ]; then
           echo "Creating symlink for global gitignore..."
           ln -sf "$HOME/nix-darwin/.gitignore_global" "$HOME/.gitignore_global"
         fi
 
-        # Symlink Claude Code skills — each skill subdirectory gets its own symlink in ~/.claude/skills/
         # Claude Code scans ~/.claude/skills/ for direct subdirs with SKILL.md, not nested repos.
         # Skills are sourced from model-skills repos only; ~/.claude/skills/ is the target, never a source.
         mkdir -p "$HOME/.claude/skills"
@@ -86,7 +83,6 @@
             fi
           done
         }
-        # Remove stale/broken skill symlinks that no longer exist in any repo
         for existing_link in "$HOME/.claude/skills"/*/; do
           [ -L "''${existing_link%/}" ] || continue
           if [ ! -f "''${existing_link}SKILL.md" ]; then
@@ -98,7 +94,6 @@
         _link_skills_from_repo "$HOME/model-skills-perfectserve"
         unset -f _link_skills_from_repo
 
-        # Symlink Claude Code commands from model-skills repos into ~/.claude/commands/
         mkdir -p "$HOME/.claude/commands"
         _link_commands_from_repo() {
           local repo="$1"
@@ -118,13 +113,11 @@
         _link_commands_from_repo "$HOME/model-skills-perfectserve"
         unset -f _link_commands_from_repo
 
-        # Symlink Claude Code settings from nix-darwin
         if [ ! -L "$HOME/.claude/settings.local.json" ] || [ "$(readlink "$HOME/.claude/settings.local.json")" != "$HOME/nix-darwin/.claude/settings.local.json" ]; then
           echo "Creating symlink for Claude Code settings..."
           ln -sf "$HOME/nix-darwin/.claude/settings.local.json" "$HOME/.claude/settings.local.json"
         fi
 
-        # Configure git to use global gitignore
         if command -v git &>/dev/null; then
           CURRENT_EXCLUDES=$(git config --global core.excludesfile 2>/dev/null || echo "")
           if [ "$CURRENT_EXCLUDES" != "$HOME/.gitignore_global" ]; then
@@ -133,7 +126,6 @@
           fi
         fi
 
-        # Install GitHub Copilot CLI extension if not already installed
         if command -v gh &>/dev/null; then
           if ! gh extension list 2>/dev/null | grep -q "gh-copilot"; then
             echo "Installing GitHub Copilot CLI extension..."
@@ -143,10 +135,8 @@
 
         HOMEBREW_PREFIX="/opt/homebrew"
 
-        # Add Homebrew bin to PATH for this script
         export PATH="$HOMEBREW_PREFIX/bin:$HOME/.cargo/bin:$HOME/go/bin:$PATH"
 
-        # Update all tracked repos to latest main, preserving local branch/changes
         if command -v git &>/dev/null; then
           _update_repo_main() {
             local repo_path="$1"
@@ -354,7 +344,6 @@
           fi
         fi
 
-        # Sync MCP servers from claude-desktop-mcp.json into Claude Code (global scope)
         MCP_CONFIG="$HOME/nix-darwin/.config/mcp/claude-desktop-mcp.json"
         if command -v claude &>/dev/null && command -v jq &>/dev/null && [ -f "$MCP_CONFIG" ]; then
           echo "Syncing MCP servers from $MCP_CONFIG to Claude Code..."
@@ -375,7 +364,6 @@
           done
         fi
 
-        # Inject model-skills repo paths into OpenCode skills.paths if not already present
         OPENCODE_CONFIG="$HOME/.config/opencode/opencode.json"
         if command -v jq &>/dev/null && [ -f "$OPENCODE_CONFIG" ]; then
           for SKILLS_REPO in "$HOME/model-skills-fullhavoc" "$HOME/model-skills-perfectserve"; do

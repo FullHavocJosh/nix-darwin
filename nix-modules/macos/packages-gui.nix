@@ -9,30 +9,17 @@
   homebrew = {
     enable = true;
     casks = [
-      # Window Management
       "nikitabobko/tap/aerospace"
-
-      # Terminals
       "ghostty"
       "hyper"
       "kitty"
-
-      # AI Tools
       "claude"
       "claude-code"
-
-      # Development IDEs
       "goland"
       "jetbrains-toolbox"
-
-      # Browsers
       "ungoogled-chromium"
       "zen"
-
-      # Graphics & Media
       "vlc"
-
-      # Utilities
       "balenaetcher"
       "xykong/tap/flux-markdown"
       "insta360-link-controller"

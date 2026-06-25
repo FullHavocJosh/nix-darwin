@@ -23,13 +23,9 @@ in
     ZSHRC_PERSONAL="$USER_HOME/.zshrc_personal"
 
     if [ -f "$KUBECONFIG_FILE" ]; then
-      # Create/update .zshrc_personal with kubectl configuration
       cat > "$ZSHRC_PERSONAL" <<'EOF'
-    # Personal kubectl configuration - managed by nix-darwin
     export KUBECONFIG="$HOME/home-infrastructure/hetzner-k3s/kubeconfig"
     export K9S_CONFIG_DIR="$HOME/.config/k9s"
-
-    # Set kubectl context to hetzner-cluster-master1
     if command -v kubectl &>/dev/null && [ -f "$KUBECONFIG" ]; then
       kubectl config use-context hetzner-cluster-master1 &>/dev/null
     fi
@@ -41,8 +37,7 @@ in
       echo "Warning: kubeconfig not found at $KUBECONFIG_FILE"
     fi
 
-    # Inject OpenCode Zen API key from Doppler (personal devices only)
-    # Run as user 'havoc' since Doppler auth is per-user and activation runs as root
+    # Doppler auth is per-user; activation runs as root, so secrets are fetched via sudo -u havoc
     echo "Fetching OpenCode Zen API key from Doppler..."
     USER_HOME="/Users/havoc"
     OPENCODE_DATA_DIR="$USER_HOME/.local/share/opencode"
@@ -51,10 +46,7 @@ in
     DOPPLER_CONFIG="$USER_HOME/.doppler/.doppler.yaml"
 
     if [ -x "$DOPPLER_BIN" ] && [ -f "$DOPPLER_CONFIG" ]; then
-      # Create directory as user
       mkdir -p "$OPENCODE_DATA_DIR"
-      
-      # Determine Doppler config based on hostname
       # MacBookM2Pro -> root_macbook, MacMiniM1 -> root_macmini
       HOSTNAME=$(scutil --get LocalHostName)
       case "$HOSTNAME" in
@@ -75,22 +67,16 @@ in
       else
         echo "Using Doppler config: $DOPPLER_CONFIG_NAME for hostname: $HOSTNAME"
         
-        # Fetch OPENCODE_ZEN_API_KEY from Doppler as user
-        # Project: FullHavocJosh, Config: determined by hostname
-        # Use sudo -u to run as havoc with their HOME environment
         DOPPLER_API_KEY=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get OPENCODE_ZEN_API_KEY --project FullHavocJosh --config "$DOPPLER_CONFIG_NAME" --plain 2>/dev/null)
-      
+
         if [ -n "$DOPPLER_API_KEY" ]; then
-          # Read existing auth.json if it exists, otherwise start with empty object
           if [ -f "$OPENCODE_AUTH_FILE" ]; then
             EXISTING_AUTH=$(cat "$OPENCODE_AUTH_FILE")
           else
             EXISTING_AUTH="{}"
           fi
           
-          # Inject OpenCode Zen credentials into auth.json using jq
-          # Keep existing providers (like github-copilot) and add/update opencode provider
-          # Note: Must use "type": "api" and "key" (not "apiKey") to match OpenCode CLI format
+          # "key" not "apiKey" — OpenCode CLI format requires this exact field name
           echo "$EXISTING_AUTH" | ${pkgs.jq}/bin/jq --arg key "$DOPPLER_API_KEY" \
             '.opencode = {"type": "api", "key": $key}' \
             > "$OPENCODE_AUTH_FILE"
@@ -152,10 +138,6 @@ in
       "vitobotta/tap/hetzner_k3s"
     ];
     casks = [
-      # Personal-specific applications only
-      # GUI apps shared with laptop are in packages-gui.nix
-      # TUI/CLI apps shared across all profiles are in packages-tui.nix
-
       "element"
       "obsidian"
       "plex"
