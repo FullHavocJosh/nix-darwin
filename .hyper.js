@@ -1,52 +1,52 @@
 // Hyper configuration
-// Configured to match alacritty and ghostty settings
+// Configured to match ghostty settings
 
 module.exports = {
   config: {
     // Font configuration
     fontSize: 14,
     fontFamily: '"JetBrains Mono", monospace',
-    fontWeight: 'normal',
-    fontWeightBold: 'bold',
+    fontWeight: "normal",
+    fontWeightBold: "bold",
 
     // Cursor
-    cursorColor: 'rgba(248, 248, 242, 0.8)',
-    cursorAccentColor: '#000',
-    cursorShape: 'BLOCK',
+    cursorColor: "rgba(248, 248, 242, 0.8)",
+    cursorAccentColor: "#000",
+    cursorShape: "BLOCK",
     cursorBlink: false,
 
     // Colors - Catppuccin Mocha theme
-    foregroundColor: '#cdd6f4',
-    backgroundColor: '#1e1e2e', // Solid background, no transparency
-    selectionColor: 'rgba(88, 91, 112, 0.5)',
-    borderColor: '#11111b',
+    foregroundColor: "#cdd6f4",
+    backgroundColor: "#1e1e2e", // Solid background, no transparency
+    selectionColor: "rgba(88, 91, 112, 0.5)",
+    borderColor: "#11111b",
 
     colors: {
-      black: '#45475a',
-      red: '#f38ba8',
-      green: '#a6e3a1',
-      yellow: '#f9e2af',
-      blue: '#89b4fa',
-      magenta: '#f5c2e7',
-      cyan: '#94e2d5',
-      white: '#bac2de',
-      lightBlack: '#585b70',
-      lightRed: '#f38ba8',
-      lightGreen: '#a6e3a1',
-      lightYellow: '#f9e2af',
-      lightBlue: '#89b4fa',
-      lightMagenta: '#f5c2e7',
-      lightCyan: '#94e2d5',
-      lightWhite: '#a6adc8',
+      black: "#45475a",
+      red: "#f38ba8",
+      green: "#a6e3a1",
+      yellow: "#f9e2af",
+      blue: "#89b4fa",
+      magenta: "#f5c2e7",
+      cyan: "#94e2d5",
+      white: "#bac2de",
+      lightBlack: "#585b70",
+      lightRed: "#f38ba8",
+      lightGreen: "#a6e3a1",
+      lightYellow: "#f9e2af",
+      lightBlue: "#89b4fa",
+      lightMagenta: "#f5c2e7",
+      lightCyan: "#94e2d5",
+      lightWhite: "#a6adc8",
     },
 
     // Shell
-    shell: '/bin/zsh',
+    shell: "/bin/zsh",
     shellArgs: [],
 
     // Environment
     env: {
-      TERM: 'xterm-256color',
+      TERM: "xterm-256color",
     },
 
     // Bell
@@ -62,7 +62,7 @@ module.exports = {
     quickEdit: false,
 
     // Padding
-    padding: '0px',
+    padding: "0px",
 
     // Window settings
     windowSize: [800, 600], // Initial size before maximizing
@@ -75,7 +75,7 @@ module.exports = {
 
     // URL handling
     webGLRenderer: true,
-    webLinksActivationKey: 'meta',
+    webLinksActivationKey: "meta",
 
     // Disable ligatures (can be enabled if desired)
     disableLigatures: false,
@@ -87,7 +87,7 @@ module.exports = {
 
   // Plugins configuration
   plugins: [
-    'hyper-pane',    // For better pane management
+    "hyper-pane", // For better pane management
   ],
 
   // Local plugins

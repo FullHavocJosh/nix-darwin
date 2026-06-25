@@ -42,7 +42,6 @@ nix-darwin/
 │
 ├── .config/                            # Application configurations (deployed via stow)
 │   ├── aerospace/                      # AeroSpace (macOS tiling WM)
-│   ├── alacritty/                      # Alacritty terminal config
 │   ├── atuin/                          # Atuin shell history config
 │   ├── btop/                           # btop system monitor
 │   ├── ghostty/                        # Ghostty terminal config
@@ -263,8 +262,7 @@ All automatically installed via nix-darwin/package managers:
 
 ### Terminals
 
-- **Alacritty** - GPU-accelerated terminal
-- **Ghostty** - Modern terminal emulator
+- **Ghostty** - Fast, native GPU-accelerated terminal
 - **Kitty** - Feature-rich terminal
 
 ### Window Management
@@ -408,8 +406,6 @@ export PATH="$HOME/.local/bin:$HOME/go/bin:$HOME/.cargo/bin:$HOME/.npm-global/bi
 
 - Press `Prefix + I` in tmux
 
-
-
 ## 🔄 Updating This Configuration
 
 ### Pull Latest Changes
@@ -432,8 +428,6 @@ darwin-rebuild switch --flake ~/nix-darwin#macos_personal
 cd ~/nix-darwin
 stow -R . -t ~  # Re-stow (replaces existing symlinks)
 ```
-
-
 
 ## 📚 Additional Documentation
 

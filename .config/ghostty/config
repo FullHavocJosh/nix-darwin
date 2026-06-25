@@ -6,9 +6,9 @@ font-family = JetBrainsMono Nerd Font Mono
 font-size = 14
 
 # Window
-window-decoration = false
-background-opacity = 0.8
-background-blur-radius = 20
+background-opacity = 0.0
+background-blur = macos-glass-regular
+macos-titlebar-style = transparent
 
 # Cursor
 cursor-style = block
