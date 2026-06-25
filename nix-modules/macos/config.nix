@@ -39,6 +39,12 @@
         chown ${config.system.primaryUser} "$TRUST_FILE"
   '';
 
+  # Expose Homebrew and standard paths to GUI apps (e.g. Neovide finding nvim).
+  # launchctl setenv propagates to all apps launched via launchd in the current session.
+  system.activationScripts.guiPath.text = ''
+    /bin/launchctl setenv PATH "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+  '';
+
   system.activationScripts.script.text = lib.mkAfter ''
         # Run user-specific configuration as the primary user
         USER_NAME="${config.system.primaryUser}"
