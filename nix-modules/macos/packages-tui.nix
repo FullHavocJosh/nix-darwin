@@ -1,5 +1,8 @@
 # TUI/CLI packages shared across ALL profiles (laptop, desktop, work)
 # GUI applications are in packages-gui.nix (laptop only)
+#
+# PACKAGE POLICY: Prefer Homebrew for all new packages (brews/casks below).
+# Only use environment.systemPackages for packages not available on Homebrew.
 {
   pkgs,
   lib,
@@ -7,43 +10,6 @@
   ...
 }:
 let
-  # Remote llama-server configuration - connects to macminim1.rollet.family:8080
-  llamaHealthChecker = pkgs.writeShellScript "llama-health-checker" ''
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    # Use remote server for laptop/work configurations
-    HEALTH_URL="http://macminim1.rollet.family:8080/health"
-    LOG_PREFIX="[llama-health-checker]"
-
-    log() { echo "$LOG_PREFIX $*"; }
-
-    # Check if remote server is responding
-    if ! curl -sf "$HEALTH_URL" -o /dev/null --max-time 5 2>/dev/null; then
-      log "ERROR: Remote llama-server at macminim1.rollet.family:8080 is not responding"
-      log "Please ensure the desktop machine is running and llama-server is active"
-      exit 1
-    else
-      log "Remote llama-server is healthy"
-      exit 0
-    fi
-  '';
-
-  aiselectWrapper = pkgs.writeShellScriptBin "aiselect" ''
-    #!/usr/bin/env bash
-
-    # Ensure remote llama-server is accessible before proceeding
-    ${llamaHealthChecker} || {
-      echo "Failed to connect to remote llama-server at macminim1.rollet.family:8080"
-      echo "Please ensure the desktop machine is running"
-      exit 1
-    }
-
-    # Add your aiselect implementation here
-    # For now, this is a placeholder that confirms llama-server is accessible
-    echo "Remote llama-server at macminim1.rollet.family:8080 is running and healthy"
-    echo "TODO: Implement actual aiselect functionality"
-  '';
 
   claudeTuiSetup = pkgs.writeShellScript "claude-tui-setup" ''
         #!/usr/bin/env bash
@@ -199,16 +165,10 @@ let
   '';
 in
 {
+  # Packages not available on Homebrew — add here only as a last resort.
   environment.systemPackages = with pkgs; [
-    nil
-    nixd
-    smassh
-    python3Packages.fonttools
-    lemminx
-    rubyPackages.rubocop
-    nodejs_22
-    typescript
-    aiselectWrapper
+    nil # Nix LSP (no Homebrew formula)
+    nixd # Nix LSP, more feature-rich than nil (no Homebrew formula)
   ];
 
   homebrew = {
@@ -253,7 +213,6 @@ in
       "luarocks"
       "mas"
       "mpv"
-      "neovide"
       "neovim"
       "nixfmt"
       "node@22"
@@ -286,6 +245,7 @@ in
       "tflint"
       "tmux"
       "tpm"
+      "typescript"
       "tree-sitter"
       "typescript-language-server"
       "uv"
