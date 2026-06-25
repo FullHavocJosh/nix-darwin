@@ -44,6 +44,10 @@ selection-foreground = #1e1e2e
 # Bold uses bright colors
 bold-is-bright = true
 
+# Clipboard
+clipboard-read = allow
+clipboard-write = allow
+
 # Keybindings
 keybind = super+c=copy_to_clipboard
 keybind = super+v=paste_from_clipboard
