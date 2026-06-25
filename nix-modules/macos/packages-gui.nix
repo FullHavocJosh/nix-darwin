@@ -10,7 +10,6 @@
       "nikitabobko/tap/aerospace"
 
       # Terminals
-      "alacritty"
       "ghostty"
       "hyper"
       "kitty"
