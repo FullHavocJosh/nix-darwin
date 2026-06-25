@@ -11,6 +11,11 @@
   programs.zsh.enable = true;
   system.stateVersion = 5;
 
+  security.pam.services.sudo_local.touchIdAuth = true;
+  security.sudo.extraConfig = ''
+    Defaults timestamp_timeout=60
+  '';
+
   # Prepend tap trust setup to the homebrew activation script so it runs BEFORE brew bundle.
   # Writes ~/.homebrew/trust.json directly (no brew binary needed, runs as root).
   system.activationScripts.homebrew.text = lib.mkBefore ''
