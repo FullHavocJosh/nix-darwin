@@ -133,6 +133,9 @@
           fi
         fi
 
+        mkdir -p "$HOME/Library/Application Support/neovide"
+        printf 'neovim-bin = "/opt/homebrew/bin/nvim"\n' > "$HOME/Library/Application Support/neovide/config.toml"
+
         HOMEBREW_PREFIX="/opt/homebrew"
 
         export PATH="$HOMEBREW_PREFIX/bin:$HOME/.cargo/bin:$HOME/go/bin:$PATH"
