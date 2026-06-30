@@ -542,10 +542,6 @@
     screencapture.show-thumbnail = true;
     screencapture.target = "file";
 
-    universalaccess.reduceMotion = true;
-    universalaccess.reduceTransparency = false;
-    universalaccess.mouseDriverCursorSize = 1.25;
-
     spaces.spans-displays = false;
     SoftwareUpdate.AutomaticallyInstallMacOSUpdates = false;
     LaunchServices.LSQuarantine = true;
