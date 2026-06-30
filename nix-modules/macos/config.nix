@@ -432,7 +432,7 @@
     dock.show-recents = false;
     dock.slow-motion-allowed = false;
     dock.dashboard-in-overlay = true;
-    dock.expose-group-apps = false;
+    dock.expose-group-apps = true;
     dock.expose-animation-duration = 0.05;
     dock.minimize-to-application = false;
     dock.wvous-bl-corner = 1;
@@ -499,7 +499,7 @@
     trackpad.SecondClickThreshold = 1;
     trackpad.ActuateDetents = true;
     NSGlobalDomain.AppleEnableSwipeNavigateWithScrolls = false;
-    NSGlobalDomain.NSWindowShouldDragOnGesture = false;
+    NSGlobalDomain.NSWindowShouldDragOnGesture = true;
 
     NSGlobalDomain."com.apple.keyboard.fnState" = false;
     NSGlobalDomain.KeyRepeat = 2;

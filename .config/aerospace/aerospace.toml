@@ -1,3 +1,4 @@
+config-version = 2
 after-login-command = []
 after-startup-command = []
 start-at-login = true
@@ -7,6 +8,20 @@ accordion-padding = 90
 default-root-container-layout = 'tiles'
 default-root-container-orientation = 'horizontal'
 key-mapping.preset = 'qwerty'
+
+persistent-workspaces = [
+    'Development', 'Browser', 'Communication', 'Audio-Video', 'Nix-Darwin',
+    '1st-Workspace', '2nd-Workspace', '3rd-Workspace', '4th-Workspace', '5th-Workspace',
+]
+
+on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
+
+[exec]
+inherit-env-vars = true
+
+[exec.env-vars]
+PATH = '/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+
 [gaps]
 inner.horizontal = 16
 inner.vertical = 16
@@ -14,6 +29,7 @@ outer.left = 16
 outer.bottom = 16
 outer.top = 16
 outer.right = 16
+
 [workspace-to-monitor-force-assignment]
 "Communication" = ['main']
 "Audio-Video" = ['main']
@@ -25,9 +41,16 @@ outer.right = 16
 "3rd-Workspace" = ['secondary']
 "4th-Workspace" = ['secondary']
 "5th-Workspace" = ['secondary']
+
 [mode.main.binding]
-alt-enter = 'exec-and-forget open -na /Applications/Ghostty.app'
-alt-z = 'exec-and-forget open -na /Applications/Zen Browser.app'
+cmd-h = []
+cmd-alt-h = []
+alt-enter = '''exec-and-forget osascript -e '
+tell application "Ghostty"
+    new window
+end tell'
+'''
+alt-z = 'exec-and-forget open -na /Applications/Zen.app'
 alt-s = 'exec-and-forget open -na /Applications/Slack.app'
 alt-e = 'exec-and-forget open -na /Applications/Element.app'
 alt-slash = 'layout tiles horizontal vertical'
@@ -74,10 +97,103 @@ alt-tab = 'workspace-back-and-forth'
 alt-shift-tab = 'move-workspace-to-monitor --wrap-around next'
 alt-shift-semicolon = 'mode service'
 alt-shift-r = 'mode resize'
+
+# PiP must precede the general Zen rule so both fire: first float, then move to Browser
 [[on-window-detected]]
 if.app-id = 'app.zen-browser.zen'
 if.window-title-regex-substring = 'Picture-in-Picture'
 run = ['layout floating']
+
+# Development
+[[on-window-detected]]
+if.app-id = 'com.mitchellh.ghostty'
+run = ['move-node-to-workspace Development']
+
+[[on-window-detected]]
+if.app-id = 'com.neovide.neovide'
+run = ['move-node-to-workspace Development']
+
+[[on-window-detected]]
+if.app-id = 'com.jetbrains.goland'
+run = ['move-node-to-workspace Development']
+
+[[on-window-detected]]
+if.app-id = 'md.obsidian'
+run = ['move-node-to-workspace 1st-Workspace']
+
+# Browser
+[[on-window-detected]]
+if.app-id = 'app.zen-browser.zen'
+run = ['move-node-to-workspace Browser']
+
+[[on-window-detected]]
+if.app-id = 'com.apple.Safari'
+run = ['move-node-to-workspace Browser']
+
+[[on-window-detected]]
+if.app-id = 'org.chromium.Chromium'
+run = ['move-node-to-workspace Browser']
+
+# Communication
+[[on-window-detected]]
+if.app-id = 'im.riot.app'
+run = ['move-node-to-workspace Communication']
+
+[[on-window-detected]]
+if.app-id = 'com.tinyspeck.slackmacgap'
+run = ['move-node-to-workspace Communication']
+
+[[on-window-detected]]
+if.app-id = 'com.apple.MobileSMS'
+run = ['move-node-to-workspace Communication']
+
+[[on-window-detected]]
+if.app-id = 'ch.protonmail.desktop'
+run = ['move-node-to-workspace Communication']
+
+[[on-window-detected]]
+if.app-id = 'com.microsoft.Outlook'
+run = ['move-node-to-workspace Communication']
+
+[[on-window-detected]]
+if.app-id = 'com.microsoft.teams2'
+run = ['move-node-to-workspace Communication']
+
+# 1st-Workspace — notes and freeform canvas
+[[on-window-detected]]
+if.app-id = 'com.apple.Notes'
+run = ['move-node-to-workspace 1st-Workspace']
+
+[[on-window-detected]]
+if.app-id = 'com.apple.freeform'
+run = ['move-node-to-workspace 1st-Workspace']
+
+# 5th-Workspace — floating utilities
+[[on-window-detected]]
+if.app-id = 'com.apple.systempreferences'
+run = ['move-node-to-workspace 5th-Workspace', 'layout floating']
+
+# Audio-Video
+[[on-window-detected]]
+if.app-id = 'tv.plex.desktop'
+run = ['move-node-to-workspace Audio-Video']
+
+[[on-window-detected]]
+if.app-id = 'tv.plex.plexamp'
+run = ['move-node-to-workspace Audio-Video']
+
+[[on-window-detected]]
+if.app-id = 'org.videolan.vlc'
+run = ['move-node-to-workspace Audio-Video']
+
+[[on-window-detected]]
+if.app-id = 'sh.cider.Cider'
+run = ['move-node-to-workspace Audio-Video']
+
+[[on-window-detected]]
+if.app-id = 'me.proton.pass.electron'
+run = ['move-node-to-workspace 5th-Workspace', 'layout floating']
+
 [mode.resize.binding]
 h = 'resize width -50'
 j = 'resize height +50'
@@ -88,13 +204,14 @@ minus = 'resize smart -50'
 equal = 'resize smart +50'
 enter = 'mode main'
 esc = 'mode main'
+
 [mode.service.binding]
 esc = ['reload-config', 'mode main']
-r = ['flatten-workspace-tree', 'mode main'] # Reset layout
+r = ['flatten-workspace-tree', 'mode main']
 f = [
   'layout floating tiling',
   'mode main',
-] # Toggle between floating and tiling layout
+]
 backspace = ['close-all-windows-but-current', 'mode main']
 alt-shift-h = ['join-with left', 'mode main']
 alt-shift-j = ['join-with down', 'mode main']
