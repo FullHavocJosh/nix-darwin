@@ -468,7 +468,7 @@
     NSGlobalDomain.AppleEnableSwipeNavigateWithScrolls = false;
     NSGlobalDomain.NSWindowShouldDragOnGesture = false;
 
-    NSGlobalDomain."com.apple.keyboard.fnState" = true;
+    NSGlobalDomain."com.apple.keyboard.fnState" = false;
     NSGlobalDomain.KeyRepeat = 2;
     NSGlobalDomain.InitialKeyRepeat = 15;
 
