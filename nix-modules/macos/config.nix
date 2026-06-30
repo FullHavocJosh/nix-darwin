@@ -468,7 +468,7 @@
     finder.QuitMenuItem = false;
     finder.CreateDesktop = false;
     finder.FXRemoveOldTrashItems = false;
-    finder.NewWindowTarget = "PfID";
+    finder.NewWindowTarget = "iCloud Drive";
     finder.ShowExternalHardDrivesOnDesktop = false;
     finder.ShowHardDrivesOnDesktop = false;
     finder.ShowRemovableMediaOnDesktop = false;
