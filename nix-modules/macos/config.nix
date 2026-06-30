@@ -417,8 +417,8 @@
     NSGlobalDomain.NSWindowResizeTime = 0.05;
 
     dock.autohide = true;
-    dock.autohide-delay = 0.05;
-    dock.autohide-time-modifier = 0.05;
+    dock.autohide-delay = 0.5;
+    dock.autohide-time-modifier = 0.5;
     dock.tilesize = 32;
     dock.largesize = 64;
     dock.magnification = true;
