@@ -139,6 +139,8 @@ in
     ];
     casks = [
       "element"
+      "font-merriweather"
+      "font-open-sans"
       "obsidian"
       "plex"
       "plexamp"
