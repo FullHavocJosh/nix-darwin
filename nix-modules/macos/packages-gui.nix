@@ -10,7 +10,6 @@
     enable = true;
     casks = [
       "nikitabobko/tap/aerospace"
-      "ghostty"
       "hyper"
       "kitty"
       "claude"

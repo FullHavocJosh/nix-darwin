@@ -240,6 +240,7 @@ in
       "slima4/claude-tui/claude-tui"
     ];
     casks = [
+      "ghostty"
       "warrensbox/tap/tfswitch"
       "claude-code"
       "font-hack-nerd-font"
