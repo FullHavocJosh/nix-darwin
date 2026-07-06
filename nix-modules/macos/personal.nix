@@ -96,7 +96,7 @@ in
 
   '';
 
-  launchd.user.agents.ollama = {
+  launchd.daemons.ollama = {
     serviceConfig = {
       ProgramArguments = [
         "/Applications/Ollama.app/Contents/Resources/ollama"
@@ -106,18 +106,13 @@ in
         OLLAMA_HOST = "0.0.0.0:11434";
         OLLAMA_FLASH_ATTENTION = "1";
         OLLAMA_KV_CACHE_TYPE = "q8_0";
+        HOME = "/Users/havoc";
       };
+      UserName = "havoc";
       KeepAlive = true;
       RunAtLoad = true;
       StandardOutPath = "/tmp/ollama.log";
       StandardErrorPath = "/tmp/ollama.error.log";
-      LimitLoadToSessionType = [
-        "Aqua"
-        "Background"
-        "LoginWindow"
-        "StandardIO"
-        "System"
-      ];
     };
   };
 
