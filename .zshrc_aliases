@@ -15,16 +15,17 @@ alias sshk3sworkervm0='ssh -i ~/.ssh/id_ed25519 havoc@k3sworkervm0.rollet.family
 alias sshk3sworkervm1='ssh -i ~/.ssh/id_ed25519 havoc@k3sworkervm1.rollet.family'
 alias sshha='ssh -i ~/.ssh/id_ed25519 root@homeassistant.rollet.family'
 
-# Shared layout for herdr project sessions: a "nvim" tab, an "aidev" tab (focused,
-# running aiselect && aidev), and a "zsh" tab running git status. Mirrors the old
-# tmux new-session/split-window setup but via herdr's socket-backed CLI (one tab
-# per tool instead of one pane per tool).
+# Core primitive: a herdr workspace labeled $name (local pane cwd $dir) with 3 tabs
+# -- nvim, aidev (focused), zsh -- running $cmd_nvim/$cmd_aidev/$cmd_zsh respectively.
+# Used for both local project layouts and remote/ssh layouts (the remote ones just
+# pass ssh-wrapped commands instead of plain local ones).
 #
 # $HERDR_ENV is set inside every herdr pane (like tmux's $TMUX). When already inside
 # herdr, attaching to a separate named session would nest multiplexers, so instead
 # this opens/focuses a workspace labeled $name in the CURRENT session.
-_herdr_devlayout() {
-  local name="$1" dir="$2"
+_herdr_space() {
+  local name="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6"
+  local label_nvim="nvim${tab_suffix}" label_aidev="aidev${tab_suffix}" label_zsh="zsh${tab_suffix}"
 
   if [ -n "$HERDR_ENV" ]; then
     local ws_id p1 p2 p3
@@ -32,12 +33,12 @@ _herdr_devlayout() {
     if [ -z "$ws_id" ]; then
       ws_id=$(herdr workspace create --cwd "$dir" --label "$name" | jq -r '.result.workspace.workspace_id')
       p1="${ws_id}:p1"
-      herdr tab rename "${ws_id}:t1" nvim >/dev/null
-      herdr pane run "$p1" "nvim" >/dev/null
-      p2=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label aidev --focus | jq -r '.result.root_pane.pane_id')
-      herdr pane run "$p2" "aiselect && aidev" >/dev/null
-      p3=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label zsh --no-focus | jq -r '.result.root_pane.pane_id')
-      herdr pane run "$p3" "git status" >/dev/null
+      herdr tab rename "${ws_id}:t1" "$label_nvim" >/dev/null
+      herdr pane run "$p1" "$cmd_nvim" >/dev/null
+      p2=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label "$label_aidev" --focus | jq -r '.result.root_pane.pane_id')
+      herdr pane run "$p2" "$cmd_aidev" >/dev/null
+      p3=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label "$label_zsh" --no-focus | jq -r '.result.root_pane.pane_id')
+      herdr pane run "$p3" "$cmd_zsh" >/dev/null
     fi
     herdr workspace focus "$ws_id" >/dev/null
     return
@@ -48,14 +49,36 @@ _herdr_devlayout() {
     disown
     sleep 0.5
     herdr workspace create --session "$name" --cwd "$dir" --label "$name" >/dev/null
-    herdr tab rename w1:t1 nvim --session "$name" >/dev/null
-    herdr pane run w1:p1 "nvim" --session "$name" >/dev/null
-    herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label aidev --focus >/dev/null
-    herdr pane run w1:p2 "aiselect && aidev" --session "$name" >/dev/null
-    herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label zsh --no-focus >/dev/null
-    herdr pane run w1:p3 "git status" --session "$name" >/dev/null
+    herdr tab rename w1:t1 "$label_nvim" --session "$name" >/dev/null
+    herdr pane run w1:p1 "$cmd_nvim" --session "$name" >/dev/null
+    herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label "$label_aidev" --focus >/dev/null
+    herdr pane run w1:p2 "$cmd_aidev" --session "$name" >/dev/null
+    herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label "$label_zsh" --no-focus >/dev/null
+    herdr pane run w1:p3 "$cmd_zsh" --session "$name" >/dev/null
   fi
   herdr --session "$name"
+}
+
+_herdr_devlayout() {
+  local name="$1" dir="$2"
+  _herdr_space "$name" "$dir" "nvim" "aiselect && aidev" "git status"
+}
+
+# Same 3-tab layout, but each tab ssh's into $host and runs its command in
+# $remote_dir there. No herdr install needed on the remote end -- it's just an
+# ssh'd-in shell inside a local pane, same as typing the ssh command by hand.
+#
+# Each command runs via `zsh -ic` on the remote side: a plain ssh remote command
+# is non-interactive, so .zshrc (and its homebrew PATH setup) never sources and
+# tools like nvim/aiselect come back "command not found".
+_herdr_remote_space() {
+  local name="$1" host="$2" remote_dir="$3"
+  local ssh="ssh -t -i ~/.ssh/id_ed25519 $host"
+  _herdr_space "$name" "$HOME" \
+    "$ssh \"zsh -ic 'cd $remote_dir && nvim'\"" \
+    "$ssh \"zsh -ic 'cd $remote_dir && aiselect && aidev'\"" \
+    "$ssh \"zsh -ic 'cd $remote_dir && git status; exec zsh -l'\"" \
+    "-macmini"
 }
 
 # Guards nxvim/psvim/hivim/itvim against machines where the project folder doesn't
@@ -101,7 +124,9 @@ _herdr_dev() {
 }
 alias dev='_herdr_dev'
 
-alias mmdev='ssh -t -i ~/.ssh/id_ed25519 havoc@macminim1.rollet.family "zsh -ic dev"'
+alias mmdev='_herdr_remote_space macmini havoc@macminim1.rollet.family ~'
+alias nxmmdev='_herdr_remote_space macmini-nix-darwin havoc@macminim1.rollet.family ~/nix-darwin'
+alias himmdev='_herdr_remote_space macmini-home-infrastructure havoc@macminim1.rollet.family ~/home-infrastructure'
 
 alias clear="clear ; clear ; clear"
 alias eza="eza -la"
