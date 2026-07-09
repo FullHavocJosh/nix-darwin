@@ -138,9 +138,11 @@ btop.log
 # These tools create files/folders inside repos when used
 # Entries without trailing slashes ignore both files AND directories
 
-# Claude (AI assistant)
-.claude
-.claude/
+# Claude (AI assistant) — ignore contents by default; settings.local.json is
+# also excluded below (line ~279), but individual repos can override that
+# with a `!.claude/settings.local.json` negation in their own .gitignore
+# once this is a contents-only exclude rather than a whole-directory one
+.claude/*
 
 # Crush (AI coding tool)
 .crush

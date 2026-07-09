@@ -60,8 +60,10 @@ ansible-linux/inventory/staging
 # Ignore coplit folders
 /.config/github-copilot
 
-# Ignore claude folders
-/.claude
+# Ignore claude folders (session state, caches, telemetry) but keep
+# settings.local.json tracked so hook/permission config syncs across machines
+/.claude/*
+!/.claude/settings.local.json
 
 # Ignore crush folders
 /.crush
