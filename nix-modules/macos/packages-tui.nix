@@ -185,6 +185,7 @@ in
       "graphviz"
       "hadolint"
       "helm"
+      "herdr"
       "jq"
       "jsonlint"
       "k9s"
