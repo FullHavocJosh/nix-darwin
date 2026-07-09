@@ -2940,7 +2940,96 @@ function gpa() {
   rm -f /tmp/gpa_secrets_verdict.txt
 }
 
-# Git PR - Create new branch and draft pull request
+# Returns 0 (via stdout "true"/"false") whether $1 is the repo's main
+# checkout, as opposed to a linked worktree. The main checkout is the only
+# one where --git-dir and --git-common-dir resolve to the same directory.
+function _is_main_worktree() {
+  local dir="$1"
+  local git_dir common_dir
+  # --path-format=absolute avoids the ambiguity where --git-dir is relative
+  # for the main worktree but absolute for linked worktrees.
+  git_dir=$(git -C "$dir" rev-parse --path-format=absolute --git-dir 2>/dev/null) || return 1
+  common_dir=$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+  [[ "$git_dir" == "$common_dir" ]]
+}
+
+# Worktree + PR hygiene: run before creating a new worktree so we don't
+# accumulate stale checkouts, and so whoever is about to start new work can
+# see what's already in flight first.
+#   - A worktree whose PR is MERGED/CLOSED is stale (the work is done or
+#     dead) -> automatically removed, its local branch deleted.
+#   - A worktree with an OPEN PR, or no PR at all (not pushed yet), is left
+#     alone and just listed.
+#   - An OPEN PR with no matching local worktree is only reported (it may
+#     be in progress on another machine) -- never deleted.
+function _gpr_prune_stale_worktrees() {
+  local repo_root="$1"
+  local pruned_any=false
+  local -a open_worktree_branches=()
+
+  echo "ℹ Checking existing worktrees and PRs..."
+
+  local wt_path="" wt_branch=""
+  while IFS= read -r line; do
+    case "$line" in
+      "worktree "*) wt_path="${line#worktree }" ;;
+      "branch refs/heads/"*) wt_branch="${line#branch refs/heads/}" ;;
+      "")
+        if [[ -n "$wt_path" && "$wt_path" != "$repo_root" ]]; then
+          if [[ -z "$wt_branch" ]]; then
+            echo "  ⚠ Worktree with no branch (detached?): $wt_path — left alone"
+          else
+            # Explicit "" assignments avoid a zsh quirk: re-declaring an
+            # already-local var with no assignment (as happens each loop
+            # iteration here) prints "name=value" instead of no-op'ing.
+            local pr_json="" pr_state=""
+            pr_json=$(cd "$wt_path" && gh pr view --json state,url 2>/dev/null)
+            if [[ -n "$pr_json" ]]; then
+              pr_state=$(echo "$pr_json" | jq -r '.state')
+              if [[ "$pr_state" == "MERGED" || "$pr_state" == "CLOSED" ]]; then
+                echo "  🧹 Pruning stale worktree '$wt_branch' (PR $pr_state): $wt_path"
+                git -C "$repo_root" worktree remove "$wt_path" --force 2>/dev/null
+                git -C "$repo_root" branch -D "$wt_branch" 2>/dev/null
+                pruned_any=true
+              else
+                local pr_url=$(echo "$pr_json" | jq -r '.url')
+                echo "  • Active: '$wt_branch' — $pr_url"
+                open_worktree_branches+=("$wt_branch")
+              fi
+            else
+              echo "  • In progress (no PR yet): '$wt_branch' — $wt_path"
+              open_worktree_branches+=("$wt_branch")
+            fi
+          fi
+        fi
+        wt_path="" wt_branch=""
+        ;;
+    esac
+  done < <(git -C "$repo_root" worktree list --porcelain; echo)
+
+  $pruned_any && git -C "$repo_root" worktree prune
+
+  # Report open PRs with no local worktree — informational only, never touched.
+  local open_prs
+  open_prs=$(cd "$repo_root" && gh pr list --state open --json headRefName,url 2>/dev/null)
+  if [[ -n "$open_prs" ]]; then
+    echo "$open_prs" | jq -c '.[]' | while IFS= read -r pr; do
+      local head_ref=$(echo "$pr" | jq -r '.headRefName')
+      local pr_url=$(echo "$pr" | jq -r '.url')
+      if [[ ! " ${open_worktree_branches[*]} " == *" $head_ref "* ]]; then
+        echo "  ⓘ Open PR with no local worktree (maybe in progress elsewhere): $head_ref — $pr_url"
+      fi
+    done
+  fi
+  echo ""
+}
+
+# Git PR - Create new branch, worktree, and draft pull request.
+#
+# Development happens in a worktree per PR (~/.worktrees/<branch> inside the
+# repo), not by checking out a branch in place -- the main repo checkout
+# always stays on main so concurrent work-in-progress branches don't collide
+# in a single working directory.
 function gpr_func() {
   # Usage: gpr [feat|fix] [branch-name]
   # Positional args skip the interactive prompts below (for scripted/AI callers).
@@ -2950,10 +3039,24 @@ function gpr_func() {
   # Validate git repository
   _check_git_repo || return 1
 
+  local repo_root
+  repo_root=$(git rev-parse --show-toplevel)
+
+  if ! _is_main_worktree "$repo_root"; then
+    local common_dir main_root
+    common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
+    main_root=$(cd "$(dirname "$common_dir")" && pwd)
+    echo "✗ You're inside a worktree. Run gpr from the main repo checkout instead:"
+    echo "  cd $main_root"
+    return 1
+  fi
+
   # gpr never calls an AI provider — branch naming and PR creation are
   # templated operations that don't benefit from cloud quality.
   echo "🏠 Creating PR locally (no AI provider needed)..."
   echo ""
+
+  _gpr_prune_stale_worktrees "$repo_root"
 
   # Stash any uncommitted changes
   echo "Stashing uncommitted changes..."
@@ -2998,8 +3101,21 @@ function gpr_func() {
     echo "✗ Branch name cannot be empty"
     return 1
   fi
-  git checkout -b "$branch_name" &&
-    git commit --allow-empty -m "$branch_name" &&
+
+  local worktree_dir="$repo_root/.worktrees/$branch_name"
+  if [ -e "$worktree_dir" ]; then
+    echo "✗ A worktree already exists at $worktree_dir"
+    return 1
+  fi
+  mkdir -p "$repo_root/.worktrees"
+
+  git worktree add -b "$branch_name" "$worktree_dir" main || return 1
+
+  # cd here (not in a subshell) so the caller's shell ends up in the new
+  # worktree, ready to work — this is a function, so cd persists.
+  cd "$worktree_dir" || return 1
+
+  git commit --allow-empty -m "$branch_name" &&
     git push -u origin "$branch_name" &&
     gh pr create --draft --title "$type_prefix: $branch_name" --body "$(
       cat <<EOF
@@ -3009,6 +3125,8 @@ $type_prefix: $branch_name
 ## Tickets
 $type_prefix: $branch_name
 EOF
-    )"
+    )" &&
+    echo "" &&
+    echo "✓ Worktree ready: $worktree_dir"
 }
 
