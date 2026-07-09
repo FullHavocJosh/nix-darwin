@@ -150,6 +150,9 @@ stow-uninstall-local-ignore
 /.config/tmux/plugins/tmux-*
 /.config/tmux/plugins/*-tmux-*
 
+# Ignore herdr runtime state (session sockets, etc.)
+/.config/herdr/
+
 # Ignore AWS VPN configs
 /.config/AWS VPN Client*
 /.config/AWSVPNCLient*

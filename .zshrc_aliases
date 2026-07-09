@@ -15,11 +15,93 @@ alias sshk3sworkervm0='ssh -i ~/.ssh/id_ed25519 havoc@k3sworkervm0.rollet.family
 alias sshk3sworkervm1='ssh -i ~/.ssh/id_ed25519 havoc@k3sworkervm1.rollet.family'
 alias sshha='ssh -i ~/.ssh/id_ed25519 root@homeassistant.rollet.family'
 
-alias nxvim="cd ~/nix-darwin && ~/.config/tmux/plugins/tpm/scripts/install_plugins.sh && (tmux has-session -t nix-darwin 2>/dev/null && tmux attach -t nix-darwin || (tmux new-session -s nix-darwin -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys 'nvim' Enter \; select-pane -t 1 \; send-keys 'aiselect && aidev' Enter \; select-pane -t 2 \; send-keys 'git status' Enter \; select-pane -t 1 \; attach))"
-alias devim='~/.config/tmux/plugins/tpm/scripts/install_plugins.sh && (tmux has-session -t $(basename $(pwd)) 2>/dev/null && tmux attach -t $(basename $(pwd)) || (tmux new-session -s $(basename $(pwd)) -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys "nvim" Enter \; select-pane -t 1 \; send-keys "aiselect && aidev" Enter \; select-pane -t 2 \; send-keys "git status" Enter \; select-pane -t 1 \; attach))'
-alias psvim="cd ~/pscloudops/ && ~/.config/tmux/plugins/tpm/scripts/install_plugins.sh && (tmux has-session -t pscloudops 2>/dev/null && tmux attach -t pscloudops || (tmux new-session -s pscloudops -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys 'nvim' Enter \; select-pane -t 1 \; send-keys 'aiselect && aidev' Enter \; select-pane -t 2 \; send-keys 'git status' Enter \; select-pane -t 1 \; attach))"
-alias hivim="cd ~/home-infrastructure && ~/.config/tmux/plugins/tpm/scripts/install_plugins.sh && (tmux has-session -t home-infrastructure 2>/dev/null && tmux attach -t home-infrastructure || (tmux new-session -s home-infrastructure -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys 'nvim' Enter \; select-pane -t 1 \; send-keys 'aiselect && aidev' Enter \; select-pane -t 2 \; send-keys 'git status' Enter \; select-pane -t 1 \; attach))"
-alias itvim="cd ~/Infrastructure-Terrakube && ~/.config/tmux/plugins/tpm/scripts/install_plugins.sh && (tmux has-session -t Infrastructure-Terrakube 2>/dev/null && tmux attach -t Infrastructure-Terrakube || (tmux new-session -s Infrastructure-Terrakube -d \; split-window -h \; split-window -v \; select-pane -t 0 \; send-keys 'nvim' Enter \; select-pane -t 1 \; send-keys 'aiselect && aidev' Enter \; select-pane -t 2 \; send-keys 'git status' Enter \; select-pane -t 1 \; attach))"
+# Shared layout for herdr project sessions: a "nvim" tab, an "aidev" tab (focused,
+# running aiselect && aidev), and a "zsh" tab running git status. Mirrors the old
+# tmux new-session/split-window setup but via herdr's socket-backed CLI (one tab
+# per tool instead of one pane per tool).
+#
+# $HERDR_ENV is set inside every herdr pane (like tmux's $TMUX). When already inside
+# herdr, attaching to a separate named session would nest multiplexers, so instead
+# this opens/focuses a workspace labeled $name in the CURRENT session.
+_herdr_devlayout() {
+  local name="$1" dir="$2"
+
+  if [ -n "$HERDR_ENV" ]; then
+    local ws_id p1 p2 p3
+    ws_id=$(herdr workspace list | jq -r --arg n "$name" '.result.workspaces[] | select(.label==$n) | .workspace_id' | head -1)
+    if [ -z "$ws_id" ]; then
+      ws_id=$(herdr workspace create --cwd "$dir" --label "$name" | jq -r '.result.workspace.workspace_id')
+      p1="${ws_id}:p1"
+      herdr tab rename "${ws_id}:t1" nvim >/dev/null
+      herdr pane run "$p1" "nvim" >/dev/null
+      p2=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label aidev --focus | jq -r '.result.root_pane.pane_id')
+      herdr pane run "$p2" "aiselect && aidev" >/dev/null
+      p3=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label zsh --no-focus | jq -r '.result.root_pane.pane_id')
+      herdr pane run "$p3" "git status" >/dev/null
+    fi
+    herdr workspace focus "$ws_id" >/dev/null
+    return
+  fi
+
+  if ! herdr session list --json 2>/dev/null | jq -e --arg n "$name" '.sessions[] | select(.name==$n and .running==true)' >/dev/null 2>&1; then
+    nohup herdr server --session "$name" >/dev/null 2>&1 &
+    disown
+    sleep 0.5
+    herdr workspace create --session "$name" --cwd "$dir" --label "$name" >/dev/null
+    herdr tab rename w1:t1 nvim --session "$name" >/dev/null
+    herdr pane run w1:p1 "nvim" --session "$name" >/dev/null
+    herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label aidev --focus >/dev/null
+    herdr pane run w1:p2 "aiselect && aidev" --session "$name" >/dev/null
+    herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label zsh --no-focus >/dev/null
+    herdr pane run w1:p3 "git status" --session "$name" >/dev/null
+  fi
+  herdr --session "$name"
+}
+
+# Guards nxvim/psvim/hivim/itvim against machines where the project folder doesn't
+# exist (e.g. ~/home-infrastructure isn't cloned on the work laptop).
+_herdr_project() {
+  local name="$1" dir="$2"
+  if [ ! -d "$dir" ]; then
+    echo "herdr: $dir does not exist on this machine, skipping $name" >&2
+    return 1
+  fi
+  cd "$dir" && _herdr_devlayout "$name" "$dir"
+}
+
+alias nxvim='_herdr_project nix-darwin ~/nix-darwin'
+alias devim='_herdr_devlayout "$(basename "$(pwd)")" "$(pwd)"'
+alias psvim='_herdr_project pscloudops ~/pscloudops'
+alias hivim='_herdr_project home-infrastructure ~/home-infrastructure'
+alias itvim='_herdr_project Infrastructure-Terrakube ~/Infrastructure-Terrakube'
+
+# Single daily-driver herdr session named "dev" holding one workspace per project
+# (each with the nvim/aidev/zsh tab layout above). Reruns of `dev` just reattach.
+# First run bootstraps whichever project workspaces have a matching folder on this
+# machine, so the same alias works unmodified across machines (laptop, mac mini, ...).
+_herdr_dev() {
+  if herdr session list --json 2>/dev/null | jq -e '.sessions[] | select(.name=="dev" and .running==true)' >/dev/null 2>&1; then
+    herdr --session dev
+    return
+  fi
+
+  nohup herdr server --session dev >/dev/null 2>&1 &
+  disown
+  sleep 0.5
+
+  local orig_dir="$PWD"
+  export HERDR_ENV=1 HERDR_SESSION=dev
+  psvim
+  hivim
+  nxvim
+  unset HERDR_ENV HERDR_SESSION
+  cd "$orig_dir"
+
+  herdr --session dev
+}
+alias dev='_herdr_dev'
+
+alias mmdev='ssh -t -i ~/.ssh/id_ed25519 havoc@macminim1.rollet.family "zsh -ic dev"'
 
 alias clear="clear ; clear ; clear"
 alias eza="eza -la"
