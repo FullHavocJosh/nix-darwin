@@ -16,7 +16,7 @@ alias sshk3sworkervm1='ssh -i ~/.ssh/id_ed25519 havoc@k3sworkervm1.rollet.family
 alias sshha='ssh -i ~/.ssh/id_ed25519 root@homeassistant.rollet.family'
 
 # Core primitive: a herdr workspace labeled $name (local pane cwd $dir) with 3 tabs
-# -- nvim, aidev (focused), zsh -- running $cmd_nvim/$cmd_aidev/$cmd_zsh respectively.
+# -- nvim (focused), zsh, zsh2 -- running $cmd_nvim/$cmd_zsh1/$cmd_zsh2 respectively.
 # Used for both local project layouts and remote/ssh layouts (the remote ones just
 # pass ssh-wrapped commands instead of plain local ones).
 #
@@ -24,8 +24,8 @@ alias sshha='ssh -i ~/.ssh/id_ed25519 root@homeassistant.rollet.family'
 # herdr, attaching to a separate named session would nest multiplexers, so instead
 # this opens/focuses a workspace labeled $name in the CURRENT session.
 _herdr_space() {
-  local name="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6"
-  local label_nvim="nvim${tab_suffix}" label_aidev="aidev${tab_suffix}" label_zsh="zsh${tab_suffix}"
+  local name="$1" dir="$2" cmd_nvim="$3" cmd_zsh1="$4" cmd_zsh2="$5" tab_suffix="$6"
+  local label_nvim="nvim${tab_suffix}" label_zsh1="zsh${tab_suffix}" label_zsh2="zsh2${tab_suffix}"
 
   if [ -n "$HERDR_ENV" ]; then
     local ws_id p1 p2 p3
@@ -34,11 +34,11 @@ _herdr_space() {
       ws_id=$(herdr workspace create --cwd "$dir" --label "$name" | jq -r '.result.workspace.workspace_id')
       p1="${ws_id}:p1"
       herdr tab rename "${ws_id}:t1" "$label_nvim" >/dev/null
-      herdr pane run "$p1" "$cmd_nvim" >/dev/null
-      p2=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label "$label_aidev" --focus | jq -r '.result.root_pane.pane_id')
-      herdr pane run "$p2" "$cmd_aidev" >/dev/null
-      p3=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label "$label_zsh" --no-focus | jq -r '.result.root_pane.pane_id')
-      herdr pane run "$p3" "$cmd_zsh" >/dev/null
+      [ -n "$cmd_nvim" ] && herdr pane run "$p1" "$cmd_nvim" >/dev/null
+      p2=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label "$label_zsh1" --no-focus | jq -r '.result.root_pane.pane_id')
+      [ -n "$cmd_zsh1" ] && herdr pane run "$p2" "$cmd_zsh1" >/dev/null
+      p3=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label "$label_zsh2" --no-focus | jq -r '.result.root_pane.pane_id')
+      [ -n "$cmd_zsh2" ] && herdr pane run "$p3" "$cmd_zsh2" >/dev/null
     fi
     herdr workspace focus "$ws_id" >/dev/null
     return
@@ -50,18 +50,21 @@ _herdr_space() {
     sleep 0.5
     herdr workspace create --session "$name" --cwd "$dir" --label "$name" >/dev/null
     herdr tab rename w1:t1 "$label_nvim" --session "$name" >/dev/null
-    herdr pane run w1:p1 "$cmd_nvim" --session "$name" >/dev/null
-    herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label "$label_aidev" --focus >/dev/null
-    herdr pane run w1:p2 "$cmd_aidev" --session "$name" >/dev/null
-    herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label "$label_zsh" --no-focus >/dev/null
-    herdr pane run w1:p3 "$cmd_zsh" --session "$name" >/dev/null
+    [ -n "$cmd_nvim" ] && herdr pane run w1:p1 "$cmd_nvim" --session "$name" >/dev/null
+    herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label "$label_zsh1" --no-focus >/dev/null
+    [ -n "$cmd_zsh1" ] && herdr pane run w1:p2 "$cmd_zsh1" --session "$name" >/dev/null
+    herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label "$label_zsh2" --no-focus >/dev/null
+    [ -n "$cmd_zsh2" ] && herdr pane run w1:p3 "$cmd_zsh2" --session "$name" >/dev/null
   fi
   herdr --session "$name"
 }
 
+# Middle tab starts as a plain shell (no auto-launched aiselect && aidev) -- launch
+# it manually when you actually want an agent running; herdr's pane persistence
+# means detach/reattach just resumes whatever's running in it.
 _herdr_devlayout() {
   local name="$1" dir="$2"
-  _herdr_space "$name" "$dir" "nvim" "aiselect && aidev" "git status"
+  _herdr_space "$name" "$dir" "nvim" "" "git status"
 }
 
 # Same 3-tab layout, but each tab ssh's into $host and runs its command in
@@ -76,7 +79,7 @@ _herdr_remote_space() {
   local ssh="ssh -t -i ~/.ssh/id_ed25519 $host"
   _herdr_space "$name" "$HOME" \
     "$ssh \"zsh -ic 'cd $remote_dir && nvim'\"" \
-    "$ssh \"zsh -ic 'cd $remote_dir && aiselect && aidev'\"" \
+    "$ssh \"zsh -ic 'cd $remote_dir && exec zsh -l'\"" \
     "$ssh \"zsh -ic 'cd $remote_dir && git status; exec zsh -l'\"" \
     "-macmini"
 }
@@ -98,10 +101,11 @@ alias psvim='_herdr_project pscloudops ~/pscloudops'
 alias hivim='_herdr_project home-infrastructure ~/home-infrastructure'
 alias itvim='_herdr_project Infrastructure-Terrakube ~/Infrastructure-Terrakube'
 
-# Single daily-driver herdr session named "dev" holding one workspace per project
-# (each with the nvim/aidev/zsh tab layout above). Reruns of `dev` just reattach.
-# First run bootstraps whichever project workspaces have a matching folder on this
-# machine, so the same alias works unmodified across machines (laptop, mac mini, ...).
+# Single daily-driver herdr session named "dev" holding one workspace per project.
+# Reruns of `dev` just reattach -- no re-scanning. First run auto-discovers every
+# git repo directly under ~/ (any dir with a .git) and opens a workspace for each,
+# so newly cloned repos get picked up automatically without editing this file.
+# Add repo names to the case statement below to exclude them from the scan.
 _herdr_dev() {
   if herdr session list --json 2>/dev/null | jq -e '.sessions[] | select(.name=="dev" and .running==true)' >/dev/null 2>&1; then
     herdr --session dev
@@ -114,9 +118,17 @@ _herdr_dev() {
 
   local orig_dir="$PWD"
   export HERDR_ENV=1 HERDR_SESSION=dev
-  psvim
-  hivim
-  nxvim
+  local repo base
+  for repo in "$HOME"/*/; do
+    repo="${repo%/}"
+    base="$(basename "$repo")"
+    [ -e "$repo/.git" ] || continue
+    case "$base" in
+      claude-howto|codebase-to-course) continue ;;
+    esac
+    _herdr_devlayout "$base" "$repo"
+  done
+  [ -d ~/nix-darwin ] && nxvim
   unset HERDR_ENV HERDR_SESSION
   cd "$orig_dir"
 
