@@ -165,6 +165,7 @@ function _is_helm_template() {
 # Helper function: Run linters on staged files
 # Returns 0 if all linters pass or user wants to continue, 1 if user wants to abort
 function _run_linters() {
+  local auto_mode="${1:-false}"
   local files=()
   while IFS= read -r file; do
     files+=("$file")
@@ -311,14 +312,20 @@ function _run_linters() {
     echo ""
     echo -e "$lint_report"
     echo ""
-    echo "Options:"
-    echo "  [e] Edit files with AI assistance (opens tmux workspace)"
-    echo "  [f] Auto-fix formatting issues (where possible)"
-    echo "  [i] Ignore and continue"
-    echo "  [q] Quit and fix manually"
-    echo ""
-    echo -n "Your choice: "
-    read -r lint_choice
+    local lint_choice
+    if $auto_mode; then
+      echo "ℹ Auto mode: auto-fixing formatting issues"
+      lint_choice="f"
+    else
+      echo "Options:"
+      echo "  [e] Edit files with AI assistance (opens tmux workspace)"
+      echo "  [f] Auto-fix formatting issues (where possible)"
+      echo "  [i] Ignore and continue"
+      echo "  [q] Quit and fix manually"
+      echo ""
+      echo -n "Your choice: "
+      read -r lint_choice
+    fi
     
     case "$lint_choice" in
       e | E)
@@ -365,7 +372,7 @@ function _run_linters() {
         echo ""
         
         # Recursively call _run_linters to check again
-        _run_linters
+        _run_linters "$auto_mode"
         return $?
         ;;
       f | F)
@@ -429,7 +436,7 @@ function _run_linters() {
         echo "ℹ Re-running linting checks to verify fixes..."
         echo "═══════════════════════════════════════════════════════════"
         echo ""
-        _run_linters
+        _run_linters "$auto_mode"
         return $?
         ;;
       i | I)
@@ -462,6 +469,7 @@ function _get_matching_files() {
 # Helper function: Check staged changes for secrets/credentials
 # Returns 0 if safe to proceed, 1 if secrets found and user wants to abort
 function _check_for_secrets() {
+  local auto_mode="${1:-false}"
   local diff_output=$(git diff --cached)
   local added_lines=$(echo "$diff_output" | grep "^+" | grep -v "^+++")
   
@@ -581,6 +589,13 @@ $(echo -e "$suspicious_lines")" | _run_ai_plain "sonnet" 2>&1)
         echo "✓ AI analysis confirms all detections are false positives. Proceeding."
         echo "$review_result" > /tmp/gpa_secrets_verdict.txt
         return 0
+      fi
+
+      if $auto_mode; then
+        echo ""
+        echo "✗ Auto mode: AI analysis could not confirm these are false positives — aborting."
+        echo "  Review the detections and AI analysis above, fix the flagged lines, then re-run gpa --auto."
+        return 1
       fi
 
       echo ""
@@ -2116,10 +2131,19 @@ function _prompt_ai_error_action() {
 
 function gpa() {
   # Git Partial Add with AI code review
-  # Usage: gpa [--tier=haiku|sonnet|opus]
-  
-  # Parse optional --tier flag
+  # Usage: gpa [--tier=haiku|sonnet|opus] [--auto]
+  #
+  # --auto: non-interactive mode for AI-agent callers (e.g. Claude Code).
+  # Stages all changes, auto-fixes lint issues, auto-escalates ambiguous
+  # AI-review escalation prompts, and never blindly proceeds past something
+  # that needs a judgment call (real secrets, AI review that fully failed).
+  # If issues are found, prints them and exits non-zero instead of entering
+  # the interactive fix loop or recursing into aidev — the caller is
+  # expected to read the findings, fix them itself, and re-run `gpa --auto`.
+
+  # Parse optional --tier and --auto flags
   local tier_override="auto"
+  local auto_mode=false
   for arg in "$@"; do
     case $arg in
       --tier=haiku|--tier=sonnet|--tier=opus)
@@ -2129,6 +2153,10 @@ function gpa() {
       --tier=*)
         echo "✗ Invalid tier. Use: haiku, sonnet, or opus"
         return 1
+        ;;
+      --auto)
+        auto_mode=true
+        shift
         ;;
     esac
   done
@@ -2219,6 +2247,13 @@ function gpa() {
   
   # If there are unstaged changes, let user select what to stage
   if [ ${#changed_files[@]} -gt 0 ]; then
+    if $auto_mode; then
+      echo "ℹ Auto mode: staging all ${#changed_files[@]} file(s)"
+      for file in "${changed_files[@]}"; do
+        git -C "$git_root" add "$file" 2>/dev/null
+      done
+      echo "✓ Staged ${#changed_files[@]} file(s)"
+    else
     # Show already-staged files if any
     if [ "$staged_count" -gt 0 ]; then
       local GREEN='\033[0;32m'
@@ -2329,6 +2364,7 @@ function gpa() {
           ;;
       esac
     fi
+    fi
   else
     # No unstaged changes, but there are staged changes - proceed to review them
     if [ "$staged_count" -gt 0 ]; then
@@ -2364,21 +2400,21 @@ function gpa() {
   echo ""
 
   # Run secrets detection using helper function
-  if ! _check_for_secrets; then
+  if ! _check_for_secrets "$auto_mode"; then
     echo "✗ Secrets detection aborted commit."
     return 1
   fi
-  
+
   echo "✓ No secrets detected in staged changes"
-  
+
   echo ""
   echo "═══════════════════════════════════════════════════════════"
   echo "ℹ Running linters on staged files..."
   echo "═══════════════════════════════════════════════════════════"
   echo ""
-  
+
   # Run linters
-  if ! _run_linters; then
+  if ! _run_linters "$auto_mode"; then
     echo "✗ Linting check aborted."
     return 1
   fi
@@ -2398,6 +2434,14 @@ function gpa() {
     echo ""
     echo "✓ All staged files have been previously reviewed with no changes"
     echo ""
+
+    if $auto_mode; then
+      echo "ℹ Auto mode: committing and pushing"
+      echo ""
+      gpc
+      return $?
+    fi
+
     echo "Options:"
     echo "  [Enter] Commit and push (gpc)"
     echo "  [r]     Re-review all files (clear cache)"
@@ -2628,12 +2672,19 @@ function gpa() {
                 echo "  Recommendation: Re-review with cloud ($cloud_provider $cloud_source_model)"
                 echo "  for authoritative security analysis."
                 echo ""
-                echo "  Options:"
-                echo "    [y] Yes - Escalate to cloud (recommended)"
-                echo "    [n] No  - Keep local findings"
-                echo ""
-                echo -n "  Your choice: "
-                read -r escalate_choice
+
+                local escalate_choice
+                if $auto_mode; then
+                  echo "  ℹ Auto mode: escalating to cloud for authoritative review"
+                  escalate_choice="y"
+                else
+                  echo "  Options:"
+                  echo "    [y] Yes - Escalate to cloud (recommended)"
+                  echo "    [n] No  - Keep local findings"
+                  echo ""
+                  echo -n "  Your choice: "
+                  read -r escalate_choice
+                fi
 
                 if [[ "$escalate_choice" == "y" || "$escalate_choice" == "Y" ]]; then
                   echo ""
@@ -2726,6 +2777,13 @@ function gpa() {
     echo "  - AI service unavailability"
     echo "  - Rate limiting"
     echo ""
+
+    if $auto_mode; then
+      echo "✗ Auto mode: AI review failed completely — not committing without review."
+      echo "  Check connectivity/AI provider and re-run gpa --auto."
+      return 1
+    fi
+
     echo "Options:"
     echo "  [Enter] Retry"
     echo "  [i]     Ignore and proceed"
@@ -2733,7 +2791,7 @@ function gpa() {
     echo ""
     echo -n "Your choice: "
     read -r skip_review
-    
+
     case "$skip_review" in
       ""|$'\n')  # ENTER - Retry
         echo ""
@@ -2762,6 +2820,13 @@ function gpa() {
     echo "The AI reviewed your code but returned output that could not be parsed."
     echo "This means issues may have been found but weren't captured."
     echo ""
+
+    if $auto_mode; then
+      echo "✗ Auto mode: review response unparseable — not committing without a clean review."
+      echo "  Re-run gpa --auto; if it persists, investigate the AI provider's output."
+      return 1
+    fi
+
     echo "Options:"
     echo "  [Enter] Retry"
     echo "  [i]     Ignore and proceed"
@@ -2769,7 +2834,7 @@ function gpa() {
     echo ""
     echo -n "Your choice: "
     read -r soft_fail_choice
-    
+
     case "$soft_fail_choice" in
       ""|$'\n')  # ENTER - Retry
         echo ""
@@ -2801,7 +2866,17 @@ function gpa() {
     else
       echo "✓ Code review complete - no critical issues or warnings found"
     fi
-    
+
+    if $auto_mode; then
+      echo ""
+      echo "ℹ Auto mode: committing and pushing"
+      echo ""
+      gpc
+      local gpc_status=$?
+      rm -f /tmp/gpa_secrets_verdict.txt
+      return $gpc_status
+    fi
+
     echo ""
     echo "Options:"
     echo "  [Enter] Commit and push (gpc)"
@@ -2825,14 +2900,14 @@ function gpa() {
         ;;
     esac
   else
-    # Issues found - display summary and enter interactive mode
+    # Issues found - display summary
     echo "⚠ Found $total_issue_count issue(s) across all batches"
     echo ""
-    
+
     # Display a summary of issues by severity
     local critical_count=$(echo "$all_issues" | jq '[.[] | select(type == "object" and .severity == "Critical")] | length' 2>/dev/null || echo "0")
     local warning_count=$(echo "$all_issues" | jq '[.[] | select(type == "object" and .severity == "Warning")] | length' 2>/dev/null || echo "0")
-    
+
     if [ "$critical_count" -gt 0 ]; then
       echo "  🔴 Critical: $critical_count"
     fi
@@ -2840,7 +2915,21 @@ function gpa() {
       echo "  🟡 Warning: $warning_count"
     fi
     echo ""
-    
+
+    if $auto_mode; then
+      # Print full findings and hand control back to the caller instead of
+      # entering the interactive fix loop or recursing into aidev — an
+      # AI-agent caller is expected to read these, fix the files itself with
+      # its own edit tools, then re-run `gpa --auto`. Changes stay staged.
+      echo "Auto mode: not committing. Findings requiring a decision:"
+      echo ""
+      echo "$all_issues" | jq -r '.[] | "─────────────────────────────────────────────\nFile: \(.file)\nSeverity: \(.severity)\nIssue: \(.issue)\nRecommendation: \(.recommendation)\n"'
+      echo "─────────────────────────────────────────────"
+      echo "Fix these, then re-run 'gpa --auto' (changes remain staged)."
+      rm -f /tmp/gpa_secrets_verdict.txt
+      return 3
+    fi
+
     # Enter interactive fix mode
     echo "Entering interactive fix mode..."
     echo ""
@@ -2851,15 +2940,123 @@ function gpa() {
   rm -f /tmp/gpa_secrets_verdict.txt
 }
 
-# Git PR - Create new branch and draft pull request
+# Returns 0 (via stdout "true"/"false") whether $1 is the repo's main
+# checkout, as opposed to a linked worktree. The main checkout is the only
+# one where --git-dir and --git-common-dir resolve to the same directory.
+function _is_main_worktree() {
+  local dir="$1"
+  local git_dir common_dir
+  # --path-format=absolute avoids the ambiguity where --git-dir is relative
+  # for the main worktree but absolute for linked worktrees.
+  git_dir=$(git -C "$dir" rev-parse --path-format=absolute --git-dir 2>/dev/null) || return 1
+  common_dir=$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+  [[ "$git_dir" == "$common_dir" ]]
+}
+
+# Worktree + PR hygiene: run before creating a new worktree so we don't
+# accumulate stale checkouts, and so whoever is about to start new work can
+# see what's already in flight first.
+#   - A worktree whose PR is MERGED/CLOSED is stale (the work is done or
+#     dead) -> automatically removed, its local branch deleted.
+#   - A worktree with an OPEN PR, or no PR at all (not pushed yet), is left
+#     alone and just listed.
+#   - An OPEN PR with no matching local worktree is only reported (it may
+#     be in progress on another machine) -- never deleted.
+function _gpr_prune_stale_worktrees() {
+  local repo_root="$1"
+  local pruned_any=false
+  local -a open_worktree_branches=()
+
+  echo "ℹ Checking existing worktrees and PRs..."
+
+  local wt_path="" wt_branch=""
+  while IFS= read -r line; do
+    case "$line" in
+      "worktree "*) wt_path="${line#worktree }" ;;
+      "branch refs/heads/"*) wt_branch="${line#branch refs/heads/}" ;;
+      "")
+        if [[ -n "$wt_path" && "$wt_path" != "$repo_root" ]]; then
+          if [[ -z "$wt_branch" ]]; then
+            echo "  ⚠ Worktree with no branch (detached?): $wt_path — left alone"
+          else
+            # Explicit "" assignments avoid a zsh quirk: re-declaring an
+            # already-local var with no assignment (as happens each loop
+            # iteration here) prints "name=value" instead of no-op'ing.
+            local pr_json="" pr_state=""
+            pr_json=$(cd "$wt_path" && gh pr view --json state,url 2>/dev/null)
+            if [[ -n "$pr_json" ]]; then
+              pr_state=$(echo "$pr_json" | jq -r '.state')
+              if [[ "$pr_state" == "MERGED" || "$pr_state" == "CLOSED" ]]; then
+                echo "  🧹 Pruning stale worktree '$wt_branch' (PR $pr_state): $wt_path"
+                git -C "$repo_root" worktree remove "$wt_path" --force 2>/dev/null
+                git -C "$repo_root" branch -D "$wt_branch" 2>/dev/null
+                pruned_any=true
+              else
+                local pr_url=$(echo "$pr_json" | jq -r '.url')
+                echo "  • Active: '$wt_branch' — $pr_url"
+                open_worktree_branches+=("$wt_branch")
+              fi
+            else
+              echo "  • In progress (no PR yet): '$wt_branch' — $wt_path"
+              open_worktree_branches+=("$wt_branch")
+            fi
+          fi
+        fi
+        wt_path="" wt_branch=""
+        ;;
+    esac
+  done < <(git -C "$repo_root" worktree list --porcelain; echo)
+
+  $pruned_any && git -C "$repo_root" worktree prune
+
+  # Report open PRs with no local worktree — informational only, never touched.
+  local open_prs
+  open_prs=$(cd "$repo_root" && gh pr list --state open --json headRefName,url 2>/dev/null)
+  if [[ -n "$open_prs" ]]; then
+    echo "$open_prs" | jq -c '.[]' | while IFS= read -r pr; do
+      local head_ref=$(echo "$pr" | jq -r '.headRefName')
+      local pr_url=$(echo "$pr" | jq -r '.url')
+      if [[ ! " ${open_worktree_branches[*]} " == *" $head_ref "* ]]; then
+        echo "  ⓘ Open PR with no local worktree (maybe in progress elsewhere): $head_ref — $pr_url"
+      fi
+    done
+  fi
+  echo ""
+}
+
+# Git PR - Create new branch, worktree, and draft pull request.
+#
+# Development happens in a worktree per PR (~/.worktrees/<branch> inside the
+# repo), not by checking out a branch in place -- the main repo checkout
+# always stays on main so concurrent work-in-progress branches don't collide
+# in a single working directory.
 function gpr_func() {
+  # Usage: gpr [feat|fix] [branch-name]
+  # Positional args skip the interactive prompts below (for scripted/AI callers).
+  local arg_type="$1"
+  local arg_branch_name="$2"
+
   # Validate git repository
   _check_git_repo || return 1
+
+  local repo_root
+  repo_root=$(git rev-parse --show-toplevel)
+
+  if ! _is_main_worktree "$repo_root"; then
+    local common_dir main_root
+    common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
+    main_root=$(cd "$(dirname "$common_dir")" && pwd)
+    echo "✗ You're inside a worktree. Run gpr from the main repo checkout instead:"
+    echo "  cd $main_root"
+    return 1
+  fi
 
   # gpr never calls an AI provider — branch naming and PR creation are
   # templated operations that don't benefit from cloud quality.
   echo "🏠 Creating PR locally (no AI provider needed)..."
   echo ""
+
+  _gpr_prune_stale_worktrees "$repo_root"
 
   # Stash any uncommitted changes
   echo "Stashing uncommitted changes..."
@@ -2879,27 +3076,46 @@ function gpr_func() {
     git stash pop || true
   fi
 
-  echo "Select type:"
-  echo "  1) feat"
-  echo "  2) fix"
-  echo -n "Enter choice (1 or 2): "
-  read type_choice
+  local type_choice="$arg_type"
+  if [ -z "$type_choice" ]; then
+    echo "Select type:"
+    echo "  1) feat"
+    echo "  2) fix"
+    echo -n "Enter choice (1 or 2): "
+    read type_choice
+  fi
   case "$type_choice" in
-    1) type_prefix="feat" ;;
-    2) type_prefix="fix" ;;
+    1|feat) type_prefix="feat" ;;
+    2|fix) type_prefix="fix" ;;
     *)
-      echo "✗ Invalid choice. Please select 1 or 2"
+      echo "✗ Invalid choice. Please select 1, 2, feat, or fix"
       return 1
       ;;
   esac
-  echo -n "Branch name: "
-  read branch_name
+  local branch_name="$arg_branch_name"
+  if [ -z "$branch_name" ]; then
+    echo -n "Branch name: "
+    read branch_name
+  fi
   if [ -z "$branch_name" ]; then
     echo "✗ Branch name cannot be empty"
     return 1
   fi
-  git checkout -b "$branch_name" &&
-    git commit --allow-empty -m "$branch_name" &&
+
+  local worktree_dir="$repo_root/.worktrees/$branch_name"
+  if [ -e "$worktree_dir" ]; then
+    echo "✗ A worktree already exists at $worktree_dir"
+    return 1
+  fi
+  mkdir -p "$repo_root/.worktrees"
+
+  git worktree add -b "$branch_name" "$worktree_dir" main || return 1
+
+  # cd here (not in a subshell) so the caller's shell ends up in the new
+  # worktree, ready to work — this is a function, so cd persists.
+  cd "$worktree_dir" || return 1
+
+  git commit --allow-empty -m "$branch_name" &&
     git push -u origin "$branch_name" &&
     gh pr create --draft --title "$type_prefix: $branch_name" --body "$(
       cat <<EOF
@@ -2909,6 +3125,8 @@ $type_prefix: $branch_name
 ## Tickets
 $type_prefix: $branch_name
 EOF
-    )"
+    )" &&
+    echo "" &&
+    echo "✓ Worktree ready: $worktree_dir"
 }
 

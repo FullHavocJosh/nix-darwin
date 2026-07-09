@@ -133,6 +133,14 @@ vendor/
 btop.log
 
 # =============================================================================
+# Git Worktrees - Per-PR Development Checkouts
+# =============================================================================
+# gpr creates one worktree per PR at <repo_root>/.worktrees/<branch>, so the
+# main repo checkout always stays on main. Never tracked, and machine-local
+# (each worktree is a real checkout, not something to sync via git).
+/.worktrees/
+
+# =============================================================================
 # AI Coding Tools - Repository-Local Artifacts
 # =============================================================================
 # These tools create files/folders inside repos when used
