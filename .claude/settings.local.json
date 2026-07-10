@@ -186,9 +186,11 @@
       "Bash(grep -viE \"^\\\\s*$\")",
       "Bash(grep -n \"mapleader\\\\|localleader\" .config/nvim/lua/config/*.lua)",
       "Bash(grep -rn \"<D-\" .config/nvim/lua/)",
-      "Bash(xxd .gitmodules)"
+      "Bash(xxd .gitmodules)",
+      "Bash(herdr status *)"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "hooks": {
     "PreToolUse": [
       {
@@ -218,6 +220,5 @@
         ]
       }
     ]
-  },
-  "enableAllProjectMcpServers": true
+  }
 }
