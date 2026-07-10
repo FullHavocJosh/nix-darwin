@@ -183,7 +183,10 @@
       "Bash(gh pr *)",
       "Bash(gpc *)",
       "Bash(grep -iE \"[a-z_]{3,}\")",
-      "Bash(grep -viE \"^\\\\s*$\")"
+      "Bash(grep -viE \"^\\\\s*$\")",
+      "Bash(grep -n \"mapleader\\\\|localleader\" .config/nvim/lua/config/*.lua)",
+      "Bash(grep -rn \"<D-\" .config/nvim/lua/)",
+      "Bash(xxd .gitmodules)"
     ]
   },
   "hooks": {
