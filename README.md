@@ -8,7 +8,7 @@ A comprehensive, declarative development environment configuration for **macOS**
 - **Cross-Platform Support** - macOS (nix-darwin) and Linux
 - **AI-Powered Git Workflows** - Automated code review, commit messages, and PR generation
 - **Multiple Profile Support** - Personal and work configurations with profile-specific packages
-- **Complete Dev Environment** - Shell (zsh), editor (Neovim), terminal (tmux), window management, and more
+- **Complete Dev Environment** - Shell (zsh), editor (Neovim), terminal (herdr), window management, and more
 - **Security-First Approach** - Smart gitignore patterns, secrets detection, environment variable management
 - **Local LLM Integration** - llama.cpp server with Qwen2.5-Coder running as a launchd service
 - **MCP Server Ecosystem** - Auto-registered Claude Code MCP servers for GitHub, Terraform, AWS, Slack, and more
@@ -50,7 +50,7 @@ nix-darwin/
 │   ├── nvim/                           # Neovim (LazyVim) configuration (incl. claudecode.nvim)
 │   ├── opencode/                       # OpenCode AI assistant config
 │   ├── superfile/                      # Superfile TUI file manager config
-│   ├── tmux/                           # Tmux multiplexer config
+│   ├── herdr/                          # herdr terminal workspace manager config
 │   ├── zed/                            # Zed editor config (gitignored - see security section)
 │   └── ...                             # Many more application configs
 │
@@ -175,7 +175,7 @@ Interactive staging with comprehensive checks:
 1. **Secrets detection** - Scans for API keys, passwords, tokens
 2. **Linting** - Auto-runs nixfmt, prettier, ruff on staged files
 3. **Batched AI review** - Reviews code in ~300 line batches
-4. **Interactive fixes** - Edit issues with AI assistance in tmux workspace
+4. **Interactive fixes** - Edit issues with AI assistance in herdr workspace
 
 ```bash
 gpa                   # Select files, lint, and get AI code review
@@ -216,7 +216,7 @@ All automatically installed via nix-darwin/package managers:
 - `opencode` - AI code assistant
 - `llama.cpp` (`llama-server`) - Local LLM inference
 - `gh` - GitHub CLI
-- `tmux` - Terminal multiplexer
+- `herdr` - Terminal workspace manager
 - `neovim` - Text editor
 
 ## 🤖 Claude Code & MCP Integration

@@ -1,25 +1,20 @@
 [keys]
 prefix = "ctrl+t"
 
-# Mirrors ~/.config/tmux/tmux.conf's custom bindings where a clean equivalent exists.
 # split_vertical/split_horizontal direction is a best guess (couldn't verify without
 # a real attached terminal -- CLI send-keys bypasses herdr's own prefix dispatch and
 # hits the pane's shell directly, e.g. ctrl+t triggered zsh/fzf's own binding instead
 # of herdr's prefix). Swap the two lines below if the split direction comes out
-# backwards from tmux's `/` (side-by-side) and `-` (stacked).
+# backwards (`/` = side-by-side, `-` = stacked).
 split_vertical = "prefix+/"
 split_horizontal = "prefix+minus"
 
-# tmux: `bind w kill-pane`. Conflicts with herdr's default workspace_picker="prefix+w",
-# so workspace_picker moves to prefix+p (freed up since previous_tab moved off prefix+p).
+# Conflicts with herdr's default workspace_picker="prefix+w", so workspace_picker
+# moves to prefix+p (freed up since previous_tab no longer lives there).
 close_pane = "prefix+w"
 workspace_picker = "prefix+p"
 
-# zoom already matches tmux's `bind z resize-pane -Z` by default (prefix+z) -- no change needed.
-
-# Raw (unprefixed) tab/agent navigation -- one keystroke instead of prefix+key, by
-# design: no need to worry about the vim-tmux-navigator/tmux Ctrl-h/j/k/l passthrough
-# this repo's tmux setup relies on, since herdr (not tmux) is the daily driver now.
+# Raw (unprefixed) tab/agent navigation -- one keystroke instead of prefix+key.
 # h/l cycle tabs (left/right axis), j/k cycle agents (up/down axis). This does shadow
 # the shell's own Ctrl+L (clear-screen) and Ctrl+J (newline) readline bindings while a
 # herdr pane has focus -- accepted tradeoff for a simpler single-key scheme.
@@ -30,19 +25,14 @@ next_tab = "ctrl+l"
 previous_agent = "ctrl+k"
 next_agent = "ctrl+j"
 
-# Workspace ("space") relative navigation -- no tmux equivalent (herdr workspaces are
-# closer to separate tmux sessions than windows). u=previous, i=next.
+# Workspace ("space") relative navigation. u=previous, i=next.
 previous_workspace = "prefix+u"
 next_workspace = "prefix+i"
 
 # Jump straight to agent N. herdr's own default-config comments suggest
 # "prefix+alt+1..9" for this exact binding, leaving switch_tab on its default
-# prefix+1..9 (tab-by-number) untouched. No tmux equivalent (no agent concept there).
+# prefix+1..9 (tab-by-number) untouched.
 focus_agent = "prefix+alt+1..9"
-
-# Not portable from tmux.conf:
-# - v/y copy-mode selection bindings. No exposed config equivalent; herdr's
-#   scrollback/copy appears to rely on native mouse selection instead.
 
 [ui.toast]
 delivery = "system"

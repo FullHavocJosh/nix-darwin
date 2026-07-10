@@ -77,16 +77,16 @@ function asc() {
   fi
 }
 
-# Helper function: Create tmux workspace for linting fixes in new terminal window
+# Helper function: Open a herdr workspace (nvim + aidev tabs) for linting fixes
 # Usage: _linter_create_edit_workspace <files_with_issues> <lint_report>
 function _linter_create_edit_workspace() {
   local -a files_array
   IFS=$'\n' read -rd '' -A files_array <<< "$1"
   local lint_report="$2"
-  
+
   # Get absolute path to repo root
   local repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-  
+
   # Save the prompt to a temp file to avoid quoting issues
   local prompt_file="/tmp/lint_prompt_$$.txt"
   cat > "$prompt_file" <<EOF
@@ -99,43 +99,22 @@ Files to fix: ${files_array[@]}
 
 Please review the issues and suggest fixes. I can make the changes in the editor above or you can help automate the fixes.
 EOF
-  
+
   # Open first file with issues in nvim
   local first_file="${files_array[1]}"
   # If file path is relative, make it absolute from repo root
   if [[ ! "$first_file" = /* ]]; then
     first_file="$repo_root/$first_file"
   fi
-  
-  # Create a session name
+
   local session_name="lint-fix-$$"
-  
-  # Create a startup script that will run tmux in the new terminal
-  local startup_script="/tmp/lint_startup_$$.sh"
-  cat > "$startup_script" <<STARTUP
-#!/usr/bin/env bash
-# Change to repo root
-cd '$repo_root'
+  local cmd_aidev="echo '=== aidev Linting Assistant ==='; echo; aidev \"\$(cat '$prompt_file')\""
 
-# Create tmux session with nvim in top pane and aidev in bottom
-tmux new-session -s '$session_name' -c '$repo_root' "nvim '$first_file'" \\; \\
-  split-window -v -p 30 -c '$repo_root' "bash -c 'echo \"=== aidev Linting Assistant ===\"; echo \"\"; aidev \"\\\$(cat \"$prompt_file\")\"; exec \\\$SHELL'" \\; \\
-  select-pane -t 0
+  _herdr_ai_edit_workspace "$session_name" "$repo_root" "nvim '$first_file'" "$cmd_aidev"
 
-# Cleanup temp files after tmux session ends
-rm -f '$prompt_file' '$startup_script'
-STARTUP
-  chmod +x "$startup_script"
-  
-  # Launch in default terminal
-  if ! _launch_terminal_window "$startup_script" "linting workspace"; then
-    rm -f "$prompt_file" "$startup_script"
-    return 1
-  fi
-
-  echo "  Session: $session_name"
+  echo "  Workspace: $session_name"
   echo "  Files: ${files_array[@]}"
-  echo "  Edit the files in the new window, then close it when done."
+  echo "  Edit the files in the herdr workspace, then switch back here when done."
   echo ""
 }
 
@@ -318,7 +297,7 @@ function _run_linters() {
       lint_choice="f"
     else
       echo "Options:"
-      echo "  [e] Edit files with AI assistance (opens tmux workspace)"
+      echo "  [e] Edit files with AI assistance (opens herdr workspace)"
       echo "  [f] Auto-fix formatting issues (where possible)"
       echo "  [i] Ignore and continue"
       echo "  [q] Quit and fix manually"
@@ -330,25 +309,25 @@ function _run_linters() {
     case "$lint_choice" in
       e | E)
         echo ""
-        echo "ℹ Opening tmux workspace for manual fixes with AI assistance..."
-        echo "  Top pane: nvim with files"
-        echo "  Bottom pane: aidev assistant"
+        echo "ℹ Opening herdr workspace for manual fixes with AI assistance..."
+        echo "  nvim tab: files with issues"
+        echo "  aidev tab: aidev assistant"
         echo ""
-        
+
         # Convert files_with_issues array to newline-separated string
         local files_string=$(printf '%s\n' "${files_with_issues[@]}")
-        
+
         _linter_create_edit_workspace "$files_string" "$lint_report"
-        
+
         # Wait for user to finish editing
         echo ""
         echo "═══════════════════════════════════════════════════════════"
         echo "⏸  Waiting for you to finish editing..."
         echo "═══════════════════════════════════════════════════════════"
         echo ""
-        echo "When you're done editing in the new terminal window:"
+        echo "When you're done editing in the herdr workspace:"
         echo "  1. Save your changes in nvim"
-        echo "  2. Close the terminal window (or exit tmux)"
+        echo "  2. Switch back to this pane"
         echo "  3. Press Enter here to re-run linting checks"
         echo ""
         echo -n "Press Enter when editing is complete: "
@@ -1000,7 +979,7 @@ function gpc() {
   fi
 }
 
-# Helper function: Create tmux workspace for manual file editing with AI assistance
+# Helper function: Open a herdr workspace for manual file editing with AI assistance
 # Usage: _gpa_create_edit_workspace <file_path> <recommendation_text>
 function _gpa_create_edit_workspace() {
   local file_path="$1"
@@ -1008,37 +987,18 @@ function _gpa_create_edit_workspace() {
   local file_dir=$(dirname "$file_path")
   local file_name=$(basename "$file_path")
   local session_name="gpa-fix-${file_name}-$$"
-  
+
   # Create a temporary file with the recommendation for aidev
   local rec_file="/tmp/gpa_recommendation_$$.txt"
   echo "$recommendation" > "$rec_file"
 
-  # Create a startup script that will run tmux in the new terminal
-  local startup_script="/tmp/gpa_startup_$$.sh"
-  cat > "$startup_script" <<STARTUP
-#!/usr/bin/env bash
-# Change to file directory
-cd '$file_dir'
+  local cmd_aidev="echo '=== Code Review Fix Assistant ==='; echo; echo 'Recommendation:'; cat '$rec_file'; echo; echo 'Starting aidev...'; echo; aidev \"Help me implement this fix: \$(cat '$rec_file'). The file to fix is: $file_path\""
 
-# Create tmux session with nvim in top pane and aidev in bottom
-tmux new-session -s '$session_name' -c '$file_dir' "nvim '$file_path'" \\; \\
-  split-window -v -p 30 -c '$file_dir' "bash -c 'echo \"=== Code Review Fix Assistant ===\"; echo \"\"; echo \"Recommendation:\"; cat \"$rec_file\"; echo \"\"; echo \"Starting aidev...\"; echo \"\"; aidev \"Help me implement this fix: \\\$(cat \\\"$rec_file\\\"). The file to fix is: $file_path\"; exec \\\$SHELL'" \\; \\
-  select-pane -t 0
+  _herdr_ai_edit_workspace "$session_name" "$file_dir" "nvim '$file_path'" "$cmd_aidev"
 
-# Cleanup temp files after tmux session ends
-rm -f '$rec_file' '$startup_script'
-STARTUP
-  chmod +x "$startup_script"
-  
-  # Launch in default terminal
-  if ! _launch_terminal_window "$startup_script" "editing workspace"; then
-    rm -f "$rec_file" "$startup_script"
-    return 1
-  fi
-
-  echo "  Session: $session_name"
+  echo "  Workspace: $session_name"
   echo "  File: $file_path"
-  echo "  Edit the file in the new window, then close it when done."
+  echo "  Edit the file in the herdr workspace, then switch back here when done."
   echo ""
 }
 
@@ -1557,7 +1517,7 @@ ${batch_context}
   return 2
 }
 
-# Helper function: Launch aidev in a new tmux window with all issues as context
+# Helper function: Launch aidev inline with all issues as context
 # Usage: _gpa_send_all_to_aidev <structured_issues_json>
 # Returns 0 to re-review, 1 to keep staged
 function _gpa_send_all_to_aidev() {
@@ -1854,7 +1814,7 @@ function _gpa_interactive_fix() {
     echo "$recommendation"
     echo ""
     echo "Options:"
-    echo "  [m] Manual fix - open tmux workspace with nvim + aidev"
+    echo "  [m] Manual fix - open herdr workspace with nvim + aidev"
     echo "  [a] Auto-fix - let aidev fix it automatically"
     echo "  [s] Skip this issue"
     echo "  [q] Quit and proceed to commit"
@@ -1873,9 +1833,9 @@ function _gpa_interactive_fix() {
         echo "⏸  Waiting for you to finish editing..."
         echo "═══════════════════════════════════════════════════════════"
         echo ""
-        echo "When you're done editing in the new terminal window:"
+        echo "When you're done editing in the herdr workspace:"
         echo "  1. Save your changes in nvim"
-        echo "  2. Close the terminal window (or exit tmux)"
+        echo "  2. Switch back to this pane"
         echo "  3. Press Enter here to continue"
         echo ""
         echo -n "Press Enter when editing is complete: "
