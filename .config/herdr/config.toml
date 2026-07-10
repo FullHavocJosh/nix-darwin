@@ -36,6 +36,7 @@ delivery = "system"
 [ui]
 show_agent_labels_on_pane_borders = true
 
+agent_panel_sort = "spaces"
 [theme]
 name = "terminal"
 auto_switch = false

@@ -1,26 +1,4 @@
 {
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\""
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\""
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
     "allow": [
       "Read(//Users/havoc/.claude/**)",
@@ -201,7 +179,31 @@
       "Bash(herdr config *)",
       "Bash(herdr api *)",
       "Bash(mount)",
-      "Bash(herdr worktree *)"
+      "Bash(herdr worktree *)",
+      "Bash(gh pr *)",
+      "Bash(gpc *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\""
+          }
+        ]
+      }
     ]
   }
 }
