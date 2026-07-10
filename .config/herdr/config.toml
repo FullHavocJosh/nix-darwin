@@ -10,11 +10,6 @@ prefix = "ctrl+t"
 split_vertical = "prefix+/"
 split_horizontal = "prefix+minus"
 
-# tmux: `bind H previous-window` / `bind L next-window` -> herdr tabs are the closest
-# equivalent to tmux windows.
-previous_tab = "prefix+shift+h"
-next_tab = "prefix+shift+l"
-
 # tmux: `bind w kill-pane`. Conflicts with herdr's default workspace_picker="prefix+w",
 # so workspace_picker moves to prefix+p (freed up since previous_tab moved off prefix+p).
 close_pane = "prefix+w"
@@ -22,11 +17,23 @@ workspace_picker = "prefix+p"
 
 # zoom already matches tmux's `bind z resize-pane -Z` by default (prefix+z) -- no change needed.
 
-# Workspace ("space") relative navigation -- unbound by default, no tmux equivalent
-# (herdr workspaces are closer to separate tmux sessions than windows). k=up/previous,
-# j=down/next, mirroring focus_pane_up/focus_pane_down (k/j, herdr's default).
-previous_workspace = "prefix+shift+k"
-next_workspace = "prefix+shift+j"
+# Custom scheme, not a tmux mirror: unshifted h/j/k/l cycle tabs and agents (h/l for
+# tabs, j/k for agents -- swapped from herdr's default, which puts pane-focus movement
+# on unshifted h/j/k/l), u/i cycle workspaces ("spaces"). Direction convention throughout:
+# left/up key = previous, right/down key = next.
+previous_tab = "prefix+h"
+next_tab = "prefix+l"
+previous_agent = "prefix+k"
+next_agent = "prefix+j"
+previous_workspace = "prefix+u"
+next_workspace = "prefix+i"
+
+# Pane-focus movement moved off herdr's default unshifted h/j/k/l (now used for
+# tab/agent cycling above) onto shift+h/j/k/l instead.
+focus_pane_left = "prefix+shift+h"
+focus_pane_down = "prefix+shift+j"
+focus_pane_up = "prefix+shift+k"
+focus_pane_right = "prefix+shift+l"
 
 # Jump straight to agent N. herdr's own default-config comments suggest
 # "prefix+alt+1..9" for this exact binding, leaving switch_tab on its default
@@ -37,7 +44,7 @@ focus_agent = "prefix+alt+1..9"
 # - C-h/j/k/l vim-tmux-navigator passthrough (detects if the focused pane is running
 #   vim and forwards the key instead of switching panes). herdr has no equivalent
 #   conditional detection, and binding ctrl+h/j/k/l directly (unprefixed) would break
-#   backspace/other shell defaults globally. Left as prefix+h/j/k/l (herdr's default).
+#   backspace/other shell defaults globally.
 # - v/y copy-mode selection bindings. No exposed config equivalent; herdr's
 #   scrollback/copy appears to rely on native mouse selection instead.
 
