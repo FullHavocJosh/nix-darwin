@@ -28,12 +28,10 @@ workspace_picker = "prefix+p"
 previous_workspace = "prefix+shift+k"
 next_workspace = "prefix+shift+j"
 
-# Jump straight to agent N. Overrides herdr's default switch_tab="prefix+1..9"
-# (tab-by-number) -- freed up since previous_tab/next_tab above already cover
-# relative tab switching and the 3-tab-per-workspace layout rarely needs a numbered
-# jump. No tmux equivalent (tmux has no agent concept).
-switch_tab = ""
-focus_agent = "prefix+1..9"
+# Jump straight to agent N. herdr's own default-config comments suggest
+# "prefix+alt+1..9" for this exact binding, leaving switch_tab on its default
+# prefix+1..9 (tab-by-number) untouched. No tmux equivalent (no agent concept there).
+focus_agent = "prefix+alt+1..9"
 
 # Not portable from tmux.conf:
 # - C-h/j/k/l vim-tmux-navigator passthrough (detects if the focused pane is running
