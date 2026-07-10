@@ -197,6 +197,10 @@
           {
             "type": "command",
             "command": "node \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\""
+          },
+          {
+            "type": "command",
+            "command": "node \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\""
           }
         ]
       },
@@ -206,9 +210,14 @@
           {
             "type": "command",
             "command": "node \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\""
+          },
+          {
+            "type": "command",
+            "command": "node \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\""
           }
         ]
       }
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true
 }
