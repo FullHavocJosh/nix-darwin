@@ -17,23 +17,23 @@ workspace_picker = "prefix+p"
 
 # zoom already matches tmux's `bind z resize-pane -Z` by default (prefix+z) -- no change needed.
 
-# Custom scheme, not a tmux mirror: unshifted h/j/k/l cycle tabs and agents (h/l for
-# tabs, j/k for agents -- swapped from herdr's default, which puts pane-focus movement
-# on unshifted h/j/k/l), u/i cycle workspaces ("spaces"). Direction convention throughout:
-# left/up key = previous, right/down key = next.
-previous_tab = "prefix+h"
-next_tab = "prefix+l"
-previous_agent = "prefix+k"
-next_agent = "prefix+j"
+# Raw (unprefixed) tab/agent navigation -- one keystroke instead of prefix+key, by
+# design: no need to worry about the vim-tmux-navigator/tmux Ctrl-h/j/k/l passthrough
+# this repo's tmux setup relies on, since herdr (not tmux) is the daily driver now.
+# h/l cycle tabs (left/right axis), j/k cycle agents (up/down axis). This does shadow
+# the shell's own Ctrl+L (clear-screen) and Ctrl+J (newline) readline bindings while a
+# herdr pane has focus -- accepted tradeoff for a simpler single-key scheme.
+# Since these moved off plain prefix+h/j/k/l, focus_pane_left/down/up/right stay on
+# herdr's own default (prefix+h/j/k/l, not overridden below).
+previous_tab = "ctrl+h"
+next_tab = "ctrl+l"
+previous_agent = "ctrl+k"
+next_agent = "ctrl+j"
+
+# Workspace ("space") relative navigation -- no tmux equivalent (herdr workspaces are
+# closer to separate tmux sessions than windows). u=previous, i=next.
 previous_workspace = "prefix+u"
 next_workspace = "prefix+i"
-
-# Pane-focus movement moved off herdr's default unshifted h/j/k/l (now used for
-# tab/agent cycling above) onto shift+h/j/k/l instead.
-focus_pane_left = "prefix+shift+h"
-focus_pane_down = "prefix+shift+j"
-focus_pane_up = "prefix+shift+k"
-focus_pane_right = "prefix+shift+l"
 
 # Jump straight to agent N. herdr's own default-config comments suggest
 # "prefix+alt+1..9" for this exact binding, leaving switch_tab on its default
@@ -41,10 +41,6 @@ focus_pane_right = "prefix+shift+l"
 focus_agent = "prefix+alt+1..9"
 
 # Not portable from tmux.conf:
-# - C-h/j/k/l vim-tmux-navigator passthrough (detects if the focused pane is running
-#   vim and forwards the key instead of switching panes). herdr has no equivalent
-#   conditional detection, and binding ctrl+h/j/k/l directly (unprefixed) would break
-#   backspace/other shell defaults globally.
 # - v/y copy-mode selection bindings. No exposed config equivalent; herdr's
 #   scrollback/copy appears to rely on native mouse selection instead.
 
