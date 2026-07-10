@@ -9,25 +9,31 @@ prefix = "ctrl+t"
 split_vertical = "prefix+/"
 split_horizontal = "prefix+minus"
 
-# Conflicts with herdr's default workspace_picker="prefix+w", so workspace_picker
-# moves to prefix+p (freed up since previous_tab no longer lives there).
+# Conflicts with herdr's default workspace_picker="prefix+w".
 close_pane = "prefix+w"
-workspace_picker = "prefix+p"
 
 # Raw (unprefixed) tab/agent navigation -- one keystroke instead of prefix+key.
 # h/l cycle tabs (left/right axis), j/k cycle agents (up/down axis). This does shadow
 # the shell's own Ctrl+L (clear-screen) and Ctrl+J (newline) readline bindings while a
 # herdr pane has focus -- accepted tradeoff for a simpler single-key scheme.
-# Since these moved off plain prefix+h/j/k/l, focus_pane_left/down/up/right stay on
-# herdr's own default (prefix+h/j/k/l, not overridden below).
 previous_tab = "ctrl+h"
 next_tab = "ctrl+l"
 previous_agent = "ctrl+k"
 next_agent = "ctrl+j"
 
-# Workspace ("space") relative navigation. u=previous, i=next.
-previous_workspace = "prefix+u"
-next_workspace = "prefix+i"
+# Raw ctrl+shift chords, freed up because plain ctrl+u/i/p/h/j/k/l collide with
+# shell readline defaults (Ctrl+U kill-line, Ctrl+I == Tab completion, Ctrl+P
+# history-up) or are already claimed above by tab/agent nav. Checked against
+# Ghostty's default keybinds and aerospace.toml (alt-shift, not ctrl-shift) --
+# no conflicts found. herdr's own docs list "explicit modified chords" (e.g.
+# ctrl+shift+x) alongside ctrl+letter as the most reliable direct bindings.
+previous_workspace = "ctrl+shift+u"
+next_workspace = "ctrl+shift+i"
+workspace_picker = "ctrl+shift+p"
+focus_pane_left = "ctrl+shift+h"
+focus_pane_down = "ctrl+shift+j"
+focus_pane_up = "ctrl+shift+k"
+focus_pane_right = "ctrl+shift+l"
 
 # Jump straight to agent N. herdr's own default-config comments suggest
 # "prefix+alt+1..9" for this exact binding, leaving switch_tab on its default
