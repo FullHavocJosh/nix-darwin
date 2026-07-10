@@ -69,6 +69,41 @@ _herdr_space() {
   herdr --session "$name"
 }
 
+# Opens an ephemeral 2-tab herdr workspace (nvim + aidev) for AI-assisted manual
+# editing flows (lint-fix, gpa auto-mode review). Unlike _herdr_space, this always
+# creates a fresh workspace -- callers pass a $$-suffixed name for uniqueness rather
+# than relying on label-based reuse. Ported from a tmux new-session/split-window
+# version (see git history) once herdr became the daily driver.
+_herdr_ai_edit_workspace() {
+  local name="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4"
+
+  if [ -n "$HERDR_ENV" ]; then
+    local ws_id
+    ws_id=$(herdr workspace create --cwd "$dir" --label "$name" | jq -r '.result.workspace.workspace_id')
+    _herdr_populate_tabs "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "" ""
+    herdr workspace focus "$ws_id" >/dev/null
+    return
+  fi
+
+  nohup herdr server --session "$name" >/dev/null 2>&1 &
+  disown
+  sleep 0.5
+  herdr workspace create --session "$name" --cwd "$dir" --label "$name" >/dev/null
+  herdr tab rename w1:t1 "nvim" --session "$name" >/dev/null
+  [ -n "$cmd_nvim" ] && herdr pane run w1:p1 "$cmd_nvim" --session "$name" >/dev/null
+  herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label "aidev" --no-focus >/dev/null
+  [ -n "$cmd_aidev" ] && herdr pane run w1:p2 "$cmd_aidev" --session "$name" >/dev/null
+
+  local attach_script="/tmp/herdr_attach_$$.sh"
+  cat >"$attach_script" <<STARTUP
+#!/usr/bin/env bash
+herdr --session '$name'
+rm -f '$attach_script'
+STARTUP
+  chmod +x "$attach_script"
+  _launch_terminal_window "$attach_script" "$name"
+}
+
 # Opens a new herdr space backed by a fresh git worktree (new branch off the
 # source repo's current HEAD) with the same nvim/aidev/zsh layout, so multiple
 # in-flight branches/PRs on the same repo never share working-directory state.

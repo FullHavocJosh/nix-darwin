@@ -113,7 +113,7 @@ Interactive staging with comprehensive checks:
 1. **Secrets detection** - Scans for API keys, passwords, tokens
 2. **Linting** - Auto-runs nixfmt, prettier, ruff on staged files
 3. **Batched AI review** - Reviews code in ~300 line batches (handles large changesets)
-4. **Interactive fixes** - Edit issues with AI assistance in tmux workspace
+4. **Interactive fixes** - Edit issues with AI assistance in herdr workspace
 
 ```bash
 gpa                   # Select files, review, and get AI feedback
@@ -155,7 +155,7 @@ All packages are automatically installed via nix-darwin/homebrew:
 - **`ruff`** - Python linter
 - **`opencode`** - AI code assistant
 - **`gh`** - GitHub CLI
-- **`tmux`** - Terminal multiplexer
+- **`herdr`** - Terminal workspace manager
 - **`neovim`** - Text editor
 
 These are already included in `nix-modules/macos/packages.nix`.
