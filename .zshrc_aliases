@@ -132,18 +132,20 @@ _herdr_worktree() {
   ws_id=$(echo "$worktree_json" | jq -r '.result.workspace.workspace_id')
   wt_dir=$(echo "$worktree_json" | jq -r '.result.workspace.worktree.checkout_path')
 
-  _herdr_populate_tabs "$ws_id" "$wt_dir" "nvim" "" "git status"
+  _herdr_populate_tabs "$ws_id" "$wt_dir" "nvim" "claude --resume" "git status"
   herdr workspace focus "$ws_id" >/dev/null
 }
 
 alias hiwt='_herdr_worktree home-infrastructure ~/home-infrastructure'
 
-# aidev tab starts as a plain shell (no auto-launched aiselect && aidev) -- launch
-# it manually when you actually want an agent running; herdr's pane persistence
-# means detach/reattach just resumes whatever's running in it.
+# aidev tab starts with `claude --resume` so any prior session in that pane
+# (herdr's pane persistence means detach/reattach normally just resumes
+# whatever's running) can also be picked back up after the pane itself was
+# recreated -- --resume prompts to pick a session if one exists, or starts
+# fresh otherwise.
 _herdr_devlayout() {
   local name="$1" dir="$2"
-  _herdr_space "$name" "$dir" "nvim" "" "git status"
+  _herdr_space "$name" "$dir" "nvim" "claude --resume" "git status"
 }
 
 # Like _herdr_space, but never resumes an existing same-label workspace/session --
@@ -180,7 +182,7 @@ _herdr_space_new() {
 # but routed through _herdr_space_new so it always starts fresh.
 _herdr_devlayout_new() {
   local name="$1" dir="$2"
-  _herdr_space_new "$name" "$dir" "nvim" "" "git status"
+  _herdr_space_new "$name" "$dir" "nvim" "claude --resume" "git status"
 }
 
 # Same 3-tab layout, but each tab ssh's into $host and runs its command in
@@ -195,7 +197,7 @@ _herdr_remote_space() {
   local ssh="ssh -t -i ~/.ssh/id_ed25519 $host"
   _herdr_space "$name" "$HOME" \
     "$ssh \"zsh -ic 'cd $remote_dir && nvim'\"" \
-    "$ssh \"zsh -ic 'cd $remote_dir && exec zsh -l'\"" \
+    "$ssh \"zsh -ic 'cd $remote_dir && claude --resume; exec zsh -l'\"" \
     "$ssh \"zsh -ic 'cd $remote_dir && git status; exec zsh -l'\"" \
     "-macmini"
 }
