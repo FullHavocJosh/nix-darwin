@@ -146,6 +146,43 @@ _herdr_devlayout() {
   _herdr_space "$name" "$dir" "nvim" "" "git status"
 }
 
+# Like _herdr_space, but never resumes an existing same-label workspace/session --
+# always creates a brand-new one with the standard nvim/aidev/zsh tabs and
+# focuses/attaches it. devim uses this because it should give a clean layout
+# every time instead of reattaching to whatever's left over from a previous run.
+_herdr_space_new() {
+  local name="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6"
+
+  if [ -n "$HERDR_ENV" ]; then
+    local ws_id
+    ws_id=$(herdr workspace create --cwd "$dir" --label "$name" | jq -r '.result.workspace.workspace_id')
+    _herdr_populate_tabs "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "$cmd_zsh" "$tab_suffix"
+    herdr workspace focus "$ws_id" >/dev/null
+    return
+  fi
+
+  local label_nvim="nvim${tab_suffix}" label_aidev="aidev${tab_suffix}" label_zsh="zsh${tab_suffix}"
+  local session_name="${name}-$$"
+  nohup herdr server --session "$session_name" >/dev/null 2>&1 &
+  disown
+  sleep 0.5
+  herdr workspace create --session "$session_name" --cwd "$dir" --label "$name" >/dev/null
+  herdr tab rename w1:t1 "$label_nvim" --session "$session_name" >/dev/null
+  [ -n "$cmd_nvim" ] && herdr pane run w1:p1 "$cmd_nvim" --session "$session_name" >/dev/null
+  herdr tab create --session "$session_name" --workspace w1 --cwd "$dir" --label "$label_aidev" --no-focus >/dev/null
+  [ -n "$cmd_aidev" ] && herdr pane run w1:p2 "$cmd_aidev" --session "$session_name" >/dev/null
+  herdr tab create --session "$session_name" --workspace w1 --cwd "$dir" --label "$label_zsh" --no-focus >/dev/null
+  [ -n "$cmd_zsh" ] && herdr pane run w1:p3 "$cmd_zsh" --session "$session_name" >/dev/null
+  herdr --session "$session_name"
+}
+
+# devim's layout function: same nvim/aidev/zsh 3-tab layout as _herdr_devlayout,
+# but routed through _herdr_space_new so it always starts fresh.
+_herdr_devlayout_new() {
+  local name="$1" dir="$2"
+  _herdr_space_new "$name" "$dir" "nvim" "" "git status"
+}
+
 # Same 3-tab layout, but each tab ssh's into $host and runs its command in
 # $remote_dir there. No herdr install needed on the remote end -- it's just an
 # ssh'd-in shell inside a local pane, same as typing the ssh command by hand.
@@ -175,7 +212,7 @@ _herdr_project() {
 }
 
 alias nxvim='_herdr_project nix-darwin ~/nix-darwin'
-alias devim='_herdr_devlayout "$(basename "$(pwd)")" "$(pwd)"'
+alias devim='_herdr_devlayout_new "$(basename "$(pwd)")" "$(pwd)"'
 alias psvim='_herdr_project pscloudops ~/pscloudops'
 alias hivim='_herdr_project home-infrastructure ~/home-infrastructure'
 alias itvim='_herdr_project Infrastructure-Terrakube ~/Infrastructure-Terrakube'
