@@ -187,7 +187,12 @@
       "Bash(grep -n \"mapleader\\\\|localleader\" .config/nvim/lua/config/*.lua)",
       "Bash(grep -rn \"<D-\" .config/nvim/lua/)",
       "Bash(xxd .gitmodules)",
-      "Bash(herdr status *)"
+      "Bash(herdr status *)",
+      "Bash(cat .config/aerospace/aerospace.toml)",
+      "Bash(grep -rn \"bindkey\" . --include=\"*.zsh*\")",
+      "Bash(bindkey)",
+      "Bash(xargs -I{} sh -c 'echo \"--- {} ---\"; cat {}')",
+      "Bash(ghostty +list-keybinds --default)"
     ]
   },
   "enableAllProjectMcpServers": true,
