@@ -27,12 +27,13 @@ next_agent = "ctrl+j"
 # Ghostty's default keybinds and aerospace.toml (alt-shift, not ctrl-shift) --
 # no conflicts found. herdr's own docs list "explicit modified chords" (e.g.
 # ctrl+shift+x) alongside ctrl+letter as the most reliable direct bindings.
-previous_workspace = "ctrl+shift+u"
-next_workspace = "ctrl+shift+i"
+# h/l switch splits (left/right pane focus); j/k switch workspaces, matching
+# previous_agent/next_agent's k=previous(up)/j=next(down) convention above.
+# No raw binding for up/down pane focus -- falls back to prefix+j/prefix+k.
+previous_workspace = "ctrl+shift+k"
+next_workspace = "ctrl+shift+j"
 workspace_picker = "ctrl+shift+p"
 focus_pane_left = "ctrl+shift+h"
-focus_pane_down = "ctrl+shift+j"
-focus_pane_up = "ctrl+shift+k"
 focus_pane_right = "ctrl+shift+l"
 
 # Jump straight to agent N. herdr's own default-config comments suggest
