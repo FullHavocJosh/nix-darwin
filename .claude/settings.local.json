@@ -192,7 +192,16 @@
       "Bash(grep -rn \"bindkey\" . --include=\"*.zsh*\")",
       "Bash(bindkey)",
       "Bash(xargs -I{} sh -c 'echo \"--- {} ---\"; cat {}')",
-      "Bash(ghostty +list-keybinds --default)"
+      "Bash(ghostty +list-keybinds --default)",
+      "Bash(awk '/^function _get_ai_provider/,/^}/' ~/nix-darwin/.zshrc_functions_git)",
+      "Bash(opencode --version)",
+      "Bash(herdr list *)",
+      "Bash(sort -k3 -r)",
+      "Bash(herdr --session dev agent --help)",
+      "Bash(herdr --session dev pane --help)",
+      "Bash(herdr *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(opencode --help)"
     ]
   },
   "enableAllProjectMcpServers": true,
