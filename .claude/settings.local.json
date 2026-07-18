@@ -201,7 +201,8 @@
       "Bash(herdr --session dev pane --help)",
       "Bash(herdr *)",
       "Bash(echo \"EXIT: $?\")",
-      "Bash(opencode --help)"
+      "Bash(opencode --help)",
+      "Bash(perl -i -pe ' *)"
     ]
   },
   "enableAllProjectMcpServers": true,
