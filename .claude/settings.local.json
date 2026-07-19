@@ -202,7 +202,8 @@
       "Bash(herdr *)",
       "Bash(echo \"EXIT: $?\")",
       "Bash(opencode --help)",
-      "Bash(perl -i -pe ' *)"
+      "Bash(perl -i -pe ' *)",
+      "Bash(grep -iA2 \"reload\\\\|refresh\\\\|rescan\")"
     ]
   },
   "enableAllProjectMcpServers": true,

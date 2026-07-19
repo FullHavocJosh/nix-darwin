@@ -200,6 +200,7 @@ in
       "node@22"
       "opencode"
       "opentofu"
+      "podman"
       "prettier"
       "python-lsp-server"
       "python3"
