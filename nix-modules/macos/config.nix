@@ -411,12 +411,17 @@
 
         # herdr is a brew package (see packages-tui.nix): its own self-update is disabled
         # on Homebrew installs ("run brew update && brew upgrade herdr" instead), so upgrade
-        # the formula explicitly, then hand the running server's live panes/spaces/agents
-        # off to the newly-installed binary instead of losing them to a cold restart.
+        # the formula explicitly, then hand each running named session's live panes/spaces/
+        # agents off to the newly-installed binary instead of losing them to a cold restart.
+        # `herdr server live-handoff` with no --session targets the unnamed "default" session,
+        # which is never what's actually running (this machine's daily driver is "dev") -- so
+        # loop over every session actually reporting running:true instead of assuming one name.
         if command -v herdr &>/dev/null; then
           echo "Checking for herdr updates..."
           brew upgrade herdr 2>&1 || echo "herdr already up to date or upgrade failed"
-          herdr server live-handoff 2>&1 || echo "Failed to hand off herdr to the updated binary"
+          herdr session list --json 2>/dev/null | jq -r '.sessions[] | select(.running==true) | .name' | while read -r session_name; do
+            herdr server live-handoff --session "$session_name" 2>&1 || echo "Failed to hand off herdr session '$session_name' to the updated binary"
+          done
         fi
     USERSCRIPT
   '';
