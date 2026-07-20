@@ -222,7 +222,19 @@
       "Bash(nvim -u ~/nix-darwin/.worktrees/nvim-shada-race/.config/nvim/init.lua --headless -c \"lua print\\('shadafile=' .. vim.o.shadafile\\)\" -c \"qa\")",
       "Bash(mkdir -p /private/tmp/claude-501/-Users-jrollet-nix-darwin/78a1928d-2ad9-4bcd-85fe-bfc9e7d49f26/scratchpad/xdgcfg/nvim /private/tmp/claude-501/-Users-jrollet-nix-darwin/78a1928d-2ad9-4bcd-85fe-bfc9e7d49f26/scratchpad/proj1)",
       "Bash(cp -r /Users/jrollet/nix-darwin/.worktrees/nvim-shada-race/.config/nvim/. /private/tmp/claude-501/-Users-jrollet-nix-darwin/78a1928d-2ad9-4bcd-85fe-bfc9e7d49f26/scratchpad/xdgcfg/nvim/)",
-      "Bash(XDG_CONFIG_HOME=/private/tmp/claude-501/-Users-jrollet-nix-darwin/78a1928d-2ad9-4bcd-85fe-bfc9e7d49f26/scratchpad/xdgcfg timeout 25 nvim --headless -c 'lua vim.defer_fn\\(function\\(\\) print\\('\\\\''SHADAFILE=['\\\\'' .. vim.o.shadafile .. '\\\\'']'\\\\''\\); vim.cmd\\('\\\\''qa'\\\\''\\) end, 4000\\)')"
+      "Bash(XDG_CONFIG_HOME=/private/tmp/claude-501/-Users-jrollet-nix-darwin/78a1928d-2ad9-4bcd-85fe-bfc9e7d49f26/scratchpad/xdgcfg timeout 25 nvim --headless -c 'lua vim.defer_fn\\(function\\(\\) print\\('\\\\''SHADAFILE=['\\\\'' .. vim.o.shadafile .. '\\\\'']'\\\\''\\); vim.cmd\\('\\\\''qa'\\\\''\\) end, 4000\\)')",
+      "Bash(sudo --set-home -u jrollet bash -c 'echo \"PATH=$PATH\"; command -v herdr; herdr --version')",
+      "Bash(sudo --set-home -u jrollet bash -c '\necho \"Checking for herdr updates...\"\nbrew upgrade herdr 2>&1 || echo \"herdr already up to date or upgrade failed\"\nherdr server live-handoff 2>&1 || echo \"Failed to hand off herdr to the updated binary\"\n')",
+      "Bash(sudo --set-home -u jrollet bash -c '\necho \"HOME=$HOME\"\necho \"USER=$USER\"\nwhoami\nls -la \"$HOME/.config/herdr/sessions/dev/\" 2>&1\nherdr session list --json 2>&1\n')",
+      "Bash(echo \"exit: $?\")",
+      "Bash(sudo --set-home -u jrollet bash -c '\necho \"Checking for herdr updates...\"\nbrew upgrade herdr 2>&1 || echo \"herdr already up to date or upgrade failed\"\nherdr session list --json 2>/dev/null | jq -r \".sessions[] | select\\(.running==true\\) | .name\" | while read -r session_name; do\n  herdr server live-handoff --session \"$session_name\" 2>&1 || echo \"Failed to hand off herdr session '\"'\"'$session_name'\"'\"' to the updated binary\"\ndone\n')",
+      "Bash(echo \"=== EXIT: $? ===\")",
+      "Bash(node dist/hook.js)",
+      "Bash(PATH=/usr/bin:/bin node dist/hook.js)",
+      "Bash(rm -f /tmp/hooktest-path/node)",
+      "Bash(rmdir /tmp/hooktest-path)",
+      "Bash(echo \"non-repo EXIT: $?\")",
+      "Bash(echo \"notebook-in-main EXIT: $?\")"
     ]
   },
   "enableAllProjectMcpServers": true,
