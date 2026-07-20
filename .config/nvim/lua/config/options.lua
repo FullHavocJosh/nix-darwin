@@ -1,5 +1,13 @@
 vim.g.have_nerd_font = true
 
+-- herdr's dev/devim aliases launch several nvim instances at once (one per
+-- workspace tab), and they all share the default main.shada file -- writing
+-- marks/history on startup or exit collides across instances and nvim exits
+-- immediately with E137, leaving the tab sitting at a bare shell prompt. Give
+-- each project its own shada file so concurrent instances never collide.
+local project = vim.fn.fnamemodify(vim.fn.getcwd(), ":t")
+vim.opt.shadafile = vim.fn.stdpath("state") .. "/shada/" .. project .. ".shada"
+
 vim.opt.encoding = "utf-8"
 vim.opt.fileencoding = "utf-8"
 
