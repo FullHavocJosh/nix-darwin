@@ -408,6 +408,15 @@
             cargo install --git https://github.com/markx3/nexus-tui --rev edd908b26b4c19d9dd8e5cf3784f60f4b273669d 2>&1 || echo "Failed to install nexus-tui"
           fi
         fi
+
+        # herdr is a brew package (see packages-tui.nix), not nix-managed, and ships its
+        # own update channel independent of the brew formula version. Run this after the
+        # homebrew activation script (brew bundle) has already updated the brew package,
+        # with --handoff so a running herdr server keeps its spaces/agents across the swap.
+        if command -v herdr &>/dev/null; then
+          echo "Checking for herdr updates..."
+          herdr update --handoff 2>&1 || echo "Failed to update herdr"
+        fi
     USERSCRIPT
   '';
 
