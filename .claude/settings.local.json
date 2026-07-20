@@ -209,7 +209,20 @@
       "Bash(npx tsc *)",
       "Bash(grep -rln \"darwin-rebuild\" /Users/jrollet/nix-darwin --include=\"*.zsh*\" --include=\"*.nix\" -not -path \"*/.worktrees/*\")",
       "Bash(grep -v \"^/Users/jrollet/nix-darwin$\")",
-      "Bash(grep -v \"/.git$\\\\|/.worktrees$\\\\|/.claude$\")"
+      "Bash(grep -v \"/.git$\\\\|/.worktrees$\\\\|/.claude$\")",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(jq '.result.snapshot.panes[] | select\\(.pane_id==\"w2:p1\"\\)' -c)",
+      "Bash(jq '.result.snapshot.panes[] | select\\(.tab_id==\"w5:t2\" or .tab_id==\"w5:t1\"\\)' -c)",
+      "Bash(grep -v '^\\\\s*$')",
+      "Bash(disown)",
+      "Bash(nvim --version)",
+      "Bash(time nvim --headless \"+qa\")",
+      "Bash(mkdir -p ~/.local/state/nvim/shada)",
+      "Read(//Users/jrollet/.local/state/nvim/shada/**)",
+      "Bash(nvim -u ~/nix-darwin/.worktrees/nvim-shada-race/.config/nvim/init.lua --headless -c \"lua print\\('shadafile=' .. vim.o.shadafile\\)\" -c \"qa\")",
+      "Bash(mkdir -p /private/tmp/claude-501/-Users-jrollet-nix-darwin/78a1928d-2ad9-4bcd-85fe-bfc9e7d49f26/scratchpad/xdgcfg/nvim /private/tmp/claude-501/-Users-jrollet-nix-darwin/78a1928d-2ad9-4bcd-85fe-bfc9e7d49f26/scratchpad/proj1)",
+      "Bash(cp -r /Users/jrollet/nix-darwin/.worktrees/nvim-shada-race/.config/nvim/. /private/tmp/claude-501/-Users-jrollet-nix-darwin/78a1928d-2ad9-4bcd-85fe-bfc9e7d49f26/scratchpad/xdgcfg/nvim/)",
+      "Bash(XDG_CONFIG_HOME=/private/tmp/claude-501/-Users-jrollet-nix-darwin/78a1928d-2ad9-4bcd-85fe-bfc9e7d49f26/scratchpad/xdgcfg timeout 25 nvim --headless -c 'lua vim.defer_fn\\(function\\(\\) print\\('\\\\''SHADAFILE=['\\\\'' .. vim.o.shadafile .. '\\\\'']'\\\\''\\); vim.cmd\\('\\\\''qa'\\\\''\\) end, 4000\\)')"
     ]
   },
   "enableAllProjectMcpServers": true,
