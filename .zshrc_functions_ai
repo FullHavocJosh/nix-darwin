@@ -261,14 +261,14 @@ function _supports_opus() {
 # `opencode run` is one-shot/headless: it never emits a session.idle event and
 # (contrary to an earlier assumption) doesn't reliably fire a
 # server.instance.disposed plugin event either. herdr's opencode plugin
-# (.config/opencode/plugins/herdr-agent-state.js) only clears "working" on
-# those events, so without an explicit nudge the pane stays stuck "working" in
-# herdr forever after the process has already exited. Call this right after
-# every `opencode run` invocation to tell herdr the pane is actually idle.
+# (.config/opencode/plugins/herdr-agent-state.js) registered a session for it
+# on startup, but there's no TUI session to return to once the process exits,
+# so release the agent registration entirely instead of leaving a stale/idle
+# entry behind. Call this right after every `opencode run` invocation.
 function _herdr_report_opencode_idle() {
   [[ -z "$HERDR_PANE_ID" || -z "$HERDR_SOCKET_PATH" ]] && return 0
   command -v herdr &>/dev/null || return 0
-  herdr pane report-agent "$HERDR_PANE_ID" --source herdr:opencode --agent opencode --state idle --seq "$(($(date +%s) * 1000000))" >/dev/null 2>&1
+  herdr pane release-agent "$HERDR_PANE_ID" --source herdr:opencode --agent opencode --seq "$(($(date +%s) * 1000000))" >/dev/null 2>&1
 }
 
 # Execute AI command with plain text output (for commit messages, etc.)
