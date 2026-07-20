@@ -205,7 +205,8 @@
       "Bash(perl -i -pe ' *)",
       "Bash(grep -iA2 \"reload\\\\|refresh\\\\|rescan\")",
       "Bash(declare *)",
-      "Bash(gpr fix *)"
+      "Bash(gpr fix *)",
+      "Bash(npx tsc *)"
     ]
   },
   "enableAllProjectMcpServers": true,
