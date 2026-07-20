@@ -149,6 +149,7 @@ stow-uninstall-local-ignore
 
 # Ignore herdr runtime state (session sockets, etc.) but keep config.toml tracked
 /.config/herdr/sessions/
+/.config/herdr/release-notes.json
 
 # Ignore AWS VPN configs
 /.config/AWS VPN Client*
