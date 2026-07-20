@@ -409,13 +409,14 @@
           fi
         fi
 
-        # herdr is a brew package (see packages-tui.nix), not nix-managed, and ships its
-        # own update channel independent of the brew formula version. Run this after the
-        # homebrew activation script (brew bundle) has already updated the brew package,
-        # with --handoff so a running herdr server keeps its spaces/agents across the swap.
+        # herdr is a brew package (see packages-tui.nix): its own self-update is disabled
+        # on Homebrew installs ("run brew update && brew upgrade herdr" instead), so upgrade
+        # the formula explicitly, then hand the running server's live panes/spaces/agents
+        # off to the newly-installed binary instead of losing them to a cold restart.
         if command -v herdr &>/dev/null; then
           echo "Checking for herdr updates..."
-          herdr update --handoff 2>&1 || echo "Failed to update herdr"
+          brew upgrade herdr 2>&1 || echo "herdr already up to date or upgrade failed"
+          herdr server live-handoff 2>&1 || echo "Failed to hand off herdr to the updated binary"
         fi
     USERSCRIPT
   '';
