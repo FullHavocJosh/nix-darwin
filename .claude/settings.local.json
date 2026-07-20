@@ -206,7 +206,10 @@
       "Bash(grep -iA2 \"reload\\\\|refresh\\\\|rescan\")",
       "Bash(declare *)",
       "Bash(gpr fix *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(grep -rln \"darwin-rebuild\" /Users/jrollet/nix-darwin --include=\"*.zsh*\" --include=\"*.nix\" -not -path \"*/.worktrees/*\")",
+      "Bash(grep -v \"^/Users/jrollet/nix-darwin$\")",
+      "Bash(grep -v \"/.git$\\\\|/.worktrees$\\\\|/.claude$\")"
     ]
   },
   "enableAllProjectMcpServers": true,
