@@ -416,12 +416,21 @@
         # `herdr server live-handoff` with no --session targets the unnamed "default" session,
         # which is never what's actually running (this machine's daily driver is "dev") -- so
         # loop over every session actually reporting running:true instead of assuming one name.
+        # Only hand off if the upgrade actually changed the installed version -- otherwise
+        # every darwin-rebuild would churn live sessions for no reason.
         if command -v herdr &>/dev/null; then
           echo "Checking for herdr updates..."
+          HERDR_OLD_VERSION=$(brew list --versions herdr 2>/dev/null)
           brew upgrade herdr 2>&1 || echo "herdr already up to date or upgrade failed"
-          herdr session list --json 2>/dev/null | jq -r '.sessions[] | select(.running==true) | .name' | while read -r session_name; do
-            herdr server live-handoff --session "$session_name" 2>&1 || echo "Failed to hand off herdr session '$session_name' to the updated binary"
-          done
+          HERDR_NEW_VERSION=$(brew list --versions herdr 2>/dev/null)
+          if [ "$HERDR_OLD_VERSION" != "$HERDR_NEW_VERSION" ]; then
+            echo "herdr updated ($HERDR_OLD_VERSION -> $HERDR_NEW_VERSION), handing off live sessions..."
+            herdr session list --json 2>/dev/null | jq -r '.sessions[] | select(.running==true) | .name' | while read -r session_name; do
+              herdr server live-handoff --session "$session_name" 2>&1 || echo "Failed to hand off herdr session '$session_name' to the updated binary"
+            done
+          else
+            echo "herdr already up to date, skipping live-handoff"
+          fi
         fi
     USERSCRIPT
   '';
