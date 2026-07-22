@@ -234,7 +234,13 @@
       "Bash(rm -f /tmp/hooktest-path/node)",
       "Bash(rmdir /tmp/hooktest-path)",
       "Bash(echo \"non-repo EXIT: $?\")",
-      "Bash(echo \"notebook-in-main EXIT: $?\")"
+      "Bash(echo \"notebook-in-main EXIT: $?\")",
+      "Bash(kubectl get *)",
+      "Bash(kubectl logs *)",
+      "Bash(kubectl describe *)",
+      "Bash(kubectl kustomize *)",
+      "Bash(ping -c *)",
+      "Bash(export KUBECONFIG=~/home-infrastructure/hetzner-k3s/kubeconfig)"
     ]
   },
   "enableAllProjectMcpServers": true,
@@ -245,11 +251,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\""
+            "command": "if [ -f \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\"; fi"
           },
           {
             "type": "command",
-            "command": "node \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\""
+            "command": "if [ -f \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\"; fi"
           }
         ]
       },
@@ -258,11 +264,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\""
+            "command": "if [ -f \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\"; fi"
           },
           {
             "type": "command",
-            "command": "node \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\""
+            "command": "if [ -f \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\"; fi"
           }
         ]
       }
