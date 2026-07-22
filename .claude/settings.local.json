@@ -240,7 +240,13 @@
       "Bash(kubectl describe *)",
       "Bash(kubectl kustomize *)",
       "Bash(ping -c *)",
-      "Bash(export KUBECONFIG=~/home-infrastructure/hetzner-k3s/kubeconfig)"
+      "Bash(export KUBECONFIG=~/home-infrastructure/hetzner-k3s/kubeconfig)",
+      "Bash(node /Users/havoc/mcp-context-guardian-fullhavoc/dist/hook.js)",
+      "Bash(node /Users/havoc/mcp-context-guardian-perfectserve/dist/hook.js)",
+      "Bash([ -f \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\" ])",
+      "Bash([ -f \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\" ])",
+      "Skill(fewer-permission-prompts)",
+      "Bash(npm run *)"
     ]
   },
   "enableAllProjectMcpServers": true,
