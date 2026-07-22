@@ -84,7 +84,6 @@ in
       "powershell"
       "remote-desktop-manager-free"
       "datagrip"
-      "google-chrome"
       "onedrive"
       "opcode"
       "rode-central"
