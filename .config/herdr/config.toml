@@ -52,3 +52,6 @@ agent_panel_sort = "spaces"
 [theme]
 name = "terminal"
 auto_switch = false
+
+[ui.sound]
+enabled = true
