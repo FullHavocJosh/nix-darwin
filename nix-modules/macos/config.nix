@@ -482,7 +482,7 @@
     finder.ShowStatusBar = true;
     finder.AppleShowAllFiles = true;
     finder.AppleShowAllExtensions = true;
-    finder.FXPreferredViewStyle = "clmv";
+    finder.FXPreferredViewStyle = "Nlsv";
     finder.FXDefaultSearchScope = "SCcf";
     finder.FXEnableExtensionChangeWarning = false;
     finder._FXSortFoldersFirst = true;
