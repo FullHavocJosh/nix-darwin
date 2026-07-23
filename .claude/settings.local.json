@@ -265,7 +265,11 @@
       "Bash(pwd)",
       "Bash(which:*)",
       "Bash(wc:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(cd *)",
+      "Bash(claudetui --help)",
+      "Bash(claudetui mode *)",
+      "Bash(claudetui statusline *)"
     ]
   },
   "enableAllProjectMcpServers": true,
