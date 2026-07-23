@@ -214,7 +214,15 @@ _herdr_project() {
 }
 
 alias nxvim='_herdr_project nix-darwin ~/nix-darwin'
-alias devim='_herdr_devlayout_new "$(basename "$(pwd)")" "$(pwd)"'
+# devim opens the current directory with the standard nvim/aidev/zsh layout,
+# naming the herdr space after the current directory by default. An optional
+# first arg overrides the space name (e.g. `devim updates` names it "updates"
+# instead of the repo's basename) while still using the current directory.
+devim() {
+  local dir="$(pwd)"
+  local name="${1:-$(basename "$dir")}"
+  _herdr_devlayout_new "$name" "$dir"
+}
 alias psvim='_herdr_project pscloudops ~/pscloudops'
 alias hivim='_herdr_project home-infrastructure ~/home-infrastructure'
 alias itvim='_herdr_project Infrastructure-Terrakube ~/Infrastructure-Terrakube'
