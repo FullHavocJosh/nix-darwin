@@ -269,7 +269,9 @@
       "Bash(cd *)",
       "Bash(claudetui --help)",
       "Bash(claudetui mode *)",
-      "Bash(claudetui statusline *)"
+      "Bash(claudetui statusline *)",
+      "Bash(brew outdated *)",
+      "Bash(darwin-rebuild build *)"
     ]
   },
   "enableAllProjectMcpServers": true,
