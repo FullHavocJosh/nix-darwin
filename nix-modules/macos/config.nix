@@ -36,6 +36,21 @@
         f.write('\n')
     "
         chown ${config.system.primaryUser} "$TRUST_FILE"
+
+        # Stash herdr's pre-upgrade version here, before `brew bundle`'s own
+        # --upgrade sweep (homebrew.onActivation.upgrade = true, see
+        # packages-tui.nix) potentially upgrades it. The later herdr-specific
+        # check in system.activationScripts.script.text runs after brew bundle
+        # has already completed, so comparing against a version captured at
+        # that point would always see the post-upgrade version on both sides
+        # of the diff -- silently skipping the live-handoff even when brew
+        # bundle just upgraded herdr out from under a running session.
+        if sudo --set-home -u ${config.system.primaryUser} command -v herdr &>/dev/null; then
+          HERDR_VERSION_BEFORE_REBUILD=$(sudo --set-home -u ${config.system.primaryUser} brew list --versions herdr 2>/dev/null || true)
+          printf '%s\n' "$HERDR_VERSION_BEFORE_REBUILD" > /tmp/.herdr-version-before-rebuild
+        else
+          rm -f /tmp/.herdr-version-before-rebuild
+        fi
   '';
 
   # Expose Homebrew and standard paths to GUI apps (e.g. Neovide finding nvim).
@@ -410,19 +425,32 @@
         fi
 
         # herdr is a brew package (see packages-tui.nix): its own self-update is disabled
-        # on Homebrew installs ("run brew update && brew upgrade herdr" instead), so upgrade
-        # the formula explicitly, then hand each running named session's live panes/spaces/
-        # agents off to the newly-installed binary instead of losing them to a cold restart.
-        # `herdr server live-handoff` with no --session targets the unnamed "default" session,
-        # which is never what's actually running (this machine's daily driver is "dev") -- so
-        # loop over every session actually reporting running:true instead of assuming one name.
-        # Only hand off if the upgrade actually changed the installed version -- otherwise
-        # every darwin-rebuild would churn live sessions for no reason.
+        # on Homebrew installs ("run brew update && brew upgrade herdr" instead). But
+        # homebrew.onActivation.upgrade = true (packages-tui.nix) already makes brew
+        # bundle's own --upgrade sweep upgrade herdr, and that runs earlier in
+        # activation (system.activationScripts.homebrew, before this script.text
+        # phase) -- so by the time we'd capture a "before" version here, herdr is
+        # already on the new binary. Comparing before/after at this point would
+        # always see the same (already-upgraded) version on both sides and silently
+        # skip the live-handoff even when brew bundle just upgraded herdr under a
+        # running session. The real "before" version is stashed to
+        # /tmp/.herdr-version-before-rebuild up in the homebrew activation script,
+        # before brew bundle runs at all -- compare against that instead.
+        # `brew upgrade herdr` below is a fallback in case herdr didn't get upgraded
+        # by the bundle sweep for some reason (e.g. temporarily dropped from the
+        # Brewfile); harmless no-op otherwise since it's already current.
+        # Hand each running named session's live panes/spaces/agents off to the
+        # newly-installed binary instead of losing them to a cold restart.
+        # `herdr server live-handoff` with no --session targets the unnamed "default"
+        # session, which is never what's actually running (this machine's daily
+        # driver is "dev") -- so loop over every session actually reporting
+        # running:true instead of assuming one name.
         if command -v herdr &>/dev/null; then
           echo "Checking for herdr updates..."
-          HERDR_OLD_VERSION=$(brew list --versions herdr 2>/dev/null)
+          HERDR_OLD_VERSION=$(cat /tmp/.herdr-version-before-rebuild 2>/dev/null)
           brew upgrade herdr 2>&1 || echo "herdr already up to date or upgrade failed"
           HERDR_NEW_VERSION=$(brew list --versions herdr 2>/dev/null)
+          rm -f /tmp/.herdr-version-before-rebuild
           if [ "$HERDR_OLD_VERSION" != "$HERDR_NEW_VERSION" ]; then
             echo "herdr updated ($HERDR_OLD_VERSION -> $HERDR_NEW_VERSION), handing off live sessions..."
             herdr session list --json 2>/dev/null | jq -r '.sessions[] | select(.running==true) | .name' | while read -r session_name; do
