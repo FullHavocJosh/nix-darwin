@@ -274,7 +274,11 @@
       "Bash(darwin-rebuild build *)",
       "Bash(git -C /Users/havoc/nix-darwin ls-files .config/herdr/)",
       "Bash(env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin bash -c 'command -v herdr &>/dev/null && echo \"FOUND \\(bug not reproduced\\)\" || echo \"NOT FOUND \\(bug reproduced -- this is why it always fell to else\\)\"')",
-      "Bash(env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin bash -c '[ -x /opt/homebrew/bin/herdr ] && echo \"FOUND via -x \\(fix works\\)\" || echo \"NOT FOUND\"')"
+      "Bash(env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin bash -c '[ -x /opt/homebrew/bin/herdr ] && echo \"FOUND via -x \\(fix works\\)\" || echo \"NOT FOUND\"')",
+      "Bash(sudo launchctl kickstart -k system/org.nixos.nix-daemon)",
+      "Read(//nix/var/nix/daemon-socket/**)",
+      "Bash(sudo -n launchctl print system/org.nixos.nix-daemon)",
+      "Bash(git rebase *)"
     ]
   },
   "enableAllProjectMcpServers": true,
