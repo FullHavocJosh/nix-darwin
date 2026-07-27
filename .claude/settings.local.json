@@ -278,7 +278,8 @@
       "Bash(sudo launchctl kickstart -k system/org.nixos.nix-daemon)",
       "Read(//nix/var/nix/daemon-socket/**)",
       "Bash(sudo -n launchctl print system/org.nixos.nix-daemon)",
-      "Bash(git rebase *)"
+      "Bash(git rebase *)",
+      "Bash(git push *)"
     ]
   },
   "enableAllProjectMcpServers": true,
