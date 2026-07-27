@@ -271,7 +271,8 @@
       "Bash(claudetui mode *)",
       "Bash(claudetui statusline *)",
       "Bash(brew outdated *)",
-      "Bash(darwin-rebuild build *)"
+      "Bash(darwin-rebuild build *)",
+      "Bash(git -C /Users/havoc/nix-darwin ls-files .config/herdr/)"
     ]
   },
   "enableAllProjectMcpServers": true,
