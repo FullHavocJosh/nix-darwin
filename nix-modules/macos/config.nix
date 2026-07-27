@@ -50,11 +50,20 @@
         # and debuggability -- but it's gitignored, since this is per-device
         # runtime state (each machine's own herdr version), never something
         # to sync between devices via git.
+        # Use absolute paths rather than `command -v`/bare `brew` here: this
+        # runs via a plain `sudo -u user <cmd>`, not a login shell, so PATH
+        # is whatever root's activation script started with -- it does NOT
+        # include /opt/homebrew/bin. (The later script.text phase works
+        # because it explicitly exports PATH with $HOMEBREW_PREFIX/bin
+        # before its own herdr check.) Without this, the existence check
+        # below always failed, so this file was never written, old version
+        # always read back empty, and every darwin-rebuild looked like an
+        # update -- forcing a live-handoff every single run.
         HERDR_STATE_DIR="$USER_HOME/.config/herdr"
         HERDR_VERSION_STATE_FILE="$HERDR_STATE_DIR/.version-before-rebuild"
         mkdir -p "$HERDR_STATE_DIR"
-        if sudo --set-home -u ${config.system.primaryUser} command -v herdr &>/dev/null; then
-          HERDR_VERSION_BEFORE_REBUILD=$(sudo --set-home -u ${config.system.primaryUser} brew list --versions herdr 2>/dev/null || true)
+        if [ -x /opt/homebrew/bin/herdr ]; then
+          HERDR_VERSION_BEFORE_REBUILD=$(sudo --set-home -u ${config.system.primaryUser} /opt/homebrew/bin/brew list --versions herdr 2>/dev/null || true)
           printf '%s\n' "$HERDR_VERSION_BEFORE_REBUILD" > "$HERDR_VERSION_STATE_FILE"
         else
           rm -f "$HERDR_VERSION_STATE_FILE"
