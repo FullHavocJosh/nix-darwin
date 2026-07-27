@@ -45,12 +45,21 @@
         # that point would always see the post-upgrade version on both sides
         # of the diff -- silently skipping the live-handoff even when brew
         # bundle just upgraded herdr out from under a running session.
+        # Lives under ~/.config/herdr/ (same dir as herdr's own config.toml,
+        # dotfile-synced across machines) rather than /tmp, for persistence
+        # and debuggability -- but it's gitignored, since this is per-device
+        # runtime state (each machine's own herdr version), never something
+        # to sync between devices via git.
+        HERDR_STATE_DIR="$USER_HOME/.config/herdr"
+        HERDR_VERSION_STATE_FILE="$HERDR_STATE_DIR/.version-before-rebuild"
+        mkdir -p "$HERDR_STATE_DIR"
         if sudo --set-home -u ${config.system.primaryUser} command -v herdr &>/dev/null; then
           HERDR_VERSION_BEFORE_REBUILD=$(sudo --set-home -u ${config.system.primaryUser} brew list --versions herdr 2>/dev/null || true)
-          printf '%s\n' "$HERDR_VERSION_BEFORE_REBUILD" > /tmp/.herdr-version-before-rebuild
+          printf '%s\n' "$HERDR_VERSION_BEFORE_REBUILD" > "$HERDR_VERSION_STATE_FILE"
         else
-          rm -f /tmp/.herdr-version-before-rebuild
+          rm -f "$HERDR_VERSION_STATE_FILE"
         fi
+        chown ${config.system.primaryUser} "$HERDR_VERSION_STATE_FILE" 2>/dev/null || true
   '';
 
   # Expose Homebrew and standard paths to GUI apps (e.g. Neovide finding nvim).
@@ -434,7 +443,8 @@
         # always see the same (already-upgraded) version on both sides and silently
         # skip the live-handoff even when brew bundle just upgraded herdr under a
         # running session. The real "before" version is stashed to
-        # /tmp/.herdr-version-before-rebuild up in the homebrew activation script,
+        # ~/.config/herdr/.version-before-rebuild (gitignored -- per-device
+        # runtime state, not synced) up in the homebrew activation script,
         # before brew bundle runs at all -- compare against that instead.
         # `brew upgrade herdr` below is a fallback in case herdr didn't get upgraded
         # by the bundle sweep for some reason (e.g. temporarily dropped from the
@@ -447,10 +457,11 @@
         # running:true instead of assuming one name.
         if command -v herdr &>/dev/null; then
           echo "Checking for herdr updates..."
-          HERDR_OLD_VERSION=$(cat /tmp/.herdr-version-before-rebuild 2>/dev/null)
+          HERDR_VERSION_STATE_FILE="$HOME/.config/herdr/.version-before-rebuild"
+          HERDR_OLD_VERSION=$(cat "$HERDR_VERSION_STATE_FILE" 2>/dev/null)
           brew upgrade herdr 2>&1 || echo "herdr already up to date or upgrade failed"
           HERDR_NEW_VERSION=$(brew list --versions herdr 2>/dev/null)
-          rm -f /tmp/.herdr-version-before-rebuild
+          rm -f "$HERDR_VERSION_STATE_FILE"
           if [ "$HERDR_OLD_VERSION" != "$HERDR_NEW_VERSION" ]; then
             echo "herdr updated ($HERDR_OLD_VERSION -> $HERDR_NEW_VERSION), handing off live sessions..."
             herdr session list --json 2>/dev/null | jq -r '.sessions[] | select(.running==true) | .name' | while read -r session_name; do
