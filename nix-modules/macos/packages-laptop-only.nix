@@ -5,6 +5,7 @@
     casks = [
       "plexamp"
       "proton-pass"
+      "steam"
     ];
   };
 }
