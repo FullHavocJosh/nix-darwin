@@ -159,6 +159,7 @@ in
       "xykong/tap"
       "slima4/claude-tui"
       "seunggabi/tap"
+      "agavra/tap"
     ];
     brews = [
       "ansible"
@@ -237,6 +238,7 @@ in
       "zplug"
       "ansible-language-server"
       "slima4/claude-tui/claude-tui"
+      "agavra/tap/tuicr"
     ];
     casks = [
       "ghostty"
