@@ -146,6 +146,7 @@ stow-uninstall-local-ignore
 
 # Ignore Git
 /.git
+/.config/gh/hosts.yml
 
 # Ignore herdr runtime state (session sockets, etc.) but keep config.toml tracked
 /.config/herdr/sessions/

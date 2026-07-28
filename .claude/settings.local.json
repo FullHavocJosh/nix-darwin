@@ -279,7 +279,14 @@
       "Read(//nix/var/nix/daemon-socket/**)",
       "Bash(sudo -n launchctl print system/org.nixos.nix-daemon)",
       "Bash(git rebase *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(mdfind -name \"tuicr\")",
+      "Bash(mdfind \"tuicr\")",
+      "Bash(gh search *)",
+      "Bash(gh repo *)",
+      "Bash(git worktree *)",
+      "Bash(git branch *)",
+      "Bash(gh auth *)"
     ]
   },
   "enableAllProjectMcpServers": true,
