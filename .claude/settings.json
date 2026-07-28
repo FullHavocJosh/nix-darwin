@@ -1,0 +1,33 @@
+{
+  "enableAllProjectMcpServers": true,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\"; fi"
+          },
+          {
+            "type": "command",
+            "command": "if [ -f \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\"; fi"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\"; fi"
+          },
+          {
+            "type": "command",
+            "command": "if [ -f \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\"; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
