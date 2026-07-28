@@ -15,24 +15,30 @@ alias sshk3sworkervm0='ssh -i ~/.ssh/id_ed25519 havoc@k3sworkervm0.rollet.family
 alias sshk3sworkervm1='ssh -i ~/.ssh/id_ed25519 havoc@k3sworkervm1.rollet.family'
 alias sshha='ssh -i ~/.ssh/id_ed25519 root@homeassistant.rollet.family'
 
-# Adds the standard nvim/aidev/zsh tabs to an already-created workspace $ws_id
-# (whose first tab/pane already exist at ${ws_id}:t1/${ws_id}:p1). Shared by
-# _herdr_space (fresh workspaces) and _herdr_worktree (worktree-backed workspaces
-# that `herdr worktree create` already opened).
+# Adds the standard nvim/aidev/zsh tabs (plus an optional tuicr review tab when
+# $cmd_review is non-empty) to an already-created workspace $ws_id (whose first
+# tab/pane already exist at ${ws_id}:t1/${ws_id}:p1). Shared by _herdr_space
+# (fresh workspaces) and _herdr_worktree (worktree-backed workspaces that
+# `herdr worktree create` already opened).
 _herdr_populate_tabs() {
-  local ws_id="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6"
-  local label_nvim="nvim${tab_suffix}" label_aidev="aidev${tab_suffix}" label_zsh="zsh${tab_suffix}"
-  local p1="${ws_id}:p1" p2 p3
+  local ws_id="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6" cmd_review="$7"
+  local label_nvim="nvim${tab_suffix}" label_aidev="aidev${tab_suffix}" label_zsh="zsh${tab_suffix}" label_review="tuicr${tab_suffix}"
+  local p1="${ws_id}:p1" p2 p3 p4
   herdr tab rename "${ws_id}:t1" "$label_nvim" >/dev/null
   [ -n "$cmd_nvim" ] && herdr pane run "$p1" "$cmd_nvim" >/dev/null
   p2=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label "$label_aidev" --no-focus | jq -r '.result.root_pane.pane_id')
   [ -n "$cmd_aidev" ] && herdr pane run "$p2" "$cmd_aidev" >/dev/null
   p3=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label "$label_zsh" --no-focus | jq -r '.result.root_pane.pane_id')
   [ -n "$cmd_zsh" ] && herdr pane run "$p3" "$cmd_zsh" >/dev/null
+  if [ -n "$cmd_review" ]; then
+    p4=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label "$label_review" --no-focus | jq -r '.result.root_pane.pane_id')
+    herdr pane run "$p4" "$cmd_review" >/dev/null
+  fi
 }
 
 # Core primitive: a herdr workspace labeled $name (local pane cwd $dir) with 3 tabs
-# -- nvim (focused), aidev, zsh -- running $cmd_nvim/$cmd_aidev/$cmd_zsh respectively.
+# -- nvim (focused), aidev, zsh -- running $cmd_nvim/$cmd_aidev/$cmd_zsh respectively,
+# plus an optional 4th tuicr tab running $cmd_review when non-empty.
 # Used for both local project layouts and remote/ssh layouts (the remote ones just
 # pass ssh-wrapped commands instead of plain local ones).
 #
@@ -40,20 +46,20 @@ _herdr_populate_tabs() {
 # herdr, attaching to a separate named session would nest multiplexers, so instead
 # this opens/focuses a workspace labeled $name in the CURRENT session.
 _herdr_space() {
-  local name="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6"
+  local name="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6" cmd_review="$7"
 
   if [ -n "$HERDR_ENV" ]; then
     local ws_id
     ws_id=$(herdr workspace list | jq -r --arg n "$name" '.result.workspaces[] | select(.label==$n) | .workspace_id' | head -1)
     if [ -z "$ws_id" ]; then
       ws_id=$(herdr workspace create --cwd "$dir" --label "$name" | jq -r '.result.workspace.workspace_id')
-      _herdr_populate_tabs "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "$cmd_zsh" "$tab_suffix"
+      _herdr_populate_tabs "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "$cmd_zsh" "$tab_suffix" "$cmd_review"
     fi
     herdr workspace focus "$ws_id" >/dev/null
     return
   fi
 
-  local label_nvim="nvim${tab_suffix}" label_aidev="aidev${tab_suffix}" label_zsh="zsh${tab_suffix}"
+  local label_nvim="nvim${tab_suffix}" label_aidev="aidev${tab_suffix}" label_zsh="zsh${tab_suffix}" label_review="tuicr${tab_suffix}"
   if ! herdr session list --json 2>/dev/null | jq -e --arg n "$name" '.sessions[] | select(.name==$n and .running==true)' >/dev/null 2>&1; then
     nohup herdr server --session "$name" >/dev/null 2>&1 &
     disown
@@ -65,6 +71,10 @@ _herdr_space() {
     [ -n "$cmd_aidev" ] && herdr pane run w1:p2 "$cmd_aidev" --session "$name" >/dev/null
     herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label "$label_zsh" --no-focus >/dev/null
     [ -n "$cmd_zsh" ] && herdr pane run w1:p3 "$cmd_zsh" --session "$name" >/dev/null
+    if [ -n "$cmd_review" ]; then
+      herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label "$label_review" --no-focus >/dev/null
+      herdr pane run w1:p4 "$cmd_review" --session "$name" >/dev/null
+    fi
   fi
   herdr --session "$name"
 }
@@ -145,25 +155,26 @@ alias hiwt='_herdr_worktree home-infrastructure ~/home-infrastructure'
 # fresh otherwise.
 _herdr_devlayout() {
   local name="$1" dir="$2"
-  _herdr_space "$name" "$dir" "nvim" "claude --resume" "git status"
+  _herdr_space "$name" "$dir" "nvim" "claude --resume" "git status" "" "tuicr"
 }
 
 # Like _herdr_space, but never resumes an existing same-label workspace/session --
-# always creates a brand-new one with the standard nvim/aidev/zsh tabs and
-# focuses/attaches it. devim uses this because it should give a clean layout
-# every time instead of reattaching to whatever's left over from a previous run.
+# always creates a brand-new one with the standard nvim/aidev/zsh tabs (plus an
+# optional 4th tuicr tab running $cmd_review) and focuses/attaches it. devim uses
+# this because it should give a clean layout every time instead of reattaching to
+# whatever's left over from a previous run.
 _herdr_space_new() {
-  local name="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6"
+  local name="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6" cmd_review="$7"
 
   if [ -n "$HERDR_ENV" ]; then
     local ws_id
     ws_id=$(herdr workspace create --cwd "$dir" --label "$name" | jq -r '.result.workspace.workspace_id')
-    _herdr_populate_tabs "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "$cmd_zsh" "$tab_suffix"
+    _herdr_populate_tabs "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "$cmd_zsh" "$tab_suffix" "$cmd_review"
     herdr workspace focus "$ws_id" >/dev/null
     return
   fi
 
-  local label_nvim="nvim${tab_suffix}" label_aidev="aidev${tab_suffix}" label_zsh="zsh${tab_suffix}"
+  local label_nvim="nvim${tab_suffix}" label_aidev="aidev${tab_suffix}" label_zsh="zsh${tab_suffix}" label_review="tuicr${tab_suffix}"
   local session_name="${name}-$$"
   nohup herdr server --session "$session_name" >/dev/null 2>&1 &
   disown
@@ -175,14 +186,18 @@ _herdr_space_new() {
   [ -n "$cmd_aidev" ] && herdr pane run w1:p2 "$cmd_aidev" --session "$session_name" >/dev/null
   herdr tab create --session "$session_name" --workspace w1 --cwd "$dir" --label "$label_zsh" --no-focus >/dev/null
   [ -n "$cmd_zsh" ] && herdr pane run w1:p3 "$cmd_zsh" --session "$session_name" >/dev/null
+  if [ -n "$cmd_review" ]; then
+    herdr tab create --session "$session_name" --workspace w1 --cwd "$dir" --label "$label_review" --no-focus >/dev/null
+    herdr pane run w1:p4 "$cmd_review" --session "$session_name" >/dev/null
+  fi
   herdr --session "$session_name"
 }
 
-# devim's layout function: same nvim/aidev/zsh 3-tab layout as _herdr_devlayout,
-# but routed through _herdr_space_new so it always starts fresh.
+# devim's layout function: same nvim/aidev/zsh/tuicr 4-tab layout as
+# _herdr_devlayout, but routed through _herdr_space_new so it always starts fresh.
 _herdr_devlayout_new() {
   local name="$1" dir="$2"
-  _herdr_space_new "$name" "$dir" "nvim" "claude --resume" "git status"
+  _herdr_space_new "$name" "$dir" "nvim" "claude --resume" "git status" "" "tuicr"
 }
 
 # Same 3-tab layout, but each tab ssh's into $host and runs its command in
@@ -214,7 +229,7 @@ _herdr_project() {
 }
 
 alias nxvim='_herdr_project nix-darwin ~/nix-darwin'
-# devim opens the current directory with the standard nvim/aidev/zsh layout,
+# devim opens the current directory with the standard nvim/aidev/zsh/tuicr layout,
 # naming the herdr space after the current directory by default. An optional
 # first arg overrides the space name (e.g. `devim updates` names it "updates"
 # instead of the repo's basename) while still using the current directory.
