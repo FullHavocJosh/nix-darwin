@@ -180,6 +180,33 @@ _herdr_worktree() {
 
 alias hiwt='_herdr_worktree home-infrastructure ~/home-infrastructure'
 
+# Polls for git activity (HEAD + working-tree status) in the tuicr pane's directory
+# and, whenever something changes, sends tuicr's own `:e` reload command (its built-in
+# "refetch PR/reload diff" binding) into $HERDR_PANE_ID -- so the diff aidev/nvim are
+# producing keeps showing up without anyone pressing `:e` by hand. Polling (not
+# fswatch) because fswatch isn't installed here and this is a low enough frequency
+# that the extra dependency isn't worth it; it only acts when the actual git state
+# (not just the clock) has changed, which is what makes this "continuous" rather than
+# a blind timer-based reload. Meant to be backgrounded by _tuicr_current_pr and killed
+# once tuicr exits.
+_tuicr_watch_and_refresh() {
+  local pane_id="$HERDR_PANE_ID"
+  [ -n "$pane_id" ] || return 0
+
+  local last_state state
+  last_state=$(git rev-parse HEAD 2>/dev/null)$(git status --porcelain 2>/dev/null)
+  while true; do
+    sleep 5
+    state=$(git rev-parse HEAD 2>/dev/null)$(git status --porcelain 2>/dev/null)
+    if [ "$state" != "$last_state" ]; then
+      last_state="$state"
+      herdr pane send-keys "$pane_id" esc >/dev/null 2>&1
+      herdr pane send-text "$pane_id" ":e" >/dev/null 2>&1
+      herdr pane send-keys "$pane_id" enter >/dev/null 2>&1
+    fi
+  done
+}
+
 # tuicr pane's default command in the dev layout. Every branch this workflow creates
 # (gpr) has a matching GitHub PR from the moment it's created, so this loads that PR's
 # diff (including any not-yet-pushed working-tree changes) straight away instead of
@@ -187,12 +214,23 @@ alias hiwt='_herdr_worktree home-infrastructure ~/home-infrastructure'
 # diff when there's no PR to load (current branch has none, e.g. `nxvim`/`dev` opened
 # directly on main) or `tuicr pr` errors out (e.g. right after `gpr` creates a
 # worktree, the PR exists but its initial commit is empty, so `tuicr pr` finds no
-# file changes even with --working-tree).
+# file changes even with --working-tree). Also runs _tuicr_watch_and_refresh
+# alongside it, in the background, so the diff stays live as aidev/nvim keep
+# committing/editing instead of freezing at whatever it looked like on launch.
 _tuicr_current_pr() {
   local pr_num
   pr_num=$(gh pr view --json number -q .number 2>/dev/null)
-  [ -n "$pr_num" ] && tuicr pr "$pr_num" --working-tree && return
+
+  _tuicr_watch_and_refresh &
+  local watcher_pid=$!
+  disown
+
+  if [ -n "$pr_num" ] && tuicr pr "$pr_num" --working-tree; then
+    kill "$watcher_pid" 2>/dev/null
+    return
+  fi
   tuicr -w
+  kill "$watcher_pid" 2>/dev/null
 }
 
 # aidev pane starts with `claude --resume` so any prior session in that pane

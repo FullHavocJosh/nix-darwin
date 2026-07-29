@@ -3140,5 +3140,61 @@ EOF
     )" &&
     echo "" &&
     echo "✓ Worktree ready: $worktree_dir"
+
+  # gpr's cd above only moves the shell it's actually running in (this pane,
+  # e.g. aidev running Claude's Bash tool) -- the sibling nvim/tuicr/zsh panes
+  # in the same herdr tab never follow along, so they keep showing whatever
+  # directory the tab was created with instead of the worktree the work is
+  # actually happening in. Push them there too when running inside herdr.
+  [ -n "$HERDR_ENV" ] && _herdr_sync_tab_to_worktree "$worktree_dir"
+}
+
+# Pushes every OTHER pane in the current herdr tab ($HERDR_TAB_ID) to follow gpr's
+# newly created worktree at $1, since gpr's own `cd` only affects the calling pane
+# (see gpr_func above). Per pane kind, by label:
+#   - nvim: `:cd $1` -- repoints file ops (netrw, :e, fuzzy-finders) without
+#     restarting nvim, so open buffers/undo history survive untouched.
+#   - tuicr: quit and relaunch via _tuicr_current_pr in the new directory, so it
+#     loads the new worktree's PR instead of the old one's -- there's no live
+#     ":cd" equivalent for tuicr's target repo.
+#   - zsh: plain `cd $1`, but ONLY if the pane is sitting at an idle shell prompt
+#     (checked via process-info) -- never inject a command into a pane that's
+#     actively running something else.
+_herdr_sync_tab_to_worktree() {
+  local dir="$1"
+  [ -n "$HERDR_TAB_ID" ] && [ -n "$HERDR_WORKSPACE_ID" ] || return 0
+
+  local panes_json
+  panes_json=$(herdr pane list --workspace "$HERDR_WORKSPACE_ID" 2>/dev/null)
+  [ -n "$panes_json" ] || return 0
+
+  local pane_line pane_id label
+  echo "$panes_json" | jq -c --arg tab "$HERDR_TAB_ID" '.result.panes[] | select(.tab_id==$tab)' | while IFS= read -r pane_line; do
+    pane_id=$(echo "$pane_line" | jq -r '.pane_id')
+    label=$(echo "$pane_line" | jq -r '.label')
+    [ "$pane_id" = "$HERDR_PANE_ID" ] && continue
+
+    case "$label" in
+      nvim*)
+        herdr pane send-keys "$pane_id" esc >/dev/null 2>&1
+        herdr pane send-text "$pane_id" ":cd $dir" >/dev/null 2>&1
+        herdr pane send-keys "$pane_id" enter >/dev/null 2>&1
+        ;;
+      tuicr*)
+        herdr pane send-keys "$pane_id" esc >/dev/null 2>&1
+        herdr pane send-text "$pane_id" ":q" >/dev/null 2>&1
+        herdr pane send-keys "$pane_id" enter >/dev/null 2>&1
+        sleep 0.3
+        herdr pane run "$pane_id" "cd $dir && _tuicr_current_pr" >/dev/null 2>&1
+        ;;
+      zsh*)
+        local fg
+        fg=$(herdr pane process-info --pane "$pane_id" 2>/dev/null | jq -r '.result.process_info.foreground_processes[0].name // ""')
+        if [ "$fg" = "zsh" ] || [ "$fg" = "-zsh" ]; then
+          herdr pane run "$pane_id" "cd $dir" >/dev/null 2>&1
+        fi
+        ;;
+    esac
+  done
 }
 
