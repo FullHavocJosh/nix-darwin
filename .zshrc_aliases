@@ -32,8 +32,10 @@ _herdr_populate_panes() {
   local p_left="${ws_id}:p1" p_right p_aidev p_zsh
   p_right=$(herdr pane split "$p_left" --direction right --ratio 0.5 --cwd "$dir" --no-focus | jq -r '.result.pane.pane_id')
 
+  # ratio 0.49 (not 0.5) gives aidev a couple rows more than tuicr -- aidev is
+  # the pane you're actively typing into, tuicr mostly just needs to show diffs.
   if [ -n "$cmd_review" ]; then
-    p_aidev=$(herdr pane split "$p_left" --direction down --ratio 0.5 --cwd "$dir" --no-focus | jq -r '.result.pane.pane_id')
+    p_aidev=$(herdr pane split "$p_left" --direction down --ratio 0.49 --cwd "$dir" --no-focus | jq -r '.result.pane.pane_id')
     herdr pane rename "$p_left" "$label_review" >/dev/null
     herdr pane run "$p_left" "$cmd_review" >/dev/null
   else
@@ -87,7 +89,7 @@ _herdr_space() {
     p_right=$(herdr pane split w1:p1 --direction right --ratio 0.5 --cwd "$dir" --no-focus --session "$name" | jq -r '.result.pane.pane_id')
 
     if [ -n "$cmd_review" ]; then
-      p_aidev=$(herdr pane split w1:p1 --direction down --ratio 0.5 --cwd "$dir" --no-focus --session "$name" | jq -r '.result.pane.pane_id')
+      p_aidev=$(herdr pane split w1:p1 --direction down --ratio 0.49 --cwd "$dir" --no-focus --session "$name" | jq -r '.result.pane.pane_id')
       herdr pane rename w1:p1 "$label_review" --session "$name" >/dev/null
       herdr pane run w1:p1 "$cmd_review" --session "$name" >/dev/null
     else
@@ -214,7 +216,7 @@ _herdr_space_new() {
   p_right=$(herdr pane split w1:p1 --direction right --ratio 0.5 --cwd "$dir" --no-focus --session "$session_name" | jq -r '.result.pane.pane_id')
 
   if [ -n "$cmd_review" ]; then
-    p_aidev=$(herdr pane split w1:p1 --direction down --ratio 0.5 --cwd "$dir" --no-focus --session "$session_name" | jq -r '.result.pane.pane_id')
+    p_aidev=$(herdr pane split w1:p1 --direction down --ratio 0.49 --cwd "$dir" --no-focus --session "$session_name" | jq -r '.result.pane.pane_id')
     herdr pane rename w1:p1 "$label_review" --session "$session_name" >/dev/null
     herdr pane run w1:p1 "$cmd_review" --session "$session_name" >/dev/null
   else

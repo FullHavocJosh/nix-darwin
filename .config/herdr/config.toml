@@ -13,12 +13,15 @@ split_horizontal = "prefix+minus"
 # Conflicts with herdr's default workspace_picker="prefix+w".
 close_pane = "prefix+w"
 
-# Raw (unprefixed) tab/agent navigation -- one keystroke instead of prefix+key.
-# h/l cycle tabs (left/right axis), j/k cycle agents (up/down axis). This does shadow
-# the shell's own Ctrl+L (clear-screen) and Ctrl+J (newline) readline bindings while a
-# herdr pane has focus -- accepted tradeoff for a simpler single-key scheme.
-previous_tab = "ctrl+h"
-next_tab = "ctrl+l"
+# Raw (unprefixed) pane/agent navigation -- one keystroke instead of prefix+key.
+# h/l cycle through the focused tab's panes (counter-clockwise/clockwise), j/k cycle
+# agents (up/down axis). h/l used to cycle tabs, but the split-based dev layout
+# (nvim/tuicr/aidev/zsh as panes in one tab, see .zshrc_aliases) means tabs see much
+# less use than panes now. This does shadow the shell's own Ctrl+L (clear-screen) and
+# Ctrl+J (newline) readline bindings while a herdr pane has focus -- accepted tradeoff
+# for a simpler single-key scheme.
+cycle_pane_previous = "ctrl+h"
+cycle_pane_next = "ctrl+l"
 previous_agent = "ctrl+k"
 next_agent = "ctrl+j"
 
