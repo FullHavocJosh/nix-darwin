@@ -15,32 +15,46 @@ alias sshk3sworkervm0='ssh -i ~/.ssh/id_ed25519 havoc@k3sworkervm0.rollet.family
 alias sshk3sworkervm1='ssh -i ~/.ssh/id_ed25519 havoc@k3sworkervm1.rollet.family'
 alias sshha='ssh -i ~/.ssh/id_ed25519 root@homeassistant.rollet.family'
 
-# Adds the standard nvim/aidev/zsh tabs (plus an optional tuicr review tab
-# right after nvim when $cmd_review is non-empty) to an already-created
-# workspace $ws_id (whose first tab/pane already exist at
-# ${ws_id}:t1/${ws_id}:p1). Shared by _herdr_space (fresh workspaces) and
-# _herdr_worktree (worktree-backed workspaces that `herdr worktree create`
-# already opened).
-_herdr_populate_tabs() {
+# Lays out the standard nvim/aidev/zsh panes (plus an optional tuicr review
+# pane when $cmd_review is non-empty) as SPLITS within a single tab, instead
+# of one tab per command -- modeled on the manual split layout in the
+# nix-darwin workspace's zsh tab: a left column (tuicr on top of aidev, or
+# just aidev alone with no review pane) and a right column (nvim on top of a
+# short zsh strip). Runs against an already-created workspace $ws_id (whose
+# first tab/pane already exist at ${ws_id}:t1/${ws_id}:p1). Shared by
+# _herdr_space (fresh workspaces) and _herdr_worktree (worktree-backed
+# workspaces that `herdr worktree create` already opened).
+_herdr_populate_panes() {
   local ws_id="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6" cmd_review="$7"
   local label_nvim="nvim${tab_suffix}" label_aidev="aidev${tab_suffix}" label_zsh="zsh${tab_suffix}" label_review="tuicr${tab_suffix}"
-  local p1="${ws_id}:p1" p2 p3
-  herdr tab rename "${ws_id}:t1" "$label_nvim" >/dev/null
-  [ -n "$cmd_nvim" ] && herdr pane run "$p1" "$cmd_nvim" >/dev/null
+  herdr tab rename "${ws_id}:t1" "dev${tab_suffix}" >/dev/null
+
+  local p_left="${ws_id}:p1" p_right p_aidev p_zsh
+  p_right=$(herdr pane split "$p_left" --direction right --ratio 0.5 --cwd "$dir" --no-focus | jq -r '.result.pane.pane_id')
+
   if [ -n "$cmd_review" ]; then
-    p2=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label "$label_review" --no-focus | jq -r '.result.root_pane.pane_id')
-    herdr pane run "$p2" "$cmd_review" >/dev/null
+    p_aidev=$(herdr pane split "$p_left" --direction down --ratio 0.5 --cwd "$dir" --no-focus | jq -r '.result.pane.pane_id')
+    herdr pane rename "$p_left" "$label_review" >/dev/null
+    herdr pane run "$p_left" "$cmd_review" >/dev/null
+  else
+    p_aidev="$p_left"
   fi
-  p2=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label "$label_aidev" --no-focus | jq -r '.result.root_pane.pane_id')
-  [ -n "$cmd_aidev" ] && herdr pane run "$p2" "$cmd_aidev" >/dev/null
-  p3=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label "$label_zsh" --no-focus | jq -r '.result.root_pane.pane_id')
-  [ -n "$cmd_zsh" ] && herdr pane run "$p3" "$cmd_zsh" >/dev/null
+  herdr pane rename "$p_aidev" "$label_aidev" >/dev/null
+  [ -n "$cmd_aidev" ] && herdr pane run "$p_aidev" "$cmd_aidev" >/dev/null
+
+  p_zsh=$(herdr pane split "$p_right" --direction down --ratio 0.75 --cwd "$dir" --no-focus | jq -r '.result.pane.pane_id')
+  herdr pane rename "$p_right" "$label_nvim" >/dev/null
+  [ -n "$cmd_nvim" ] && herdr pane run "$p_right" "$cmd_nvim" >/dev/null
+  herdr pane rename "$p_zsh" "$label_zsh" >/dev/null
+  [ -n "$cmd_zsh" ] && herdr pane run "$p_zsh" "$cmd_zsh" >/dev/null
+
+  herdr pane focus --pane "$p_zsh" --direction up >/dev/null
 }
 
-# Core primitive: a herdr workspace labeled $name (local pane cwd $dir) with 3 tabs
-# -- nvim (focused), aidev, zsh -- running $cmd_nvim/$cmd_aidev/$cmd_zsh respectively,
-# plus an optional tuicr tab (running $cmd_review) inserted right after nvim when
-# $cmd_review is non-empty.
+# Core primitive: a herdr workspace labeled $name (local pane cwd $dir) with a single
+# tab split into nvim (focused, top-right) / aidev (left, running $cmd_aidev) / zsh
+# (bottom-right, running $cmd_zsh) panes, plus an optional tuicr pane (running
+# $cmd_review) stacked above aidev on the left when $cmd_review is non-empty.
 # Used for both local project layouts and remote/ssh layouts (the remote ones just
 # pass ssh-wrapped commands instead of plain local ones).
 #
@@ -55,7 +69,7 @@ _herdr_space() {
     ws_id=$(herdr workspace list | jq -r --arg n "$name" '.result.workspaces[] | select(.label==$n) | .workspace_id' | head -1)
     if [ -z "$ws_id" ]; then
       ws_id=$(herdr workspace create --cwd "$dir" --label "$name" | jq -r '.result.workspace.workspace_id')
-      _herdr_populate_tabs "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "$cmd_zsh" "$tab_suffix" "$cmd_review"
+      _herdr_populate_panes "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "$cmd_zsh" "$tab_suffix" "$cmd_review"
     fi
     herdr workspace focus "$ws_id" >/dev/null
     return
@@ -67,18 +81,28 @@ _herdr_space() {
     disown
     sleep 0.5
     herdr workspace create --session "$name" --cwd "$dir" --label "$name" >/dev/null
-    herdr tab rename w1:t1 "$label_nvim" --session "$name" >/dev/null
-    [ -n "$cmd_nvim" ] && herdr pane run w1:p1 "$cmd_nvim" --session "$name" >/dev/null
-    local pane_aidev="w1:p2" pane_zsh="w1:p3"
+    herdr tab rename w1:t1 "dev${tab_suffix}" --session "$name" >/dev/null
+
+    local p_right p_aidev p_zsh
+    p_right=$(herdr pane split w1:p1 --direction right --ratio 0.5 --cwd "$dir" --no-focus --session "$name" | jq -r '.result.pane.pane_id')
+
     if [ -n "$cmd_review" ]; then
-      herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label "$label_review" --no-focus >/dev/null
-      herdr pane run w1:p2 "$cmd_review" --session "$name" >/dev/null
-      pane_aidev="w1:p3" pane_zsh="w1:p4"
+      p_aidev=$(herdr pane split w1:p1 --direction down --ratio 0.5 --cwd "$dir" --no-focus --session "$name" | jq -r '.result.pane.pane_id')
+      herdr pane rename w1:p1 "$label_review" --session "$name" >/dev/null
+      herdr pane run w1:p1 "$cmd_review" --session "$name" >/dev/null
+    else
+      p_aidev="w1:p1"
     fi
-    herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label "$label_aidev" --no-focus >/dev/null
-    [ -n "$cmd_aidev" ] && herdr pane run "$pane_aidev" "$cmd_aidev" --session "$name" >/dev/null
-    herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label "$label_zsh" --no-focus >/dev/null
-    [ -n "$cmd_zsh" ] && herdr pane run "$pane_zsh" "$cmd_zsh" --session "$name" >/dev/null
+    herdr pane rename "$p_aidev" "$label_aidev" --session "$name" >/dev/null
+    [ -n "$cmd_aidev" ] && herdr pane run "$p_aidev" "$cmd_aidev" --session "$name" >/dev/null
+
+    p_zsh=$(herdr pane split "$p_right" --direction down --ratio 0.75 --cwd "$dir" --no-focus --session "$name" | jq -r '.result.pane.pane_id')
+    herdr pane rename "$p_right" "$label_nvim" --session "$name" >/dev/null
+    [ -n "$cmd_nvim" ] && herdr pane run "$p_right" "$cmd_nvim" --session "$name" >/dev/null
+    herdr pane rename "$p_zsh" "$label_zsh" --session "$name" >/dev/null
+    [ -n "$cmd_zsh" ] && herdr pane run "$p_zsh" "$cmd_zsh" --session "$name" >/dev/null
+
+    herdr pane focus --pane "$p_zsh" --direction up --session "$name" >/dev/null
   fi
   herdr --session "$name"
 }
@@ -94,7 +118,7 @@ _herdr_ai_edit_workspace() {
   if [ -n "$HERDR_ENV" ]; then
     local ws_id
     ws_id=$(herdr workspace create --cwd "$dir" --label "$name" | jq -r '.result.workspace.workspace_id')
-    _herdr_populate_tabs "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "" ""
+    _herdr_populate_panes "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "" ""
     herdr workspace focus "$ws_id" >/dev/null
     return
   fi
@@ -146,13 +170,13 @@ _herdr_worktree() {
   ws_id=$(echo "$worktree_json" | jq -r '.result.workspace.workspace_id')
   wt_dir=$(echo "$worktree_json" | jq -r '.result.workspace.worktree.checkout_path')
 
-  _herdr_populate_tabs "$ws_id" "$wt_dir" "nvim" "claude --resume" "git status"
+  _herdr_populate_panes "$ws_id" "$wt_dir" "nvim" "claude --resume" "git status"
   herdr workspace focus "$ws_id" >/dev/null
 }
 
 alias hiwt='_herdr_worktree home-infrastructure ~/home-infrastructure'
 
-# aidev tab starts with `claude --resume` so any prior session in that pane
+# aidev pane starts with `claude --resume` so any prior session in that pane
 # (herdr's pane persistence means detach/reattach normally just resumes
 # whatever's running) can also be picked back up after the pane itself was
 # recreated -- --resume prompts to pick a session if one exists, or starts
@@ -163,8 +187,8 @@ _herdr_devlayout() {
 }
 
 # Like _herdr_space, but never resumes an existing same-label workspace/session --
-# always creates a brand-new one with the standard nvim/aidev/zsh tabs (plus an
-# optional tuicr tab running $cmd_review, inserted right after nvim) and
+# always creates a brand-new one with the standard nvim/aidev/zsh split layout (plus
+# an optional tuicr pane running $cmd_review, stacked above aidev) and
 # focuses/attaches it. devim uses this because it should give a clean layout
 # every time instead of reattaching to whatever's left over from a previous run.
 _herdr_space_new() {
@@ -173,7 +197,7 @@ _herdr_space_new() {
   if [ -n "$HERDR_ENV" ]; then
     local ws_id
     ws_id=$(herdr workspace create --cwd "$dir" --label "$name" | jq -r '.result.workspace.workspace_id')
-    _herdr_populate_tabs "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "$cmd_zsh" "$tab_suffix" "$cmd_review"
+    _herdr_populate_panes "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "$cmd_zsh" "$tab_suffix" "$cmd_review"
     herdr workspace focus "$ws_id" >/dev/null
     return
   fi
@@ -184,29 +208,40 @@ _herdr_space_new() {
   disown
   sleep 0.5
   herdr workspace create --session "$session_name" --cwd "$dir" --label "$name" >/dev/null
-  herdr tab rename w1:t1 "$label_nvim" --session "$session_name" >/dev/null
-  [ -n "$cmd_nvim" ] && herdr pane run w1:p1 "$cmd_nvim" --session "$session_name" >/dev/null
-  local pane_aidev="w1:p2" pane_zsh="w1:p3"
+  herdr tab rename w1:t1 "dev${tab_suffix}" --session "$session_name" >/dev/null
+
+  local p_right p_aidev p_zsh
+  p_right=$(herdr pane split w1:p1 --direction right --ratio 0.5 --cwd "$dir" --no-focus --session "$session_name" | jq -r '.result.pane.pane_id')
+
   if [ -n "$cmd_review" ]; then
-    herdr tab create --session "$session_name" --workspace w1 --cwd "$dir" --label "$label_review" --no-focus >/dev/null
-    herdr pane run w1:p2 "$cmd_review" --session "$session_name" >/dev/null
-    pane_aidev="w1:p3" pane_zsh="w1:p4"
+    p_aidev=$(herdr pane split w1:p1 --direction down --ratio 0.5 --cwd "$dir" --no-focus --session "$session_name" | jq -r '.result.pane.pane_id')
+    herdr pane rename w1:p1 "$label_review" --session "$session_name" >/dev/null
+    herdr pane run w1:p1 "$cmd_review" --session "$session_name" >/dev/null
+  else
+    p_aidev="w1:p1"
   fi
-  herdr tab create --session "$session_name" --workspace w1 --cwd "$dir" --label "$label_aidev" --no-focus >/dev/null
-  [ -n "$cmd_aidev" ] && herdr pane run "$pane_aidev" "$cmd_aidev" --session "$session_name" >/dev/null
-  herdr tab create --session "$session_name" --workspace w1 --cwd "$dir" --label "$label_zsh" --no-focus >/dev/null
-  [ -n "$cmd_zsh" ] && herdr pane run "$pane_zsh" "$cmd_zsh" --session "$session_name" >/dev/null
+  herdr pane rename "$p_aidev" "$label_aidev" --session "$session_name" >/dev/null
+  [ -n "$cmd_aidev" ] && herdr pane run "$p_aidev" "$cmd_aidev" --session "$session_name" >/dev/null
+
+  p_zsh=$(herdr pane split "$p_right" --direction down --ratio 0.75 --cwd "$dir" --no-focus --session "$session_name" | jq -r '.result.pane.pane_id')
+  herdr pane rename "$p_right" "$label_nvim" --session "$session_name" >/dev/null
+  [ -n "$cmd_nvim" ] && herdr pane run "$p_right" "$cmd_nvim" --session "$session_name" >/dev/null
+  herdr pane rename "$p_zsh" "$label_zsh" --session "$session_name" >/dev/null
+  [ -n "$cmd_zsh" ] && herdr pane run "$p_zsh" "$cmd_zsh" --session "$session_name" >/dev/null
+
+  herdr pane focus --pane "$p_zsh" --direction up --session "$session_name" >/dev/null
   herdr --session "$session_name"
 }
 
-# devim's layout function: same nvim/tuicr/aidev/zsh 4-tab layout as
+# devim's layout function: same nvim/tuicr/aidev/zsh split layout as
 # _herdr_devlayout, but routed through _herdr_space_new so it always starts fresh.
 _herdr_devlayout_new() {
   local name="$1" dir="$2"
   _herdr_space_new "$name" "$dir" "nvim" "claude --resume" "git status" "" "tuicr"
 }
 
-# Same 3-tab layout, but each tab ssh's into $host and runs its command in
+# Same split layout (no tuicr pane, since _herdr_space is called without
+# $cmd_review here), but each pane ssh's into $host and runs its command in
 # $remote_dir there. No herdr install needed on the remote end -- it's just an
 # ssh'd-in shell inside a local pane, same as typing the ssh command by hand.
 #
