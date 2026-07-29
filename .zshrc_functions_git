@@ -2984,12 +2984,36 @@ function _gpr_prune_stale_worktrees() {
   echo ""
 }
 
-# Cross-repo worktree hygiene: _gpr_prune_stale_worktrees only ever runs against
-# one repo, as a side effect of `gpr` creating a new worktree there -- a repo you
-# haven't touched with `gpr` in a while just keeps accumulating stale MERGED/CLOSED
-# worktrees. This runs the same check against every repo under $HOME (2 levels
-# deep, to also catch nested repos like pscloudops/terraform-infrastructure)
-# that has a .worktrees directory at all.
+# Fast-forwards $1's default branch (main or master, whichever origin/HEAD points
+# at) to match origin, but ONLY if $1 is currently checked out on that branch --
+# never touches a repo sitting on some other branch, which shouldn't happen under
+# this workflow (real work always happens in a worktree) but is a cheap guard
+# against pulling into the wrong place. --ff-only means this can never create a
+# merge conflict: if local main has actually diverged (e.g. from a manual commit),
+# the merge just fails and is silently skipped rather than leaving a scheduled,
+# unattended job to sort out a conflict on its own.
+function _pull_main_if_clean() {
+  local repo="$1"
+  local default_branch current_branch before after
+  default_branch=$(git -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')
+  [[ -n "$default_branch" ]] || return 0
+  current_branch=$(git -C "$repo" branch --show-current 2>/dev/null)
+  [[ "$current_branch" == "$default_branch" ]] || return 0
+
+  before=$(git -C "$repo" rev-parse HEAD 2>/dev/null)
+  git -C "$repo" fetch --quiet origin "$default_branch" 2>/dev/null
+  if git -C "$repo" merge --ff-only --quiet "origin/$default_branch" 2>/dev/null; then
+    after=$(git -C "$repo" rev-parse HEAD 2>/dev/null)
+    [[ "$before" != "$after" ]] && echo "  ⬆ Updated $default_branch: ${before:0:7} → ${after:0:7}"
+  fi
+}
+
+# Cross-repo repo hygiene: keeps each repo's main branch current and prunes stale
+# worktrees, across every repo under $HOME (2 levels deep, to also catch nested
+# repos like pscloudops/terraform-infrastructure) that has a .worktrees directory
+# at all -- both are things `gpr` already does for whichever single repo you
+# happen to run it in, but a repo you haven't touched with `gpr` in a while just
+# drifts behind origin and keeps accumulating stale MERGED/CLOSED worktrees.
 function gprune() {
   local -a repos=("$HOME"/*/.worktrees(N) "$HOME"/*/*/.worktrees(N))
   repos=("${repos[@]%/.worktrees}")
@@ -3007,6 +3031,7 @@ function gprune() {
     # letting git's "not a git repository" error leak into the output below.
     [[ -d "$repo/.git" || -f "$repo/.git" ]] || continue
     echo "═══ ${repo#$HOME/} ═══"
+    _pull_main_if_clean "$repo"
     _gpr_prune_stale_worktrees "$repo"
   done
 }
