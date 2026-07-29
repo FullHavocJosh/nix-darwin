@@ -8,7 +8,13 @@
 	<array>
 		<string>/bin/zsh</string>
 		<string>-c</string>
-		<string>source ~/.zshrc_functions_git &amp;&amp; gprune</string>
+		<!-- nix-darwin's /etc/zshenv unconditionally resets PATH (via Nix's set-environment)
+		     for every zsh invocation, before this -c string even starts running -- so an
+		     EnvironmentVariables PATH override here gets silently clobbered before `gh`/`jq`
+		     (both under /opt/homebrew/bin, absent from the Nix-only PATH) are looked up.
+		     Exporting PATH from inside the command string itself runs after that reset, so
+		     it's the only place an override actually sticks. -->
+		<string>export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH" &amp;&amp; source ~/.zshrc_functions_git &amp;&amp; gprune</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
