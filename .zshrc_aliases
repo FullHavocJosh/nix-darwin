@@ -178,6 +178,21 @@ _herdr_worktree() {
 
 alias hiwt='_herdr_worktree home-infrastructure ~/home-infrastructure'
 
+# tuicr pane's default command in the dev layout. Every branch this workflow creates
+# (gpr) has a matching GitHub PR from the moment it's created, so this loads that PR's
+# diff (including any not-yet-pushed working-tree changes) straight away instead of
+# landing on tuicr's local/PR target picker. Falls back to a plain local working-tree
+# diff when there's no PR to load (current branch has none, e.g. `nxvim`/`dev` opened
+# directly on main) or `tuicr pr` errors out (e.g. right after `gpr` creates a
+# worktree, the PR exists but its initial commit is empty, so `tuicr pr` finds no
+# file changes even with --working-tree).
+_tuicr_current_pr() {
+  local pr_num
+  pr_num=$(gh pr view --json number -q .number 2>/dev/null)
+  [ -n "$pr_num" ] && tuicr pr "$pr_num" --working-tree && return
+  tuicr -w
+}
+
 # aidev pane starts with `claude --resume` so any prior session in that pane
 # (herdr's pane persistence means detach/reattach normally just resumes
 # whatever's running) can also be picked back up after the pane itself was
@@ -185,7 +200,7 @@ alias hiwt='_herdr_worktree home-infrastructure ~/home-infrastructure'
 # fresh otherwise.
 _herdr_devlayout() {
   local name="$1" dir="$2"
-  _herdr_space "$name" "$dir" "nvim" "claude --resume" "git status" "" "tuicr"
+  _herdr_space "$name" "$dir" "nvim" "claude --resume" "git status" "" "_tuicr_current_pr"
 }
 
 # Like _herdr_space, but never resumes an existing same-label workspace/session --
@@ -239,7 +254,7 @@ _herdr_space_new() {
 # _herdr_devlayout, but routed through _herdr_space_new so it always starts fresh.
 _herdr_devlayout_new() {
   local name="$1" dir="$2"
-  _herdr_space_new "$name" "$dir" "nvim" "claude --resume" "git status" "" "tuicr"
+  _herdr_space_new "$name" "$dir" "nvim" "claude --resume" "git status" "" "_tuicr_current_pr"
 }
 
 # Same split layout (no tuicr pane, since _herdr_space is called without
