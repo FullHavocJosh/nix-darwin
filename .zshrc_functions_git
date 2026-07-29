@@ -2984,6 +2984,33 @@ function _gpr_prune_stale_worktrees() {
   echo ""
 }
 
+# Cross-repo worktree hygiene: _gpr_prune_stale_worktrees only ever runs against
+# one repo, as a side effect of `gpr` creating a new worktree there -- a repo you
+# haven't touched with `gpr` in a while just keeps accumulating stale MERGED/CLOSED
+# worktrees. This runs the same check against every repo under $HOME (2 levels
+# deep, to also catch nested repos like pscloudops/terraform-infrastructure)
+# that has a .worktrees directory at all.
+function gprune() {
+  local -a repos=("$HOME"/*/.worktrees(N) "$HOME"/*/*/.worktrees(N))
+  repos=("${repos[@]%/.worktrees}")
+
+  if [[ ${#repos[@]} -eq 0 ]]; then
+    echo "gprune: no repos with .worktrees found under $HOME"
+    return 0
+  fi
+
+  local repo
+  for repo in "${repos[@]}"; do
+    # A stray .worktrees dir with no .git alongside it isn't a repo at all (seen in
+    # practice: an empty leftover ~/pscloudops/.worktrees where pscloudops is just a
+    # container folder for nested repos, not a repo itself) -- skip it rather than
+    # letting git's "not a git repository" error leak into the output below.
+    [[ -d "$repo/.git" || -f "$repo/.git" ]] || continue
+    echo "═══ ${repo#$HOME/} ═══"
+    _gpr_prune_stale_worktrees "$repo"
+  done
+}
+
 # Git PR - Create new branch, worktree, and draft pull request.
 #
 # Development happens in a worktree per PR (~/.worktrees/<branch> inside the
