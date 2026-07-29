@@ -145,8 +145,10 @@ STARTUP
 }
 
 # Opens a new herdr space backed by a fresh git worktree (new branch off the
-# source repo's current HEAD) with the same nvim/aidev/zsh layout, so multiple
-# in-flight branches/PRs on the same repo never share working-directory state.
+# source repo's current HEAD) with the same nvim/tuicr/aidev/zsh layout, so multiple
+# in-flight branches/PRs on the same repo never share working-directory state. The
+# tuicr pane is exactly where this is most useful -- each worktree is its own
+# branch/PR by design, so _tuicr_current_pr has something fresh to load every time.
 # Requires an existing herdr session ($HERDR_ENV set) -- worktree spaces are meant
 # to live alongside your main dev session, not as their own standalone session.
 _herdr_worktree() {
@@ -172,7 +174,7 @@ _herdr_worktree() {
   ws_id=$(echo "$worktree_json" | jq -r '.result.workspace.workspace_id')
   wt_dir=$(echo "$worktree_json" | jq -r '.result.workspace.worktree.checkout_path')
 
-  _herdr_populate_panes "$ws_id" "$wt_dir" "nvim" "claude --resume" "git status"
+  _herdr_populate_panes "$ws_id" "$wt_dir" "nvim" "claude --resume" "git status" "" "_tuicr_current_pr"
   herdr workspace focus "$ws_id" >/dev/null
 }
 
