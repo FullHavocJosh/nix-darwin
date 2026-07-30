@@ -180,15 +180,72 @@ _herdr_worktree() {
 
 alias hiwt='_herdr_worktree home-infrastructure ~/home-infrastructure'
 
+# Quits whatever tuicr is currently showing in pane $1 -- PR mode, working-tree
+# diff, or the always-alive pristine/all-files fallback below -- and relaunches
+# _tuicr_current_pr there (cd'ing to $2 first if given). `:q` works as the quit
+# command regardless of which of those modes it's currently in. Used both by the
+# watcher below (to re-evaluate which mode is now right once git state changes --
+# :e alone can't jump from pristine/all-files mode to a real diff, since those are
+# different tuicr CLI targets, not just a stale view of the same one) and by
+# _herdr_sync_tab_to_worktree (to point an already-open tuicr pane at a newly
+# created worktree instead of leaving it showing the old one).
+#
+# The relaunch step uses send-text + send-keys enter, NOT `herdr pane run` --
+# confirmed by testing that `pane run` deadlocks specifically when the caller is
+# itself a lingering background process of the SAME pane it's targeting (as the
+# watcher below is): it appears to wait for the pane to have no attached child
+# processes before injecting the command, which can never become true while the
+# very process making the call is one of them. send-text/send-keys don't wait for
+# that and work fine self-targeted; `pane run` is still fine for cross-pane calls
+# (e.g. _herdr_sync_tab_to_worktree targeting sibling panes from a different one).
+#
+# Waits for the pane to actually settle on a plain shell before sending the
+# relaunch text, rather than a blind sleep -- confirmed by testing that a fixed
+# short sleep isn't reliably long enough for tuicr's quit to fully land, and text
+# sent while it's still mid-exit silently never reaches a shell prompt to execute.
+_tuicr_restart() {
+  local pane_id="$1" dir="$2"
+  herdr pane send-keys "$pane_id" esc >/dev/null 2>&1
+  herdr pane send-text "$pane_id" ":q" >/dev/null 2>&1
+  herdr pane send-keys "$pane_id" enter >/dev/null 2>&1
+
+  local tries=0 fg
+  while [ "$tries" -lt 25 ]; do
+    fg=$(herdr pane process-info --pane "$pane_id" 2>/dev/null | jq -r '.result.process_info.foreground_processes[-1].name // ""')
+    { [ "$fg" = "zsh" ] || [ "$fg" = "-zsh" ]; } && break
+    sleep 0.2
+    tries=$((tries + 1))
+  done
+
+  if [ -n "$dir" ]; then
+    herdr pane send-text "$pane_id" "cd $dir && _tuicr_current_pr" >/dev/null 2>&1
+  else
+    herdr pane send-text "$pane_id" "_tuicr_current_pr" >/dev/null 2>&1
+  fi
+  herdr pane send-keys "$pane_id" enter >/dev/null 2>&1
+}
+
 # Polls for git activity (HEAD + working-tree status) in the tuicr pane's directory
-# and, whenever something changes, sends tuicr's own `:e` reload command (its built-in
-# "refetch PR/reload diff" binding) into $HERDR_PANE_ID -- so the diff aidev/nvim are
-# producing keeps showing up without anyone pressing `:e` by hand. Polling (not
-# fswatch) because fswatch isn't installed here and this is a low enough frequency
-# that the extra dependency isn't worth it; it only acts when the actual git state
-# (not just the clock) has changed, which is what makes this "continuous" rather than
-# a blind timer-based reload. Meant to be backgrounded by _tuicr_current_pr and killed
-# once tuicr exits.
+# and, whenever something changes, sends tuicr's own `:e` reload command into
+# $HERDR_PANE_ID -- so the diff aidev/nvim are producing keeps showing up without
+# anyone pressing `:e` by hand. Polling (not fswatch) because fswatch isn't
+# installed here and this is a low enough frequency that the extra dependency isn't
+# worth it; it only acts when the actual git state (not just the clock) has changed,
+# which is what makes this "continuous" rather than a blind timer-based reload.
+#
+# This intentionally sends `:e`, not a full _tuicr_restart -- tried that first, but
+# a self-targeted restart (this watcher quitting and relaunching tuicr in its OWN
+# hosting pane) turned out to be unreliable: the relaunch text sent right after the
+# quit routinely never reached a shell prompt to execute (most likely the shell's
+# own prompt redraw discarding queued input, a common anti-typeahead protection in
+# fancy prompt frameworks), silently leaving the pane dead at an idle shell instead
+# of picking the new mode. `:e` doesn't have that problem -- it doesn't need tuicr to
+# exit and a new process to land in its place -- but it also can't jump out of the
+# pristine/all-files fallback into a real diff, since those are different tuicr CLI
+# targets, not just a stale view of the same one. That upgrade still happens
+# correctly whenever something restarts tuicr from a DIFFERENT pane instead (e.g.
+# _herdr_sync_tab_to_worktree, which calls _tuicr_restart cross-pane and doesn't hit
+# this issue).
 _tuicr_watch_and_refresh() {
   local pane_id="$HERDR_PANE_ID"
   [ -n "$pane_id" ] || return 0
@@ -214,9 +271,13 @@ _tuicr_watch_and_refresh() {
 # diff when there's no PR to load (current branch has none, e.g. `nxvim`/`dev` opened
 # directly on main) or `tuicr pr` errors out (e.g. right after `gpr` creates a
 # worktree, the PR exists but its initial commit is empty, so `tuicr pr` finds no
-# file changes even with --working-tree). Also runs _tuicr_watch_and_refresh
-# alongside it, in the background, so the diff stays live as aidev/nvim keep
-# committing/editing instead of freezing at whatever it looked like on launch.
+# file changes even with --working-tree). Final fallback is -A (review every tracked
+# file) when there's truly nothing to diff yet -- tuicr exits immediately on "no
+# changes to review" otherwise, which would leave the pane dead with nothing running
+# to receive the watcher's refresh or a later worktree-sync restart. Also runs
+# _tuicr_watch_and_refresh alongside it, in the background, so the diff stays live as
+# aidev/nvim keep committing/editing instead of freezing at whatever it looked like
+# on launch.
 _tuicr_current_pr() {
   local pr_num
   pr_num=$(gh pr view --json number -q .number 2>/dev/null)
@@ -229,7 +290,11 @@ _tuicr_current_pr() {
     kill "$watcher_pid" 2>/dev/null
     return
   fi
-  tuicr -w
+  if tuicr -w; then
+    kill "$watcher_pid" 2>/dev/null
+    return
+  fi
+  tuicr -A
   kill "$watcher_pid" 2>/dev/null
 }
 

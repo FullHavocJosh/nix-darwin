@@ -3181,11 +3181,7 @@ _herdr_sync_tab_to_worktree() {
         herdr pane send-keys "$pane_id" enter >/dev/null 2>&1
         ;;
       tuicr*)
-        herdr pane send-keys "$pane_id" esc >/dev/null 2>&1
-        herdr pane send-text "$pane_id" ":q" >/dev/null 2>&1
-        herdr pane send-keys "$pane_id" enter >/dev/null 2>&1
-        sleep 0.3
-        herdr pane run "$pane_id" "cd $dir && _tuicr_current_pr" >/dev/null 2>&1
+        _tuicr_restart "$pane_id" "$dir"
         ;;
       zsh*)
         local fg
