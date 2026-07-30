@@ -3123,29 +3123,35 @@ function gpr_func() {
 
   git worktree add -b "$branch_name" "$worktree_dir" main || return 1
 
-  # cd here (not in a subshell) so the caller's shell ends up in the new
-  # worktree, ready to work — this is a function, so cd persists.
-  cd "$worktree_dir" || return 1
-
-  git commit --allow-empty -m "$branch_name" &&
-    git push -u origin "$branch_name" &&
-    gh pr create --draft --title "$type_prefix: $branch_name" --body "$(
-      cat <<EOF
+  # Deliberately NOT cd'ing the caller's shell into the worktree. aidev is often
+  # working through a whole run of PRs/worktrees in one sitting (create worktree,
+  # land the PR, move to the next), and if gpr moved it each time it'd lose track
+  # of "home base" -- the repo root, or wherever devim was originally triggered
+  # from -- a little more with every worktree. Everything below that needs to run
+  # inside the worktree does so in a subshell instead, so this shell's own cwd
+  # never changes; $worktree_dir is reported at the end for anything that
+  # genuinely needs to work IN it afterward.
+  (
+    cd "$worktree_dir" || exit 1
+    git commit --allow-empty -m "$branch_name" &&
+      git push -u origin "$branch_name" &&
+      gh pr create --draft --title "$type_prefix: $branch_name" --body "$(
+        cat <<EOF
 ## Description
 $type_prefix: $branch_name
 
 ## Tickets
 $type_prefix: $branch_name
 EOF
-    )" &&
+      )"
+  ) &&
     echo "" &&
     echo "✓ Worktree ready: $worktree_dir"
 
-  # gpr's cd above only moves the shell it's actually running in (this pane,
-  # e.g. aidev running Claude's Bash tool) -- the sibling nvim/tuicr/zsh panes
-  # in the same herdr tab never follow along, so they keep showing whatever
-  # directory the tab was created with instead of the worktree the work is
-  # actually happening in. Push them there too when running inside herdr.
+  # aidev's own pane deliberately stays put (see above), but the sibling
+  # nvim/tuicr/zsh panes in the same herdr tab should still follow the worktree --
+  # that's where the actual file changes are happening, so they should be showing
+  # it even though aidev's cwd doesn't move. Push them there when running in herdr.
   [ -n "$HERDR_ENV" ] && _herdr_sync_tab_to_worktree "$worktree_dir"
 }
 
