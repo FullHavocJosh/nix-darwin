@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>family.rollet.nix-store-keepalive</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/sh</string>
+		<string>-c</string>
+		<string>/usr/bin/security find-generic-password -s 'C65F94B6-EFE1-4B76-94E6-618FAFC4FFEB' -w | /usr/sbin/diskutil apfs unlockVolume 'C65F94B6-EFE1-4B76-94E6-618FAFC4FFEB' -mountpoint '/nix' -stdinpassphrase</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StartInterval</key>
+	<integer>120</integer>
+	<key>StandardOutPath</key>
+	<string>/var/log/nix-store-keepalive.log</string>
+	<key>StandardErrorPath</key>
+	<string>/var/log/nix-store-keepalive.log</string>
+</dict>
+</plist>

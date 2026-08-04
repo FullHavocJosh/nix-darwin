@@ -18,3 +18,4 @@ ansible-.*
 org\.nixos\..*\.plist$
 homebrew\.mxcl\..*\.plist$
 ^\.claude$
+LaunchDaemons$
