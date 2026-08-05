@@ -45,6 +45,11 @@ outer.right = 16
 [mode.main.binding]
 cmd-h = []
 cmd-alt-h = []
+# Types the clipboard contents out as simulated keystrokes instead of pasting --
+# for contexts that forward keyboard input but not clipboard sync (RDP, AWS Fleet
+# Manager, etc.). Plain cmd-v is left alone/unbound here, so normal paste still
+# works everywhere aerospace doesn't intercept it.
+cmd-ctrl-v = "exec-and-forget osascript -e 'tell application \"System Events\" to keystroke (the clipboard as text)'"
 alt-enter = '''exec-and-forget osascript -e '
 tell application "Ghostty"
     new window
