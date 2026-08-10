@@ -75,10 +75,23 @@ in
     brews = [
       "act"
       "awscli"
+      # Podman replaces Docker Desktop -- "docker" and "docker-compose" here are
+      # the CLI-only formulae (distinct from the docker-desktop cask, which
+      # bundled its own GUI/VM/daemon). Combined with `podman-mac-helper`
+      # (installed manually once: `sudo podman-mac-helper install`, then a
+      # `podman machine stop && podman machine start` cycle to activate it),
+      # podman forwards the standard /var/run/docker.sock path, so this docker
+      # CLI and any other docker-expecting tool work against it transparently
+      # -- no DOCKER_HOST override needed.
+      "podman"
+      "docker"
+      "docker-compose"
+      "docker-credential-helper"
+      "docker-credential-helper-ecr"
+      "lazydocker"
     ];
     casks = [
       "citrix-workspace"
-      "docker-desktop"
       "lastpass"
       "mqtt-explorer"
       "powershell"
