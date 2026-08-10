@@ -48,8 +48,9 @@ cmd-alt-h = []
 # Types the clipboard contents out as simulated keystrokes instead of pasting --
 # for contexts that forward keyboard input but not clipboard sync (RDP, AWS Fleet
 # Manager, etc.). Plain cmd-v is left alone/unbound here, so normal paste still
-# works everywhere aerospace doesn't intercept it.
-cmd-ctrl-v = "exec-and-forget osascript -e 'tell application \"System Events\" to keystroke (the clipboard as text)'"
+# works everywhere aerospace doesn't intercept it. See scripts/type-clipboard.sh
+# for why this needs a delay before it actually types anything.
+cmd-ctrl-v = 'exec-and-forget /Users/jrollet/nix-darwin/.config/aerospace/scripts/type-clipboard.sh'
 alt-enter = '''exec-and-forget osascript -e '
 tell application "Ghostty"
     new window
