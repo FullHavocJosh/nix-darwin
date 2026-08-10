@@ -91,6 +91,13 @@ ansible-linux/inventory/staging
 # Other machine-specific files, if necessary
 *.local
 
+# Podman machine state (VM disk paths, SSH identity paths, PIDs -- all
+# specific to one machine/user; committing this previously caused a podman
+# machine on one machine to end up with another machine's SSH identity path,
+# corrupting it entirely)
+.config/containers/podman-connections.json*
+.config/containers/podman/machine/
+
 # Ignore Nix-Darwin generated files and caches
 /result
 /nix/store
