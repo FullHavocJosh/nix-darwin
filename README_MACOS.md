@@ -63,6 +63,25 @@ For work profile:
 darwin-rebuild switch --flake ~/nix-darwin#macos_work
 ```
 
+### 6. Set Up Podman (Docker Replacement)
+
+This repo uses Podman instead of Docker Desktop. `darwin-rebuild` installs the
+`podman`, `docker`, and `docker-compose` packages, but activating Podman's
+Docker-API socket forwarding is a one-time manual step it can't do for you:
+
+```bash
+sudo podman-mac-helper install
+podman machine init
+podman machine start
+```
+
+`podman machine start` prints `API forwarding listening on: /var/run/docker.sock`
+once forwarding is active. From then on, `docker`, `docker compose`, and
+`lazydocker` all work against it with no `DOCKER_HOST` override needed.
+
+If you ever recreate the machine (`podman machine rm` then `init`), you only
+need to re-run `podman machine start` -- the helper install is permanent.
+
 ## Package Management
 
 **Find packages**: Visit [search.nixos.org](https://search.nixos.org) or run:
@@ -219,4 +238,12 @@ darwin-rebuild switch --flake ~/nix-darwin#macos_personal --show-trace
 
 ```bash
 export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
+```
+
+**Podman machine broken / wrong SSH identity path**: `.config/containers/podman/machine/` is gitignored on purpose -- it's per-machine VM/SSH state, not portable config. If it ever ends up tracked again and gets pulled onto a different machine, the podman machine will reference paths that don't exist there. Fix by recreating it:
+
+```bash
+podman machine rm podman-machine-default --force
+podman machine init
+podman machine start
 ```
