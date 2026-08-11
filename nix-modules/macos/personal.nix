@@ -133,6 +133,7 @@ in
       "vitobotta/tap/hetzner_k3s"
     ];
     casks = [
+      "cider"
       "element"
       "font-merriweather"
       "font-open-sans"
