@@ -17,7 +17,7 @@ cursor-style = block
 cursor-style-blink = false
 
 # Scrollback
-scrollback-limit = 100000
+scrollback-limit = 100000000
 
 # Colors (Catppuccin Mocha)
 background = #1e1e2e

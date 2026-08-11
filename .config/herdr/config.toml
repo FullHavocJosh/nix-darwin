@@ -58,3 +58,7 @@ auto_switch = false
 
 [ui.sound]
 enabled = true
+
+[advanced]
+# Matches ghostty's scrollback-limit (.config/ghostty/config).
+scrollback_limit_bytes = 100000000
