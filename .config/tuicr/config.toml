@@ -1,1 +1,10 @@
 diff_view = "side-by-side"
+
+# Pinned instead of left to `appearance = "system"` (the default) so the diff
+# always renders with the same strong red/green coloring regardless of
+# whether macOS is in light or dark mode -- every bundled theme already uses
+# green-for-add/red-for-delete, but the shade varies theme to theme and some
+# (e.g. the plain "light" theme) are muted enough to be hard to read at a
+# glance. github-dark/github-light match GitHub's own PR diff colors.
+theme_dark = "github-dark"
+theme_light = "github-light"
