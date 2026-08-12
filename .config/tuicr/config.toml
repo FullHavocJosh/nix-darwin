@@ -1,1 +1,9 @@
 diff_view = "side-by-side"
+
+# Pinned instead of left to `appearance = "system"` (the default) so the diff
+# always renders with the same coloring regardless of whether macOS is in
+# light or dark mode. Every catppuccin flavor maps its palette's green/red
+# straight to diff_add/diff_del, so this still gives a clear red/green diff,
+# just in catppuccin's colors instead of GitHub's.
+theme_dark = "catppuccin-mocha"
+theme_light = "catppuccin-latte"
