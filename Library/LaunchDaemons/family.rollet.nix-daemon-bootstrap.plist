@@ -8,7 +8,7 @@
 	<array>
 		<string>/bin/sh</string>
 		<string>-c</string>
-		<string>/usr/bin/launchctl bootstrap system /Library/LaunchDaemons/org.nixos.activate-system.plist; /usr/bin/launchctl bootstrap system /Library/LaunchDaemons/org.nixos.nix-daemon.plist</string>
+		<string>/bin/launchctl bootstrap system /Library/LaunchDaemons/org.nixos.activate-system.plist; /bin/launchctl bootstrap system /Library/LaunchDaemons/org.nixos.nix-daemon.plist</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
