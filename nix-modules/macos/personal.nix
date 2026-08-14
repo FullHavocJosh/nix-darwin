@@ -122,18 +122,16 @@ in
   homebrew = {
     enable = true;
     taps = [
-      "dopplerhq/cli"
       "minio/stable"
       "vitobotta/tap"
     ];
     brews = [
-      "dopplerhq/cli/doppler"
+      "doppler"
       "minio/stable/mc"
       "tailscale"
       "vitobotta/tap/hetzner_k3s"
     ];
     casks = [
-      "cider"
       "element"
       "font-merriweather"
       "font-open-sans"
