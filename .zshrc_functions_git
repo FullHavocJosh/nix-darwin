@@ -3036,6 +3036,97 @@ function gprune() {
   done
 }
 
+# Standalone version of the "Updating tracked repositories to latest main..."
+# step that darwin-rebuild switch already runs on every activation (see
+# nix-modules/macos/config.nix) -- lets you pull the same fixed repo list
+# without a full rebuild. Ported verbatim from that activation script's bash,
+# so behavior matches exactly: stashes dirty state, switches to main/master if
+# needed, pulls + updates submodules, switches back, pops the stash. The repo
+# list here is intentionally the same list hardcoded in config.nix -- if that
+# list changes, update both places.
+function update-repos() {
+  local -a tracked_repos=(
+    "$HOME/nix-darwin"
+    "$HOME/home-infrastructure"
+    "$HOME/mcp-context-guardian-fullhavoc"
+    "$HOME/mcp-context-guardian-perfectserve"
+    "$HOME/model-skills-fullhavoc"
+    "$HOME/model-skills-perfectserve"
+    "$HOME/Infrastructure-Terrakube"
+    "$HOME/Infrastructure-Ansible"
+  )
+
+  _update_repo_main() {
+    local repo_path="$1"
+    local repo_name
+    repo_name=$(basename "$repo_path")
+
+    if [ ! -d "$repo_path/.git" ]; then
+      echo "  $repo_name: not present, skipping."
+      return 0
+    fi
+
+    echo "── $repo_name ──"
+
+    local current_branch
+    current_branch=$(git -C "$repo_path" symbolic-ref --short HEAD 2>/dev/null)
+    if [ -z "$current_branch" ]; then
+      echo "  Detached HEAD, skipping."
+      return 0
+    fi
+
+    local stash_created=0
+    if ! git -C "$repo_path" diff --quiet HEAD 2>/dev/null; then
+      git -C "$repo_path" stash push -m "update-repos auto-stash $(date +%Y%m%d-%H%M%S)" \
+        && stash_created=1 \
+        && echo "  Stashed uncommitted changes."
+    fi
+
+    local main_branch
+    if git -C "$repo_path" rev-parse --verify main &>/dev/null; then
+      main_branch="main"
+    elif git -C "$repo_path" rev-parse --verify master &>/dev/null; then
+      main_branch="master"
+    else
+      echo "  No main/master branch found, skipping."
+      [ "$stash_created" -eq 1 ] && git -C "$repo_path" stash pop
+      return 0
+    fi
+
+    if [ "$current_branch" != "$main_branch" ]; then
+      git -C "$repo_path" checkout "$main_branch" || {
+        echo "  Failed to checkout $main_branch, aborting."
+        [ "$stash_created" -eq 1 ] && git -C "$repo_path" stash pop
+        return 1
+      }
+    fi
+
+    git -C "$repo_path" pull \
+      && git -C "$repo_path" submodule update --init --recursive \
+      || echo "  Warning: pull failed for $repo_name (SSH agent may not be available)."
+
+    if [ "$current_branch" != "$main_branch" ]; then
+      git -C "$repo_path" checkout "$current_branch" \
+        || echo "  Warning: failed to return to $current_branch."
+    fi
+
+    if [ "$stash_created" -eq 1 ]; then
+      git -C "$repo_path" stash pop \
+        || echo "  Warning: stash pop failed — run: git -C '$repo_path' stash pop"
+    fi
+
+    echo "  Done."
+  }
+
+  echo "Updating tracked repositories to latest main..."
+  local tracked_repo
+  for tracked_repo in "${tracked_repos[@]}"; do
+    _update_repo_main "$tracked_repo"
+  done
+  unset -f _update_repo_main
+  echo "Finished updating repositories."
+}
+
 # Git PR - Create new branch, worktree, and draft pull request.
 #
 # Development happens in a worktree per PR (~/.worktrees/<branch> inside the
