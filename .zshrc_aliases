@@ -231,7 +231,7 @@ _tuicr_repo_fingerprint() {
 # command regardless of which of those modes it's currently in. Used both by the
 # watcher below (to pick up the latest content on every change, including brand
 # new files -- see below for why a full restart, not `:e`, is what it takes) and
-# by _herdr_sync_workspace_to_worktree (to point an already-open tuicr pane at a newly
+# by _herdr_sync_dev_panes (to point an already-open tuicr pane at a newly
 # created worktree instead of leaving it showing the old one).
 #
 # The relaunch step uses send-text + send-keys enter, NOT `herdr pane run` --
@@ -241,7 +241,7 @@ _tuicr_repo_fingerprint() {
 # processes before injecting the command, which can never become true while the
 # very process making the call is one of them. send-text/send-keys don't wait for
 # that and work fine self-targeted; `pane run` is still fine for cross-pane calls
-# (e.g. _herdr_sync_workspace_to_worktree targeting sibling panes from a different one).
+# (e.g. _herdr_sync_dev_panes targeting sibling panes from a different one).
 #
 # Waits for the PANE'S VISIBLE CONTENT to stabilize (three consecutive identical
 # reads) before sending the relaunch text, rather than just checking that the
