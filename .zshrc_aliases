@@ -1,4 +1,4 @@
-alias sshmacbook='ssh -i ~/.ssh/id_ed25519 havoc@MacBookProM2Pro.rollet.family'
+alias sshmacbook='ssh -i ~/.ssh/id_ed25519 havoc@macbookm2pro.rollet.family'
 alias sshg14='ssh -i ~/.ssh/id_ed25519 root@Joshs-G14.rollet.family'
 alias sshazeroth='ssh -i ~/.ssh/id_ed25519 root@azerothcore.rollet.family'
 alias sshtestazeroth='ssh -i ~/.ssh/id_ed25519 root@testing-azerothcore.rollet.family'

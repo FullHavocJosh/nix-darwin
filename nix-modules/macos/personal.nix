@@ -94,6 +94,45 @@ in
       echo "Warning: Doppler CLI not found at $DOPPLER_BIN or config missing. OpenCode Zen API key not injected."
     fi
 
+    # Sync infrastructure-context.json between personal machines (macbook <-> macmini).
+    # This file is gitignored on purpose (see mcp-context-guardian-fullhavoc), so it
+    # doesn't travel with the repo -- each machine keeps a local copy. rsync -u only
+    # overwrites the older side, so pull-then-push here converges both copies to
+    # whichever was edited most recently, regardless of which machine's activation
+    # runs it. Best-effort: the peer is frequently unreachable (laptop travels, mini
+    # sleeps/off-LAN), so failures here are logged and swallowed, never fatal.
+    echo "Syncing infrastructure-context.json with peer machine..."
+    INFRA_CTX_REL="mcp-context-guardian-fullhavoc/infrastructure-context.json"
+    INFRA_CTX_LOCAL="$USER_HOME/$INFRA_CTX_REL"
+    SSH_OPTS="-i $USER_HOME/.ssh/id_ed25519 -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
+
+    LOCAL_HOSTNAME=$(scutil --get LocalHostName)
+    case "$LOCAL_HOSTNAME" in
+      MacBookM2Pro*)
+        PEER_HOST="macminim1.rollet.family"
+        ;;
+      MacMiniM1*)
+        PEER_HOST="macbookm2pro.rollet.family"
+        ;;
+      *)
+        PEER_HOST=""
+        ;;
+    esac
+
+    if [ -z "$PEER_HOST" ]; then
+      echo "Skipping infrastructure-context.json sync: unrecognized hostname '$LOCAL_HOSTNAME'."
+    elif [ ! -f "$INFRA_CTX_LOCAL" ]; then
+      echo "Skipping infrastructure-context.json sync: no local copy at $INFRA_CTX_LOCAL yet."
+    else
+      PEER_SPEC="havoc@$PEER_HOST:$INFRA_CTX_REL"
+      sudo -u havoc HOME="$USER_HOME" ${pkgs.rsync}/bin/rsync -au -e "ssh $SSH_OPTS" "$PEER_SPEC" "$INFRA_CTX_LOCAL" 2>/dev/null \
+        && echo "Pulled newer infrastructure-context.json from $PEER_HOST (if any)." \
+        || echo "Could not reach $PEER_HOST to pull infrastructure-context.json (offline?)."
+      sudo -u havoc HOME="$USER_HOME" ${pkgs.rsync}/bin/rsync -au -e "ssh $SSH_OPTS" "$INFRA_CTX_LOCAL" "$PEER_SPEC" 2>/dev/null \
+        && echo "Pushed infrastructure-context.json to $PEER_HOST (if newer)." \
+        || echo "Could not reach $PEER_HOST to push infrastructure-context.json (offline?)."
+    fi
+
   '';
 
   launchd.daemons.ollama = {
