@@ -3156,12 +3156,15 @@ EOF
   [ -n "$HERDR_ENV" ] && _herdr_sync_workspace_to_worktree "$worktree_dir"
 }
 
-# Pushes every OTHER pane in the current herdr WORKSPACE ($HERDR_WORKSPACE_ID) to
-# follow gpr's newly created worktree at $1, since gpr's own `cd` only affects the
-# calling pane (see gpr_func above). Workspace-wide, not tab-scoped, because aidev
-# lives in its own tab (see .config/herdr/config.toml / _herdr_populate_panes) --
-# nvim/tuicr/zsh are over in the workspace's separate dev tab, not siblings of
-# aidev within one tab. Per pane kind, by label:
+# Pushes every pane in the workspace's dev tab (nvim/tuicr/zsh -- see
+# _herdr_populate_panes) to follow gpr's newly created worktree at $1, since gpr's
+# own `cd` only affects the calling pane (see gpr_func above). Resolves the dev
+# tab explicitly by tab label ("dev", optionally suffixed) rather than scanning
+# every pane in $HERDR_WORKSPACE_ID and matching by pane label -- that would also
+# catch any OTHER tab the user happens to have open in this workspace if a pane
+# in it were ever labeled nvim/tuicr/zsh too. Scoping to the resolved dev tab_id
+# instead means only that tab's panes are ever touched, full stop. Per pane kind,
+# by label:
 #   - nvim: `:cd $1` repoints file ops (netrw, :e, fuzzy-finders) without
 #     restarting nvim, so open buffers/undo history survive untouched, chained
 #     with `| Neotree git_status` (same view as <leader>gs, see keymaps.lua) so
@@ -3176,12 +3179,16 @@ _herdr_sync_workspace_to_worktree() {
   local dir="$1"
   [ -n "$HERDR_WORKSPACE_ID" ] || return 0
 
+  local dev_tab
+  dev_tab=$(herdr tab list --workspace "$HERDR_WORKSPACE_ID" 2>/dev/null | jq -r '.result.tabs[] | select(.label | startswith("dev")) | .tab_id' | head -1)
+  [ -n "$dev_tab" ] || return 0
+
   local panes_json
   panes_json=$(herdr pane list --workspace "$HERDR_WORKSPACE_ID" 2>/dev/null)
   [ -n "$panes_json" ] || return 0
 
   local pane_line pane_id label
-  echo "$panes_json" | jq -c '.result.panes[]' | while IFS= read -r pane_line; do
+  echo "$panes_json" | jq -c --arg tab "$dev_tab" '.result.panes[] | select(.tab_id==$tab)' | while IFS= read -r pane_line; do
     pane_id=$(echo "$pane_line" | jq -r '.pane_id')
     label=$(echo "$pane_line" | jq -r '.label')
     [ "$pane_id" = "$HERDR_PANE_ID" ] && continue
