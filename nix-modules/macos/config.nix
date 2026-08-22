@@ -237,16 +237,13 @@
           }
 
           echo "Updating tracked repositories to latest main..."
-          for TRACKED_REPO in \
-            "$HOME/nix-darwin" \
-            "$HOME/home-infrastructure" \
-            "$HOME/mcp-context-guardian-fullhavoc" \
-            "$HOME/mcp-context-guardian-perfectserve" \
-            "$HOME/model-skills-fullhavoc" \
-            "$HOME/model-skills-perfectserve" \
-            "$HOME/Infrastructure-Terrakube" \
-            "$HOME/Infrastructure-Ansible"; do
-            _update_repo_main "$TRACKED_REPO"
+          # Dynamically discovers every repo directly under $HOME (anything with a
+          # .git entry) instead of a hardcoded list -- so a newly cloned repo gets
+          # picked up automatically on the next darwin-rebuild without editing this
+          # file. Nested repos (2+ levels deep) are intentionally not touched here.
+          for REPO_GIT_DIR in "$HOME"/*/.git; do
+            [ -e "$REPO_GIT_DIR" ] || continue
+            _update_repo_main "''${REPO_GIT_DIR%/.git}"
           done
           unset -f _update_repo_main
           echo "Finished updating repositories."
