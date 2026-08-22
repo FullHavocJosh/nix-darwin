@@ -3153,13 +3153,18 @@ EOF
   # worktree -- that's where the actual file changes are happening, so they
   # should be showing it even though aidev's cwd doesn't move. Push them there
   # when running in herdr.
-  [ -n "$HERDR_ENV" ] && _herdr_sync_workspace_to_worktree "$worktree_dir"
+  [ -n "$HERDR_ENV" ] && _herdr_sync_dev_panes "$worktree_dir"
 }
 
 # Pushes every pane in the workspace's dev tab (nvim/tuicr/zsh -- see
-# _herdr_populate_panes) to follow gpr's newly created worktree at $1, since gpr's
-# own `cd` only affects the calling pane (see gpr_func above). Resolves the dev
-# tab explicitly by tab label ("dev", optionally suffixed) rather than scanning
+# _herdr_populate_panes) to $1 -- whatever directory that is. Called from
+# gpr_func with a freshly created worktree (gpr's own `cd` only affects the
+# calling pane, see gpr_func above), and from the pr-merged-reset skill
+# (~/model-skills-fullhavoc/pr-merged-reset) with the repo root instead, to pull
+# the dev tab back once that worktree's PR has merged and gone stale. Same
+# mechanics either direction -- it's just a directory to point the panes at.
+# Resolves the dev tab explicitly by tab label ("dev", optionally suffixed) rather
+# than scanning
 # every pane in $HERDR_WORKSPACE_ID and matching by pane label -- that would also
 # catch any OTHER tab the user happens to have open in this workspace if a pane
 # in it were ever labeled nvim/tuicr/zsh too. Scoping to the resolved dev tab_id
@@ -3175,7 +3180,7 @@ EOF
 #   - zsh: plain `cd $1`, but ONLY if the pane is sitting at an idle shell prompt
 #     (checked via process-info) -- never inject a command into a pane that's
 #     actively running something else.
-_herdr_sync_workspace_to_worktree() {
+_herdr_sync_dev_panes() {
   local dir="$1"
   [ -n "$HERDR_WORKSPACE_ID" ] || return 0
 
