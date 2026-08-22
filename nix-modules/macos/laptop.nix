@@ -17,4 +17,17 @@
         DenyUsers *
     '';
   };
+
+  # Matches macminim1's existing ~/.ssh/authorized_keys -- once services.openssh.enable
+  # is on, nix-darwin routes key lookup through /etc/ssh/nix_authorized_keys.d/havoc
+  # instead of the plain authorized_keys file, so this has to be declared explicitly
+  # or every inbound connection (e.g. macminim1's half of the infra-context sync in
+  # personal.nix) fails with "Permission denied (publickey)".
+  users.users.havoc.openssh.authorizedKeys.keys = [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGDGMODrm0bM4Y2qnYRory7xSKQq3LLSLc0J7vzLHp9r josh@rollet.family"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB5YgF0KwOuadZn/diOuhxot4EWWng2+IDm+b67GwCaQ josh@rollet.family"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEibecAhZFNAfYmFwUHNCERbdEuapG4EEfd1QOg4uyDS josh@rollet.family"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMbJZjdgBYuMnqPmiIMDBz8xbsCq/lhFVLSfFqDpy/oV josh@rollet.family"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIqA3gKzspRERKswFA4p9ZrdOYfpVeE/52YlbF6rGv0q josh@rollet.family"
+  ];
 }
