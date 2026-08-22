@@ -3038,23 +3038,16 @@ function gprune() {
 
 # Standalone version of the "Updating tracked repositories to latest main..."
 # step that darwin-rebuild switch already runs on every activation (see
-# nix-modules/macos/config.nix) -- lets you pull the same fixed repo list
-# without a full rebuild. Ported verbatim from that activation script's bash,
-# so behavior matches exactly: stashes dirty state, switches to main/master if
-# needed, pulls + updates submodules, switches back, pops the stash. The repo
-# list here is intentionally the same list hardcoded in config.nix -- if that
-# list changes, update both places.
+# nix-modules/macos/config.nix) -- lets you pull the same repos without a full
+# rebuild. Ported verbatim from that activation script's bash, so behavior
+# matches exactly: stashes dirty state, switches to main/master if needed,
+# pulls + updates submodules, switches back, pops the stash. Repos are
+# discovered dynamically (anything directly under $HOME with a .git entry),
+# same as config.nix -- a newly cloned repo is picked up automatically by
+# both, nothing to edit here.
 function update-repos() {
-  local -a tracked_repos=(
-    "$HOME/nix-darwin"
-    "$HOME/home-infrastructure"
-    "$HOME/mcp-context-guardian-fullhavoc"
-    "$HOME/mcp-context-guardian-perfectserve"
-    "$HOME/model-skills-fullhavoc"
-    "$HOME/model-skills-perfectserve"
-    "$HOME/Infrastructure-Terrakube"
-    "$HOME/Infrastructure-Ansible"
-  )
+  local -a tracked_repos=("$HOME"/*/.git(N))
+  tracked_repos=("${tracked_repos[@]%/.git}")
 
   _update_repo_main() {
     local repo_path="$1"
