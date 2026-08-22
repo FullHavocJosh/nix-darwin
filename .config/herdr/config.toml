@@ -23,13 +23,13 @@ close_pane = "prefix+w"
 # j/k cycle agents down/up. h/l cycle panes in the dev tab's traversal order
 # (nvim -> tuicr -> zsh -> nvim...) -- with nvim as a full-height left pane and
 # tuicr/zsh stacked to its right, that order visually runs clockwise, so
-# h = clockwise (next), l = counterclockwise (previous). This shadows the
+# h = counterclockwise (previous), l = clockwise (next). This shadows the
 # shell's own Ctrl+L (clear-screen) and Ctrl+J (newline) readline bindings while
 # a herdr pane has focus -- accepted tradeoff for a single-key scheme.
 next_agent = "ctrl+j"
 previous_agent = "ctrl+k"
-cycle_pane_next = "ctrl+h"
-cycle_pane_previous = "ctrl+l"
+cycle_pane_next = "ctrl+l"
+cycle_pane_previous = "ctrl+h"
 
 # Direct tab-by-number, no prefix needed.
 switch_tab = "ctrl+1..9"
