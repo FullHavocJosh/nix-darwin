@@ -30,4 +30,14 @@
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMbJZjdgBYuMnqPmiIMDBz8xbsCq/lhFVLSfFqDpy/oV josh@rollet.family"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIqA3gKzspRERKswFA4p9ZrdOYfpVeE/52YlbF6rGv0q josh@rollet.family"
   ];
+
+  # Mac App Store apps: only safe on hosts that get `darwin-rebuild switch`
+  # run interactively from their own GUI session. `mas install`/`upgrade`
+  # needs the Aqua bootstrap session to talk to the App Store daemons, and
+  # hangs forever (no error, no dropped connection) when darwin-rebuild is
+  # invoked over SSH -- which is how MacMiniM1 (desktop.nix) is always
+  # updated. Keep masApps host-scoped here rather than in shared personal.nix.
+  homebrew.masApps = {
+    "Search+ for Safari" = 6781814441;
+  };
 }
