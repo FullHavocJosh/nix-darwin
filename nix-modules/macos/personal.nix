@@ -181,8 +181,5 @@ in
       "protonvpn"
       "proton-mail"
     ];
-    masApps = {
-      "Search+ for Safari" = 6781814441;
-    };
   };
 }
