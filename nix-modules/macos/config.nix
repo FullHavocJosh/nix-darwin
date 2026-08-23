@@ -118,14 +118,37 @@
         }
         for existing_link in "$HOME/.claude/skills"/*/; do
           [ -L "''${existing_link%/}" ] || continue
+          link_name=$(basename "''${existing_link%/}")
+          # Whole-repo convenience symlinks (below) have no SKILL.md of their own -- don't
+          # treat them as stale skill links.
+          case "$link_name" in
+            model-skills-fullhavoc|model-skills-perfectserve) continue ;;
+          esac
           if [ ! -f "''${existing_link}SKILL.md" ]; then
-            echo "Removing stale Claude skill symlink: $(basename "''${existing_link%/}")"
+            echo "Removing stale Claude skill symlink: $link_name"
             rm "''${existing_link%/}"
           fi
         done
         _link_skills_from_repo "$HOME/model-skills-fullhavoc"
         _link_skills_from_repo "$HOME/model-skills-perfectserve"
         unset -f _link_skills_from_repo
+
+        # Convenience symlinks to the whole model-skills repos (for browsing/editing the
+        # source directly), alongside the per-skill symlinks above.
+        _link_whole_repo() {
+          local repo="$1"
+          local name
+          name=$(basename "$repo")
+          [ -d "$repo" ] || return 0
+          local target="$HOME/.claude/skills/$name"
+          if [ ! -L "$target" ] || [ "$(readlink "$target")" != "$repo" ]; then
+            echo "Linking model-skills repo: $name → $repo"
+            ln -sfn "$repo" "$target"
+          fi
+        }
+        _link_whole_repo "$HOME/model-skills-fullhavoc"
+        _link_whole_repo "$HOME/model-skills-perfectserve"
+        unset -f _link_whole_repo
 
         mkdir -p "$HOME/.claude/commands"
         _link_commands_from_repo() {
