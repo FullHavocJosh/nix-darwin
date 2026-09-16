@@ -67,10 +67,10 @@ function _model_tier_display() {
   
   case "$provider" in
     claude-code)
-      echo "🟢 Haiku 4.5 (Copilot) | 🔵 Sonnet 4.5 (Copilot) | 🔴 Opus 4.7 (Anthropic)"
+      echo "🟢 Haiku 4.5 (Copilot) | 🔵 Sonnet 5 (Copilot) | 🔴 Opus 5 (Copilot)"
       ;;
     github-copilot)
-      echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.5"
+      echo "🟢 Haiku 4.5 | 🔵 Sonnet 5 | 🔴 Opus 5"
       ;;
     opencode)
       # Check if using a free model
@@ -110,7 +110,7 @@ function _get_opencode_model() {
   fi
 
   # GitHub Copilot: skip auto-discovery (4.6 listed but not actually supported)
-  # Claude Code: skip auto-discovery so hybrid routing (haiku/sonnet→Copilot, opus→Anthropic) is used
+  # Claude Code: skip auto-discovery — all tiers route via Copilot, never Anthropic directly
   if [[ "$provider" != "github-copilot" ]] && [[ "$provider" != "claude-code" ]]; then
     local model=""
     if [[ "$task_type" == "haiku" ]]; then
@@ -128,16 +128,15 @@ function _get_opencode_model() {
 
   case $provider in
     github-copilot)
-      # GitHub Copilot: Only Sonnet 4.5 and Haiku 4.5 available (tested)
-      # Opus models NOT available - fall back to Sonnet
+      # Verified 2026-09-16 against `opencode models github-copilot`: claude-sonnet-4.5
+      # is gone from the catalog and errors every time (UnknownError), and opus
+      # models are available now (the old "opus not available" fallback was stale).
       if [[ "$task_type" == "opus" ]]; then
-        # Opus not available - fall back to Sonnet 4.5
-        echo "github-copilot/claude-sonnet-4.5"
+        echo "github-copilot/claude-opus-5"
       elif [[ "$task_type" == "haiku" ]]; then
         echo "github-copilot/claude-haiku-4.5"
       else
-        # Sonnet 4.6 not available - use 4.5
-        echo "github-copilot/claude-sonnet-4.5"
+        echo "github-copilot/claude-sonnet-5"
       fi
       ;;
     opencode)
@@ -154,20 +153,22 @@ function _get_opencode_model() {
       fi
       ;;
     claude-code)
-      # Haiku/Sonnet route via GitHub Copilot (saves Anthropic credits); Opus stays on Anthropic
+      # All tiers route via GitHub Copilot, never Anthropic directly — the
+      # user's Anthropic/Claude Code quota is reserved for the interactive
+      # Claude Code session, not consumed by git-helper automation.
       if [[ "$task_type" == "opus" ]]; then
-        echo "claude-opus-4-7"
+        echo "github-copilot/claude-opus-5"
       elif [[ "$task_type" == "haiku" ]]; then
         echo "github-copilot/claude-haiku-4.5"
       else
-        echo "github-copilot/claude-sonnet-4.5"
+        echo "github-copilot/claude-sonnet-5"
       fi
       ;;
     llama-cpp|llama.cpp)
       echo "llama.cpp/local-coder"
       ;;
     *)
-      echo "github-copilot/claude-sonnet-4.5"
+      echo "github-copilot/claude-sonnet-5"
       ;;
   esac
 }
@@ -219,7 +220,7 @@ function _supports_multi_tier() {
   
   case "$provider" in
     claude-code|github-copilot)
-      return 0  # Supports Haiku/Sonnet/Opus (claude-code) or Haiku/Sonnet (github-copilot)
+      return 0  # Both support Haiku/Sonnet/Opus (all routed via GitHub Copilot)
       ;;
     opencode)
       # OpenCode supports multi-tier ONLY if using a Claude model (not free)
@@ -241,10 +242,10 @@ function _supports_opus() {
   
   case "$provider" in
     claude-code)
-      return 0  # Claude Code supports Opus
+      return 0  # Claude Code supports Opus (routed via GitHub Copilot, not Anthropic directly)
       ;;
     github-copilot)
-      return 1  # GitHub Copilot does NOT support Opus
+      return 0  # Opus (4.7/4.7-fast/4.8/4.8-fast/5) confirmed available 2026-09-16
       ;;
     opencode)
       # OpenCode Zen supports Opus only with Claude models
@@ -318,30 +319,21 @@ function _run_ai_plain() {
       ;;
       
     claude-code)
+      # All tiers route via opencode+Copilot — never claude --print — so this
+      # never touches the Anthropic API directly. _get_opencode_model always
+      # returns a github-copilot/* model for this provider (see above); the
+      # direct-Anthropic branch this used to have for the opus tier is gone
+      # on purpose, not an oversight.
       local result exit_code
-      if [[ "$model" == github-copilot/* ]]; then
-        # Haiku/Sonnet: route via opencode+Copilot to save Anthropic credits
-        result=$(echo "$prompt" | timeout 90s opencode run --model "$model" 2>&1)
-        exit_code=$?
-        _herdr_report_opencode_idle
-        if [ $exit_code -eq 124 ]; then
-          echo "Error: OpenCode command timeout after 90s" >&2
-          return 1
-        elif [ $exit_code -ne 0 ]; then
-          echo "Error: OpenCode command failed (exit code: $exit_code)" >&2
-          return 1
-        fi
-      else
-        # Opus: use Anthropic directly via claude --print
-        result=$(echo "$prompt" | timeout 90s claude --print --output-format text 2>&1)
-        exit_code=$?
-        if [ $exit_code -eq 124 ]; then
-          echo "Error: claude timeout after 90s" >&2
-          return 1
-        elif [ $exit_code -ne 0 ]; then
-          echo "Error: claude failed (exit $exit_code)" >&2
-          return 1
-        fi
+      result=$(echo "$prompt" | timeout 90s opencode run --model "$model" 2>&1)
+      exit_code=$?
+      _herdr_report_opencode_idle
+      if [ $exit_code -eq 124 ]; then
+        echo "Error: OpenCode command timeout after 90s" >&2
+        return 1
+      elif [ $exit_code -ne 0 ]; then
+        echo "Error: OpenCode command failed (exit code: $exit_code)" >&2
+        return 1
       fi
       echo "$result"
       return 0
@@ -589,73 +581,30 @@ Example of CORRECT response format:
 
 START YOUR RESPONSE NOW WITH [ OR []:"
 
+      # All tiers route via opencode+Copilot — never claude --print — so this
+      # never touches the Anthropic API directly. _get_opencode_model always
+      # returns a github-copilot/* model for this provider (see above); the
+      # direct-Anthropic branch this used to have for the opus tier is gone
+      # on purpose, not an oversight.
       local result exit_code
-      if [[ "$model" == github-copilot/* ]]; then
-        # Haiku/Sonnet: route via opencode+Copilot to save Anthropic credits
-        result=$(echo "$json_prompt" | timeout 90s opencode run --model "$model" 2>&1)
-        exit_code=$?
-        _herdr_report_opencode_idle
-        if [ $exit_code -eq 124 ]; then
-          echo "Error: OpenCode command timeout after 90s" >&2
-          return 1
-        elif [ $exit_code -ne 0 ]; then
-          echo "Error: OpenCode command failed (exit code: $exit_code)" >&2
-          return 1
-        fi
-        local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
-        if echo "$extracted" | jq empty 2>/dev/null; then
-          echo "$extracted"
-          return 0
-        fi
-        echo "Error: Could not parse AI response as JSON" >&2
-        echo "[]"
-        return 2
-      else
-        # Opus: use Anthropic directly via claude --print
-        # claude --print bypasses shell fd redirections — use python3 wrapper to suppress tty output
-        result=$(echo "$json_prompt" | timeout 90s python3 -c '
-import subprocess, sys, os
-env = dict(os.environ)
-env.pop("TTY", None)
-r = subprocess.run(
-    ["claude", "--print", "--output-format", "text"],
-    input=sys.stdin.buffer.read(),
-    capture_output=True,
-    start_new_session=True,
-    env=env
-)
-sys.stdout.buffer.write(r.stdout)
-sys.exit(r.returncode)
-' 2>/dev/null)
-        exit_code=$?
-        if [ $exit_code -eq 124 ]; then
-          echo "Error: claude timeout after 90s" >&2
-          return 1
-        elif [ $exit_code -ne 0 ]; then
-          echo "Error: claude failed (exit $exit_code)" >&2
-          return 1
-        fi
-        if [[ -n "$result" ]]; then
-          if echo "$result" | jq empty 2>/dev/null; then
-            echo "$result"; return 0
-          fi
-          local stripped
-          stripped=$(echo "$result" | sed 's/```[a-z]*//g; s/```//g')
-          if echo "$stripped" | jq empty 2>/dev/null; then
-            echo "$stripped"; return 0
-          fi
-          local extracted
-          extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
-          if echo "$extracted" | jq empty 2>/dev/null; then
-            echo "$extracted"; return 0
-          fi
-          echo "Error: Could not parse AI response as JSON" >&2
-          echo "[]"
-          return 2
-        fi
-        echo "Error: claude returned empty response" >&2
+      result=$(echo "$json_prompt" | timeout 90s opencode run --model "$model" 2>&1)
+      exit_code=$?
+      _herdr_report_opencode_idle
+      if [ $exit_code -eq 124 ]; then
+        echo "Error: OpenCode command timeout after 90s" >&2
+        return 1
+      elif [ $exit_code -ne 0 ]; then
+        echo "Error: OpenCode command failed (exit code: $exit_code)" >&2
         return 1
       fi
+      local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
+      if echo "$extracted" | jq empty 2>/dev/null; then
+        echo "$extracted"
+        return 0
+      fi
+      echo "Error: Could not parse AI response as JSON" >&2
+      echo "[]"
+      return 2
       ;;
 
     *)
@@ -889,13 +838,16 @@ function _ensure_ai_provider() {
 
 # Hybrid routing: llama-cpp → cloud escalation
 # gpc/gpr always local; gpa escalates to cloud on critical/security findings
-# Cloud provider stored in ~/.ai_cloud_provider_preference (separate from main provider)
+# Cloud provider stored in ~/.ai_cloud_provider_preference (separate from main provider).
+# Defaults to github-copilot, not anthropic: git-helper cloud escalation should
+# never consume the Anthropic/Claude Code API quota, which is reserved for the
+# interactive Claude Code session.
 function _get_cloud_fallback_provider() {
   local cloud_pref="$HOME/.ai_cloud_provider_preference"
   if [[ -f "$cloud_pref" ]]; then
     cat "$cloud_pref"
   else
-    echo "anthropic"
+    echo "github-copilot"
   fi
 }
 
@@ -905,9 +857,9 @@ function _get_cloud_model() {
 
   case $provider in
     github-copilot)
-      [[ "$task_type" == "opus"  ]] && echo "github-copilot/claude-opus-4.5"  && return
+      [[ "$task_type" == "opus"  ]] && echo "github-copilot/claude-opus-5"  && return
       [[ "$task_type" == "haiku" ]] && echo "github-copilot/claude-haiku-4.5" && return
-      echo "github-copilot/claude-sonnet-4.5"
+      echo "github-copilot/claude-sonnet-5"
       ;;
     opencode)
       [[ "$task_type" == "opus"  ]] && echo "opencode/claude-opus-4.5"        && return
@@ -1131,7 +1083,7 @@ function aiselect() {
     echo "Command → Model → Mode:"
     if [[ "$current_provider" == "claude-code" ]]; then
       echo "  • aidev                     → claude (direct) → Full Agent"
-      echo "  • gpa                       → claude --print → Headless review (opencode fallback)"
+      echo "  • gpa                       → $opencode_model → Headless review (never Anthropic directly)"
     else
       echo "  • aidev                     → $opencode_model → Full Agent (claude)"
       echo "  • gpa                       → $opencode_model → Headless review"
