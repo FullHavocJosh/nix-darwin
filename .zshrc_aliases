@@ -277,20 +277,25 @@ _tuicr_repo_fingerprint() {
 # stability-wait loop essentially every time, since it has no sleep in the
 # way -- confirmed via traced test runs: the quit sequence would go out, but
 # the relaunch command never did, leaving the pane at a dead shell prompt.
-_tuicr_restart() {
-  local pane_id="$1" dir="$2"
-  local marker="/tmp/.tuicr-restart-$pane_id"
-  : > "$marker"
-  herdr pane send-keys "$pane_id" esc >/dev/null 2>&1
-  herdr pane send-text "$pane_id" ":q" >/dev/null 2>&1
-  herdr pane send-keys "$pane_id" enter >/dev/null 2>&1
-
+# Waits for pane $1's VISIBLE CONTENT to go still (three consecutive
+# identical, non-empty reads) before returning -- a direct signal that
+# whatever's rendering there (shell startup, an editor repainting, a plugin
+# still loading) has settled, rather than an indirect proxy like process
+# state. Requiring non-empty specifically so a still-blank pane (nothing
+# rendered yet at all) never false-positives as "stable" on its very first
+# read. Times out after ~6s (40 tries * 0.15s) and returns anyway rather than
+# blocking forever if content never settles for some other reason -- callers
+# proceed either way, same as _tuicr_restart always did before this was
+# pulled out into its own function.
+# Usage: _herdr_wait_pane_stable <pane_id>
+_herdr_wait_pane_stable() {
+  local pane_id="$1"
   local prev_content="" cur_content stable_count=0 tries=0
   while [ "$tries" -lt 40 ]; do
     cur_content=$(herdr pane read "$pane_id" --source visible 2>/dev/null)
     if [ "$cur_content" = "$prev_content" ] && [ -n "$cur_content" ]; then
       stable_count=$((stable_count + 1))
-      [ "$stable_count" -ge 3 ] && break
+      [ "$stable_count" -ge 3 ] && return 0
     else
       stable_count=0
     fi
@@ -298,6 +303,35 @@ _tuicr_restart() {
     sleep 0.15
     tries=$((tries + 1))
   done
+}
+
+_tuicr_restart() {
+  local pane_id="$1" dir="$2"
+  # Guards against two independent callers restarting the SAME pane at once
+  # -- confirmed as a real scenario, not just theoretical: _tuicr_watch_and_refresh
+  # polls every 5s and calls this on its own, and _herdr_sync_dev_panes (gpr)
+  # can call it for the same pane within that same window right after a
+  # worktree's git state changes. Two concurrent :q + relaunch sequences
+  # racing on one pane's input stream is exactly the kind of interleaving that
+  # leaves it at a dead shell prompt -- neither sequence's stability-wait or
+  # marker-file handling accounts for a SECOND sequence doing the same thing
+  # at the same time. A stale lock (>30s -- several times longer than this
+  # function normally takes) is treated as an abandoned previous run, not a
+  # live one, so a crashed caller can't permanently wedge the pane.
+  local lock="/tmp/.tuicr-restart-lock-$pane_id"
+  if [ -f "$lock" ]; then
+    local lock_age=$(( $(date +%s) - $(stat -f %m "$lock" 2>/dev/null || echo 0) ))
+    [ "$lock_age" -lt 30 ] && return 0
+  fi
+  : > "$lock"
+
+  local marker="/tmp/.tuicr-restart-$pane_id"
+  : > "$marker"
+  herdr pane send-keys "$pane_id" esc >/dev/null 2>&1
+  herdr pane send-text "$pane_id" ":q" >/dev/null 2>&1
+  herdr pane send-keys "$pane_id" enter >/dev/null 2>&1
+
+  _herdr_wait_pane_stable "$pane_id"
 
   if [ -n "$dir" ]; then
     herdr pane send-text "$pane_id" "cd $dir && _tuicr_current_pr" >/dev/null 2>&1
@@ -305,7 +339,7 @@ _tuicr_restart() {
     herdr pane send-text "$pane_id" "_tuicr_current_pr" >/dev/null 2>&1
   fi
   herdr pane send-keys "$pane_id" enter >/dev/null 2>&1
-  rm -f "$marker"
+  rm -f "$marker" "$lock"
 }
 
 # Called instead of a bare `kill "$watcher_pid"` after each tuicr invocation

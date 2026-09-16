@@ -3,6 +3,23 @@
 # Helper functions and main workflow commands for git operations
 # =============================================================================
 
+# Several functions below (_herdr_sync_dev_panes -> _tuicr_restart,
+# devlite/aidevlite -> _herdr_ai_edit_workspace) call functions that live in
+# .zshrc_aliases. .zshrc sources that file before this one in a normal
+# interactive shell, but anything that sources only this file directly — an
+# agent's tool call running `source .zshrc_functions_git` on its own, a
+# script, a non-interactive subshell — hits "command not found" instead.
+# Confirmed live: gpr calls into _herdr_sync_dev_panes even when HERDR_ENV is
+# only ambiently inherited (not from a full interactive shell), and the
+# failure is silent from gpr's own output — the real tuicr pane just never
+# gets pointed at the new worktree, which is indistinguishable from "tuicr
+# isn't opening" to whoever's watching that pane. Self-heal instead of relying
+# on load order that nothing enforces. _tuicr_restart is the canary — if it's
+# missing, none of .zshrc_aliases loaded, so (re-)source the whole file.
+if ! command -v _tuicr_restart >/dev/null 2>&1; then
+  [[ -f "$HOME/.zshrc_aliases" ]] && source "$HOME/.zshrc_aliases" 2>/dev/null
+fi
+
 # Helper function: Launch a script in a new terminal window (macOS + Linux)
 # Usage: _launch_terminal_window <script_path> <label>
 # Returns 0 on success, 1 if no terminal could be found
@@ -3286,7 +3303,17 @@ _herdr_sync_dev_panes() {
 
     case "$label" in
       nvim*)
+        # Two escs, not one: a single esc only backs out of insert/visual mode
+        # or a one-level popup (completion menu, telescope prompt) -- it
+        # doesn't close a floating window that's ALSO showing on top of that,
+        # which a second esc does. Then wait for whatever's rendering to
+        # settle before typing an Ex command at it -- unlike _tuicr_restart's
+        # quit+relaunch, nothing here previously waited for the pane to be in
+        # a known-ready state, so this fired the instant gpr ran regardless of
+        # what nvim happened to be doing at that exact moment.
         herdr pane send-keys "$pane_id" esc >/dev/null 2>&1
+        herdr pane send-keys "$pane_id" esc >/dev/null 2>&1
+        _herdr_wait_pane_stable "$pane_id"
         herdr pane send-text "$pane_id" ":cd $dir | Neotree git_status" >/dev/null 2>&1
         herdr pane send-keys "$pane_id" enter >/dev/null 2>&1
         ;;
