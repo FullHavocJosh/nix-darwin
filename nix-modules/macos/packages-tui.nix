@@ -144,6 +144,86 @@ let
         touch "$SETUP_MARKER"
         echo "[claude-tui] Setup completed successfully"
   '';
+
+  # Vetted 2026-09-16: all four are real, actively maintained OSS projects
+  # (see PR description for the per-tool footprint writeup). token-savior is
+  # registered as an MCP server via claude-desktop-mcp.json; this script only
+  # does the parts that json sync can't (venv creation, npm global install,
+  # the caveman plugin, and the CLAUDE.md rules drop-in).
+  tokenOptimizationSetup = pkgs.writeShellScript "token-optimization-setup" ''
+        #!/usr/bin/env bash
+        set -uo pipefail
+
+        MARKER_DIR="$HOME/.claude/.token-optimization"
+        mkdir -p "$MARKER_DIR"
+
+        # --- token-savior: symbol-navigation MCP server, isolated venv ---
+        if [ ! -x "$HOME/bench/venv-tokensavior/bin/token-savior" ]; then
+          echo "[token-optimization] Installing token-savior..."
+          if python3 -m venv "$HOME/bench/venv-tokensavior" && \
+             "$HOME/bench/venv-tokensavior/bin/pip" install --quiet 'token-savior-recall[mcp]'; then
+            echo "[token-optimization] token-savior installed."
+          else
+            echo "WARNING: token-savior install failed" >&2
+          fi
+        fi
+
+        # --- claude-token-efficient: terseness rules dropped into global CLAUDE.md ---
+        CLAUDE_MD="$HOME/.claude/CLAUDE.md"
+        RULES_MARKER="<!-- claude-token-efficient rules (github.com/drona23/claude-token-efficient) -->"
+        mkdir -p "$(dirname "$CLAUDE_MD")"
+        if [ ! -f "$CLAUDE_MD" ] || ! grep -qF "$RULES_MARKER" "$CLAUDE_MD"; then
+          echo "[token-optimization] Adding claude-token-efficient rules to CLAUDE.md..."
+          RULES=$(curl -fsSL https://raw.githubusercontent.com/drona23/claude-token-efficient/main/CLAUDE.md 2>/dev/null)
+          if [ -n "$RULES" ]; then
+            {
+              echo ""
+              echo "$RULES_MARKER"
+              echo "$RULES"
+            } >> "$CLAUDE_MD"
+            echo "[token-optimization] CLAUDE.md updated."
+          else
+            echo "WARNING: could not fetch claude-token-efficient rules" >&2
+          fi
+        fi
+
+        # --- token-optimizer-mcp: caching MCP + hooks, global npm install ---
+        if ! npm ls -g @ooples/token-optimizer-mcp &>/dev/null; then
+          echo "[token-optimization] Installing token-optimizer-mcp..."
+          npm install -g @ooples/token-optimizer-mcp 2>&1 || echo "WARNING: token-optimizer-mcp install failed" >&2
+        fi
+        if [ ! -f "$MARKER_DIR/token-optimizer-hooks-installed" ]; then
+          NPM_PREFIX=$(npm config get prefix 2>/dev/null || echo "/opt/homebrew")
+          HOOKS_SCRIPT="$NPM_PREFIX/lib/node_modules/@ooples/token-optimizer-mcp/install-hooks.sh"
+          if [ -f "$HOOKS_SCRIPT" ]; then
+            echo "[token-optimization] Installing token-optimizer-mcp hooks..."
+            if bash "$HOOKS_SCRIPT" --skip-mcp-check 2>&1; then
+              touch "$MARKER_DIR/token-optimizer-hooks-installed"
+              echo "[token-optimization] token-optimizer-mcp hooks installed."
+            else
+              echo "WARNING: token-optimizer-mcp hooks install failed" >&2
+            fi
+          fi
+        fi
+
+        # --- caveman: Claude Code plugin (skill + hooks + statusline) ---
+        if command -v claude &>/dev/null && [ ! -f "$MARKER_DIR/caveman-plugin-installed" ]; then
+          echo "[token-optimization] Installing caveman plugin..."
+          claude plugin marketplace add JuliusBrussee/caveman 2>&1 || true
+          if claude plugin install caveman@caveman 2>&1; then
+            touch "$MARKER_DIR/caveman-plugin-installed"
+            echo "[token-optimization] caveman plugin installed."
+          else
+            echo "WARNING: caveman plugin install failed" >&2
+          fi
+        fi
+        mkdir -p "$HOME/.config/caveman"
+        if [ ! -f "$HOME/.config/caveman/config.json" ]; then
+          cat > "$HOME/.config/caveman/config.json" <<'JSON'
+    {"defaultMode": "ultra"}
+    JSON
+        fi
+  '';
 in
 {
   # Packages not available on Homebrew — add here only as a last resort.
@@ -280,6 +360,10 @@ in
         (
           ${claudeTuiSetup}
         ) || echo "WARNING: claude-tui setup failed — continuing activation" >&2
+
+        (
+          ${tokenOptimizationSetup}
+        ) || echo "WARNING: token-optimization setup failed — continuing activation" >&2
 
         (
           OPCODE_APP="/Applications/opcode.app"

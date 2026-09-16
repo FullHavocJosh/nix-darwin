@@ -118,6 +118,16 @@
     "prettier": {
       "command": "npx",
       "args": ["-y", "@prettier/mcp"]
+    },
+    "token-savior": {
+      "command": "__HOME__/bench/venv-tokensavior/bin/token-savior",
+      "env": {
+        "WORKSPACE_ROOTS": "__HOME__",
+        "TOKEN_SAVIOR_PROFILE": "core"
+      }
+    },
+    "token-optimizer-mcp": {
+      "command": "token-optimizer-mcp"
     }
   }
 }
