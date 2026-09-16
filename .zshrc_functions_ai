@@ -49,6 +49,105 @@ function _discover_latest_model() {
   echo "$base_models" | sort -V | tail -1
 }
 
+# Discover the latest active Claude model for a given tier on GitHub Copilot,
+# using `opencode models --verbose`'s family/status/release_date metadata
+# instead of a plain name sort — a bare version-string sort put "sonnet-4.5"
+# ahead of "sonnet-5" and this is exactly the class of bug that left
+# claude-sonnet-4.5 hardcoded for months after GitHub removed it from the
+# catalog. "-fast" variants share their sibling's release_date but trade
+# quality for speed, so they only win a tie, never outrank a newer release.
+# Usage: _discover_latest_copilot_claude_model <haiku|sonnet|opus>
+# Prints the bare model id (e.g. "claude-opus-5"); returns 1 on any failure
+# (network, opencode missing, catalog shape changed) so callers can fall back.
+function _discover_latest_copilot_claude_model() {
+  local tier="$1"
+  local raw
+  raw=$(timeout 10 opencode models --verbose github-copilot 2>/dev/null)
+  [[ -z "$raw" ]] && return 1
+
+  local script='
+import sys, json, re
+
+tier = sys.argv[1]
+text = sys.stdin.read()
+# opencode prints a bare "provider/model-id" label line before each JSON
+# block; strip those so the rest decodes as back-to-back JSON objects.
+lines = [l for l in text.splitlines() if not re.match(r"^[\w.-]+/[\w.-]+$", l)]
+blob = "\n".join(lines)
+
+decoder = json.JSONDecoder()
+models = []
+rest = blob
+while True:
+    rest = rest.lstrip()
+    if not rest:
+        break
+    try:
+        obj, idx = decoder.raw_decode(rest)
+    except ValueError:
+        break
+    models.append(obj)
+    rest = rest[idx:]
+
+family = "claude-" + tier
+candidates = [m for m in models if m.get("family") == family and m.get("status") == "active"]
+if not candidates:
+    sys.exit(1)
+
+def sort_key(m):
+    is_fast = "fast" in m.get("name", "").lower()
+    return (m.get("release_date", ""), not is_fast)
+
+print(max(candidates, key=sort_key)["id"])
+'
+  python3 -c "$script" "$tier" <<< "$raw"
+}
+
+# Cached wrapper around _discover_latest_copilot_claude_model — the discovery
+# call is a real network round-trip (~1.5s), too slow to pay on every gpc/gpa
+# invocation. Refreshes at most once per day per tier; falls back to a stale
+# cache (better than nothing) and finally to a hardcoded last-known-good model
+# if discovery fails outright (network down, opencode missing, catalog shape
+# changed) — this must never be the thing that breaks gpc/gpa.
+# Usage: _get_copilot_claude_model <haiku|sonnet|opus>
+function _get_copilot_claude_model() {
+  local tier="$1"
+  local cache_dir="$HOME/.cache/nix-darwin-ai"
+  local cache_file="$cache_dir/github-copilot-claude-${tier}.txt"
+  local ttl=86400
+  local fallback
+  case "$tier" in
+    haiku) fallback="claude-haiku-4.5" ;;
+    opus)  fallback="claude-opus-5" ;;
+    *)     fallback="claude-sonnet-5" ;;
+  esac
+
+  mkdir -p "$cache_dir" 2>/dev/null
+
+  if [[ -f "$cache_file" ]]; then
+    local age=$(( $(date +%s) - $(stat -f %m "$cache_file" 2>/dev/null || echo 0) ))
+    if [[ $age -lt $ttl ]]; then
+      cat "$cache_file"
+      return 0
+    fi
+  fi
+
+  local discovered
+  discovered=$(_discover_latest_copilot_claude_model "$tier" 2>/dev/null)
+  if [[ -n "$discovered" ]]; then
+    echo "$discovered" > "$cache_file"
+    echo "$discovered"
+    return 0
+  fi
+
+  # Discovery failed: prefer a stale cache over the hardcoded fallback.
+  if [[ -f "$cache_file" ]]; then
+    cat "$cache_file"
+  else
+    echo "$fallback"
+  fi
+}
+
 # Returns a human-readable provider name with proper capitalisation.
 function _provider_display_name() {
   case "$1" in
@@ -66,11 +165,16 @@ function _model_tier_display() {
   local provider="${1:-$(_get_ai_provider)}"
   
   case "$provider" in
-    claude-code)
-      echo "🟢 Haiku 4.5 (Copilot) | 🔵 Sonnet 5 (Copilot) | 🔴 Opus 5 (Copilot)"
-      ;;
-    github-copilot)
-      echo "🟢 Haiku 4.5 | 🔵 Sonnet 5 | 🔴 Opus 5"
+    claude-code|github-copilot)
+      # Built from live/cached discovery (_get_copilot_claude_model), not a
+      # version string typed into this file — that's what let claude-sonnet-4.5
+      # sit here silently for months after GitHub retired it.
+      local h="${$(_get_copilot_claude_model haiku)#claude-haiku-}"
+      local s="${$(_get_copilot_claude_model sonnet)#claude-sonnet-}"
+      local o="${$(_get_copilot_claude_model opus)#claude-opus-}"
+      local suffix=""
+      [[ "$provider" == "claude-code" ]] && suffix=" (Copilot)"
+      echo "🟢 Haiku ${h}${suffix} | 🔵 Sonnet ${s}${suffix} | 🔴 Opus ${o}${suffix}"
       ;;
     opencode)
       # Check if using a free model
@@ -128,16 +232,10 @@ function _get_opencode_model() {
 
   case $provider in
     github-copilot)
-      # Verified 2026-09-16 against `opencode models github-copilot`: claude-sonnet-4.5
-      # is gone from the catalog and errors every time (UnknownError), and opus
-      # models are available now (the old "opus not available" fallback was stale).
-      if [[ "$task_type" == "opus" ]]; then
-        echo "github-copilot/claude-opus-5"
-      elif [[ "$task_type" == "haiku" ]]; then
-        echo "github-copilot/claude-haiku-4.5"
-      else
-        echo "github-copilot/claude-sonnet-5"
-      fi
+      # Always the latest active model per tier (cached ~1 day) — see
+      # _get_copilot_claude_model. A hardcoded version string is exactly what
+      # left claude-sonnet-4.5 in place for months after GitHub retired it.
+      echo "github-copilot/$(_get_copilot_claude_model "$task_type")"
       ;;
     opencode)
       # OpenCode Zen: Use latest available Claude models with hyphens (claude-haiku-4-5)
@@ -155,20 +253,15 @@ function _get_opencode_model() {
     claude-code)
       # All tiers route via GitHub Copilot, never Anthropic directly — the
       # user's Anthropic/Claude Code quota is reserved for the interactive
-      # Claude Code session, not consumed by git-helper automation.
-      if [[ "$task_type" == "opus" ]]; then
-        echo "github-copilot/claude-opus-5"
-      elif [[ "$task_type" == "haiku" ]]; then
-        echo "github-copilot/claude-haiku-4.5"
-      else
-        echo "github-copilot/claude-sonnet-5"
-      fi
+      # Claude Code session, not consumed by git-helper automation. Always
+      # the latest active model per tier — see _get_copilot_claude_model.
+      echo "github-copilot/$(_get_copilot_claude_model "$task_type")"
       ;;
     llama-cpp|llama.cpp)
       echo "llama.cpp/local-coder"
       ;;
     *)
-      echo "github-copilot/claude-sonnet-5"
+      echo "github-copilot/$(_get_copilot_claude_model sonnet)"
       ;;
   esac
 }
@@ -857,9 +950,7 @@ function _get_cloud_model() {
 
   case $provider in
     github-copilot)
-      [[ "$task_type" == "opus"  ]] && echo "github-copilot/claude-opus-5"  && return
-      [[ "$task_type" == "haiku" ]] && echo "github-copilot/claude-haiku-4.5" && return
-      echo "github-copilot/claude-sonnet-5"
+      echo "github-copilot/$(_get_copilot_claude_model "$task_type")"
       ;;
     opencode)
       [[ "$task_type" == "opus"  ]] && echo "opencode/claude-opus-4.5"        && return
