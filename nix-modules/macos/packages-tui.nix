@@ -357,10 +357,27 @@ in
   # postActivation IS one of the real names (nix-darwin's own doc comment on
   # it: "Extra activation scripts, that can be customized by users").
   system.activationScripts.postActivation.text = lib.mkAfter ''
-        USER_NAME="$(id -un)"
-        USER_HOME="$HOME"
-        
-        sudo -u "$USER_NAME" bash <<'USERSCRIPT'
+        # This whole block runs as root (nix-darwin activation always does),
+        # so `id -un` here returns "root", not the real login user -- that
+        # made `sudo -u "$USER_NAME"` a no-op (already root) and left $HOME
+        # as /var/root for everything below, e.g. token-savior's venv landed
+        # at /var/root/bench (using macOS's ancient system python3, whose old
+        # pip couldn't even resolve the package) instead of ~/bench. Use the
+        # module's own username argument instead, same as config.nix does via
+        # config.system.primaryUser. --set-home makes sudo actually reset
+        # $HOME for the target user; without it, sudo -u alone does not.
+        USER_NAME="${username}"
+        USER_HOME=$(eval echo "~$USER_NAME")
+
+        sudo --set-home -u "$USER_NAME" bash <<'USERSCRIPT'
+        # sudo -u spawns a non-login, non-interactive shell -- it never reads
+        # .zprofile/.zshrc, so PATH here is whatever sudo's secure_path
+        # default is (typically /usr/bin:/bin:/usr/sbin:/sbin), NOT Homebrew's
+        # bin dirs. Confirmed: this is why brew/npm/node all came back
+        # "command not found" here despite being freshly installed moments
+        # earlier in this same activation run.
+        export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+
         if [ -f "$HOME/.config/opencode/opencode.json" ]; then
           echo "Patching opencode.json with correct home path..."
           ${pkgs.gnused}/bin/sed -i "s|__HOME__|$HOME|g" "$HOME/.config/opencode/opencode.json"
