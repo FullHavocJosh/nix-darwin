@@ -240,7 +240,6 @@ in
       "slima4/claude-tui"
       "seunggabi/tap"
       "agavra/tap"
-      "xcodesorg/made"
     ];
     brews = [
       "ansible"
@@ -320,7 +319,6 @@ in
       "ansible-language-server"
       "slima4/claude-tui/claude-tui"
       "agavra/tap/tuicr"
-      "xcodesorg/made/xcodes"
     ];
     casks = [
       "ghostty"
