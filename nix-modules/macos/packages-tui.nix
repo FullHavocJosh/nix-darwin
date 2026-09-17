@@ -342,7 +342,21 @@ in
     fi
   '';
 
-  system.activationScripts.packagesUserConfig.text = lib.mkAfter ''
+  # Was "packagesUserConfig" -- a name nix-darwin's own activation-scripts.nix
+  # never references (its system.activationScripts.script.text hardcodes a
+  # fixed list of known names: checks, groups, users, homebrew,
+  # postActivation, etc). types.attrsOf submodule happily accepts any
+  # attribute name, including ones nothing consumes, so this evaluated fine
+  # and `nix eval` on it showed the right content, but it was never part of
+  # config.system.build.toplevel's actual closure -- confirmed by comparing
+  # .drvPath across commits: editing this text never changed the derivation,
+  # while editing system.activationScripts.homebrew.text (a real, referenced
+  # name) always did. Every darwin-rebuild switch has silently no-op'd this
+  # whole block since it was introduced -- claudeTuiSetup, the Opcode
+  # auto-install, and now token-optimization-setup never actually ran.
+  # postActivation IS one of the real names (nix-darwin's own doc comment on
+  # it: "Extra activation scripts, that can be customized by users").
+  system.activationScripts.postActivation.text = lib.mkAfter ''
         USER_NAME="$(id -un)"
         USER_HOME="$HOME"
         
