@@ -378,6 +378,19 @@ in
         # earlier in this same activation run.
         export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
 
+        # Self-heal a known Homebrew gap: `brew bundle`'s upgrade (onActivation.upgrade
+        # above) only touches formulae explicitly listed in the Brewfile, not their
+        # transitive dependencies. When a dependency gets a new dylib SONAME (e.g.
+        # simdutf 35 -> 36) but a dependent that isn't itself in the Brewfile (e.g.
+        # merve, a node build dependency) doesn't get rebuilt against it, node/npm
+        # break with "Library not loaded" -- confirmed hitting this on two separate
+        # machines. Detected generically (node itself, not any specific formula)
+        # since tomorrow's stale dependent will have a different name.
+        if ! node --version >/dev/null 2>&1; then
+          echo "node is broken (likely a stale bottled dependency) -- running brew upgrade to self-heal..."
+          brew upgrade 2>&1 || true
+        fi
+
         if [ -f "$HOME/.config/opencode/opencode.json" ]; then
           echo "Patching opencode.json with correct home path..."
           ${pkgs.gnused}/bin/sed -i "s|__HOME__|$HOME|g" "$HOME/.config/opencode/opencode.json"
