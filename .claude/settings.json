@@ -109,7 +109,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "claudetui statusline"
+    "command": "claudetui statusline --compact"
   },
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true,

@@ -32,16 +32,33 @@ if its anchor text is missing, i.e. upstream changed the file it targets.
    two separate bars with single-letter labels (S/W) and a bare reset-time
    countdown, which didn't say what window was being measured or give any
    sense of when a limit would actually be hit. Adds format_usage_constraint(),
-   a single combined widget: whichever of the four tracked windows
-   (five_hour, seven_day, seven_day_sonnet, extra_usage) is currently
-   closest to its cap, plainly labeled ("5-hour", "7-day", "7-day
-   (Sonnet)", "Overage"), with a linear projection of time-to-cap when one
-   is computable (known fixed window length, reset timestamp present,
-   usage trending upward, and projected to hit the cap before the window
-   would reset anyway) — falling back to a plain "resets in <time>" when a
-   projection isn't possible. Rewires render.py's line 2, line 3, and
-   compact-line builders to call it once instead of calling
-   format_usage_session + format_usage_weekly separately.
+   a single combined widget: whichever tracked window is currently closest
+   to its cap, plainly labeled, with a linear projection of time-to-cap
+   when one is computable (known fixed window length, reset timestamp
+   present, usage trending upward, and projected to hit the cap before the
+   window would reset anyway) — falling back to a plain "resets in <time>"
+   otherwise. Rewires render.py's line 2, line 3, and compact-line builders
+   to call it once instead of calling format_usage_session +
+   format_usage_weekly separately.
+
+4. Real constraint-window keys + local monthly cost + layout cleanup
+   (transcript.py, formatting.py, display_state.py, render.py,
+   statusline.py, new monthly_cost.py): patch 3 above originally tracked
+   five_hour/seven_day/seven_day_sonnet/extra_usage, but reading
+   code.claude.com/docs/en/statusline showed those last two are fields of
+   the separate /api/oauth/usage HTTP response (network.py's fetch_usage())
+   -- a function statusline.py's real render path never calls. The stdin
+   `rate_limits` object Claude Code actually hands the statusline only ever
+   carries five_hour, seven_day, and spend_limit (a work/gateway account's
+   dollar-budget cap, Claude Code v2.1.251+). transcript.py's
+   _build_usage_from_rate_limits() didn't pass spend_limit through at all,
+   so a work account with a real $ budget cap had no way to show it even
+   though Claude Code was already handing it over. Swaps the key set to the
+   real three, adds a new monthly_cost.py module (a local $ estimate summed
+   from this machine's own Claude Code session transcripts, priced through
+   claude_tui_core.models' existing pricing table -- see that module's
+   docstring for caveats), and reworks the compact line to drop the model
+   name and append the monthly estimate after the usage widget.
 """
 
 import sys
@@ -552,6 +569,325 @@ NEW_RENDER_COMPACT = '''    if ds.usage:
         if usage_str:
             parts.append(usage_str)'''
 
+# --- Patch 4: real constraint-window keys + local monthly cost + layout ----
+
+OLD_TRANSCRIPT_KEYS = '''    for key in ("five_hour", "seven_day"):'''
+NEW_TRANSCRIPT_KEYS = '''    for key in ("five_hour", "seven_day", "spend_limit"):'''
+
+OLD_REAL_KEYS_BLOCK = '''# nix-darwin: combined-usage-widget patch
+# Single combined usage widget: one %, plainly labeled with which window it
+# is, and (when computable) a projected time to hitting that window's cap --
+# replacing the separate S/W bars, which gave no sense of what was being
+# measured or when it would actually bind. format_usage_session/
+# format_usage_weekly above are left in place (still covered by upstream's
+# own tests) but are no longer called from render.py after this patch.
+_CONSTRAINT_LABELS = {
+    "five_hour": "5-hour",
+    "seven_day": "7-day",
+    "seven_day_sonnet": "7-day (Sonnet)",
+    "extra_usage": "Overage",
+}
+
+# Fixed, documented window lengths for Claude's rate-limit windows, used to
+# project "time until this window hits its cap" from a single utilization%
+# reading. extra_usage has no documented fixed window length (it may be a
+# purchased balance with no rolling reset) so it's deliberately absent here:
+# no projection is attempted for it, only the plain percentage.
+_CONSTRAINT_WINDOW_SECONDS = {
+    "five_hour": 5 * 3600,
+    "seven_day": 7 * 86400,
+    "seven_day_sonnet": 7 * 86400,
+}
+
+_ALL_CONSTRAINT_KEYS = ("five_hour", "seven_day", "seven_day_sonnet", "extra_usage")'''
+
+NEW_REAL_KEYS_BLOCK = '''# nix-darwin: combined-usage-widget patch
+# Single combined usage widget: one %, plainly labeled with which window it
+# is, and (when computable) a projected time to hitting that window's cap --
+# replacing the separate S/W bars, which gave no sense of what was being
+# measured or when it would actually bind. format_usage_session/
+# format_usage_weekly above are left in place (still covered by upstream's
+# own tests) but are no longer called from render.py after this patch.
+#
+# Key set corrected 2026-09-21 after reading code.claude.com/docs/en/statusline:
+# the real stdin `rate_limits` object Claude Code hands the statusline only
+# ever carries five_hour, seven_day, and spend_limit (the last one only
+# "behind a Claude apps gateway that sets a spend limit for you", Claude Code
+# v2.1.251+) -- seven_day_sonnet/extra_usage were fields of the separate
+# /api/oauth/usage HTTP response that fetch_usage() (network.py) calls, but
+# that function is never actually invoked by statusline.py's real render
+# path, so those two keys could never appear in practice. spend_limit is the
+# real mechanism for a work/gateway account's dollar-budget cap.
+_CONSTRAINT_LABELS = {
+    "five_hour": "5-hour",
+    "seven_day": "7-day",
+    "spend_limit": "Spend limit",
+}
+
+# Fixed, documented window lengths for Claude's rate-limit windows, used to
+# project "time until this window hits its cap" from a single utilization%
+# reading. spend_limit's reset period is gateway-configured, not a documented
+# fixed duration, so it's deliberately absent here: no projection is
+# attempted for it, only the plain percentage (which can exceed 100 -- see
+# format_usage_constraint).
+_CONSTRAINT_WINDOW_SECONDS = {
+    "five_hour": 5 * 3600,
+    "seven_day": 7 * 86400,
+}
+
+_ALL_CONSTRAINT_KEYS = ("five_hour", "seven_day", "spend_limit")'''
+
+OLD_DISPLAY_STATE = '''    cache_pct: int = 0
+    cost_per_turn: str = ""
+
+    # Layout
+    bar_length: int = 20'''
+
+NEW_DISPLAY_STATE = '''    cache_pct: int = 0
+    cost_per_turn: str = ""
+    monthly_cost_part: str = ""
+
+    # Layout
+    bar_length: int = 20'''
+
+OLD_COMPACT_LINE_V2 = '''def build_compact_line(ds):
+    """Build compact single-line from DisplayState."""
+    parts = []
+    if is_visible("line1", "model"):
+        parts.append(f"{BOLD}{MAGENTA}{ds.model}{RESET}")
+    if is_visible("line1", "context_bar"):
+        ctx = f"{ds.bar}"
+        if is_visible("line1", "token_count"):
+            ctx += f" {format_token_suffix(ds.tokens_str, ds.limit_str)}"
+        parts.append(ctx)
+    if ds.usage:
+        usage_str = format_usage_constraint(ds.usage, length=ds.bar_length)
+        if usage_str:
+            parts.append(usage_str)
+    sep = f" {GRAY}⋮{RESET} "
+    return sep.join(parts) if parts else ""'''
+
+NEW_COMPACT_LINE_V2 = '''def build_compact_line(ds):
+    """Build compact single-line from DisplayState.
+
+    nix-darwin: drops the model name (redundant with what's visible
+    elsewhere in the UI per user request) and appends a local monthly-cost
+    estimate after the usage widget."""
+    parts = []
+    if is_visible("line1", "context_bar"):
+        ctx = f"{ds.bar}"
+        if is_visible("line1", "token_count"):
+            ctx += f" {format_token_suffix(ds.tokens_str, ds.limit_str)}"
+        parts.append(ctx)
+    if ds.usage:
+        usage_str = format_usage_constraint(ds.usage, length=ds.bar_length)
+        if usage_str:
+            if ds.monthly_cost_part:
+                usage_str += f" {GRAY}·{RESET} {ds.monthly_cost_part}"
+            parts.append(usage_str)
+    elif ds.monthly_cost_part:
+        parts.append(ds.monthly_cost_part)
+    sep = f" {GRAY}⋮{RESET} "
+    return sep.join(parts) if parts else ""'''
+
+OLD_STATUSLINE_IMPORT = '''from statusline_core.transcript import (
+    parse_input_data,
+    parse_transcript,
+)
+from claude_tui_components.utils import format_tokens'''
+
+NEW_STATUSLINE_IMPORT = '''from statusline_core.transcript import (
+    parse_input_data,
+    parse_transcript,
+)
+from claude_tui_components.utils import format_tokens
+from claude_tui_core.monthly_cost import fetch_monthly_cost, format_monthly_cost'''
+
+OLD_STATUSLINE_COMPUTE = '''    usage = basic["usage"]
+
+    ds = DisplayState('''
+
+NEW_STATUSLINE_COMPUTE = '''    usage = basic["usage"]
+    monthly_cost_part = format_monthly_cost(fetch_monthly_cost(background=True))
+
+    ds = DisplayState('''
+
+OLD_STATUSLINE_WIRING = '''        cost_per_turn=calculate_cost_per_turn(cost, metrics["turn_count"]),
+        bar_length=bar_length,
+    )'''
+
+NEW_STATUSLINE_WIRING = '''        cost_per_turn=calculate_cost_per_turn(cost, metrics["turn_count"]),
+        bar_length=bar_length,
+        monthly_cost_part=monthly_cost_part,
+    )'''
+
+MONTHLY_COST_MODULE_SOURCE = '''# nix-darwin: local-monthly-cost patch
+"""Local monthly-cost estimate for the statusline.
+
+Not a real billed total -- there is no local API for that (Anthropic's
+Usage & Cost Admin API and the Claude Enterprise Analytics API both require
+an org admin credential this account may not have). This instead recomputes
+an estimate from this machine's own Claude Code session transcripts: sums
+each session ending in the current UTC calendar month, using each session's
+own token counts priced through claude_tui_core.models' pricing table --
+the same list-price convention claude-code-session-stats already uses for
+its own per-session cost breakdown.
+
+Caveats, worth surfacing to the user:
+- Local-machine only. Doesn't see sessions run on another device, or any
+  Console/API usage outside Claude Code.
+- Doesn't distinguish which Claude account was active per session --
+  personal and work usage on the same machine get summed together.
+- List-price estimate. For a Pro/Max/Enterprise seat this isn't what's
+  actually billed (flat subscription, not per-token); for a gateway/API
+  account it should track real spend reasonably closely.
+- A session that started last month and continued into this one has its
+  *entire* cost attributed to whichever month its last message landed in
+  (matching the granularity claude-code-session-stats already uses).
+"""
+
+import importlib.util
+import os
+import threading
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+from .network import _read_json_file, _write_json_file, _try_acquire_lock, _release_lock
+from .settings import get_setting
+
+CLAUDE_DIR = ".claude"
+MONTHLY_COST_CACHE_PATH = os.path.join(os.path.expanduser("~"), CLAUDE_DIR, "monthly-cost-cache.json")
+MONTHLY_COST_LOCK_PATH = MONTHLY_COST_CACHE_PATH + ".lock"
+
+# claude_tui_core/monthly_cost.py -> libexec/claude_tui_core/.. -> libexec/
+_SESSION_STATS_PATH = (
+    Path(__file__).resolve().parent.parent / "claude-code-session-stats" / "session-stats.py"
+)
+
+_session_stats_module = None
+_session_stats_load_failed = False
+
+
+def _load_session_stats_module():
+    """Dynamically load the sibling session-stats.py script as a module.
+
+    It's a standalone script (hyphenated dir/file names, not a package), so
+    it's loaded by path rather than imported by name -- the same pattern
+    settings.py's load_widget already uses for widget files.
+    """
+    global _session_stats_module, _session_stats_load_failed
+    if _session_stats_module is not None:
+        return _session_stats_module
+    if _session_stats_load_failed:
+        return None
+    if not _SESSION_STATS_PATH.exists():
+        _session_stats_load_failed = True
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location("claude_code_session_stats", _SESSION_STATS_PATH)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    except Exception:
+        _session_stats_load_failed = True
+        return None
+    _session_stats_module = mod
+    return mod
+
+
+def _current_month_key(now=None):
+    now = now or datetime.now(timezone.utc)
+    return f"{now.year:04d}-{now.month:02d}"
+
+
+def _compute_monthly_cost():
+    mod = _load_session_stats_module()
+    if mod is None:
+        return None
+
+    month_key = _current_month_key()
+    total = 0.0
+    try:
+        sessions = mod.find_sessions(days=32)
+    except Exception:
+        return None
+
+    for s in sessions:
+        try:
+            report = mod.parse_session(s["path"])
+        except Exception:
+            continue
+        end_time = report.get("end_time")
+        if not end_time:
+            continue
+        try:
+            end_dt = datetime.fromisoformat(str(end_time).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if _current_month_key(end_dt) != month_key:
+            continue
+        total += report.get("cost", {}).get("total", 0.0)
+
+    return total
+
+
+def fetch_monthly_cost(background=False):
+    """Cached local monthly-cost estimate. Returns a float, or None when
+    disabled, unavailable (session-stats.py missing), or never yet computed
+    and a background refresh was just kicked off."""
+    if not get_setting("monthly_cost", "enabled", default=True):
+        return None
+
+    ttl = max(300, get_setting("monthly_cost", "ttl", default=900))
+    cache = _read_json_file(MONTHLY_COST_CACHE_PATH)
+    now = time.time()
+    month_key = _current_month_key()
+
+    is_stale = (
+        not cache
+        or cache.get("month") != month_key
+        or now - cache.get("fetched_at", 0) >= ttl
+    )
+    if not is_stale:
+        return cache.get("total")
+
+    if background:
+        t = threading.Thread(target=fetch_monthly_cost, kwargs={"background": False}, daemon=True)
+        t.start()
+        return cache.get("total") if cache and cache.get("month") == month_key else None
+
+    lock_fd = _try_acquire_lock(MONTHLY_COST_LOCK_PATH)
+    if lock_fd is None:
+        return cache.get("total") if cache else None
+
+    try:
+        refreshed = _read_json_file(MONTHLY_COST_CACHE_PATH)
+        if refreshed and refreshed.get("month") == month_key and now - refreshed.get("fetched_at", 0) < ttl:
+            return refreshed.get("total")
+
+        total = _compute_monthly_cost()
+        if total is None:
+            return cache.get("total") if cache and cache.get("month") == month_key else None
+
+        fresh = {"fetched_at": now, "month": month_key, "total": total}
+        try:
+            _write_json_file(MONTHLY_COST_CACHE_PATH, fresh)
+        except OSError:
+            pass
+        return total
+    finally:
+        _release_lock(lock_fd)
+
+
+def format_monthly_cost(total):
+    """Format a monthly-cost float as a compact '$X.XX/mo' suffix, or ''."""
+    if total is None:
+        return ""
+    from .formatting import GRAY, RESET
+
+    return f"{GRAY}${total:.2f}/mo{RESET}"
+'''
+
 
 def _apply_patch(target, marker, replacements, label):
     """Apply one or more (old, new) replacements to target as a single unit,
@@ -587,6 +923,26 @@ def _apply_patch(target, marker, replacements, label):
 
     _os.replace(tmp, target)
     print(f"[claude-tui-usage-patch] {label} patched {target}")
+
+def _ensure_file(target, content, label):
+    """Write content to target if it's not already there. For a brand-new
+    file wholly owned by this patch script (nothing to merge with upstream
+    changes), so an idempotent overwrite is simpler than an anchor check."""
+    try:
+        with open(target, "r") as f:
+            if f.read() == content:
+                print(f"[claude-tui-usage-patch] {label} already up to date")
+                return
+    except OSError:
+        pass
+    tmp = target + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(content)
+    import os as _os
+
+    _os.replace(tmp, target)
+    print(f"[claude-tui-usage-patch] {label} wrote {target}")
+
 
 
 def main() -> int:
@@ -635,6 +991,45 @@ def main() -> int:
             (OLD_RENDER_COMPACT, NEW_RENDER_COMPACT),
         ],
         "combined usage widget (render.py)",
+    )
+    _apply_patch(
+        f"{libexec}/claude-code-statusline/statusline_core/transcript.py",
+        "spend_limit",
+        [(OLD_TRANSCRIPT_KEYS, NEW_TRANSCRIPT_KEYS)],
+        "real constraint keys (transcript.py spend_limit passthrough)",
+    )
+    _apply_patch(
+        f"{libexec}/claude_tui_core/formatting.py",
+        '"spend_limit": "Spend limit"',
+        [(OLD_REAL_KEYS_BLOCK, NEW_REAL_KEYS_BLOCK)],
+        "real constraint keys (formatting.py)",
+    )
+    _ensure_file(
+        f"{libexec}/claude_tui_core/monthly_cost.py",
+        MONTHLY_COST_MODULE_SOURCE,
+        "monthly cost module",
+    )
+    _apply_patch(
+        f"{libexec}/claude-code-statusline/statusline_core/display_state.py",
+        "monthly_cost_part",
+        [(OLD_DISPLAY_STATE, NEW_DISPLAY_STATE)],
+        "monthly cost (display_state.py field)",
+    )
+    _apply_patch(
+        f"{libexec}/claude-code-statusline/statusline_core/render.py",
+        "monthly_cost_part",
+        [(OLD_COMPACT_LINE_V2, NEW_COMPACT_LINE_V2)],
+        "monthly cost + drop model (render.py compact line)",
+    )
+    _apply_patch(
+        f"{libexec}/claude-code-statusline/statusline.py",
+        "fetch_monthly_cost",
+        [
+            (OLD_STATUSLINE_IMPORT, NEW_STATUSLINE_IMPORT),
+            (OLD_STATUSLINE_COMPUTE, NEW_STATUSLINE_COMPUTE),
+            (OLD_STATUSLINE_WIRING, NEW_STATUSLINE_WIRING),
+        ],
+        "monthly cost (statusline.py wiring)",
     )
     return 0
 
