@@ -69,16 +69,6 @@
     ],
     "SessionStart": [
       {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash '/Users/jrollet/.claude/hooks/herdr-agent-state.sh' session",
-            "timeout": 10
-          }
-        ]
-      },
-      {
         "matcher": "",
         "hooks": [
           {
@@ -92,6 +82,16 @@
           {
             "type": "command",
             "command": "node \"/Users/jrollet/.claude-global/hooks/token-optimizer/session-start.mjs\""
+          }
+        ]
+      },
+      {
+        "matcher": "^(startup|resume|clear|compact|fork)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash '/Users/jrollet/.claude/hooks/herdr-agent-state.sh' session",
+            "timeout": 10
           }
         ]
       }
