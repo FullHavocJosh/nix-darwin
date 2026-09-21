@@ -11,6 +11,13 @@
 }:
 let
 
+  # See claude-tui-usage-patch.py for why: isolates the statusline's
+  # session/week usage cache per Claude Code account instead of one shared
+  # ~/.claude/usage-cache.json bleeding numbers between accounts.
+  claudeTuiUsagePatchScript = pkgs.writeText "claude-tui-usage-patch.py" (
+    builtins.readFile ./claude-tui-usage-patch.py
+  );
+
   claudeTuiSetup = pkgs.writeShellScript "claude-tui-setup" ''
         #!/usr/bin/env bash
         set -euo pipefail
@@ -420,6 +427,12 @@ in
         (
           ${claudeTuiSetup}
         ) || echo "WARNING: claude-tui setup failed — continuing activation" >&2
+
+        (
+          if command -v claudetui &>/dev/null; then
+            python3 "${claudeTuiUsagePatchScript}" "/opt/homebrew/opt/claude-tui/libexec"
+          fi
+        ) || echo "WARNING: claude-tui usage-cache patch failed — continuing activation" >&2
 
         (
           ${tokenOptimizationSetup}

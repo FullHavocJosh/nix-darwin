@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"/Users/jrollet/.claude-global/hooks/token-optimizer/pretooluse-router.mjs\""
+            "command": "if [ -f \"$HOME/.claude-global/hooks/token-optimizer/pretooluse-router.mjs\" ]; then node \"$HOME/.claude-global/hooks/token-optimizer/pretooluse-router.mjs\"; fi"
           }
         ]
       }
@@ -81,7 +81,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"/Users/jrollet/.claude-global/hooks/token-optimizer/session-start.mjs\""
+            "command": "if [ -f \"$HOME/.claude-global/hooks/token-optimizer/session-start.mjs\" ]; then node \"$HOME/.claude-global/hooks/token-optimizer/session-start.mjs\"; fi"
           }
         ]
       },
@@ -90,7 +90,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash '/Users/jrollet/.claude/hooks/herdr-agent-state.sh' session",
+            "command": "if [ -f \"$HOME/.claude/hooks/herdr-agent-state.sh\" ]; then bash \"$HOME/.claude/hooks/herdr-agent-state.sh\" session; fi",
             "timeout": 10
           }
         ]
@@ -101,7 +101,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"/Users/jrollet/.claude-global/hooks/token-optimizer/precompact-optimize.mjs\""
+            "command": "if [ -f \"$HOME/.claude-global/hooks/token-optimizer/precompact-optimize.mjs\" ]; then node \"$HOME/.claude-global/hooks/token-optimizer/precompact-optimize.mjs\"; fi"
           }
         ]
       }
