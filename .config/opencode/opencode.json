@@ -246,6 +246,25 @@
         "/Users/jrollet/mcp-context-guardian-perfectserve/dist/index.js"
       ]
     },
+    "context-guardian-fullhavoc": {
+      "type": "local",
+      "command": [
+        "node",
+        "/Users/jrollet/mcp-context-guardian-fullhavoc/dist/index.js"
+      ]
+    },
+    "token-optimizer-mcp": {
+      "type": "local",
+      "command": ["token-optimizer-mcp"]
+    },
+    "token-savior": {
+      "type": "local",
+      "command": ["/Users/jrollet/bench/venv-tokensavior/bin/token-savior"],
+      "environment": {
+        "WORKSPACE_ROOTS": "/Users/jrollet",
+        "TOKEN_SAVIOR_PROFILE": "core"
+      }
+    },
     "memory": {
       "type": "local",
       "command": ["npx", "@modelcontextprotocol/server-memory"]
