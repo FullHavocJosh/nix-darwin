@@ -29,7 +29,12 @@
     "webfetch": true,
     "todoread": true,
     "todowrite": true,
-    "patch": true
+    "patch": true,
+    "token-savior_replace_symbol_source": false,
+    "token-savior_insert_near_symbol": false,
+    "token-savior_get_edit_context": false,
+    "token-savior_search_codebase": false,
+    "token-savior_ts_search": false
   },
   "formatter": {
     "prettier": {
