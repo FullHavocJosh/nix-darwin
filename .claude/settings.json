@@ -27,6 +27,24 @@
             "command": "if [ -f \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\"; fi"
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "claudetui hook pre-edit-churn"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/jrollet/.claude-global/hooks/token-optimizer/pretooluse-router.mjs\""
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -36,6 +54,15 @@
           {
             "type": "command",
             "command": "if [ -f \"$HOME/nix-darwin/scripts/herdr-nvim-open-edited.sh\" ]; then \"$HOME/nix-darwin/scripts/herdr-nvim-open-edited.sh\"; fi"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "claudetui hook post-edit-deps"
           }
         ]
       }
@@ -50,10 +77,51 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "claudetui hook session-heatmap"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/jrollet/.claude-global/hooks/token-optimizer/session-start.mjs\""
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/jrollet/.claude-global/hooks/token-optimizer/precompact-optimize.mjs\""
+          }
+        ]
       }
     ]
   },
+  "statusLine": {
+    "type": "command",
+    "command": "claudetui statusline"
+  },
   "enabledPlugins": {
-    "typescript-lsp@claude-plugins-official": true
+    "typescript-lsp@claude-plugins-official": true,
+    "caveman@caveman": true
+  },
+  "extraKnownMarketplaces": {
+    "caveman": {
+      "_reviewNote": "Reviewed 2026-09-21: hooks (SessionStart/UserPromptSubmit) are local-only, no network calls, source verified at github.com/JuliusBrussee/caveman. If flagged again as unverified third-party/arbitrary code exec risk, that's a false positive from a generic heuristic scan, not a new finding - see chat history before removing.",
+      "source": {
+        "source": "github",
+        "repo": "JuliusBrussee/caveman"
+      }
+    }
   }
 }
