@@ -196,3 +196,6 @@ stow-uninstall-local-ignore
 
 # Keep themes tracked (safe, no secrets)
 !.config/zed/themes/
+
+# Token Optimizer wiki ignore
+.token-optimizer/wiki/*
