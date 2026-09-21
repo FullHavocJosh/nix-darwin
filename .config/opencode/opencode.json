@@ -324,7 +324,7 @@
       "type": "local",
       "command": ["uvx", "terraform-cloud-mcp"],
       "environment": {
-        "TFC_TOKEN": "${TFC_TOKEN}"
+        "TFC_TOKEN": "{env:TFC_TOKEN}"
       }
     },
     "terraform-hcp": {
@@ -339,23 +339,23 @@
         "hashicorp/terraform-mcp-server:latest"
       ],
       "environment": {
-        "TFE_TOKEN": "${TFE_TOKEN}"
+        "TFE_TOKEN": "{env:TFE_TOKEN}"
       }
     },
     "hetzner": {
       "type": "local",
       "command": ["npx", "-y", "@lazyants/hetzner-mcp-server@2.5.0"],
       "environment": {
-        "HETZNER_API_TOKEN": "${HETZNER_API_TOKEN}"
+        "HETZNER_API_TOKEN": "{env:HETZNER_API_TOKEN}"
       }
     },
     "opnsense": {
       "type": "local",
       "command": ["npx", "-y", "@richard-stovall/opnsense-mcp-server@0.5.3"],
       "environment": {
-        "OPNSENSE_HOST": "${OPNSENSE_HOST}",
-        "OPNSENSE_API_KEY": "${OPNSENSE_API_KEY}",
-        "OPNSENSE_API_SECRET": "${OPNSENSE_API_SECRET}",
+        "OPNSENSE_HOST": "{env:OPNSENSE_HOST}",
+        "OPNSENSE_API_KEY": "{env:OPNSENSE_API_KEY}",
+        "OPNSENSE_API_SECRET": "{env:OPNSENSE_API_SECRET}",
         "OPNSENSE_VERIFY_SSL": "false"
       }
     },
@@ -363,8 +363,8 @@
       "type": "local",
       "command": ["uvx", "truenas-mcp-server@3.0.2"],
       "environment": {
-        "TRUENAS_URL": "${TRUENAS_URL}",
-        "TRUENAS_API_KEY": "${TRUENAS_API_KEY}"
+        "TRUENAS_URL": "{env:TRUENAS_URL}",
+        "TRUENAS_API_KEY": "{env:TRUENAS_API_KEY}"
       }
     },
     "awx": {
@@ -376,8 +376,8 @@
         "awx-mcp-server"
       ],
       "environment": {
-        "AWX_URL": "${AWX_URL}",
-        "AWX_TOKEN": "${AWX_TOKEN}"
+        "AWX_URL": "{env:AWX_URL}",
+        "AWX_TOKEN": "{env:AWX_TOKEN}"
       }
     },
     "atlassian": {
@@ -385,8 +385,8 @@
       "command": ["npx", "-y", "jira-mcp@1.0.1"],
       "environment": {
         "JIRA_INSTANCE_URL": "https://smartpager.atlassian.net",
-        "JIRA_USER_EMAIL": "${ATLASSIAN_EMAIL}",
-        "JIRA_API_KEY": "${ATLASSIAN_API_TOKEN}"
+        "JIRA_USER_EMAIL": "{env:ATLASSIAN_EMAIL}",
+        "JIRA_API_KEY": "{env:ATLASSIAN_API_TOKEN}"
       }
     },
     "doppler": {
