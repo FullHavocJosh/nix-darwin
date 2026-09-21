@@ -23,7 +23,25 @@ if its anchor text is missing, i.e. upstream changed the file it targets.
    (purchased overage), either of which can bind before the plain weekly
    figure does — so a real, imminent constraint on one of those could go
    unshown. Patches format_usage_weekly() to render whichever of the three
-   is currently closest to its cap.
+   is currently closest to its cap. Superseded for actual rendering by
+   patch 3 below; left in place (and still covered by upstream's own
+   tests) since nothing else references it.
+
+3. Combined single usage widget (formatting.py, network.py, api_clients.py,
+   render.py): the statusline showed session (5-hour) and weekly usage as
+   two separate bars with single-letter labels (S/W) and a bare reset-time
+   countdown, which didn't say what window was being measured or give any
+   sense of when a limit would actually be hit. Adds format_usage_constraint(),
+   a single combined widget: whichever of the four tracked windows
+   (five_hour, seven_day, seven_day_sonnet, extra_usage) is currently
+   closest to its cap, plainly labeled ("5-hour", "7-day", "7-day
+   (Sonnet)", "Overage"), with a linear projection of time-to-cap when one
+   is computable (known fixed window length, reset timestamp present,
+   usage trending upward, and projected to hit the cap before the window
+   would reset anyway) — falling back to a plain "resets in <time>" when a
+   projection isn't possible. Rewires render.py's line 2, line 3, and
+   compact-line builders to call it once instead of calling
+   format_usage_session + format_usage_weekly separately.
 """
 
 import sys
@@ -312,6 +330,228 @@ def format_usage_weekly(usage_data, length=20):
     window = _most_constraining_window(usage_data, _WEEKLY_CONSTRAINT_KEYS)
     return _format_usage_bar_from_window(window, "W", length) if window else ""'''
 
+# --- Patch 3: single combined usage widget ---------------------------------
+
+COMBINED_MARKER = "# nix-darwin: combined-usage-widget patch"
+
+OLD_DATETIME_IMPORT = "from datetime import datetime, timezone"
+NEW_DATETIME_IMPORT = "from datetime import datetime, timedelta, timezone"
+
+# Anchored on format_usage_weekly's body as patch 2 left it -- patches apply
+# in order, so this targets the post-patch-2 source, not the original.
+OLD_TAIL_FOR_COMBINED = '''def format_usage_weekly(usage_data, length=20):
+    """Format whichever weekly-ish usage window (seven_day, seven_day_sonnet,
+    extra_usage) is currently closest to its cap."""
+    if not usage_data:
+        return ""
+    window = _most_constraining_window(usage_data, _WEEKLY_CONSTRAINT_KEYS)
+    return _format_usage_bar_from_window(window, "W", length) if window else ""'''
+
+NEW_TAIL_FOR_COMBINED = OLD_TAIL_FOR_COMBINED + '''
+
+
+''' + COMBINED_MARKER + '''
+# Single combined usage widget: one %, plainly labeled with which window it
+# is, and (when computable) a projected time to hitting that window's cap --
+# replacing the separate S/W bars, which gave no sense of what was being
+# measured or when it would actually bind. format_usage_session/
+# format_usage_weekly above are left in place (still covered by upstream's
+# own tests) but are no longer called from render.py after this patch.
+_CONSTRAINT_LABELS = {
+    "five_hour": "5-hour",
+    "seven_day": "7-day",
+    "seven_day_sonnet": "7-day (Sonnet)",
+    "extra_usage": "Overage",
+}
+
+# Fixed, documented window lengths for Claude's rate-limit windows, used to
+# project "time until this window hits its cap" from a single utilization%
+# reading. extra_usage has no documented fixed window length (it may be a
+# purchased balance with no rolling reset) so it's deliberately absent here:
+# no projection is attempted for it, only the plain percentage.
+_CONSTRAINT_WINDOW_SECONDS = {
+    "five_hour": 5 * 3600,
+    "seven_day": 7 * 86400,
+    "seven_day_sonnet": 7 * 86400,
+}
+
+_ALL_CONSTRAINT_KEYS = ("five_hour", "seven_day", "seven_day_sonnet", "extra_usage")
+
+
+def _most_constraining_window_and_key(usage_data, keys):
+    """Like _most_constraining_window, but also returns which key won."""
+    best_key, best, best_pct = None, None, -1
+    for key in keys:
+        window = usage_data.get(key)
+        if not isinstance(window, dict):
+            continue
+        pct = window.get("utilization")
+        if not isinstance(pct, (int, float)):
+            continue
+        if pct > best_pct:
+            best_key, best, best_pct = key, window, pct
+    return best_key, best
+
+
+def _parse_iso(reset_iso):
+    if not isinstance(reset_iso, str) or not reset_iso:
+        return None
+    try:
+        return datetime.fromisoformat(reset_iso.replace("Z", UTC_OFFSET))
+    except ValueError:
+        return None
+
+
+def _format_hm(seconds):
+    seconds = max(0, int(seconds))
+    h, m = seconds // 3600, (seconds % 3600) // 60
+    return f"{h}h{m:02d}m" if h > 0 else f"{m}m"
+
+
+# Minimum time into a window before trusting a linear-rate projection. Right
+# after a window resets, elapsed is tiny, so even trivial usage produces a
+# wildly inflated rate estimate (e.g. 1% two minutes in projects hitting the
+# cap in the next few minutes) -- a false alarm, not a real constraint.
+_MIN_ELAPSED_FOR_PROJECTION_SECONDS = 300
+
+
+def _project_time_to_cap(key, pct, reset_dt):
+    """Linear projection of when this window's usage would hit 100%, from
+    its known fixed duration and current utilization. None when: unknown
+    window duration, no reset timestamp, not enough elapsed time yet for a
+    stable rate estimate, usage isn't trending upward, or the window would
+    reset before the cap is reached."""
+    duration = _CONSTRAINT_WINDOW_SECONDS.get(key)
+    if duration is None or reset_dt is None or pct is None or pct <= 0:
+        return None
+    now = datetime.now(timezone.utc)
+    window_start = reset_dt - timedelta(seconds=duration)
+    elapsed = (now - window_start).total_seconds()
+    if elapsed < _MIN_ELAPSED_FOR_PROJECTION_SECONDS:
+        return None
+    rate = pct / elapsed
+    if rate <= 0:
+        return None
+    eta_seconds = (100 - pct) / rate
+    seconds_to_reset = (reset_dt - now).total_seconds()
+    if seconds_to_reset > 0 and eta_seconds > seconds_to_reset:
+        return None
+    return eta_seconds
+
+
+def format_usage_constraint(usage_data, length=20):
+    """Single combined usage widget: whichever tracked window (5-hour
+    session, 7-day, 7-day Sonnet-only, purchased overage) is currently
+    closest to its cap -- one %, plainly labeled with which window it is,
+    and a projected time to hitting that cap when one can be computed."""
+    from claude_tui_components.lines import build_bar_line
+
+    if not usage_data:
+        return ""
+    key, window = _most_constraining_window_and_key(usage_data, _ALL_CONSTRAINT_KEYS)
+    if window is None:
+        return ""
+    pct = window.get("utilization")
+    if not isinstance(pct, (int, float)):
+        return ""
+
+    ratio = min(pct / 100.0, 1.0)
+    label = _CONSTRAINT_LABELS.get(key, key)
+    reset_dt = _parse_iso(window.get("resets_at", ""))
+    eta_seconds = _project_time_to_cap(key, pct, reset_dt)
+
+    if eta_seconds is not None:
+        color = RED if ratio >= 0.8 else ORANGE if ratio >= 0.55 else YELLOW
+        suffix = f"{color}~{_format_hm(eta_seconds)} to limit{RESET}"
+    else:
+        countdown = _format_reset_countdown(window.get("resets_at", ""))
+        suffix = f"{GRAY}resets in {countdown}{RESET}" if countdown else ""
+
+    return build_bar_line(ratio, length, pct_label=label, suffix=suffix)'''
+
+OLD_API_CLIENTS = '''from claude_tui_core.network import (
+    fetch_api_status,
+    format_api_status,
+    fetch_usage,
+    format_usage_session,
+    format_usage_weekly,
+)
+
+__all__ = [
+    "fetch_api_status",
+    "format_api_status",
+    "fetch_usage",
+    "format_usage_session",
+    "format_usage_weekly",
+]'''
+
+NEW_API_CLIENTS = '''from claude_tui_core.network import (
+    fetch_api_status,
+    format_api_status,
+    fetch_usage,
+    format_usage_session,
+    format_usage_weekly,
+    format_usage_constraint,
+)
+
+__all__ = [
+    "fetch_api_status",
+    "format_api_status",
+    "fetch_usage",
+    "format_usage_session",
+    "format_usage_weekly",
+    "format_usage_constraint",
+]'''
+
+OLD_NETWORK_REEXPORT = '''from .formatting import (  # noqa: E402
+    format_api_status,
+    format_usage_session,
+    format_usage_weekly,
+)'''
+
+NEW_NETWORK_REEXPORT = '''from .formatting import (  # noqa: E402
+    format_api_status,
+    format_usage_session,
+    format_usage_weekly,
+    format_usage_constraint,
+)'''
+
+OLD_RENDER_IMPORT = "from .api_clients import format_usage_session, format_usage_weekly"
+NEW_RENDER_IMPORT = "from .api_clients import format_usage_constraint"
+
+OLD_RENDER_LINE2 = '''    if is_visible("line2", "usage"):
+        usage_str = format_usage_session(ds.usage, length=ds.bar_length)
+        if usage_str:
+            parts.append(usage_str)'''
+
+NEW_RENDER_LINE2 = '''    if is_visible("line2", "usage"):
+        usage_str = format_usage_constraint(ds.usage, length=ds.bar_length)
+        if usage_str:
+            parts.append(usage_str)'''
+
+OLD_RENDER_LINE3 = '''    lines = []
+    if is_visible("line3", "usage_weekly"):
+        weekly_str = format_usage_weekly(ds.usage, length=ds.bar_length)
+        if weekly_str:
+            lines.append(weekly_str)
+    wrapped = wrap_line_parts('''
+
+NEW_RENDER_LINE3 = '''    lines = []
+    wrapped = wrap_line_parts('''
+
+OLD_RENDER_COMPACT = '''    if ds.usage:
+        session = format_usage_session(ds.usage, length=ds.bar_length)
+        weekly = format_usage_weekly(ds.usage, length=ds.bar_length)
+        if session:
+            parts.append(session)
+        if weekly:
+            parts.append(weekly)'''
+
+NEW_RENDER_COMPACT = '''    if ds.usage:
+        usage_str = format_usage_constraint(ds.usage, length=ds.bar_length)
+        if usage_str:
+            parts.append(usage_str)'''
+
 
 def _apply_patch(target, marker, replacements, label):
     """Apply one or more (old, new) replacements to target as a single unit,
@@ -366,6 +606,35 @@ def main() -> int:
         FORMATTING_MARKER,
         [(OLD_USAGE_BAR_FNS, NEW_USAGE_BAR_FNS)],
         "most-constraining weekly window",
+    )
+    _apply_patch(
+        f"{libexec}/claude_tui_core/formatting.py",
+        COMBINED_MARKER,
+        [(OLD_DATETIME_IMPORT, NEW_DATETIME_IMPORT), (OLD_TAIL_FOR_COMBINED, NEW_TAIL_FOR_COMBINED)],
+        "combined usage widget (formatting.py)",
+    )
+    _apply_patch(
+        f"{libexec}/claude_tui_core/network.py",
+        "format_usage_constraint",
+        [(OLD_NETWORK_REEXPORT, NEW_NETWORK_REEXPORT)],
+        "combined usage widget (network.py re-export)",
+    )
+    _apply_patch(
+        f"{libexec}/claude-code-statusline/statusline_core/api_clients.py",
+        "format_usage_constraint",
+        [(OLD_API_CLIENTS, NEW_API_CLIENTS)],
+        "combined usage widget (api_clients.py re-export)",
+    )
+    _apply_patch(
+        f"{libexec}/claude-code-statusline/statusline_core/render.py",
+        "format_usage_constraint",
+        [
+            (OLD_RENDER_IMPORT, NEW_RENDER_IMPORT),
+            (OLD_RENDER_LINE2, NEW_RENDER_LINE2),
+            (OLD_RENDER_LINE3, NEW_RENDER_LINE3),
+            (OLD_RENDER_COMPACT, NEW_RENDER_COMPACT),
+        ],
+        "combined usage widget (render.py)",
     )
     return 0
 
