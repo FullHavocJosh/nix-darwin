@@ -267,45 +267,45 @@
     },
     "memory": {
       "type": "local",
-      "command": ["npx", "@modelcontextprotocol/server-memory"]
+      "command": ["npx", "@modelcontextprotocol/server-memory@2026.8.31"]
     },
     "sequential-thinking": {
       "type": "local",
-      "command": ["npx", "@modelcontextprotocol/server-sequential-thinking"]
+      "command": ["npx", "@modelcontextprotocol/server-sequential-thinking@2026.8.31"]
     },
     "github": {
       "type": "local",
-      "command": ["npx", "@edjl/github-mcp"]
+      "command": ["npx", "@edjl/github-mcp@1.0.8"]
     },
     "terraform": {
       "type": "local",
-      "command": ["npx", "terraform-mcp-server"]
+      "command": ["npx", "terraform-mcp-server@0.13.0"]
     },
     "context7": {
       "type": "local",
-      "command": ["npx", "-y", "@upstash/context7-mcp"]
+      "command": ["npx", "-y", "@upstash/context7-mcp@4.1.1"]
     },
     "aws-core-mcp-server": {
       "type": "local",
-      "command": ["uvx", "awslabs.core-mcp-server@latest"],
+      "command": ["uvx", "awslabs.core-mcp-server@1.0.27"],
       "environment": {
         "FASTMCP_LOG_LEVEL": "ERROR"
       }
     },
     "aws-terraform-mcp": {
       "type": "local",
-      "command": ["uvx", "awslabs.terraform-mcp-server@latest"],
+      "command": ["uvx", "awslabs.terraform-mcp-server@1.0.18"],
       "environment": {
         "FASTMCP_LOG_LEVEL": "ERROR"
       }
     },
     "mcp-server-chart": {
       "type": "local",
-      "command": ["npx", "-y", "@antv/mcp-server-chart"]
+      "command": ["npx", "-y", "@antv/mcp-server-chart@0.9.10"]
     },
     "aws-pricing-mcp-server": {
       "type": "local",
-      "command": ["uvx", "awslabs.aws-pricing-mcp-server@latest"],
+      "command": ["uvx", "awslabs.aws-pricing-mcp-server@1.1.1"],
       "environment": {
         "FASTMCP_LOG_LEVEL": "ERROR",
         "AWS_PROFILE": "services"
@@ -339,14 +339,14 @@
     },
     "hetzner": {
       "type": "local",
-      "command": ["npx", "-y", "@lazyants/hetzner-mcp-server"],
+      "command": ["npx", "-y", "@lazyants/hetzner-mcp-server@2.5.0"],
       "environment": {
         "HETZNER_API_TOKEN": "${HETZNER_API_TOKEN}"
       }
     },
     "opnsense": {
       "type": "local",
-      "command": ["npx", "-y", "@richard-stovall/opnsense-mcp-server"],
+      "command": ["npx", "-y", "@richard-stovall/opnsense-mcp-server@0.5.3"],
       "environment": {
         "OPNSENSE_HOST": "${OPNSENSE_HOST}",
         "OPNSENSE_API_KEY": "${OPNSENSE_API_KEY}",
@@ -356,7 +356,7 @@
     },
     "truenas": {
       "type": "local",
-      "command": ["uvx", "truenas-mcp-server"],
+      "command": ["uvx", "truenas-mcp-server@3.0.2"],
       "environment": {
         "TRUENAS_URL": "${TRUENAS_URL}",
         "TRUENAS_API_KEY": "${TRUENAS_API_KEY}"
@@ -377,7 +377,7 @@
     },
     "atlassian": {
       "type": "local",
-      "command": ["npx", "-y", "jira-mcp"],
+      "command": ["npx", "-y", "jira-mcp@1.0.1"],
       "environment": {
         "JIRA_INSTANCE_URL": "https://smartpager.atlassian.net",
         "JIRA_USER_EMAIL": "${ATLASSIAN_EMAIL}",
@@ -386,11 +386,11 @@
     },
     "doppler": {
       "type": "local",
-      "command": ["npx", "-y", "@dopplerhq/mcp-server"]
+      "command": ["npx", "-y", "@dopplerhq/mcp-server@1.0.5"]
     },
     "prettier": {
       "type": "local",
-      "command": ["npx", "-y", "@prettier/mcp"]
+      "command": ["npx", "-y", "@prettier/mcp@0.0.1"]
     }
   },
   "skills": {
