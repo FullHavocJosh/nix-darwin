@@ -248,14 +248,14 @@
       "type": "local",
       "command": [
         "node",
-        "/Users/jrollet/mcp-context-guardian-perfectserve/dist/index.js"
+        "__HOME__/mcp-context-guardian-perfectserve/dist/index.js"
       ]
     },
     "context-guardian-fullhavoc": {
       "type": "local",
       "command": [
         "node",
-        "/Users/jrollet/mcp-context-guardian-fullhavoc/dist/index.js"
+        "__HOME__/mcp-context-guardian-fullhavoc/dist/index.js"
       ]
     },
     "token-optimizer-mcp": {
@@ -264,9 +264,9 @@
     },
     "token-savior": {
       "type": "local",
-      "command": ["/Users/jrollet/bench/venv-tokensavior/bin/token-savior"],
+      "command": ["__HOME__/bench/venv-tokensavior/bin/token-savior"],
       "environment": {
-        "WORKSPACE_ROOTS": "/Users/jrollet",
+        "WORKSPACE_ROOTS": "__HOME__",
         "TOKEN_SAVIOR_PROFILE": "core"
       }
     },
@@ -402,8 +402,8 @@
     "paths": [
       "/Users/havoc/model-skills-fullhavoc",
       "/Users/havoc/model-skills-perfectserve",
-      "/Users/jrollet/model-skills-fullhavoc",
-      "/Users/jrollet/model-skills-perfectserve"
+      "__HOME__/model-skills-fullhavoc",
+      "__HOME__/model-skills-perfectserve"
     ]
   }
 }
