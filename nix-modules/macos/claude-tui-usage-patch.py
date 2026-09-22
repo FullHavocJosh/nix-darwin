@@ -58,7 +58,10 @@ if its anchor text is missing, i.e. upstream changed the file it targets.
    from this machine's own Claude Code session transcripts, priced through
    claude_tui_core.models' existing pricing table -- see that module's
    docstring for caveats), and reworks the compact line to drop the model
-   name and append the monthly estimate after the usage widget.
+   name and append the monthly estimate after the usage widget. Gated on
+   spend_limit being present in rate_limits (2026-09-22 follow-up), so it
+   never shows on a personal Pro/Max login -- only a real work/gateway
+   account, which is what carries a genuine per-token dollar budget.
 """
 
 import sys
@@ -708,7 +711,15 @@ OLD_STATUSLINE_COMPUTE = '''    usage = basic["usage"]
     ds = DisplayState('''
 
 NEW_STATUSLINE_COMPUTE = '''    usage = basic["usage"]
-    monthly_cost_part = format_monthly_cost(fetch_monthly_cost(background=True))
+    # nix-darwin: spend_limit only ever appears behind a work/gateway account
+    # (see patch 4 docstring) -- personal Pro/Max logins never get it. Gate
+    # the local monthly-cost estimate on it so a personal-account session
+    # never shows a dollar figure that isn't how that seat is billed.
+    monthly_cost_part = (
+        format_monthly_cost(fetch_monthly_cost(background=True))
+        if usage and "spend_limit" in usage
+        else ""
+    )
 
     ds = DisplayState('''
 
@@ -733,14 +744,21 @@ own token counts priced through claude_tui_core.models' pricing table --
 the same list-price convention claude-code-session-stats already uses for
 its own per-session cost breakdown.
 
+Only ever computed and shown when the current statusline's rate_limits carry
+a spend_limit window -- i.e. only behind a work/gateway account, per
+statusline.py's monthly_cost_part gating (patch 4). A personal Pro/Max
+login never triggers this at all.
+
 Caveats, worth surfacing to the user:
 - Local-machine only. Doesn't see sessions run on another device, or any
   Console/API usage outside Claude Code.
-- Doesn't distinguish which Claude account was active per session --
-  personal and work usage on the same machine get summed together.
-- List-price estimate. For a Pro/Max/Enterprise seat this isn't what's
-  actually billed (flat subscription, not per-token); for a gateway/API
-  account it should track real spend reasonably closely.
+- Sums every session transcript on this machine ending this month, not just
+  ones run under the currently-active account -- if a personal account was
+  used earlier in the same calendar month on this machine, that usage is
+  still folded into the total shown once a work/gateway account is active.
+- List-price estimate. For a gateway/API account it should track real spend
+  reasonably closely; it's never shown for a flat-subscription seat (see
+  gating above).
 - A session that started last month and continued into this one has its
   *entire* cost attributed to whichever month its last message landed in
   (matching the granularity claude-code-session-stats already uses).
