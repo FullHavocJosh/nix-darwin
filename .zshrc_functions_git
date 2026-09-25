@@ -1580,9 +1580,7 @@ function _gpa_send_all_to_aidev() {
   echo ""
   echo "=== aidev: Fix All Issues ==="
   echo ""
-  local model=$(jq -r '.model // empty' ~/.config/opencode/opencode.json 2>/dev/null)
-  [ -z "$model" ] && model=$(_get_opencode_model "sonnet")
-  (cd "$repo_root" && opencode --model "$model" --prompt "I have $issue_count code review issue(s) in my staged git changes that need to be fixed. Read $prompt_file for full details and help me fix them.")
+  (cd "$repo_root" && aidev "I have $issue_count code review issue(s) in my staged git changes that need to be fixed. Read $prompt_file for full details and help me fix them.")
   rm -f "$prompt_file"
 
   echo ""
