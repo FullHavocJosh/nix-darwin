@@ -452,13 +452,45 @@
           done
         fi
 
-        # Deployed independently of stow (see .stow-local-ignore): this file gets
-        # mutated below (skills.paths, per-profile MCP enabled flags), and stow
-        # would otherwise fold .config/opencode into a symlinked/shared-inode tree
-        # with the git-tracked source, making every mutation here show up as an
-        # uncommitted diff in the repo and blocking `gp`. rm+cp always creates a
-        # fresh inode, so this stays independent of the tracked file no matter how
-        # it was previously linked.
+        # $HOME/.config is stow's single top-level symlink for the whole .config
+        # tree (folded, since until now no leaf under .config needed independent
+        # treatment). That means $HOME/.config/opencode/opencode.json resolves
+        # straight through to the git-tracked file in the repo -- so an ignore
+        # entry for opencode.json in .stow-local-ignore, and an rm+cp of that same
+        # resolved path, were both no-ops: stow never re-evaluates an existing
+        # correct-looking symlink on restow, and rm+cp of a path that resolves
+        # into the repo just recreates the same file in the same place.
+        #
+        # Unfold $HOME/.config into real-directory + per-item symlinks once
+        # (idempotent: a no-op on every run after the first, since stow only
+        # folds a target that doesn't exist yet as a real directory) so
+        # opencode.json can be deployed independently below instead of dirtying
+        # the repo on every activation. Functionally identical for every other
+        # stowed item under .config -- each still resolves to the same repo file,
+        # just via its own symlink instead of one shared parent symlink.
+        #
+        # Both $HOME/.config AND $HOME/.config/opencode must be unfolded to real
+        # directories in the SAME pass, before stow runs: unfolding just the
+        # parent still leaves stow free to fold .config/opencode itself into one
+        # symlink (verified empirically -- stow's ignore list affects per-item
+        # linking, not the fold decision, at any level it hasn't been forced to
+        # unfold yet), which reproduces the exact same problem one level deeper.
+        NEEDS_RESTOW=false
+        if [ -L "$HOME/.config" ]; then
+          rm "$HOME/.config"
+          mkdir -p "$HOME/.config"
+          NEEDS_RESTOW=true
+        fi
+        if [ -L "$HOME/.config/opencode" ]; then
+          rm "$HOME/.config/opencode"
+          mkdir -p "$HOME/.config/opencode"
+          NEEDS_RESTOW=true
+        fi
+        if [ "$NEEDS_RESTOW" = true ]; then
+          echo "Unfolding \$HOME/.config into per-item symlinks (one-time, needed for independent OpenCode config deployment)..."
+          (cd "$HOME/nix-darwin" && ${pkgs.stow}/bin/stow -R .) || echo "Warning: failed to re-stow after unfolding \$HOME/.config"
+        fi
+
         OPENCODE_CONFIG="$HOME/.config/opencode/opencode.json"
         REPO_OPENCODE_CONFIG="$HOME/nix-darwin/.config/opencode/opencode.json"
         if command -v jq &>/dev/null && [ -f "$REPO_OPENCODE_CONFIG" ]; then
