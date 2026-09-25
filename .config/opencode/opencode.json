@@ -295,7 +295,12 @@
     },
     "aws-terraform-mcp": {
       "type": "local",
-      "command": ["uvx", "--with", "mcp<2", "awslabs.terraform-mcp-server@1.0.18"],
+      "command": [
+        "uvx",
+        "--with",
+        "mcp<2",
+        "awslabs.terraform-mcp-server@1.0.18"
+      ],
       "environment": {
         "FASTMCP_LOG_LEVEL": "ERROR"
       }
@@ -318,7 +323,14 @@
     },
     "terraform-cloud": {
       "type": "local",
-      "command": ["uvx", "terraform-cloud-mcp"],
+      "command": [
+        "uvx",
+        "--from",
+        "git+https://github.com/severity1/terraform-cloud-mcp.git",
+        "--with",
+        "fastmcp<3",
+        "terraform-cloud-mcp"
+      ],
       "environment": {
         "TFC_TOKEN": "{env:TFC_TOKEN}"
       }
