@@ -90,6 +90,38 @@ in
           echo "And verify the secret exists in project 'FullHavocJosh', config '$DOPPLER_CONFIG_NAME'"
         fi
       fi
+
+      # MCP server credentials for opnsense/truenas/doppler. Unlike Claude Code
+      # (which stores literal values in ~/.claude.json via `claude mcp add-json`),
+      # OpenCode's opencode.json resolves "{env:VAR}" from the process environment
+      # at server-launch time, so these need to be real exported shell vars.
+      # $ZSHRC_PERSONAL is machine-local and never templated from the repo (regenerated
+      # fresh here every run), same as the kubeconfig export above -- real secret
+      # values must never land in the (public) git history.
+      echo ""
+      echo "Injecting MCP server credentials (opnsense/truenas/doppler) into $ZSHRC_PERSONAL..."
+      OPNSENSE_URL_VAL=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get OPNSENSE_URI --project FullHavocJosh --config root_opnsense --plain 2>/dev/null)
+      OPNSENSE_API_KEY_VAL=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get OPNSENSE_API_KEY --project FullHavocJosh --config root_opnsense --plain 2>/dev/null)
+      OPNSENSE_API_SECRET_VAL=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get OPNSENSE_API_SECRET --project FullHavocJosh --config root_opnsense --plain 2>/dev/null)
+      TRUENAS_API_KEY_VAL=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get TRUENAS_API_KEY --project FullHavocJosh --config root_truenas --plain 2>/dev/null)
+      DOPPLER_TOKEN_VAL=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" configure get token --plain 2>/dev/null)
+
+      if [ -f "$ZSHRC_PERSONAL" ]; then
+        {
+          [ -n "$OPNSENSE_URL_VAL" ] && printf 'export OPNSENSE_URL=%q\n' "$OPNSENSE_URL_VAL"
+          [ -n "$OPNSENSE_API_KEY_VAL" ] && printf 'export OPNSENSE_API_KEY=%q\n' "$OPNSENSE_API_KEY_VAL"
+          [ -n "$OPNSENSE_API_SECRET_VAL" ] && printf 'export OPNSENSE_API_SECRET=%q\n' "$OPNSENSE_API_SECRET_VAL"
+          [ -n "$OPNSENSE_API_KEY_VAL" ] && printf 'export OPNSENSE_VERIFY_SSL=%q\n' "false"
+          [ -n "$TRUENAS_API_KEY_VAL" ] && printf 'export TRUENAS_URL=%q\n' "https://truenas.rollet.family"
+          [ -n "$TRUENAS_API_KEY_VAL" ] && printf 'export TRUENAS_API_KEY=%q\n' "$TRUENAS_API_KEY_VAL"
+          [ -n "$DOPPLER_TOKEN_VAL" ] && printf 'export DOPPLER_TOKEN=%q\n' "$DOPPLER_TOKEN_VAL"
+        } >> "$ZSHRC_PERSONAL"
+        chown havoc:staff "$ZSHRC_PERSONAL"
+        chmod 600 "$ZSHRC_PERSONAL"
+        echo "MCP server credentials appended to $ZSHRC_PERSONAL."
+      else
+        echo "Warning: $ZSHRC_PERSONAL not found yet -- MCP credentials not injected this run."
+      fi
     else
       echo "Warning: Doppler CLI not found at $DOPPLER_BIN or config missing. OpenCode Zen API key not injected."
     fi
