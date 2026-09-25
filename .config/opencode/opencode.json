@@ -367,12 +367,16 @@
       "type": "local",
       "command": [
         "uvx",
+        "--with",
+        "mcp<2",
         "--from",
         "git+https://github.com/SurgeX-Labs/awx-mcp-server.git@40870878846c10c8433894a2fbd1be5641ea357d#subdirectory=server",
-        "awx-mcp-server"
+        "python",
+        "-m",
+        "awx_mcp_server"
       ],
       "environment": {
-        "AWX_URL": "{env:AWX_URL}",
+        "AWX_BASE_URL": "{env:AWX_BASE_URL}",
         "AWX_TOKEN": "{env:AWX_TOKEN}"
       }
     },

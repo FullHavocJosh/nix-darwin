@@ -26,7 +26,7 @@ environment variable name, the Doppler project and config it belongs in, and a d
 | Environment Variable  | MCP Server | Description                                                 |
 | --------------------- | ---------- | ----------------------------------------------------------- |
 | `HETZNER_API_TOKEN`   | `hetzner`  | Hetzner Cloud API token — Console → Security → API Tokens   |
-| `AWX_URL`             | `awx`      | AWX/AAP/Ansible Tower base URL, e.g. `https://awx.homelab`  |
+| `AWX_BASE_URL`        | `awx`      | AWX/AAP/Ansible Tower base URL, e.g. `https://awx.homelab`  |
 | `AWX_TOKEN`           | `awx`      | AWX personal access token — User → Tokens                   |
 
 ### `FullHavocJosh` project · `root` config
