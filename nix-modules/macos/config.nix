@@ -391,6 +391,25 @@
           echo "Unable to check for macOS updates (may require sudo or network connection)"
         fi
 
+        # Determine which MCP servers this host should NOT run. Personal
+        # machines (laptop/desktop) skip work-only servers (Jira, AWS/Terraform
+        # infra tooling); the work machine skips personal homelab servers
+        # (Hetzner/OPNsense/TrueNAS/AWX) plus Doppler (personal secrets flow
+        # only). Same list gates both the Claude Code sync and the OpenCode
+        # opencode.json patch below, so the two stay in lockstep.
+        HOSTNAME_LOCAL=$(scutil --get LocalHostName 2>/dev/null)
+        case "$HOSTNAME_LOCAL" in
+          MacBookM2Pro*|MacMiniM1*)
+            MCP_EXCLUDE_SERVERS="atlassian terraform-cloud terraform-hcp aws-terraform-mcp aws-pricing-mcp-server context-guardian-perfectserve"
+            ;;
+          MacBookM3Pro*)
+            MCP_EXCLUDE_SERVERS="hetzner opnsense truenas awx doppler"
+            ;;
+          *)
+            MCP_EXCLUDE_SERVERS=""
+            ;;
+        esac
+
         # Register context-mode with Claude Code if already installed
         if command -v context-mode &>/dev/null && command -v claude &>/dev/null; then
           if ! grep -q '"context-mode"' "$HOME/.claude.json" 2>/dev/null; then
@@ -404,6 +423,19 @@
         if command -v claude &>/dev/null && command -v jq &>/dev/null && [ -f "$MCP_CONFIG" ]; then
           echo "Syncing MCP servers from $MCP_CONFIG to Claude Code..."
           jq -r '.mcpServers | keys[]' "$MCP_CONFIG" | while read -r SERVER_NAME; do
+            case " $MCP_EXCLUDE_SERVERS " in
+              *" $SERVER_NAME "*)
+                if grep -q "\"$SERVER_NAME\"" "$HOME/.claude.json" 2>/dev/null; then
+                  claude mcp remove --scope user "$SERVER_NAME" 2>/dev/null && \
+                    echo "  Removed $SERVER_NAME (excluded on this profile)." || \
+                    echo "  Failed to remove $SERVER_NAME."
+                else
+                  echo "  $SERVER_NAME excluded on this profile, skipping."
+                fi
+                continue
+                ;;
+            esac
+
             if grep -q "\"$SERVER_NAME\"" "$HOME/.claude.json" 2>/dev/null; then
               echo "  $SERVER_NAME already registered, skipping."
               continue
@@ -428,6 +460,14 @@
               UPDATED=$(jq --arg p "$SKILLS_REPO" '.skills.paths = ((.skills.paths // []) + [$p] | unique)' "$OPENCODE_CONFIG")
               printf '%s\n' "$UPDATED" > "$OPENCODE_CONFIG"
               echo "Added $SKILLS_REPO to OpenCode skills.paths"
+            fi
+          done
+
+          for EXCLUDED in $MCP_EXCLUDE_SERVERS; do
+            if jq -e --arg s "$EXCLUDED" '.mcp[$s]' "$OPENCODE_CONFIG" &>/dev/null; then
+              UPDATED=$(jq --arg s "$EXCLUDED" '.mcp[$s].enabled = false' "$OPENCODE_CONFIG")
+              printf '%s\n' "$UPDATED" > "$OPENCODE_CONFIG"
+              echo "Disabled $EXCLUDED in OpenCode config (excluded on this profile)"
             fi
           done
         fi
