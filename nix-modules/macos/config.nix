@@ -452,8 +452,19 @@
           done
         fi
 
+        # Deployed independently of stow (see .stow-local-ignore): this file gets
+        # mutated below (skills.paths, per-profile MCP enabled flags), and stow
+        # would otherwise fold .config/opencode into a symlinked/shared-inode tree
+        # with the git-tracked source, making every mutation here show up as an
+        # uncommitted diff in the repo and blocking `gp`. rm+cp always creates a
+        # fresh inode, so this stays independent of the tracked file no matter how
+        # it was previously linked.
         OPENCODE_CONFIG="$HOME/.config/opencode/opencode.json"
-        if command -v jq &>/dev/null && [ -f "$OPENCODE_CONFIG" ]; then
+        REPO_OPENCODE_CONFIG="$HOME/nix-darwin/.config/opencode/opencode.json"
+        if command -v jq &>/dev/null && [ -f "$REPO_OPENCODE_CONFIG" ]; then
+          mkdir -p "$(dirname "$OPENCODE_CONFIG")"
+          rm -f "$OPENCODE_CONFIG"
+          cp "$REPO_OPENCODE_CONFIG" "$OPENCODE_CONFIG"
           for SKILLS_REPO in "$HOME/model-skills-fullhavoc" "$HOME/model-skills-perfectserve"; do
             [ -d "$SKILLS_REPO" ] || continue
             if ! jq -e --arg p "$SKILLS_REPO" '(.skills.paths // []) | contains([$p])' "$OPENCODE_CONFIG" &>/dev/null; then
