@@ -398,8 +398,9 @@
     "paths": [
       "/Users/havoc/model-skills-fullhavoc",
       "/Users/havoc/model-skills-perfectserve",
-      "__HOME__/model-skills-fullhavoc",
-      "__HOME__/model-skills-perfectserve"
+      "/Users/havoc/model-skills-fullhavoc",
+      "/Users/havoc/model-skills-perfectserve"
     ]
-  }
+  },
+  "model": "opencode/claude-sonnet-4-6"
 }
