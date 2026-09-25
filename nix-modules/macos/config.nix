@@ -478,14 +478,20 @@
         NEEDS_RESTOW=false
         if [ -L "$HOME/.config" ]; then
           rm "$HOME/.config"
-          mkdir -p "$HOME/.config"
           NEEDS_RESTOW=true
         fi
+        # mkdir runs unconditionally, NOT gated behind the -L check above: once
+        # $HOME/.config's symlink is removed, $HOME/.config/opencode stops
+        # existing at all (it only existed via the parent symlink), so an -L
+        # check on it here would find neither a symlink nor a real dir and
+        # silently skip -- leaving stow to fold it back into one symlink on
+        # restow below and reproducing the exact bug this block exists to fix.
+        mkdir -p "$HOME/.config"
         if [ -L "$HOME/.config/opencode" ]; then
           rm "$HOME/.config/opencode"
-          mkdir -p "$HOME/.config/opencode"
           NEEDS_RESTOW=true
         fi
+        mkdir -p "$HOME/.config/opencode"
         if [ "$NEEDS_RESTOW" = true ]; then
           echo "Unfolding \$HOME/.config into per-item symlinks (one-time, needed for independent OpenCode config deployment)..."
           (cd "$HOME/nix-darwin" && ${pkgs.stow}/bin/stow -R .) || echo "Warning: failed to re-stow after unfolding \$HOME/.config"
@@ -495,24 +501,33 @@
         REPO_OPENCODE_CONFIG="$HOME/nix-darwin/.config/opencode/opencode.json"
         if command -v jq &>/dev/null && [ -f "$REPO_OPENCODE_CONFIG" ]; then
           mkdir -p "$(dirname "$OPENCODE_CONFIG")"
-          rm -f "$OPENCODE_CONFIG"
-          cp "$REPO_OPENCODE_CONFIG" "$OPENCODE_CONFIG"
-          for SKILLS_REPO in "$HOME/model-skills-fullhavoc" "$HOME/model-skills-perfectserve"; do
-            [ -d "$SKILLS_REPO" ] || continue
-            if ! jq -e --arg p "$SKILLS_REPO" '(.skills.paths // []) | contains([$p])' "$OPENCODE_CONFIG" &>/dev/null; then
-              UPDATED=$(jq --arg p "$SKILLS_REPO" '.skills.paths = ((.skills.paths // []) + [$p] | unique)' "$OPENCODE_CONFIG")
-              printf '%s\n' "$UPDATED" > "$OPENCODE_CONFIG"
-              echo "Added $SKILLS_REPO to OpenCode skills.paths"
-            fi
-          done
+          # Hard safety net: never rm+cp when the two paths are still the same
+          # file (device+inode, via -ef) -- that's exactly the condition under
+          # which rm would delete the git-tracked source out from under the
+          # following cp, corrupting the repo's working tree. If the unfold
+          # above ever regresses, fail loud here instead of deleting data.
+          if [ -e "$OPENCODE_CONFIG" ] && [ "$OPENCODE_CONFIG" -ef "$REPO_OPENCODE_CONFIG" ]; then
+            echo "Warning: $OPENCODE_CONFIG still resolves to the git-tracked file (unfold didn't take); skipping OpenCode config deployment this run to avoid corrupting the repo."
+          else
+            rm -f "$OPENCODE_CONFIG"
+            cp "$REPO_OPENCODE_CONFIG" "$OPENCODE_CONFIG"
+            for SKILLS_REPO in "$HOME/model-skills-fullhavoc" "$HOME/model-skills-perfectserve"; do
+              [ -d "$SKILLS_REPO" ] || continue
+              if ! jq -e --arg p "$SKILLS_REPO" '(.skills.paths // []) | contains([$p])' "$OPENCODE_CONFIG" &>/dev/null; then
+                UPDATED=$(jq --arg p "$SKILLS_REPO" '.skills.paths = ((.skills.paths // []) + [$p] | unique)' "$OPENCODE_CONFIG")
+                printf '%s\n' "$UPDATED" > "$OPENCODE_CONFIG"
+                echo "Added $SKILLS_REPO to OpenCode skills.paths"
+              fi
+            done
 
-          for EXCLUDED in $MCP_EXCLUDE_SERVERS; do
-            if jq -e --arg s "$EXCLUDED" '.mcp[$s]' "$OPENCODE_CONFIG" &>/dev/null; then
-              UPDATED=$(jq --arg s "$EXCLUDED" '.mcp[$s].enabled = false' "$OPENCODE_CONFIG")
-              printf '%s\n' "$UPDATED" > "$OPENCODE_CONFIG"
-              echo "Disabled $EXCLUDED in OpenCode config (excluded on this profile)"
-            fi
-          done
+            for EXCLUDED in $MCP_EXCLUDE_SERVERS; do
+              if jq -e --arg s "$EXCLUDED" '.mcp[$s]' "$OPENCODE_CONFIG" &>/dev/null; then
+                UPDATED=$(jq --arg s "$EXCLUDED" '.mcp[$s].enabled = false' "$OPENCODE_CONFIG")
+                printf '%s\n' "$UPDATED" > "$OPENCODE_CONFIG"
+                echo "Disabled $EXCLUDED in OpenCode config (excluded on this profile)"
+              fi
+            done
+          fi
         fi
 
         if command -v uv &>/dev/null; then
