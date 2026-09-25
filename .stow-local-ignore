@@ -19,3 +19,4 @@ org\.nixos\..*\.plist$
 homebrew\.mxcl\..*\.plist$
 ^\.claude$
 LaunchDaemons$
+^opencode\.json$
