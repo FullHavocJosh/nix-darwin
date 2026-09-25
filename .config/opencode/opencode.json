@@ -276,7 +276,10 @@
     },
     "sequential-thinking": {
       "type": "local",
-      "command": ["npx", "@modelcontextprotocol/server-sequential-thinking@2026.8.31"]
+      "command": [
+        "npx",
+        "@modelcontextprotocol/server-sequential-thinking@2026.8.31"
+      ]
     },
     "github": {
       "type": "local",
