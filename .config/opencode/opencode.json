@@ -248,14 +248,14 @@
       "type": "local",
       "command": [
         "node",
-        "__HOME__/mcp-context-guardian-perfectserve/dist/index.js"
+        "{env:HOME}/mcp-context-guardian-perfectserve/dist/index.js"
       ]
     },
     "context-guardian-fullhavoc": {
       "type": "local",
       "command": [
         "node",
-        "__HOME__/mcp-context-guardian-fullhavoc/dist/index.js"
+        "{env:HOME}/mcp-context-guardian-fullhavoc/dist/index.js"
       ]
     },
     "token-optimizer-mcp": {
@@ -264,9 +264,9 @@
     },
     "token-savior": {
       "type": "local",
-      "command": ["__HOME__/bench/venv-tokensavior/bin/token-savior"],
+      "command": ["{env:HOME}/bench/venv-tokensavior/bin/token-savior"],
       "environment": {
-        "WORKSPACE_ROOTS": "__HOME__",
+        "WORKSPACE_ROOTS": "{env:HOME}",
         "TOKEN_SAVIOR_PROFILE": "core"
       }
     },
