@@ -1,9 +1,5 @@
 {
   "mcpServers": {
-    "context-guardian": {
-      "command": "node",
-      "args": ["__HOME__/mcp-context-guardian-fullhavoc/dist/index.js"]
-    },
     "memory": {
       "command": "npx",
       "args": ["@modelcontextprotocol/server-memory"]
@@ -24,16 +20,9 @@
       "command": "npx",
       "args": ["-y", "@upstash/context7-mcp"]
     },
-    "aws-core-mcp-server": {
-      "command": "uvx",
-      "args": ["awslabs.core-mcp-server@latest"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      }
-    },
     "aws-terraform-mcp": {
       "command": "uvx",
-      "args": ["awslabs.terraform-mcp-server@latest"],
+      "args": ["--with", "mcp<2", "awslabs.terraform-mcp-server@1.0.18"],
       "env": {
         "FASTMCP_LOG_LEVEL": "ERROR"
       }
@@ -85,7 +74,7 @@
       "command": "npx",
       "args": ["-y", "@richard-stovall/opnsense-mcp-server"],
       "env": {
-        "OPNSENSE_HOST": "${OPNSENSE_HOST}",
+        "OPNSENSE_URL": "${OPNSENSE_URL}",
         "OPNSENSE_API_KEY": "${OPNSENSE_API_KEY}",
         "OPNSENSE_API_SECRET": "${OPNSENSE_API_SECRET}",
         "OPNSENSE_VERIFY_SSL": "false"
@@ -93,7 +82,7 @@
     },
     "truenas": {
       "command": "uvx",
-      "args": ["truenas-mcp-server"],
+      "args": ["--with", "mcp<2", "truenas-mcp-server"],
       "env": {
         "TRUENAS_URL": "${TRUENAS_URL}",
         "TRUENAS_API_KEY": "${TRUENAS_API_KEY}"
@@ -103,7 +92,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/SurgeX-Labs/awx-mcp-server.git@40870878846c10c8433894a2fbd1be5641ea357d",
+        "git+https://github.com/SurgeX-Labs/awx-mcp-server.git@40870878846c10c8433894a2fbd1be5641ea357d#subdirectory=server",
         "awx-mcp-server"
       ],
       "env": {

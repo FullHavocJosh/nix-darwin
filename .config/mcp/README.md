@@ -10,7 +10,7 @@ environment variable name, the Doppler project and config it belongs in, and a d
 
 | Environment Variable  | MCP Server | Description                                                |
 | --------------------- | ---------- | ---------------------------------------------------------- |
-| `OPNSENSE_HOST`       | `opnsense` | OPNsense firewall URL, e.g. `https://192.168.1.1`          |
+| `OPNSENSE_URL`        | `opnsense` | OPNsense firewall URL, e.g. `https://192.168.1.1`          |
 | `OPNSENSE_API_KEY`    | `opnsense` | OPNsense API key — System → Access → Users → API Keys      |
 | `OPNSENSE_API_SECRET` | `opnsense` | OPNsense API secret (paired with `OPNSENSE_API_KEY`)       |
 
