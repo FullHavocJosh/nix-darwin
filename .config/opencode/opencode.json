@@ -244,7 +244,7 @@
     }
   },
   "mcp": {
-    "context-guardian": {
+    "context-guardian-perfectserve": {
       "type": "local",
       "command": [
         "node",
