@@ -385,11 +385,11 @@
     },
     "atlassian": {
       "type": "local",
-      "command": ["npx", "-y", "jira-mcp@1.0.1"],
+      "command": ["uvx", "mcp-atlassian@0.23.1"],
       "environment": {
-        "JIRA_INSTANCE_URL": "https://smartpager.atlassian.net",
-        "JIRA_USER_EMAIL": "{env:ATLASSIAN_EMAIL}",
-        "JIRA_API_KEY": "{env:ATLASSIAN_API_TOKEN}"
+        "JIRA_URL": "https://smartpager.atlassian.net",
+        "JIRA_USERNAME": "{env:ATLASSIAN_EMAIL}",
+        "JIRA_API_TOKEN": "{env:ATLASSIAN_API_TOKEN}"
       }
     },
     "doppler": {
