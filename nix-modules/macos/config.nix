@@ -400,7 +400,7 @@
         HOSTNAME_LOCAL=$(scutil --get LocalHostName 2>/dev/null)
         case "$HOSTNAME_LOCAL" in
           MacBookM2Pro*|MacMiniM1*)
-            MCP_EXCLUDE_SERVERS="atlassian terraform-cloud terraform-hcp aws-terraform-mcp aws-pricing-mcp-server context-guardian"
+            MCP_EXCLUDE_SERVERS="atlassian terraform-cloud terraform-hcp aws-terraform-mcp aws-pricing-mcp-server context-guardian-perfectserve"
             ;;
           MacBookM3Pro*)
             MCP_EXCLUDE_SERVERS="hetzner opnsense truenas awx doppler"
