@@ -174,6 +174,7 @@ in
     enable = true;
     taps = [
       "minio/stable"
+      "music-assistant/tap"
       "vitobotta/tap"
     ];
     brews = [
@@ -186,6 +187,7 @@ in
       "element"
       "font-merriweather"
       "font-open-sans"
+      "music-assistant/tap/music-assistant"
       "obsidian"
       "plex"
       "plexamp"
