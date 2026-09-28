@@ -233,6 +233,7 @@ All automatically installed via nix-darwin/package managers:
 | Server                   | Description                                                     |
 | ------------------------ | --------------------------------------------------------------- |
 | `context-guardian`       | Custom local MCP server (`~/mcp-context-guardian-fullhavoc`)    |
+| `verbosity-guardian`     | Custom local MCP server (`~/mcp-verbosity-guardian`) — flags verbose/redundant code comments, PR/ticket text, commit messages |
 | `memory`                 | `@modelcontextprotocol/server-memory` — persistent entity graph |
 | `sequential-thinking`    | `@modelcontextprotocol/server-sequential-thinking`              |
 | `github`                 | `@edjl/github-mcp` — GitHub PR/issue integration                |

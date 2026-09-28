@@ -121,6 +121,13 @@
     },
     "token-optimizer-mcp": {
       "command": "token-optimizer-mcp"
+    },
+    "verbosity-guardian": {
+      "command": "uv",
+      "args": ["run", "--project", "__HOME__/mcp-verbosity-guardian", "mcp-verbosity-guardian"],
+      "env": {
+        "VG_THRESHOLDS": "comment_ratio=0.4,pr_words=350,ticket_words=500,similarity=0.75,fixme_chatter=5"
+      }
     }
   }
 }
