@@ -1340,10 +1340,14 @@ function aiselect() {
   echo "      of the selection below. That selection only changes which"
   echo "      provider/model aidev and interactive opencode sessions use."
   echo ""
-  echo -n "Selection (1-4) [Enter = Anthropic, auto-selects in 5s]: "
+  echo -n "Selection (1-4) [Enter = llama.cpp/Gemma-4, auto-selects in 5s]: "
   read -t 5 -r choice
   echo ""
-  [[ -z "$choice" ]] && choice="1"
+  local _auto_timeout=false
+  if [[ -z "$choice" ]]; then
+    choice="4"
+    _auto_timeout=true
+  fi
 
   case "$choice" in
     1)
@@ -1527,22 +1531,30 @@ function aiselect() {
           local state_file="$local_cfg_dir/selected-model"
           local current_id="qwen2.5-coder-14b"
           [[ -f "$state_file" ]] && current_id="$(cat "$state_file")"
-
-          echo ""
-          echo "Select local model (llama-server restarts to switch -- cold start ~1-3 min):"
-          echo "  1) Qwen2.5-Coder-14B (coding-specialized, ~12GB)$([[ "$current_id" == "qwen2.5-coder-14b" ]] && echo " ${GREEN}[current]${NC}")"
-          echo "  2) Gemma-4-26B-A4B MoE (general + coding, ~17GB)$([[ "$current_id" == "gemma-4-26b-a4b" ]] && echo " ${GREEN}[current]${NC}")"
-          echo ""
-          echo -n "Selection (1-2) [Enter = keep current]: "
-          read -r model_choice
-
           local new_id="$current_id"
-          case "$model_choice" in
-            1) new_id="qwen2.5-coder-14b" ;;
-            2) new_id="gemma-4-26b-a4b" ;;
-            "") ;;
-            *) echo "${YELLOW}⚠${NC} Invalid selection, keeping $(_llamacpp_local_model_label "$current_id")" ;;
-          esac
+          if $_auto_timeout; then
+            # No response within 5s on the main menu: default all the way to
+            # llama.cpp + Gemma-4, not just the provider.
+            new_id="gemma-4-26b-a4b"
+            echo ""
+            echo "No selection in 5s -- defaulting to llama.cpp / $(_llamacpp_local_model_label "$new_id")."
+          else
+            echo ""
+            echo "Select local model (llama-server restarts to switch -- cold start ~1-3 min):"
+            echo "  1) Qwen2.5-Coder-14B (coding-specialized, ~12GB)$([[ "$current_id" == "qwen2.5-coder-14b" ]] && echo " ${GREEN}[current]${NC}")"
+            echo "  2) Gemma-4-26B-A4B MoE (general + coding, ~17GB)$([[ "$current_id" == "gemma-4-26b-a4b" ]] && echo " ${GREEN}[current]${NC}")"
+            echo ""
+            echo -n "Selection (1-2) [Enter = keep current]: "
+            read -r model_choice
+
+            case "$model_choice" in
+              1) new_id="qwen2.5-coder-14b" ;;
+              2) new_id="gemma-4-26b-a4b" ;;
+              "") ;;
+              *) echo "${YELLOW}⚠${NC} Invalid selection, keeping $(_llamacpp_local_model_label "$current_id")" ;;
+            esac
+          fi
+
 
           if [[ "$new_id" != "$current_id" ]]; then
             echo "$new_id" > "$state_file"
