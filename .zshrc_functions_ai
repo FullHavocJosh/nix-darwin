@@ -209,7 +209,7 @@ function _get_opencode_model() {
 
   # Special case: llama.cpp - always return the local model
   if [[ "$provider" == "llama-cpp" ]] || [[ "$provider" == "llama.cpp" ]]; then
-    echo "llama.cpp/local-coder"
+    echo "llama.cpp/$(_llamacpp_local_model_id)"
     return 0
   fi
 
@@ -258,7 +258,7 @@ function _get_opencode_model() {
       echo "github-copilot/$(_get_copilot_claude_model "$task_type")"
       ;;
     llama-cpp|llama.cpp)
-      echo "llama.cpp/local-coder"
+      echo "llama.cpp/$(_llamacpp_local_model_id)"
       ;;
     *)
       echo "github-copilot/$(_get_copilot_claude_model sonnet)"
@@ -757,7 +757,7 @@ function aidev() {
       fi
       ;;
     llama-cpp)
-      local local_model="llama.cpp/local-coder"
+      local local_model="llama.cpp/$(_llamacpp_local_model_id)"
       echo "${GREEN}✓${NC} Model:    ⚪ $(_llamacpp_model_short) → $local_model"
       echo ""
       if $print_mode; then
@@ -851,6 +851,21 @@ function _llamacpp_model_tier() {
   ram_gb=$(( ram_bytes / 1024 / 1024 / 1024 ))
   echo "qwen2.5-coder-7b Q8 (~8 GB, ${ram_gb} GB device)"
 }
+# Returns the opencode.json model key matching whatever's actually loaded:
+# the selected-model state file's id on hosts with a local switchable server
+# (llamacpp-local.nix), or "local-coder" (the alias macminim1's untouched
+# remote llama-server always reports) everywhere else. Each id must have a
+# matching entry under provider."llama.cpp".models in opencode.json.
+function _llamacpp_local_model_id() {
+  local state_file="$HOME/.config/llama-cpp/selected-model"
+  if [[ -f "$state_file" ]]; then
+    cat "$state_file"
+  else
+    echo "local-coder"
+  fi
+}
+
+
 
 # Keep in sync with `localModels` in nix-modules/macos/llamacpp-local.nix --
 # id must match exactly, label is just for display.
@@ -858,6 +873,9 @@ function _llamacpp_local_model_label() {
   case "$1" in
     qwen2.5-coder-14b) echo "Qwen2.5-Coder-14B" ;;
     gemma-4-26b-a4b)   echo "Gemma-4-26B-A4B" ;;
+    glm-4.7-flash)     echo "GLM-4.7-Flash" ;;
+    qwen3-coder-30b-a3b) echo "Qwen3-Coder-30B-A3B" ;;
+    devstral-small-2-24b) echo "Devstral-Small-2-24B" ;;
     *)                 echo "$1" ;;
   esac
 }
@@ -1215,7 +1233,7 @@ function aiselect() {
       echo "  gpc  → ⚪ local always  (commit messages)"
       echo "  gpr  → ⚪ local always  (PR creation)"
       echo "  gpa  → ⚪ local (small diffs) → 🟢 Haiku (medium) → 🔵 Sonnet (large or critical/security)"
-      echo "  aidev → ⚪ local (claude with llama.cpp/local-coder)"
+      echo "  aidev → ⚪ local (claude with llama.cpp/$(_llamacpp_local_model_id))"
     fi
     echo ""
     echo "Note: Run 'aiselect' to change provider. Changes apply immediately"
@@ -1534,22 +1552,31 @@ function aiselect() {
           local new_id="$current_id"
           if $_auto_timeout; then
             # No response within 5s on the main menu: default all the way to
-            # llama.cpp + Gemma-4, not just the provider.
-            new_id="gemma-4-26b-a4b"
+            # llama.cpp + GLM-4.7-Flash -- the model confirmed working with
+            # opencode's tool-calling (gemma-4-26b-a4b hits a genuine
+            # Gemma-4-specific llama.cpp bug on any tool-call request, see
+            # its note in llamacpp-local.nix).
+            new_id="glm-4.7-flash"
             echo ""
             echo "No selection in 5s -- defaulting to llama.cpp / $(_llamacpp_local_model_label "$new_id")."
           else
             echo ""
             echo "Select local model (llama-server restarts to switch -- cold start ~1-3 min):"
-            echo "  1) Qwen2.5-Coder-14B (coding-specialized, ~12GB)$([[ "$current_id" == "qwen2.5-coder-14b" ]] && echo " ${GREEN}[current]${NC}")"
-            echo "  2) Gemma-4-26B-A4B MoE (general + coding, ~17GB)$([[ "$current_id" == "gemma-4-26b-a4b" ]] && echo " ${GREEN}[current]${NC}")"
+            echo "  1) Qwen2.5-Coder-14B (coding-specialized, ~12GB, 32K ctx)$([[ "$current_id" == "qwen2.5-coder-14b" ]] && echo " ${GREEN}[current]${NC}")"
+            echo "  2) Gemma-4-26B-A4B MoE (general + coding, ~17GB, 160K ctx)$([[ "$current_id" == "gemma-4-26b-a4b" ]] && echo " ${GREEN}[current]${NC}") ${YELLOW}[aidev/opencode broken, upstream bug]${NC}"
+            echo "  3) GLM-4.7-Flash MoE (general + coding, ~18.5GB, 160K ctx)$([[ "$current_id" == "glm-4.7-flash" ]] && echo " ${GREEN}[current]${NC}") ${GREEN}[works with aidev/opencode]${NC}"
+            echo "  4) Qwen3-Coder-30B-A3B MoE (agentic coding, ~18.6GB, 160K ctx)$([[ "$current_id" == "qwen3-coder-30b-a3b" ]] && echo " ${GREEN}[current]${NC}")"
+            echo "  5) Devstral-Small-2-24B (agentic coding, ~14.3GB, 160K ctx)$([[ "$current_id" == "devstral-small-2-24b" ]] && echo " ${GREEN}[current]${NC}")"
             echo ""
-            echo -n "Selection (1-2) [Enter = keep current]: "
+            echo -n "Selection (1-5) [Enter = keep current]: "
             read -r model_choice
 
             case "$model_choice" in
               1) new_id="qwen2.5-coder-14b" ;;
               2) new_id="gemma-4-26b-a4b" ;;
+              3) new_id="glm-4.7-flash" ;;
+              4) new_id="qwen3-coder-30b-a3b" ;;
+              5) new_id="devstral-small-2-24b" ;;
               "") ;;
               *) echo "${YELLOW}⚠${NC} Invalid selection, keeping $(_llamacpp_local_model_label "$current_id")" ;;
             esac
@@ -1587,7 +1614,7 @@ function aiselect() {
         echo ""
         echo "${GREEN}✓${NC} Using llama.cpp (local: $(_llamacpp_model_short))"
         echo ""
-        echo "aidev/opencode will now use llama.cpp/local-coder directly."
+        echo "aidev/opencode will now use llama.cpp/$(_llamacpp_local_model_id) directly."
         echo "gpc/gpr always prefer llama.cpp when reachable regardless of this"
         echo "setting; gpa escalates to cloud on larger diffs or critical findings"
         echo "unless this host defaults gpc/gpa/gpr to local-only (AI_LOCAL_DEFAULT)."

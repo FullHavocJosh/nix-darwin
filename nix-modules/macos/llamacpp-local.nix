@@ -36,7 +36,54 @@ let
       hfFilename = "google_gemma-4-26B-A4B-it-Q4_K_M.gguf";
       localFilename = "gemma-4-26b-a4b-it-q4_k_m.gguf";
       ctxSize = 163840;
-      note = "MoE, general + coding, ~17GB (Q4_K_M), 160K context (native max 256K)";
+      # KNOWN BROKEN for aidev/opencode: hits a genuine, Gemma-4-specific
+      # llama.cpp server bug ("NotImplemented: map: filter-mapping not
+      # implemented", https://github.com/ggml-org/llama.cpp/issues/21547,
+      # open as of writing) on any tool-calling request, regardless of
+      # --jinja/--reasoning-format. Confirmed live: the same flags that fix
+      # Qwen do nothing for Gemma. Fine for gpc/gpa (no tool calls there).
+      note = "MoE, general + coding, ~17GB (Q4_K_M), 160K context (native max 256K) -- aidev/opencode BROKEN, upstream bug";
+    }
+    {
+      # zai-org/GLM-4.7-Flash's own config.json natively supports up to
+      # 202752, rope_scaling is null (no scaling needed). The model
+      # confirmed working with opencode's tool-calling in community reports
+      # (unlike gemma-4-26b-a4b above) -- this is the model to pick for
+      # aidev/opencode use until Gemma-4's llama.cpp bug is fixed upstream.
+      id = "glm-4.7-flash";
+      label = "GLM-4.7-Flash";
+      hfRepo = "bartowski/zai-org_GLM-4.7-Flash-GGUF";
+      hfFilename = "zai-org_GLM-4.7-Flash-Q4_K_M.gguf";
+      localFilename = "glm-4.7-flash-q4_k_m.gguf";
+      ctxSize = 163840;
+      note = "MoE (30B-A3B), general + coding, ~18.5GB (Q4_K_M), 160K context (native max ~200K), works with aidev/opencode tool-calling";
+    }
+    {
+      # Qwen/Qwen3-Coder-30B-A3B-Instruct's own config.json natively supports
+      # up to 262144, rope_scaling null (no scaling needed). Purpose-built by
+      # Qwen for agentic coding/tool-calling; MoE (128 experts, 8 active).
+      id = "qwen3-coder-30b-a3b";
+      label = "Qwen3-Coder-30B-A3B";
+      hfRepo = "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF";
+      hfFilename = "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf";
+      localFilename = "qwen3-coder-30b-a3b-instruct-q4_k_m.gguf";
+      ctxSize = 163840;
+      note = "MoE (30B-A3B), agentic-coding-specialized, ~18.6GB (Q4_K_M), 160K context (native max 256K)";
+    }
+    {
+      # mistralai/Devstral-Small-2-24B-Instruct-2512's own config.json ships
+      # an OFFICIAL YaRN rope_scaling config (factor 48) supporting up to
+      # 393216 natively -- unlike qwen2.5-coder-14b above, extending this
+      # one's context is Mistral's own published spec, not a guess. Dense
+      # 24B (not MoE); built by Mistral + All Hands AI specifically for
+      # agentic coding tool-use. Apache 2.0.
+      id = "devstral-small-2-24b";
+      label = "Devstral-Small-2-24B";
+      hfRepo = "bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF";
+      hfFilename = "mistralai_Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf";
+      localFilename = "devstral-small-2-24b-instruct-2512-q4_k_m.gguf";
+      ctxSize = 163840;
+      note = "dense 24B, agentic-coding-specialized, ~14.3GB (Q4_K_M), 160K context (native max 384K, official YaRN config)";
     }
   ];
 
@@ -159,12 +206,22 @@ let
     # "exec: llama-server: not found" on every launchd-triggered start, even
     # though running this exact script by hand always worked (an interactive
     # shell's PATH includes the nix profile bin dirs; launchd's doesn't).
+    #
+    # --jinja --reasoning-format none: --jinja is already the llama-server
+    # default, but opencode's tool-calling requests against Qwen2.5-Coder
+    # crashed with "NotImplemented: map: filter-mapping not implemented"
+    # until both were set explicitly -- confirmed live, reproduced with and
+    # without. Does not fix the same-looking error on gemma-4-26b-a4b (see
+    # its note above -- that one's a genuine Gemma-4-specific llama.cpp bug),
+    # but is harmless there and fixes it for qwen2.5-coder-14b/glm-4.7-flash.
     exec ${pkgs.llama-cpp}/bin/llama-server \
       --model           "$MODEL_FILE" \
       --host            "127.0.0.1" \
       --port            "8080" \
       --ctx-size        "$CTX_SIZE" \
       --parallel        1 \
+      --jinja \
+      --reasoning-format none \
       --n-gpu-layers    99 \
       --flash-attn      on \
       --cache-type-k    q8_0 \
