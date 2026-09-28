@@ -58,6 +58,33 @@ let
       ctxSize = 163840;
       note = "MoE (30B-A3B), general + coding, ~18.5GB (Q4_K_M), 160K context (native max ~200K), works with aidev/opencode tool-calling";
     }
+    {
+      # Qwen/Qwen3-Coder-30B-A3B-Instruct's own config.json natively supports
+      # up to 262144, rope_scaling null (no scaling needed). Purpose-built by
+      # Qwen for agentic coding/tool-calling; MoE (128 experts, 8 active).
+      id = "qwen3-coder-30b-a3b";
+      label = "Qwen3-Coder-30B-A3B";
+      hfRepo = "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF";
+      hfFilename = "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf";
+      localFilename = "qwen3-coder-30b-a3b-instruct-q4_k_m.gguf";
+      ctxSize = 163840;
+      note = "MoE (30B-A3B), agentic-coding-specialized, ~18.6GB (Q4_K_M), 160K context (native max 256K)";
+    }
+    {
+      # mistralai/Devstral-Small-2-24B-Instruct-2512's own config.json ships
+      # an OFFICIAL YaRN rope_scaling config (factor 48) supporting up to
+      # 393216 natively -- unlike qwen2.5-coder-14b above, extending this
+      # one's context is Mistral's own published spec, not a guess. Dense
+      # 24B (not MoE); built by Mistral + All Hands AI specifically for
+      # agentic coding tool-use. Apache 2.0.
+      id = "devstral-small-2-24b";
+      label = "Devstral-Small-2-24B";
+      hfRepo = "bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF";
+      hfFilename = "mistralai_Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf";
+      localFilename = "devstral-small-2-24b-instruct-2512-q4_k_m.gguf";
+      ctxSize = 163840;
+      note = "dense 24B, agentic-coding-specialized, ~14.3GB (Q4_K_M), 160K context (native max 384K, official YaRN config)";
+    }
   ];
 
   defaultModelId = (builtins.head localModels).id;
