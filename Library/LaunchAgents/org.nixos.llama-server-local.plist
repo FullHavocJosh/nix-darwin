@@ -9,7 +9,7 @@
 	<key>ProgramArguments</key>
 	<array>
 		<string>/bin/bash</string>
-		<string>/nix/store/q1z1fr6sfm4jdwvirzf4980cqfkgga8h-llama-server-local-launcher</string>
+		<string>/nix/store/a9wj9ca2z2zmi7n92y70fi19rs57ak8n-llama-server-local-launcher</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
