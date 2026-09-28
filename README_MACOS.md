@@ -42,7 +42,7 @@ sh <(curl -L https://nixos.org/nix/install)
 ### 3. Deploy nix-darwin
 
 ```bash
-nix run nix-darwin --extra-experimental-features "nix-command flakes" -- switch --flake ~/nix-darwin#macos_personal
+nix run nix-darwin --extra-experimental-features "nix-command flakes" -- switch --flake ~/nix-darwin#macos_laptop
 ```
 
 ### 4. Deploy Dotfiles
@@ -54,7 +54,13 @@ stow . -t ~
 ### 5. Subsequent Updates
 
 ```bash
-darwin-rebuild switch --flake ~/nix-darwin#macos_personal
+darwin-rebuild switch --flake ~/nix-darwin#macos_laptop
+```
+
+For desktop profile:
+
+```bash
+darwin-rebuild switch --flake ~/nix-darwin#macos_desktop
 ```
 
 For work profile:
@@ -90,18 +96,19 @@ need to re-run `podman machine start` -- the helper install is permanent.
 nix search nixpkgs <package-name>
 ```
 
-**Add packages**: Edit `nix-modules/macos/packages.nix`
+**Add packages**: Edit `nix-modules/macos/packages-tui.nix` (CLI, all profiles), `packages-gui.nix` (GUI apps, laptop/work), or `packages-laptop-only.nix` (laptop only)
 
 **Update packages**:
 
 ```bash
 nix flake update
-darwin-rebuild switch --flake ~/nix-darwin#macos_personal
+darwin-rebuild switch --flake ~/nix-darwin#macos_laptop
 ```
 
 ## Configuration Profiles
 
-- **`macos_personal`** - Full personal development environment
+- **`macos_laptop`** - Full personal development environment for laptops (includes laptop-only packages and GUI apps)
+- **`macos_desktop`** - Personal development environment for desktops (CLI packages only, no GUI app bundle)
 - **`macos_work`** - Work-specific configurations and restrictions
 
 ## Shell Functions & Git Workflow
@@ -177,7 +184,7 @@ All packages are automatically installed via nix-darwin/homebrew:
 - **`herdr`** - Terminal workspace manager
 - **`neovim`** - Text editor
 
-These are already included in `nix-modules/macos/packages.nix`.
+These are already included in `nix-modules/macos/packages-tui.nix`.
 
 ## MCP Server Configuration
 
@@ -231,7 +238,7 @@ Edit methodology and command rules:
 **nix-darwin errors**: Run with verbose flag:
 
 ```bash
-darwin-rebuild switch --flake ~/nix-darwin#macos_personal --show-trace
+darwin-rebuild switch --flake ~/nix-darwin#macos_laptop --show-trace
 ```
 
 **Missing Command Errors**: Ensure Nix packages are in PATH:

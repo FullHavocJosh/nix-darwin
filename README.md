@@ -30,10 +30,14 @@ nix-darwin/
 ├── .stow-local-ignore                  # Stow exclusions
 │
 ├── nix-modules/macos/                  # macOS nix-darwin modules
-│   ├── packages.nix                    # Shared packages (all profiles)
+│   ├── packages-tui.nix                # Shared CLI packages (all profiles)
+│   ├── packages-gui.nix                # Shared GUI apps (laptop/work profiles)
+│   ├── packages-laptop-only.nix        # Laptop-only packages
 │   ├── config.nix                      # System configuration & scripts
-│   ├── personal.nix                    # Personal profile packages/services
-│   └── work.nix                        # Work profile packages/services
+│   ├── personal.nix                    # Personal (laptop/desktop) profile packages/services
+│   ├── work.nix                        # Work profile packages/services
+│   ├── laptop.nix                      # Laptop-specific config
+│   └── desktop.nix                     # Desktop-specific config
 │
 ├── scripts/                            # Utility scripts
 │   ├── truenas-smb-monitor.sh          # TrueNAS SMB service monitor
@@ -111,13 +115,19 @@ See `.gitignore` for comprehensive patterns that protect:
 
 Defined in `flake.nix`:
 
-#### `macos_personal`
+#### `macos_laptop`
 
-- Full personal development environment
+- Full personal development environment, laptop-specific packages (`packages-laptop-only.nix`)
 - Gaming and entertainment apps (Steam, Battle.net, Whisky, Plex)
 - Personal productivity tools (Obsidian, Proton Drive/Mail/VPN, Element)
-- **Ollama** local LLM (runs as launchd service on `0.0.0.0:11434`)
+- Local llama.cpp server via `llamacpp-local.nix`
 - Custom wallpaper (set via activation script)
+- User: `/Users/havoc`
+
+#### `macos_desktop`
+
+- Personal development environment (no laptop-only packages, no GUI app bundle)
+- Local llama.cpp server via `llamacpp.nix`
 - User: `/Users/havoc`
 
 #### `macos_work`
@@ -128,14 +138,15 @@ Defined in `flake.nix`:
 - **Terraform cache cleanup** on activation (cleans `.terraform` directories under `~/pscloudops/terraform-infrastructure`)
 - User: `/Users/jrollet`
 
-#### Shared (all macOS profiles, via `packages.nix`)
+#### Shared (all macOS profiles, via `packages-tui.nix`)
 
 - **llama-server** launchd service — runs Qwen2.5-Coder-7B-Q8 via llama.cpp on `127.0.0.1:8080`; model auto-downloaded on activation
 
 **Switch profiles:**
 
 ```bash
-darwin-rebuild switch --flake ~/nix-darwin#macos_personal
+darwin-rebuild switch --flake ~/nix-darwin#macos_laptop
+darwin-rebuild switch --flake ~/nix-darwin#macos_desktop
 darwin-rebuild switch --flake ~/nix-darwin#macos_work
 ```
 
@@ -230,20 +241,20 @@ All automatically installed via nix-darwin/package managers:
 
 ### MCP Servers (`.config/mcp/claude-desktop-mcp.json`)
 
-| Server                   | Description                                                     |
-| ------------------------ | --------------------------------------------------------------- |
-| `context-guardian`       | Custom local MCP server (`~/mcp-context-guardian-fullhavoc`)    |
+| Server                   | Description                                                                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `context-guardian`       | Custom local MCP server (`~/mcp-context-guardian-fullhavoc`)                                                                  |
 | `verbosity-guardian`     | Custom local MCP server (`~/mcp-verbosity-guardian`) — flags verbose/redundant code comments, PR/ticket text, commit messages |
-| `memory`                 | `@modelcontextprotocol/server-memory` — persistent entity graph |
-| `sequential-thinking`    | `@modelcontextprotocol/server-sequential-thinking`              |
-| `github`                 | `@edjl/github-mcp` — GitHub PR/issue integration                |
-| `terraform`              | `terraform-mcp-server` — Terraform registry docs                |
-| `context7`               | `@upstash/context7-mcp` — up-to-date library documentation      |
-| `aws-core-mcp-server`    | `awslabs.core-mcp-server` — AWS service proxy/orchestration     |
-| `aws-terraform-mcp`      | `awslabs.terraform-mcp-server` — AWS Terraform provider docs    |
-| `aws-pricing-mcp-server` | `awslabs.aws-pricing-mcp-server` — AWS pricing API              |
-| `mcp-server-chart`       | `@antv/mcp-server-chart` — chart/diagram generation             |
-| `slack`                  | `@modelcontextprotocol/server-slack` — Slack integration        |
+| `memory`                 | `@modelcontextprotocol/server-memory` — persistent entity graph                                                               |
+| `sequential-thinking`    | `@modelcontextprotocol/server-sequential-thinking`                                                                            |
+| `github`                 | `@edjl/github-mcp` — GitHub PR/issue integration                                                                              |
+| `terraform`              | `terraform-mcp-server` — Terraform registry docs                                                                              |
+| `context7`               | `@upstash/context7-mcp` — up-to-date library documentation                                                                    |
+| `aws-core-mcp-server`    | `awslabs.core-mcp-server` — AWS service proxy/orchestration                                                                   |
+| `aws-terraform-mcp`      | `awslabs.terraform-mcp-server` — AWS Terraform provider docs                                                                  |
+| `aws-pricing-mcp-server` | `awslabs.aws-pricing-mcp-server` — AWS pricing API                                                                            |
+| `mcp-server-chart`       | `@antv/mcp-server-chart` — chart/diagram generation                                                                           |
+| `slack`                  | `@modelcontextprotocol/server-slack` — Slack integration                                                                      |
 
 ### Neovim Claude Code Plugin
 
@@ -321,14 +332,14 @@ Visit [search.nixos.org](https://search.nixos.org)
 
 **Add packages:**
 
-1. Edit `nix-modules/macos/packages.nix` (shared across profiles)
+1. Edit `nix-modules/macos/packages-tui.nix` (CLI, shared across all profiles) or `packages-gui.nix` (GUI apps, shared by laptop/work) or `packages-laptop-only.nix` (laptop only)
 2. Or edit `nix-modules/macos/personal.nix` or `work.nix` (profile-specific)
 
 **Update packages:**
 
 ```bash
 nix flake update
-darwin-rebuild switch --flake ~/nix-darwin#macos_personal
+darwin-rebuild switch --flake ~/nix-darwin#macos_laptop
 ```
 
 ### Linux
@@ -386,7 +397,7 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 **nix-darwin errors:**
 
 ```bash
-darwin-rebuild switch --flake ~/nix-darwin#macos_personal --show-trace
+darwin-rebuild switch --flake ~/nix-darwin#macos_laptop --show-trace
 ```
 
 **Zed LSP issues:**
@@ -420,7 +431,7 @@ git pull
 
 ```bash
 nix flake update
-darwin-rebuild switch --flake ~/nix-darwin#macos_personal
+darwin-rebuild switch --flake ~/nix-darwin#macos_laptop
 ```
 
 ### Linux: Re-Stow Dotfiles

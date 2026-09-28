@@ -7,14 +7,17 @@ alias sshtruenas='ssh -i ~/.ssh/id_ed25519 admin@truenas.rollet.family'
 alias ssh6rx26x1='ssh -i ~/.ssh/id_ed25519 havoc@6rx26x1.rollet.family'
 alias sshcaitsg14='ssh -i ~/.ssh/id_ed25519 nesheri@Caits-G14.rollet.family'
 alias sshxps13='ssh -i ~/.ssh/id_ed25519 havoc@xps13.rollet.family'
-alias sshopnsense='ssh -i ~/.ssh/id_ed25519 root@192.168.144.1'
+alias sshopnsense='ssh -i ~/.ssh/id_ed25519 root@opnsense.rollet.family'
 alias ssh705g4='ssh -i ~/.ssh/id_ed25519 havoc@705g4.rollet.family'
 alias ssh4kfjsn2='ssh -i ~/.ssh/id_ed25519 havoc@4kfjsn2.rollet.family'
 alias ssh2fgjsn2='ssh -i ~/.ssh/id_ed25519 havoc@2fgjsn2.rollet.family'
 alias sshk3sworkervm0='ssh -i ~/.ssh/id_ed25519 havoc@k3sworkervm0.rollet.family'
 alias sshk3sworkervm1='ssh -i ~/.ssh/id_ed25519 havoc@k3sworkervm1.rollet.family'
 alias sshha='ssh -i ~/.ssh/id_ed25519 root@homeassistant.rollet.family'
-alias sshnobaralaptop='ssh -i ~/.ssh/id_ed25519 havoc@192.168.144.35'
+# NOBARA_LAPTOP_IP has no stable DNS hostname (DHCP reservation only) -- set it
+# in the local, gitignored ~/.zshrc_envvars (not _insecure, since it's still an
+# internal LAN IP): export NOBARA_LAPTOP_IP="192.168.144.35"
+alias sshnobaralaptop='ssh -i ~/.ssh/id_ed25519 havoc@${NOBARA_LAPTOP_IP}'
 
 # Pulls the KRDP username/password from Doppler (fullhavocjosh/root_nobaralaptop)
 # at run time instead of hardcoding them, then pipes the password to sdl-freerdp
@@ -23,7 +26,7 @@ rdpnobaralaptop() {
   local user pass
   user=$(doppler secrets get KRDP_USERNAME --project fullhavocjosh --config root_nobaralaptop --plain) || return 1
   pass=$(doppler secrets get KRDP_PASSWORD --project fullhavocjosh --config root_nobaralaptop --plain) || return 1
-  printf '%s\n' "$pass" | sdl-freerdp /v:192.168.144.35 "/u:$user" /from-stdin /cert:ignore /dynamic-resolution /size:1920x1080
+  printf '%s\n' "$pass" | sdl-freerdp /v:${NOBARA_LAPTOP_IP} "/u:$user" /from-stdin /cert:ignore /dynamic-resolution /size:1920x1080
 }
 
 # Lays out aidev as tab 1 (the workspace's initial tab/pane, so it sorts first
