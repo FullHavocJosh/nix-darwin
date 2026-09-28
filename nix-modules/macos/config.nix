@@ -419,6 +419,17 @@
           fi
         fi
 
+        # mcp-verbosity-guardian is a uv-managed Python project, not part of
+        # the $HOME/mcp-* npm auto-build loop above -- sync its deps here so
+        # the first real MCP handshake (Claude Code or opencode) isn't also
+        # the first dependency resolve.
+        if command -v uv &>/dev/null && [ -f "$HOME/mcp-verbosity-guardian/pyproject.toml" ]; then
+          echo "Syncing mcp-verbosity-guardian dependencies..."
+          uv sync --project "$HOME/mcp-verbosity-guardian" && \
+            echo "mcp-verbosity-guardian dependencies up to date." || \
+            echo "Failed to sync mcp-verbosity-guardian dependencies"
+        fi
+
         MCP_CONFIG="$HOME/nix-darwin/.config/mcp/claude-desktop-mcp.json"
         if command -v claude &>/dev/null && command -v jq &>/dev/null && [ -f "$MCP_CONFIG" ]; then
           echo "Syncing MCP servers from $MCP_CONFIG to Claude Code..."
