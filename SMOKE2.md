@@ -1,1 +1,0 @@
-smoke default test

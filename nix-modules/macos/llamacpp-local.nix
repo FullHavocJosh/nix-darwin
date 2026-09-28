@@ -111,6 +111,13 @@ in
   environment.variables = {
     LLAMA_CPP_HOST = "http://localhost:8080";
     LLAMA_CPP_MODEL_LABEL = "Qwen2.5-Coder-14B";
+    # Makes plain gpc/gpa behave like gpc-local/gpa-local (local-only, no
+    # cloud fallback) on this host by default -- see the guards at the top
+    # of gpc()/gpa() in .zshrc_functions_git. Does NOT affect aiselect or
+    # aidev/opencode, which still resolve the provider normally, so llama-cpp
+    # stays a free choice there rather than a forced one. Override for a
+    # single shell session with `unset AI_LOCAL_DEFAULT`.
+    AI_LOCAL_DEFAULT = "1";
   };
 
   # system.activationScripts run as root, so plain $HOME resolves to /var/root

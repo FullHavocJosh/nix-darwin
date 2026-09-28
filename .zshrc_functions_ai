@@ -1304,17 +1304,25 @@ function aiselect() {
     opencode_zen_available=true
   fi
 
+  local llamacpp_status="${RED}✗${NC}"
+  local llamacpp_available=false
+  if _validate_llamacpp; then
+    llamacpp_status="${GREEN}✓${NC}"
+    llamacpp_available=true
+  fi
+
   # Display menu
   echo "Select AI Provider:"
   echo ""
   echo "  1) $claude_code_status Anthropic"
   echo "  2) $github_copilot_status GitHub Copilot"
   echo "  3) $opencode_zen_status OpenCode Zen (API key)"
+  echo "  4) $llamacpp_status llama.cpp (local: $(_llamacpp_model_short)) -- also usable via aidev/opencode"
   echo ""
   echo "Note: llama.cpp is automatically used for commit messages (gpc)"
   echo "      when OpenCode Zen free models are selected."
   echo ""
-  echo -n "Selection (1-3) [Enter = Anthropic, auto-selects in 5s]: "
+  echo -n "Selection (1-4) [Enter = Anthropic, auto-selects in 5s]: "
   read -t 5 -r choice
   echo ""
   [[ -z "$choice" ]] && choice="1"
@@ -1488,6 +1496,27 @@ function aiselect() {
         return 1
       fi
       ;;
+    4)
+      # llama.cpp (local llama-server)
+      if $llamacpp_available; then
+        _aiselect_commit "llama-cpp"
+        echo "${GREEN}✓${NC} Using llama.cpp (local: $(_llamacpp_model_short))"
+        echo ""
+        echo "aidev/opencode will now use llama.cpp/local-coder directly."
+        echo "gpc/gpr always prefer llama.cpp when reachable regardless of this"
+        echo "setting; gpa escalates to cloud on larger diffs or critical findings"
+        echo "unless this host defaults gpc/gpa/gpr to local-only (AI_LOCAL_DEFAULT)."
+        echo "═══════════════════════════════════════════════════════════"
+        return 0
+      else
+        echo "${RED}✗${NC} llama.cpp server not reachable at ${LLAMA_CPP_HOST:-http://macminim1.rollet.family:8080}"
+        echo ""
+        echo "Start it first (this host's llama-server-local launchd daemon, or"
+        echo "macminim1's remote one), then re-run aiselect."
+        return 1
+      fi
+      ;;
+
     
     *)
       echo "${RED}✗${NC} Invalid selection"
