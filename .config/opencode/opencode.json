@@ -5,11 +5,11 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "llama-server (remote)",
       "options": {
-        "baseURL": "http://macminim1.rollet.family:8080/v1"
+        "baseURL": "{env:LLAMA_CPP_HOST}/v1"
       },
       "models": {
         "local-coder": {
-          "name": "Qwen2.5-Coder-7B (remote)",
+          "name": "Qwen2.5-Coder (local-coder)",
           "limit": {
             "context": 81920,
             "output": 8192

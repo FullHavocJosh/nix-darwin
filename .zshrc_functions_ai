@@ -853,11 +853,11 @@ function _llamacpp_model_tier() {
 }
 
 function _llamacpp_model_short() {
-  echo "Qwen2.5-Coder-7B"
+  echo "${LLAMA_CPP_MODEL_LABEL:-Qwen2.5-Coder-7B}"
 }
 
 function _validate_llamacpp() {
-  local endpoint="http://macminim1.rollet.family:8080"
+  local endpoint="${LLAMA_CPP_HOST:-http://macminim1.rollet.family:8080}"
   local response
   response=$(curl -s --max-time 3 "${endpoint}/health" 2>/dev/null)
   if echo "$response" | grep -q '"status"'; then
