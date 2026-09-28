@@ -13,22 +13,30 @@ let
   # only the display label (_llamacpp_model_short) reads this state file.
   localModels = [
     {
+      # 32768 is this checkpoint's hard native limit -- Qwen2.5-Coder-14B-Instruct's
+      # own config.json has no rope_scaling/YaRN entry, so this is as far as it
+      # goes without going off-spec. Fine for gpc/gpa's short direct prompts;
+      # NOT enough for aidev/opencode's own system prompt (observed ~141k
+      # tokens) -- use gemma-4-26b-a4b for that instead.
       id = "qwen2.5-coder-14b";
       label = "Qwen2.5-Coder-14B";
       hfRepo = "bartowski/Qwen2.5-Coder-14B-Instruct-GGUF";
       hfFilename = "Qwen2.5-Coder-14B-Instruct-Q6_K.gguf";
       localFilename = "qwen2.5-coder-14b-instruct-q6_k.gguf";
       ctxSize = 32768;
-      note = "coding-specialized, ~12GB (Q6_K)";
+      note = "coding-specialized, ~12GB (Q6_K), 32K context (native limit)";
     }
     {
+      # google/gemma-4-26B-A4B-it's own config.json natively supports up to
+      # 262144 -- no YaRN/scaling needed. 163840 leaves real margin under that
+      # cap while comfortably covering aidev/opencode's own system prompt.
       id = "gemma-4-26b-a4b";
       label = "Gemma-4-26B-A4B";
       hfRepo = "bartowski/google_gemma-4-26B-A4B-it-GGUF";
       hfFilename = "google_gemma-4-26B-A4B-it-Q4_K_M.gguf";
       localFilename = "gemma-4-26b-a4b-it-q4_k_m.gguf";
-      ctxSize = 32768;
-      note = "MoE, general + coding, ~17GB (Q4_K_M)";
+      ctxSize = 163840;
+      note = "MoE, general + coding, ~17GB (Q4_K_M), 160K context (native max 256K)";
     }
   ];
 
@@ -135,15 +143,25 @@ let
     # Bound to loopback only -- unlike macminim1 (a stationary home server),
     # these are laptops that travel to untrusted networks, so this must never
     # be reachable off-host.
+    #
+    # --parallel 1: llama-server defaults to n_parallel=4, which silently
+    # divides --ctx-size across 4 slots (a 131072 request became four 32768
+    # slots) -- a single aidev/opencode conversation needs the full
+    # configured context in one slot, not a quarter of it.
+    #
+    # --cache-type-v q4_0 (keeping k at q8_0): higher resolution for keys
+    # than values noticeably cuts KV cache memory at large context sizes,
+    # same K/V split reported working well for local coding-agent setups.
     exec llama-server \
       --model           "$MODEL_FILE" \
       --host            "127.0.0.1" \
       --port            "8080" \
       --ctx-size        "$CTX_SIZE" \
+      --parallel        1 \
       --n-gpu-layers    99 \
       --flash-attn      on \
       --cache-type-k    q8_0 \
-      --cache-type-v    q8_0 \
+      --cache-type-v    q4_0 \
       --alias           "local-coder"
   '';
 in
