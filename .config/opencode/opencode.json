@@ -408,6 +408,13 @@
     "prettier": {
       "type": "local",
       "command": ["npx", "-y", "@prettier/mcp@0.0.1"]
+    },
+    "verbosity-guardian": {
+      "type": "local",
+      "command": ["uv", "run", "--project", "{env:HOME}/mcp-verbosity-guardian", "mcp-verbosity-guardian"],
+      "environment": {
+        "VG_THRESHOLDS": "comment_ratio=0.4,pr_words=350,ticket_words=500,similarity=0.75,fixme_chatter=5"
+      }
     }
   },
   "skills": {
@@ -418,5 +425,6 @@
       "/Users/jrollet/model-skills-perfectserve"
     ]
   },
-  "model": "opencode/claude-sonnet-4-6"
+  "model": "opencode/claude-sonnet-4-6",
+  "instructions": ["{env:HOME}/.config/opencode/verbosity-guardian-rule.md"]
 }
