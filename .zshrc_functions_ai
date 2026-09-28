@@ -1335,8 +1335,10 @@ function aiselect() {
   echo "  3) $opencode_zen_status OpenCode Zen (API key)"
   echo "  4) $llamacpp_status llama.cpp (local: $(_llamacpp_model_short)) -- also usable via aidev/opencode"
   echo ""
-  echo "Note: llama.cpp is automatically used for commit messages (gpc)"
-  echo "      when OpenCode Zen free models are selected."
+  echo "Note: gpc always prefers llama.cpp when reachable, and gpa does too"
+  echo "      on hosts that default to local (AI_LOCAL_DEFAULT) -- regardless"
+  echo "      of the selection below. That selection only changes which"
+  echo "      provider/model aidev and interactive opencode sessions use."
   echo ""
   echo -n "Selection (1-4) [Enter = Anthropic, auto-selects in 5s]: "
   read -t 5 -r choice
