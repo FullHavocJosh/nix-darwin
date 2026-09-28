@@ -642,6 +642,15 @@ $(echo -e "$suspicious_lines")" | _run_ai_plain "sonnet" 2>&1)
 }
 
 function gpc() {
+  # AI_LOCAL_DEFAULT (set system-wide on hosts with a local llama-server, see
+  # llamacpp-local.nix) makes plain gpc behave like gpc-local: local-only, no
+  # cloud fallback. Guarded on AI_LOCAL_ONLY being unset so gpc-local calling
+  # back into gpc here doesn't recurse. Override for one call with
+  # `unset AI_LOCAL_DEFAULT` first.
+  if [[ -n "$AI_LOCAL_DEFAULT" ]] && [[ -z "$AI_LOCAL_ONLY" ]]; then
+    gpc-local "$@"
+    return $?
+  fi
   # Validate git repository
   _check_git_repo || return 1
 
@@ -2141,6 +2150,16 @@ function gpa() {
   # If issues are found, prints them and exits non-zero instead of entering
   # the interactive fix loop or recursing into aidev — the caller is
   # expected to read the findings, fix them itself, and re-run `gpa --auto`.
+  # AI_LOCAL_DEFAULT (set system-wide on hosts with a local llama-server, see
+  # llamacpp-local.nix) makes plain gpa behave like gpa-local: local-only, no
+  # cloud fallback/escalation. Guarded on AI_LOCAL_ONLY being unset so
+  # gpa-local calling back into gpa here doesn't recurse. Override for one
+  # call with `unset AI_LOCAL_DEFAULT` first.
+  if [[ -n "$AI_LOCAL_DEFAULT" ]] && [[ -z "$AI_LOCAL_ONLY" ]]; then
+    gpa-local "$@"
+    return $?
+  fi
+
 
   # Parse optional --tier and --auto flags
   local tier_override="auto"
