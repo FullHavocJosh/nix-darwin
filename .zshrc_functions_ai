@@ -434,7 +434,7 @@ function _run_ai_plain() {
 
     llama-cpp)
       # llama-server exposes an OpenAI-compatible /v1/chat/completions endpoint
-      local endpoint="http://macminim1.rollet.family:8080"
+      local endpoint="${LLAMA_CPP_HOST:-http://macminim1.rollet.family:8080}"
       local model_name="${model#llama-cpp/}"
 
       # Truncate prompt to ~6000 chars to keep it fast for plain-text tasks
@@ -606,7 +606,7 @@ If there are no issues to report, respond with exactly: []
       
     llama-cpp)
       # llama-server exposes an OpenAI-compatible /v1/chat/completions endpoint
-      local endpoint="http://macminim1.rollet.family:8080"
+      local endpoint="${LLAMA_CPP_HOST:-http://macminim1.rollet.family:8080}"
       local model_name="${model#llama-cpp/}"
 
       # Truncate prompt to ~4000 chars (~1000 tokens) to keep inference fast (~10s).
@@ -1186,7 +1186,7 @@ function aiselect() {
     echo "  • gpa (code review)         → $opencode_model → Direct API"
     echo ""
     if [[ "$current_provider" == "llama-cpp" ]]; then
-      local endpoint="http://macminim1.rollet.family:8080"
+      local endpoint="${LLAMA_CPP_HOST:-http://macminim1.rollet.family:8080}"
       local cloud_provider=$(_get_cloud_fallback_provider)
       local cloud_model=$(_get_cloud_model "sonnet")
       echo ""
