@@ -1584,8 +1584,12 @@ function aiselect() {
       else
         echo "${RED}✗${NC} llama.cpp server not reachable at ${LLAMA_CPP_HOST:-http://macminim1.rollet.family:8080}"
         echo ""
-        echo "Start it first (this host's llama-server-local launchd agent, or"
-        echo "macminim1's remote one), then re-run aiselect."
+        if [[ -d "$HOME/.config/llama-cpp" ]]; then
+          echo "Start it: launchctl kickstart -k gui/\$(id -u)/org.nixos.llama-server-local"
+          echo "Then re-run aiselect."
+        else
+          echo "Start macminim1's remote llama-server, then re-run aiselect."
+        fi
         return 1
       fi
       ;;
