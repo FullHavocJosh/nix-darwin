@@ -997,6 +997,24 @@ function gpc() {
     return 1
   fi
 }
+# Local-only test variant of gpc: pins the provider chain to llama-cpp for
+# this call so it never silently falls through to a cloud provider. Fails
+# loud (via the normal retry/manual-entry prompt) instead of escalating.
+function gpc-local() {
+  local _had_prev=0
+  [[ -n "${AI_LOCAL_ONLY+x}" ]] && _had_prev=1
+  local _prev="$AI_LOCAL_ONLY"
+  export AI_LOCAL_ONLY=1
+  gpc "$@"
+  local ret=$?
+  if [[ $_had_prev -eq 1 ]]; then
+    export AI_LOCAL_ONLY="$_prev"
+  else
+    unset AI_LOCAL_ONLY
+  fi
+  return $ret
+}
+
 
 # Helper function: Open a herdr workspace for manual file editing with AI assistance
 # Usage: _gpa_create_edit_workspace <file_path> <recommendation_text>
@@ -1268,6 +1286,12 @@ function _gpa_determine_tier() {
   local total_batch_count="${3:-1}"
 
   local provider=$(_get_ai_provider)
+
+  # AI_LOCAL_ONLY (gpa-local): never escalate by diff size, always local.
+  if [[ -n "$AI_LOCAL_ONLY" ]]; then
+    echo "local"
+    return 0
+  fi
   
   # llama.cpp: Hybrid escalation strategy
   if [[ "$provider" == "llama-cpp" ]] || [[ "$provider" == "llama.cpp" ]]; then
@@ -1499,7 +1523,7 @@ ${batch_context}
     echo "  ⚪ Using local model [$_route_provider / $(_llamacpp_model_short)]" >&2
     batch_result=$(echo "$full_prompt" | _run_ai_direct "sonnet" 2>&1)
     api_exit_code=$?
-    if [ $api_exit_code -eq 1 ]; then
+    if [ $api_exit_code -eq 1 ] && [[ -z "$AI_LOCAL_ONLY" ]]; then
       local _cloud=$(_get_cloud_fallback_provider)
       echo "  ⚠ Local model failed — falling back to cloud [$_cloud]..." >&2
       batch_result=$(echo "$full_prompt" | _run_ai_direct_cloud "sonnet" 2>&1)
@@ -2635,6 +2659,8 @@ function gpa() {
                [[ "$tier_override" == "haiku" ]] || [[ "$tier_override" == "local" ]]; then
               can_escalate=true
             fi
+            # AI_LOCAL_ONLY (gpa-local): never offer the cloud escalation prompt.
+            [[ -n "$AI_LOCAL_ONLY" ]] && can_escalate=false
 
             if $can_escalate && _gpa_should_escalate "$valid_batch_issues"; then
               echo ""
@@ -2916,6 +2942,26 @@ function gpa() {
   fi
   rm -f /tmp/gpa_secrets_verdict.txt
 }
+# Local-only test variant of gpa: pins the provider chain to llama-cpp for
+# this call. Batch tier is always "local" (no size-based cloud escalation)
+# and the local-model-failed / critical-security-finding cloud fallbacks are
+# both suppressed -- a run either completes on-device or fails, never quietly
+# switches providers.
+function gpa-local() {
+  local _had_prev=0
+  [[ -n "${AI_LOCAL_ONLY+x}" ]] && _had_prev=1
+  local _prev="$AI_LOCAL_ONLY"
+  export AI_LOCAL_ONLY=1
+  gpa "$@"
+  local ret=$?
+  if [[ $_had_prev -eq 1 ]]; then
+    export AI_LOCAL_ONLY="$_prev"
+  else
+    unset AI_LOCAL_ONLY
+  fi
+  return $ret
+}
+
 
 # Returns 0 (via stdout "true"/"false") whether $1 is the repo's main
 # checkout, as opposed to a linked worktree. The main checkout is the only

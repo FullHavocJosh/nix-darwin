@@ -113,10 +113,18 @@ in
     LLAMA_CPP_MODEL_LABEL = "Qwen2.5-Coder-14B";
   };
 
+  # system.activationScripts run as root, so plain $HOME resolves to /var/root
+  # -- not the laptop's actual user -- and the background downloader would
+  # silently write nowhere the launchd daemon (which does run as `username`)
+  # can ever find. sudo --set-home -u is the pattern config.nix already uses
+  # for the same problem (see its homebrew/script activation scripts).
   system.activationScripts.llamacppLocalUserConfig.text = lib.mkAfter ''
+    sudo --set-home -u ${username} bash <<'USERSCRIPT'
     mkdir -p "$HOME/models"
-    (nohup ${llamaModelDownloader} </dev/null >>"$HOME/models/download.log" 2>&1 &)
+    nohup ${llamaModelDownloader} </dev/null >>"$HOME/models/download.log" 2>&1 &
+    disown
     echo "[llama-model-downloader-local] Download check running in background — tail ~/models/download.log"
+    USERSCRIPT
   '';
 
   launchd.daemons.llama-server-local = {

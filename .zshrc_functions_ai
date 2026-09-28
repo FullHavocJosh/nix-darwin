@@ -892,6 +892,9 @@ function _is_online() {
 }
 
 function _get_ai_provider() {
+  # gpc-local/gpa-local/gpr-local set this to pin the whole resolution chain
+  # to llama-cpp for a run, bypassing session/preference files entirely.
+  [[ -n "$AI_LOCAL_ONLY" ]] && echo "llama-cpp" && return 0
   local session_file="/tmp/.ai_provider_session_$(id -u)"
   local preference_file="$HOME/.ai_provider_preference"
   [[ -f "$session_file" ]] && cat "$session_file" && return 0

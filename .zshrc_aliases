@@ -600,6 +600,10 @@ alias sso='function awslogin() { aws sso login --profile "$1" && export AWS_PROF
 alias ssoswitch='function awsswitch() { export AWS_PROFILE="$1"; unset AWS_ACCESS_KEY_ID; unset AWS_SECRET_ACCESS_KEY; }; awsswitch'
 alias ssoexport='eval "$(aws configure export-credentials --profile $AWS_PROFILE --format env)"'
 
+# gpr never calls an AI provider (branch/PR creation only), so this is a
+# plain alias for interface symmetry with gpc-local/gpa-local, not a
+# behavioral wrapper.
+alias gpr-local='gpr_func'
 alias gpr='gpr_func'
 alias gpa-clear-cache='_gpa_clear_cache'
 alias gp='git pull && git submodule update --init --recursive'
