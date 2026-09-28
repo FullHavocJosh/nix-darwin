@@ -152,7 +152,14 @@ let
     # --cache-type-v q4_0 (keeping k at q8_0): higher resolution for keys
     # than values noticeably cuts KV cache memory at large context sizes,
     # same K/V split reported working well for local coding-agent setups.
-    exec llama-server \
+    #
+    # Absolute store path, not bare `llama-server`: launchd.user.agents jobs
+    # get launchd's own minimal default PATH, not this shell's interactive
+    # PATH -- confirmed live via /tmp/llama-server-local.error.log showing
+    # "exec: llama-server: not found" on every launchd-triggered start, even
+    # though running this exact script by hand always worked (an interactive
+    # shell's PATH includes the nix profile bin dirs; launchd's doesn't).
+    exec ${pkgs.llama-cpp}/bin/llama-server \
       --model           "$MODEL_FILE" \
       --host            "127.0.0.1" \
       --port            "8080" \
