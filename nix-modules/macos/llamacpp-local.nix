@@ -5,9 +5,73 @@
   ...
 }:
 let
+  # Every locally-servable model. `id` is the stable key written to
+  # ~/.config/llama-cpp/selected-model by aiselect and matched in the
+  # launcher's case statement below -- keep it slug-safe (no spaces/slashes).
+  # All models share one llama-server alias ("local-coder"), so nothing
+  # elsewhere in .zshrc_functions_ai/_git needs to know which one is loaded;
+  # only the display label (_llamacpp_model_short) reads this state file.
+  localModels = [
+    {
+      id = "qwen2.5-coder-14b";
+      label = "Qwen2.5-Coder-14B";
+      hfRepo = "bartowski/Qwen2.5-Coder-14B-Instruct-GGUF";
+      hfFilename = "Qwen2.5-Coder-14B-Instruct-Q6_K.gguf";
+      localFilename = "qwen2.5-coder-14b-instruct-q6_k.gguf";
+      ctxSize = 32768;
+      note = "coding-specialized, ~12GB (Q6_K)";
+    }
+    {
+      id = "gemma-4-26b-a4b";
+      label = "Gemma-4-26B-A4B";
+      hfRepo = "bartowski/google_gemma-4-26B-A4B-it-GGUF";
+      hfFilename = "google_gemma-4-26B-A4B-it-Q4_K_M.gguf";
+      localFilename = "gemma-4-26b-a4b-it-q4_k_m.gguf";
+      ctxSize = 32768;
+      note = "MoE, general + coding, ~17GB (Q4_K_M)";
+    }
+  ];
+
+  defaultModelId = (builtins.head localModels).id;
+
+  downloadBlock = m: ''
+    MODEL_FILE="${m.localFilename}"
+    HF_REPO="${m.hfRepo}"
+    HF_FILENAME="${m.hfFilename}"
+    DEST="$MODELS_DIR/$MODEL_FILE"
+    STAMP="$MODELS_DIR/.downloaded-$MODEL_FILE"
+
+    if [ -f "$STAMP" ] && [ -f "$DEST" ]; then
+      log "Model already present: $MODEL_FILE (${m.label}) — skipping download"
+    else
+      RESUME_FLAG=""
+      if [ -f "$DEST" ]; then
+        log "Partial download found, will attempt resume: $MODEL_FILE"
+        RESUME_FLAG="-C -"
+      fi
+
+      log "Starting download: $MODEL_FILE (${m.label})"
+      log "Source: https://huggingface.co/$HF_REPO/resolve/main/$HF_FILENAME"
+      log "Destination: $DEST"
+
+      if curl -fL ''${RESUME_FLAG} \
+          --retry 5 --retry-delay 10 --retry-max-time 3600 \
+          --connect-timeout 30 \
+          -o "$DEST" \
+          "https://huggingface.co/$HF_REPO/resolve/main/$HF_FILENAME" \
+          >> "$LOG" 2>&1; then
+        touch "$STAMP"
+        log "Download complete: $MODEL_FILE"
+      else
+        log "ERROR: Download failed for $MODEL_FILE — see $LOG for details"
+        rm -f "$DEST"
+      fi
+    fi
+  '';
+
   llamaModelDownloader = pkgs.writeShellScript "llama-model-downloader-local" ''
     #!/usr/bin/env bash
-    set -euo pipefail
+    set -uo pipefail
 
     MODELS_DIR="$HOME/models"
     LOG="$MODELS_DIR/download.log"
@@ -17,47 +81,15 @@ let
 
     mkdir -p "$MODELS_DIR"
 
-    # Qwen 2.5 Coder 14B Q6_K for coding tasks (GPA/GPC functions), sized for
-    # a 32GB laptop that also runs a normal daily app load -- leaves ~20GB
-    # headroom rather than the ~20GB a 32B Q4 quant would consume outright.
-    MODEL_FILE="qwen2.5-coder-14b-instruct-q6_k.gguf"
-    HF_REPO="bartowski/Qwen2.5-Coder-14B-Instruct-GGUF"
-    HF_FILENAME="Qwen2.5-Coder-14B-Instruct-Q6_K.gguf"
-    RAM_BYTES=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
-    RAM_GB=$(( RAM_BYTES / 1024 / 1024 / 1024 ))
-    TIER="14B Q6_K (''${RAM_GB} GB device)"
+    ${lib.concatMapStringsSep "\n" downloadBlock localModels}
+  '';
 
-    DEST="$MODELS_DIR/$MODEL_FILE"
-    STAMP="$MODELS_DIR/.downloaded-$MODEL_FILE"
-
-    if [ -f "$STAMP" ] && [ -f "$DEST" ]; then
-      log "Model already present: $MODEL_FILE ($TIER) — skipping download"
-      exit 0
-    fi
-
-    RESUME_FLAG=""
-    if [ -f "$DEST" ]; then
-      log "Partial download found, will attempt resume: $MODEL_FILE"
-      RESUME_FLAG="-C -"
-    fi
-
-    log "Starting download: $MODEL_FILE ($TIER)"
-    log "Source: https://huggingface.co/$HF_REPO/resolve/main/$HF_FILENAME"
-    log "Destination: $DEST"
-
-    if curl -fL ''${RESUME_FLAG} \
-        --retry 5 --retry-delay 10 --retry-max-time 3600 \
-        --connect-timeout 30 \
-        -o "$DEST" \
-        "https://huggingface.co/$HF_REPO/resolve/main/$HF_FILENAME" \
-        >> "$LOG" 2>&1; then
-      touch "$STAMP"
-      log "Download complete: $MODEL_FILE"
-    else
-      log "ERROR: Download failed — see $LOG for details"
-      rm -f "$DEST"
-      exit 1
-    fi
+  launcherCaseBlock = m: ''
+      ${m.id})
+        MODEL_FILE="$MODELS_DIR/${m.localFilename}"
+        CTX_SIZE=${toString m.ctxSize}
+        LABEL="${m.label}"
+        ;;
   '';
 
   llamaServerLauncher = pkgs.writeShellScript "llama-server-local-launcher" ''
@@ -65,20 +97,32 @@ let
     set -euo pipefail
 
     MODELS_DIR="$HOME/models"
+    STATE_FILE="$HOME/.config/llama-cpp/selected-model"
     LOG_PREFIX="[llama-server-local-launcher]"
 
     log() { echo "$LOG_PREFIX $*"; }
 
-    RAM_BYTES=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
-    RAM_GB=$(( RAM_BYTES / 1024 / 1024 / 1024 ))
-    log "Detected ''${RAM_GB} GB unified memory"
-    MODEL_FILE="$MODELS_DIR/qwen2.5-coder-14b-instruct-q6_k.gguf"
-    # 32K matches the model's native training context, same reasoning as the
-    # remote macminim1 server (llamacpp.nix) -- no RoPE scaling needed.
-    CTX_SIZE=32768
-    TIER="14B Q6_K (''${RAM_GB} GB device)"
+    SELECTED="${defaultModelId}"
+    if [ -f "$STATE_FILE" ]; then
+      CANDIDATE="$(cat "$STATE_FILE")"
+      case "$CANDIDATE" in
+        ${lib.concatMapStringsSep "|" (m: m.id) localModels})
+          SELECTED="$CANDIDATE"
+          ;;
+        *)
+          log "WARNING: unknown selected-model '$CANDIDATE', falling back to ${defaultModelId}"
+          ;;
+      esac
+    fi
 
-    log "Selected tier: $TIER"
+    MODEL_FILE=""
+    CTX_SIZE=32768
+    LABEL=""
+    case "$SELECTED" in
+    ${lib.concatMapStringsSep "" launcherCaseBlock localModels}
+    esac
+
+    log "Selected model: $SELECTED ($LABEL)"
     log "Model file: $MODEL_FILE"
 
     if [ ! -f "$MODEL_FILE" ]; then
@@ -110,7 +154,7 @@ in
 
   environment.variables = {
     LLAMA_CPP_HOST = "http://localhost:8080";
-    LLAMA_CPP_MODEL_LABEL = "Qwen2.5-Coder-14B";
+    LLAMA_CPP_MODEL_LABEL = "${(builtins.head localModels).label}";
     # Makes plain gpc/gpa behave like gpc-local/gpa-local (local-only, no
     # cloud fallback) on this host by default -- see the guards at the top
     # of gpc()/gpa() in .zshrc_functions_git. Does NOT affect aiselect or
@@ -122,21 +166,27 @@ in
 
   # system.activationScripts run as root, so plain $HOME resolves to /var/root
   # -- not the laptop's actual user -- and the background downloader would
-  # silently write nowhere the launchd daemon (which does run as `username`)
+  # silently write nowhere the launchd agent (which does run as `username`)
   # can ever find. sudo --set-home -u is the pattern config.nix already uses
   # for the same problem (see its homebrew/script activation scripts).
   system.activationScripts.llamacppLocalUserConfig.text = lib.mkAfter ''
     sudo --set-home -u ${username} bash <<'USERSCRIPT'
     mkdir -p "$HOME/models"
+    mkdir -p "$HOME/.config/llama-cpp"
+    if [ ! -f "$HOME/.config/llama-cpp/selected-model" ]; then
+      echo "${defaultModelId}" > "$HOME/.config/llama-cpp/selected-model"
+    fi
     nohup ${llamaModelDownloader} </dev/null >>"$HOME/models/download.log" 2>&1 &
     disown
     echo "[llama-model-downloader-local] Download check running in background — tail ~/models/download.log"
     USERSCRIPT
   '';
 
-  launchd.daemons.llama-server-local = {
+  # A per-user LaunchAgent (not a system LaunchDaemon) so aiselect can
+  # restart it with `launchctl kickstart -k gui/$(id -u)/org.nixos.llama-server-local`
+  # to switch models, without needing sudo each time.
+  launchd.user.agents.llama-server-local = {
     serviceConfig = {
-      UserName = username;
       ProgramArguments = [
         "/bin/bash"
         "${llamaServerLauncher}"
