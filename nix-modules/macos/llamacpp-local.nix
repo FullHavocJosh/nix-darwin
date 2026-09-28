@@ -182,12 +182,31 @@ in
     AI_LOCAL_DEFAULT = "1";
   };
 
-  # system.activationScripts run as root, so plain $HOME resolves to /var/root
-  # -- not the laptop's actual user -- and the background downloader would
-  # silently write nowhere the launchd agent (which does run as `username`)
-  # can ever find. sudo --set-home -u is the pattern config.nix already uses
-  # for the same problem (see its homebrew/script activation scripts).
-  system.activationScripts.llamacppLocalUserConfig.text = lib.mkAfter ''
+  # IMPORTANT: nix-darwin's real "activate" script (system.build.toplevel,
+  # /run/current-system/activate) is assembled from a HARDCODED list of
+  # recognized system.activationScripts names in nix-darwin's own
+  # modules/system/activation-scripts.nix (checks, groups, users, etc,
+  # launchd, homebrew, postActivation, ...). Any other attribute name is
+  # accepted by the option's type (attrsOf submodule) and evaluates fine --
+  # `nix eval` on it looks completely correct -- but its `.text` is silently
+  # never included in the built closure, so it never runs on
+  # `darwin-rebuild switch`. This repo already hit and fixed this exact class
+  # of bug once (PR #74, packagesUserConfig -> postActivation). This block
+  # originally used a made-up name (llamacppLocalUserConfig) and had the same
+  # bug: the model downloader and ~/.config/llama-cpp/selected-model default
+  # never actually ran, which meant the model file was never present, which
+  # meant the launchd.user.agents.llama-server-local daemon below crash-
+  # looped on every start instead of running. `postActivation` (also used by
+  # packages-tui.nix, shared via lib.mkAfter -- multiple files' text merges,
+  # it doesn't overwrite) is the real, nix-darwin-documented extension point.
+  #
+  # system.activationScripts run as root, so plain $HOME resolves to
+  # /var/root -- not the laptop's actual user -- and the background
+  # downloader would silently write nowhere the launchd agent (which does
+  # run as `username`) can ever find. sudo --set-home -u is the pattern
+  # config.nix already uses for the same problem (see its homebrew/script
+  # activation scripts).
+  system.activationScripts.postActivation.text = lib.mkAfter ''
     sudo --set-home -u ${username} bash <<'USERSCRIPT'
     mkdir -p "$HOME/models"
     mkdir -p "$HOME/.config/llama-cpp"
@@ -198,6 +217,21 @@ in
     disown
     echo "[llama-model-downloader-local] Download check running in background — tail ~/models/download.log"
     USERSCRIPT
+
+    # nix-darwin's own userLaunchd activation (which runs before
+    # postActivation, per its documented script ordering) installs/copies
+    # this plist, but a `sudo darwin-rebuild switch` run mid-session often
+    # can't get launchd to actually load it into the already-running GUI
+    # session until the next login. Explicitly bootstrap it (first-ever
+    # install) or kickstart it (already bootstrapped from a prior switch,
+    # e.g. after being stopped or crash-looped from a missing model file)
+    # so it starts right away instead of silently staying dark until reboot.
+    LLAMA_AGENT_PLIST="/Users/${username}/Library/LaunchAgents/org.nixos.llama-server-local.plist"
+    if [ -f "$LLAMA_AGENT_PLIST" ]; then
+      sudo --set-home -u ${username} launchctl bootstrap "gui/$(id -u ${username})" "$LLAMA_AGENT_PLIST" 2>/dev/null \
+        || sudo --set-home -u ${username} launchctl kickstart -k "gui/$(id -u ${username})/org.nixos.llama-server-local" 2>/dev/null \
+        || true
+    fi
   '';
 
   # A per-user LaunchAgent (not a system LaunchDaemon) so aiselect can
