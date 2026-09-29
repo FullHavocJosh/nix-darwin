@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\"; fi"
+            "command": "if [ -f \"$HOME/mcp-stack-fullhavoc/hooks/pretooluse_gate.py\" ] && [ -x \"$HOME/mcp-stack-fullhavoc/.venv/bin/python\" ]; then \"$HOME/mcp-stack-fullhavoc/.venv/bin/python\" \"$HOME/mcp-stack-fullhavoc/hooks/pretooluse_gate.py\"; fi"
           },
           {
             "type": "command",
@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-fullhavoc/dist/hook.js\"; fi"
+            "command": "if [ -f \"$HOME/mcp-stack-fullhavoc/hooks/pretooluse_gate.py\" ] && [ -x \"$HOME/mcp-stack-fullhavoc/.venv/bin/python\" ]; then \"$HOME/mcp-stack-fullhavoc/.venv/bin/python\" \"$HOME/mcp-stack-fullhavoc/hooks/pretooluse_gate.py\"; fi"
           },
           {
             "type": "command",
@@ -43,15 +43,6 @@
           {
             "type": "command",
             "command": "if [ -f \"$HOME/.claude-global/hooks/token-optimizer/pretooluse-router.mjs\" ]; then node \"$HOME/.claude-global/hooks/token-optimizer/pretooluse-router.mjs\"; fi"
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|MultiEdit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ -f \"$HOME/mcp-verbosity-guardian/hooks/claude_pretooluse_gate.py\" ] && [ -x \"$HOME/mcp-verbosity-guardian/.venv/bin/python\" ]; then \"$HOME/mcp-verbosity-guardian/.venv/bin/python\" \"$HOME/mcp-verbosity-guardian/hooks/claude_pretooluse_gate.py\"; fi"
           }
         ]
       }
