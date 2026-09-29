@@ -255,62 +255,11 @@
     },
     "mcp-lazy": {
       "type": "local",
-      "command": ["npx", "-y", "mcp-lazy", "serve"]
-    },
-    "hetzner": {
-      "type": "local",
-      "command": ["npx", "-y", "@lazyants/hetzner-mcp-server@2.5.0"],
+      "command": ["npx", "-y", "mcp-lazy", "serve"],
       "environment": {
-        "HETZNER_API_TOKEN": "{env:HETZNER_API_TOKEN}"
-      }
-    },
-    "opnsense": {
-      "type": "local",
-      "command": ["npx", "-y", "@richard-stovall/opnsense-mcp-server@0.5.3"],
-      "environment": {
-        "OPNSENSE_URL": "{env:OPNSENSE_URL}",
-        "OPNSENSE_API_KEY": "{env:OPNSENSE_API_KEY}",
-        "OPNSENSE_API_SECRET": "{env:OPNSENSE_API_SECRET}",
-        "OPNSENSE_VERIFY_SSL": "false"
-      }
-    },
-    "truenas": {
-      "type": "local",
-      "command": ["uvx", "--with", "mcp<2", "truenas-mcp-server@3.0.2"],
-      "environment": {
-        "TRUENAS_URL": "{env:TRUENAS_URL}",
-        "TRUENAS_API_KEY": "{env:TRUENAS_API_KEY}"
-      }
-    },
-    "awx": {
-      "type": "local",
-      "command": [
-        "uvx",
-        "--with",
-        "mcp<2",
-        "--from",
-        "git+https://github.com/SurgeX-Labs/awx-mcp-server.git@40870878846c10c8433894a2fbd1be5641ea357d#subdirectory=server",
-        "python",
-        "-m",
-        "awx_mcp_server"
-      ],
-      "environment": {
-        "AWX_BASE_URL": "{env:AWX_BASE_URL}",
-        "AWX_TOKEN": "{env:AWX_TOKEN}"
-      }
-    },
-    "atlassian": {
-      "type": "local",
-      "command": ["uvx", "mcp-atlassian@0.23.1"],
-      "environment": {
-        "JIRA_URL": "https://smartpager.atlassian.net",
         "JIRA_USERNAME": "{env:ATLASSIAN_EMAIL}",
         "JIRA_API_TOKEN": "{env:ATLASSIAN_API_TOKEN}"
       }
-    },
-    "doppler": {
-      "type": "local",
-      "command": ["npx", "-y", "@dopplerhq/mcp-server@1.0.5"]
     },
     "verbosity-guardian": {
       "type": "local",
