@@ -274,5 +274,8 @@
   },
   "plugin": ["@zenobius/opencode-skillful"],
   "model": "opencode/claude-sonnet-4-6",
-  "instructions": ["{env:HOME}/.config/opencode/verbosity-guardian-rule.md"]
+  "instructions": ["{env:HOME}/.config/opencode/verbosity-guardian-rule.md"],
+  "skills": {
+    "paths": []
+  }
 }
