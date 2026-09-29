@@ -9,42 +9,7 @@
       },
       "models": {
         "local-coder": {
-          "name": "Qwen2.5-Coder-7B (macminim1 remote)",
-          "limit": {
-            "context": 32768,
-            "output": 8192
-          }
-        },
-        "qwen2.5-coder-14b": {
-          "name": "Qwen2.5-Coder-14B",
-          "limit": {
-            "context": 32768,
-            "output": 8192
-          }
-        },
-        "gemma-4-26b-a4b": {
-          "name": "Gemma-4-26B-A4B",
-          "limit": {
-            "context": 163840,
-            "output": 16384
-          }
-        },
-        "glm-4.7-flash": {
-          "name": "GLM-4.7-Flash",
-          "limit": {
-            "context": 163840,
-            "output": 16384
-          }
-        },
-        "qwen3-coder-30b-a3b": {
-          "name": "Qwen3-Coder-30B-A3B",
-          "limit": {
-            "context": 163840,
-            "output": 16384
-          }
-        },
-        "devstral-small-2-24b": {
-          "name": "Devstral-Small-2-24B",
+          "name": "llama.cpp",
           "limit": {
             "context": 163840,
             "output": 16384

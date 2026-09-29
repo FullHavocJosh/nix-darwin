@@ -209,7 +209,7 @@ function _get_opencode_model() {
 
   # Special case: llama.cpp - always return the local model
   if [[ "$provider" == "llama-cpp" ]] || [[ "$provider" == "llama.cpp" ]]; then
-    echo "llama.cpp/$(_llamacpp_local_model_id)"
+    echo "llama.cpp/local-coder"
     return 0
   fi
 
@@ -258,7 +258,7 @@ function _get_opencode_model() {
       echo "github-copilot/$(_get_copilot_claude_model "$task_type")"
       ;;
     llama-cpp|llama.cpp)
-      echo "llama.cpp/$(_llamacpp_local_model_id)"
+      echo "llama.cpp/local-coder"
       ;;
     *)
       echo "github-copilot/$(_get_copilot_claude_model sonnet)"
@@ -757,7 +757,7 @@ function aidev() {
       fi
       ;;
     llama-cpp)
-      local local_model="llama.cpp/$(_llamacpp_local_model_id)"
+      local local_model="llama.cpp/local-coder"
       echo "${GREEN}✓${NC} Model:    ⚪ $(_llamacpp_model_short) → $local_model"
       echo ""
       if $print_mode; then
@@ -851,20 +851,6 @@ function _llamacpp_model_tier() {
   ram_gb=$(( ram_bytes / 1024 / 1024 / 1024 ))
   echo "qwen2.5-coder-7b Q8 (~8 GB, ${ram_gb} GB device)"
 }
-# Returns the opencode.json model key matching whatever's actually loaded:
-# the selected-model state file's id on hosts with a local switchable server
-# (llamacpp-local.nix), or "local-coder" (the alias macminim1's untouched
-# remote llama-server always reports) everywhere else. Each id must have a
-# matching entry under provider."llama.cpp".models in opencode.json.
-function _llamacpp_local_model_id() {
-  local state_file="$HOME/.config/llama-cpp/selected-model"
-  if [[ -f "$state_file" ]]; then
-    cat "$state_file"
-  else
-    echo "local-coder"
-  fi
-}
-
 
 
 # Keep in sync with `localModels` in nix-modules/macos/llamacpp-local.nix --
@@ -1233,7 +1219,7 @@ function aiselect() {
       echo "  gpc  → ⚪ local always  (commit messages)"
       echo "  gpr  → ⚪ local always  (PR creation)"
       echo "  gpa  → ⚪ local (small diffs) → 🟢 Haiku (medium) → 🔵 Sonnet (large or critical/security)"
-      echo "  aidev → ⚪ local (claude with llama.cpp/$(_llamacpp_local_model_id))"
+      echo "  aidev → ⚪ local (claude with llama.cpp, currently: $(_llamacpp_model_short))"
     fi
     echo ""
     echo "Note: Run 'aiselect' to change provider. Changes apply immediately"
@@ -1614,7 +1600,7 @@ function aiselect() {
         echo ""
         echo "${GREEN}✓${NC} Using llama.cpp (local: $(_llamacpp_model_short))"
         echo ""
-        echo "aidev/opencode will now use llama.cpp/$(_llamacpp_local_model_id) directly."
+        echo "aidev/opencode will now use llama.cpp (currently: $(_llamacpp_model_short))."
         echo "gpc/gpr always prefer llama.cpp when reachable regardless of this"
         echo "setting; gpa escalates to cloud on larger diffs or critical findings"
         echo "unless this host defaults gpc/gpa/gpr to local-only (AI_LOCAL_DEFAULT)."
