@@ -141,6 +141,31 @@ let
 
     mkdir -p "$MODELS_DIR"
 
+    # Delete GGUFs (and their download stamps) for models no longer listed
+    # in localModels -- these are multi-GB files and swapping one entry out
+    # (e.g. replacing qwen2.5-coder-14b with qwen3-4b-instruct) otherwise
+    # leaves the old one orphaned on disk forever. Only ever touches files
+    # this same script previously stamped as downloaded, never anything
+    # placed in $MODELS_DIR by hand.
+    CURRENT_MODEL_FILES=(
+      ${lib.concatMapStringsSep "\n      " (m: ''"${m.localFilename}"'') localModels}
+    )
+    for STAMP in "$MODELS_DIR"/.downloaded-*; do
+      [ -f "$STAMP" ] || continue
+      STAMP_FILE="''${STAMP#"$MODELS_DIR"/.downloaded-}"
+      KEEP=false
+      for CUR in "''${CURRENT_MODEL_FILES[@]}"; do
+        if [ "$STAMP_FILE" = "$CUR" ]; then
+          KEEP=true
+          break
+        fi
+      done
+      if [ "$KEEP" = false ]; then
+        log "Removing orphaned model no longer in localModels: $STAMP_FILE"
+        rm -f "$MODELS_DIR/$STAMP_FILE" "$STAMP"
+      fi
+    done
+
     ${lib.concatMapStringsSep "\n" downloadBlock localModels}
   '';
 
