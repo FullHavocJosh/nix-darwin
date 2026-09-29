@@ -251,12 +251,14 @@
         "{env:HOME}/mcp-context-guardian-perfectserve/dist/index.js"
       ]
     },
-    "context-guardian-fullhavoc": {
+    "mcp-stack-fullhavoc": {
       "type": "local",
       "command": [
-        "node",
-        "{env:HOME}/mcp-context-guardian-fullhavoc/dist/index.js"
-      ]
+        "{env:HOME}/mcp-stack-fullhavoc/.venv/bin/mcp-stack-fullhavoc"
+      ],
+      "environment": {
+        "VG_THRESHOLDS": "comment_ratio=0.4,pr_words=350,ticket_words=500,similarity=0.75,fixme_chatter=5"
+      }
     },
     "token-optimizer-mcp": {
       "type": "local",
@@ -408,13 +410,6 @@
     "prettier": {
       "type": "local",
       "command": ["npx", "-y", "@prettier/mcp@0.0.1"]
-    },
-    "verbosity-guardian": {
-      "type": "local",
-      "command": ["uv", "run", "--project", "{env:HOME}/mcp-verbosity-guardian", "mcp-verbosity-guardian"],
-      "environment": {
-        "VG_THRESHOLDS": "comment_ratio=0.4,pr_words=350,ticket_words=500,similarity=0.75,fixme_chatter=5"
-      }
     }
   },
   "skills": {
