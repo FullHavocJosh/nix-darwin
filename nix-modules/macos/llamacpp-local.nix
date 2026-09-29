@@ -147,6 +147,15 @@ let
     # leaves the old one orphaned on disk forever. Only ever touches files
     # this same script previously stamped as downloaded, never anything
     # placed in $MODELS_DIR by hand.
+    #
+    # CAUTION for anyone tempted to copy this into llamacpp.nix (the
+    # macos_desktop / macminim1 module): that machine's model file
+    # (qwen2.5-coder-7b-instruct-q8_0.gguf, hardcoded for azerothcore's own
+    # chat integration) happens to share its exact filename with an old,
+    # genuinely-unused leftover this script correctly removes on the laptop.
+    # Same name, different machine, different purpose -- this cleanup logic
+    # must stay scoped to llamacpp-local.nix (macos_laptop/macos_work only,
+    # see flake.nix) and never run against desktop's $HOME/models.
     CURRENT_MODEL_FILES=(
       ${lib.concatMapStringsSep "\n      " (m: ''"${m.localFilename}"'') localModels}
     )
