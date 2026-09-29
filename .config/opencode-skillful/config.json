@@ -1,0 +1,13 @@
+{
+  "debug": false,
+  "basePaths": [
+    "/Users/havoc/model-skills-fullhavoc",
+    "/Users/havoc/model-skills-perfectserve",
+    "/Users/jrollet/model-skills-fullhavoc",
+    "/Users/jrollet/model-skills-perfectserve"
+  ],
+  "promptRenderer": "xml",
+  "modelRenderers": {
+    "local-coder": "md"
+  }
+}
