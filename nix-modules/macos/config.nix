@@ -522,14 +522,13 @@
           else
             rm -f "$OPENCODE_CONFIG"
             cp "$REPO_OPENCODE_CONFIG" "$OPENCODE_CONFIG"
-            for SKILLS_REPO in "$HOME/model-skills-fullhavoc" "$HOME/model-skills-perfectserve"; do
-              [ -d "$SKILLS_REPO" ] || continue
-              if ! jq -e --arg p "$SKILLS_REPO" '(.skills.paths // []) | contains([$p])' "$OPENCODE_CONFIG" &>/dev/null; then
-                UPDATED=$(jq --arg p "$SKILLS_REPO" '.skills.paths = ((.skills.paths // []) + [$p] | unique)' "$OPENCODE_CONFIG")
-                printf '%s\n' "$UPDATED" > "$OPENCODE_CONFIG"
-                echo "Added $SKILLS_REPO to OpenCode skills.paths"
-              fi
-            done
+            # Skill directories are no longer injected into .skills.paths here --
+            # the opencode-skillful plugin (see .config/opencode-skillful/config.json)
+            # discovers them lazily via its own basePaths instead. This loop used to
+            # unconditionally re-add $HOME/model-skills-* on every activation, which
+            # silently reintroduced eager skill loading (and the ~17K token cost that
+            # comes with it) on every darwin-rebuild regardless of what opencode.json's
+            # own skills.paths was committed as.
 
             for EXCLUDED in $MCP_EXCLUDE_SERVERS; do
               if jq -e --arg s "$EXCLUDED" '.mcp[$s]' "$OPENCODE_CONFIG" &>/dev/null; then
