@@ -13,18 +13,23 @@ let
   # only the display label (_llamacpp_model_short) reads this state file.
   localModels = [
     {
-      # 32768 is this checkpoint's hard native limit -- Qwen2.5-Coder-14B-Instruct's
-      # own config.json has no rope_scaling/YaRN entry, so this is as far as it
-      # goes without going off-spec. Fine for gpc/gpa's short direct prompts;
-      # NOT enough for aidev/opencode's own system prompt (observed ~141k
-      # tokens) -- use gemma-4-26b-a4b for that instead.
-      id = "qwen2.5-coder-14b";
-      label = "Qwen2.5-Coder-14B";
-      hfRepo = "bartowski/Qwen2.5-Coder-14B-Instruct-GGUF";
-      hfFilename = "Qwen2.5-Coder-14B-Instruct-Q6_K.gguf";
-      localFilename = "qwen2.5-coder-14b-instruct-q6_k.gguf";
-      ctxSize = 32768;
-      note = "coding-specialized, ~12GB (Q6_K), 32K context (native limit)";
+      # Replaces the former qwen2.5-coder-14b slot: that checkpoint's own
+      # config.json capped out at 32768 with no rope_scaling/YaRN entry,
+      # too small for aidev/opencode's own system prompt regardless of
+      # available RAM (verified: it's an architectural training-time limit,
+      # not a memory tradeoff). Qwen3-4B-Instruct-2507's own config.json
+      # natively supports up to 262144 with no scaling needed -- smaller and
+      # faster than the checkpoint it replaces, with real context headroom.
+      # Not a dedicated coding checkpoint (Qwen3-Coder's smallest official
+      # release is the 30B-A3B already in this list) but capable at code for
+      # its size.
+      id = "qwen3-4b-instruct";
+      label = "Qwen3-4B-Instruct-2507";
+      hfRepo = "bartowski/Qwen_Qwen3-4B-Instruct-2507-GGUF";
+      hfFilename = "Qwen_Qwen3-4B-Instruct-2507-Q8_0.gguf";
+      localFilename = "qwen3-4b-instruct-2507-q8_0.gguf";
+      ctxSize = 163840;
+      note = "general-purpose (not coding-specialized), ~4.3GB (Q8_0), 163K context (native max 262144, no scaling)";
     }
     {
       # google/gemma-4-26B-A4B-it's own config.json natively supports up to
