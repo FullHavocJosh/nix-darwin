@@ -956,11 +956,10 @@ function aistack_func() {
   setopt local_options
   [[ $prev_opts == *x* ]] && setopt no_xtrace
 
+  # Task is optional: run bare `aistack` with no argument and describe the
+  # task live in the chat instead -- tier 0 is already a live conversation,
+  # so requiring it as a shell arg up front was redundant with that.
   local task="$1"
-  if [[ -z "$task" ]]; then
-    echo "Usage: aistack \"<task description>\"" >&2
-    return 1
-  fi
 
   local repo_root
   repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
@@ -995,14 +994,15 @@ function aistack_func() {
   # directive. Exiting before getting a reply you're happy with -- or before
   # chatting at all -- aborts; no tiers run.
   #
-  # The task is seeded into the model's actual context via --read, not just
-  # printed to the terminal: printing alone only tells the human, and
-  # verified live, a human reply that doesn't restate the task produces a
-  # generic answer disconnected from it -- tier 1 went and explored the repo
-  # instead of creating the requested file, on a directive that said "analyze
-  # the provided code" with no code ever having been provided. --read makes
-  # the task part of the model's context from the first turn regardless of
-  # what's typed.
+  # If a task was given, it's seeded into the model's actual context via
+  # --read, not just printed to the terminal: printing alone only tells the
+  # human, and verified live, a human reply that doesn't restate the task
+  # produces a generic answer disconnected from it -- tier 1 went and
+  # explored the repo instead of creating the requested file, on a
+  # directive that said "analyze the provided code" with no code ever
+  # having been provided. --read makes the task part of the model's context
+  # from the first turn regardless of what's typed. With no task given,
+  # the seed instead tells the model to ask what you want done.
   local endpoint="${LLAMA_CPP_HOST:-http://macminim1.rollet.family:8080}"
   local settings_file="$HOME/.config/aider/model-settings.yml"
   local chat_history_file="$cache_dir/aistack-plan-chat-$$.md"
@@ -1015,6 +1015,17 @@ function aistack_func() {
     return 1
   fi
 
+  local task_section
+  if [[ -n "$task" ]]; then
+    task_section="## Task
+
+$task"
+  else
+    task_section="## Task
+
+Not given yet -- ask the user what they'd like done, then help plan it."
+  fi
+
   cat > "$seed_file" <<SEEDEOF
 # aistack tier 0 -- planning context
 
@@ -1023,9 +1034,7 @@ You are the planning/supervising stage of a cost-tiered coding pipeline:
 - Tier 1: OpenCode Zen's free tier. Does the actual editing.
 - Tier 2: Claude via GitHub Copilot. Paid, last resort.
 
-## Task
-
-$task
+$task_section
 
 Discuss this task with the user and refine a plan together. When they are
 happy with it, your LAST reply before they exit should be the final
@@ -1034,12 +1043,19 @@ SEEDEOF
 
   echo "── Tier 0 (llama-cpp): live planning session -- exit (Ctrl-D or /exit) when you're happy with the plan ──"
   echo ""
-  echo "TASK: $task"
+  if [[ -n "$task" ]]; then
+    echo "TASK: $task"
+  else
+    echo "No task given -- describe what you want done as your first message below."
+  fi
   echo ""
   echo "Talking to llama.cpp. It plans and supervises; OpenCode Zen's free tier"
   echo "does the actual editing; Claude via GitHub Copilot is the paid last"
   echo "resort. Describe the task, push back on its plan, ask it to revise --"
   echo "whatever its last reply says before you exit becomes tier 1's directive."
+  echo ""
+  echo "(llama.cpp is a slow local model -- after you send a message, a reply can"
+  echo "take a while with nothing visible in between. That's normal, not stuck.)"
   echo ""
 
   aider \
@@ -1074,6 +1090,11 @@ SEEDEOF
   fi
 
   if [[ -n "$directive" ]]; then
+    # No task was given up front -- the directive agreed live in chat is the
+    # closest thing to one now, and later tier1/judge/tier2 prompts all
+    # reference $task (e.g. "ORIGINAL TASK: $task"); backfill it rather than
+    # leave those blank.
+    [[ -z "$task" ]] && task="$directive"
     echo ""
     echo "Directive for tier 1:"
     echo "$directive"
