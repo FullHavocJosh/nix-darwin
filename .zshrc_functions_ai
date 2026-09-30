@@ -458,9 +458,20 @@ function _herdr_report_opencode_idle() {
 }
 
 # Strips Aider's own chrome (version/model/repo banner, the trailing
-# "Tokens: N sent, M received." line) and a markdown code fence wrapping the
-# answer -- GLM in particular wraps JSON responses in ```json ... ```, the
-# same fence-stripping gpc/gpa's old direct-curl path already needed.
+# "Tokens: N sent, M received." line), a leaked <think>...</think> block, and
+# a markdown code fence wrapping the answer -- GLM in particular wraps JSON
+# responses in ```json ... ```, the same fence-stripping gpc/gpa's old
+# direct-curl path already needed.
+#
+# The <think> strip is needed despite model-settings.yml's
+# chat_template_kwargs.enable_thinking=false: on the currently loaded model
+# (GLM-4.7-Flash via llama-server --reasoning-format none) that setting does
+# not stop the block from appearing in the response content -- only removing
+# it from a separate reasoning_content field would, and this server config
+# doesn't split it out. Verified live: every local-coder-plan/-judge call so
+# far has emitted one. The second rule (no closing tag) covers a thinking
+# block truncated by max_tokens before it could close -- nothing after an
+# unclosed <think> is a usable answer either.
 function _aider_extract_response() {
   perl -0777 -pe '
     s/^Warning:.*\n//mg;
@@ -472,6 +483,8 @@ function _aider_extract_response() {
     s/^Repo-map:.*\n//mg;
     s/^Added .* to the chat.*\n//mg;
     s/^Tokens: .* sent, .* received\.\s*\n?//mg;
+    s/<think>.*?<\/think>\s*//is;
+    s/<think>.*$//is;
     s/^\s*```(?:json)?\s*\n//;
     s/\n?```\s*$//;
     s/^\s+//;
@@ -865,6 +878,269 @@ function _run_ai_command() {
 function _get_ai_command() {
   local task_type="${1:-sonnet}"
   echo "_run_ai_direct $task_type"
+}
+# aistack -- tiered cost-escalation coding stack with a real supervisor.
+#
+# Tier 0: llama.cpp, via aider (--chat-mode ask, read-only, no edit tools).
+#   Plans once at the start, then re-judges tier 1's progress after every
+#   iteration. Tier 0 never edits the workspace itself -- it only plans and
+#   monitors. (Earlier draft ran tier 0 through `opencode run` in full agent
+#   mode; that deadlocked for 600s on a trivial prompt because the agent-mode
+#   system/tool-schema prompt is expensive to prefill on this local model.
+#   aider's ask-mode calls are the same path gpc/gpa already use for local-
+#   model commit messages and reviews, and are proven fast.)
+# Tier 1: OpenCode Zen free tier -- model opencode/$(_get_free_zen_model),
+#   currently big-pickle. Does the actual editing, iteratively, under tier
+#   0's supervision.
+# Tier 2: Claude, via GitHub Copilot -- model
+#   github-copilot/$(_get_copilot_claude_model sonnet), same routing
+#   convention as every other "claude-code" invocation in this file. Last
+#   resort, single attempt.
+#
+# Flow:
+#   1. Tier 0 plans (local-coder-plan): produces the directive tier 1 works
+#      from. If tier 0 itself fails to respond, the raw task is used as the
+#      directive instead -- planning failure degrades gracefully, it doesn't
+#      block the pipeline.
+#   2. Tier 1 runs the directive through `opencode run --auto` (full agent
+#      mode -- edit/write/bash tools). --auto is required: this repo's
+#      opencode.json has edit/write permission set to "ask", which in
+#      headless mode auto-REJECTS every edit/write call with no error --
+#      confirmed live, a plain `opencode run` here cannot touch a single
+#      file. --auto approves anything not explicitly denied; the deny rules
+#      in opencode.json's permission.bash block (rm -rf /, mkfs, etc) still
+#      apply regardless of --auto.
+#   3. After each iteration, tier 0 judges (local-coder-judge): given the
+#      task, the directive, tier 1's latest output, and a `git diff --stat`
+#      snapshot, it returns one of progressing/stuck/done/regressing. `done`
+#      ends the run successfully. `stuck`/`regressing` two checkpoints in a
+#      row (not just once -- a single bad checkpoint is noise) escalates to
+#      tier 2. If the judge call itself fails, that fails open as
+#      "progressing" -- an infra hiccup in the monitor isn't a reason to burn
+#      the paid tier.
+#   4. Tier 1 gets at most 3 iterations total; exhausting them without a
+#      `done` verdict also escalates to tier 2.
+#   5. Any hard-failure signal (timeout, non-zero exit, a known rate-limit/
+#      quota/403 string) at tier 1 escalates immediately, no retry, no wait
+#      for the next judge checkpoint -- these are infrastructure failures,
+#      not quality judgments the judge is positioned to make.
+#   6. Tier 2 gets the full history (task, directive, tier 1's last output,
+#      escalation reason) and one attempt. Same hard-failure check applies;
+#      if it also fails there is nowhere further to go.
+#
+# What this deliberately does not do (v1 scope, not a bug):
+#   - No spend cap on the tier 2 attempt -- only its wall-clock timeout
+#     bounds it.
+#   - Tier 0 never edits, even if it judges itself capable of the whole task
+#     in one step -- every task goes through at least one tier-1 iteration.
+#     A future version could let tier 0 short-circuit trivial tasks; this one
+#     always delegates.
+#
+# Every stage (plan, each tier-1 attempt, each judge verdict, the tier-2
+# attempt) is logged to ~/.cache/nix-darwin-ai/aistack-log.jsonl.
+#
+# Usage: aistack "<task description>"
+function aistack_func() {
+  local task="$1"
+  if [[ -z "$task" ]]; then
+    echo "Usage: aistack \"<task description>\"" >&2
+    return 1
+  fi
+
+  local repo_root
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+
+  local cache_dir="$HOME/.cache/nix-darwin-ai"
+  mkdir -p "$cache_dir" 2>/dev/null
+  local ledger="$cache_dir/aistack-log.jsonl"
+
+  local hard_fail_re='rate.?limit|http.?429|freetiererror|can only be used from within opencode|usage cap|quota exceeded|http.?403'
+
+  _aistack_log() {
+    jq -nc --arg ts "$(date -u +%FT%TZ)" "$@" '{ts:$ts} + $ARGS.named' 2>/dev/null >> "$ledger"
+  }
+
+  # ---- Tier 0: plan ----
+  echo "── Tier 0 (llama-cpp, planning) ──"
+  local plan_prompt="You are the planning stage of a tiered coding-agent pipeline.
+
+TASK:
+$task
+
+Produce a concise directive for a separate coding agent that will execute
+this task: what to do, any constraints, and how to check success. Do not
+write code yourself. Output only the directive, no preamble."
+  local plan_output plan_exit
+  plan_output=$(_run_aider_local "local-coder-plan" 300 "$plan_prompt" 2>&1)
+  plan_exit=$?
+
+  local directive
+  if [[ $plan_exit -eq 0 && -n "$plan_output" ]]; then
+    directive="$plan_output"
+    echo "$directive"
+  else
+    echo "⚠ Tier 0 planning failed -- falling back to the raw task as tier 1's directive."
+    directive="$task"
+  fi
+  _aistack_log --arg stage plan --argjson exit_code "$plan_exit"
+
+  # ---- Tier 1: execution loop, monitored by tier 0 ----
+  local tier1_model="opencode/$(_get_free_zen_model)"
+  local max_iters=3
+  local stuck_count=0
+  local prompt="$directive"
+  local escalate_reason=""
+  local t1_output=""
+  local iter
+
+  for iter in 1 2 3; do
+    echo "── Tier 1 iter $iter/$max_iters (opencode-free): $tier1_model ──"
+
+    local start_ts=$(date +%s)
+    local t1_exit
+    t1_output=$(timeout 300s opencode run --auto --model "$tier1_model" "$prompt" 2>&1)
+    t1_exit=$?
+    _herdr_report_opencode_idle
+    local elapsed=$(( $(date +%s) - start_ts ))
+    echo "$t1_output"
+
+    local hard_reason=""
+    if [[ $t1_exit -eq 124 ]]; then
+      hard_reason="timeout after 300s"
+    elif [[ $t1_exit -ne 0 ]]; then
+      hard_reason="exit code $t1_exit"
+    elif echo "$t1_output" | grep -qiE "$hard_fail_re"; then
+      hard_reason="hard provider failure signal"
+    fi
+
+    _aistack_log --arg stage tier1_attempt --argjson iter "$iter" \
+      --argjson exit_code "$t1_exit" --argjson elapsed_s "$elapsed" --arg reason "$hard_reason"
+
+    if [[ -n "$hard_reason" ]]; then
+      escalate_reason="$hard_reason"
+      break
+    fi
+
+    # ---- Tier 0: judge this iteration's progress ----
+    echo "── Tier 0 (llama-cpp, judging iter $iter) ──"
+    local diff_stat=""
+    [[ -n "$repo_root" ]] && diff_stat=$(git -C "$repo_root" diff --stat)
+    local judge_prompt="You are monitoring a coding agent's progress on a task.
+
+ORIGINAL TASK:
+$task
+
+DIRECTIVE GIVEN TO THE CODING AGENT:
+$directive
+
+CODING AGENT'S LATEST OUTPUT (iteration $iter of $max_iters):
+$t1_output
+
+WORKSPACE DIFF SO FAR:
+$diff_stat
+
+Respond with exactly one word first -- progressing, stuck, done, or
+regressing -- optionally followed by a one-line reason. Do not write code."
+    local judge_output judge_exit
+    judge_output=$(_run_aider_local "local-coder-judge" 180 "$judge_prompt" 2>&1)
+    judge_exit=$?
+
+    local verdict="progressing"
+    if [[ $judge_exit -eq 0 && -n "$judge_output" ]]; then
+      verdict=$(echo "$judge_output" | grep -oiE '^(progressing|stuck|done|regressing)' | head -1 | tr 'A-Z' 'a-z')
+      [[ -z "$verdict" ]] && verdict="progressing"
+    else
+      echo "⚠ Tier 0 judge call failed -- failing open as 'progressing'."
+    fi
+    echo "Tier 0 verdict: $verdict"
+    _aistack_log --arg stage judge --argjson iter "$iter" --arg verdict "$verdict" --argjson judge_exit "$judge_exit"
+
+    case "$verdict" in
+      done)
+        echo "✓ Tier 0 judged the task complete after tier 1 iteration $iter."
+        unset -f _aistack_log
+        return 0
+        ;;
+      stuck|regressing)
+        stuck_count=$((stuck_count + 1))
+        if [[ $stuck_count -ge 2 ]]; then
+          escalate_reason="tier 0 judged $verdict for $stuck_count consecutive checkpoints"
+          break
+        fi
+        ;;
+      *)
+        stuck_count=0
+        ;;
+    esac
+
+    if [[ $iter -eq $max_iters ]]; then
+      escalate_reason="tier 1 exhausted $max_iters iterations without a done verdict"
+      break
+    fi
+
+    prompt="ORIGINAL TASK:
+$task
+
+DIRECTIVE:
+$directive
+
+PREVIOUS ATTEMPT (iteration $iter) OUTPUT:
+$t1_output
+
+Tier 0's assessment: $verdict. Continue this work. The workspace may
+already contain partial changes -- check its current state before relying
+on anything above."
+  done
+
+  if [[ -z "$escalate_reason" ]]; then
+    echo "✓ Tier 1 completed. No escalation triggered."
+    unset -f _aistack_log
+    return 0
+  fi
+
+  # ---- Tier 2: last resort, single attempt ----
+  echo "⚠ Escalating to Tier 2 ($escalate_reason)."
+  local tier2_model="github-copilot/$(_get_copilot_claude_model sonnet)"
+  echo "── Tier 2 (claude-code): $tier2_model ──"
+  local handoff_prompt="ORIGINAL TASK:
+$task
+
+DIRECTIVE:
+$directive
+
+TIER 1'S LAST ATTEMPT ($tier1_model):
+$t1_output
+
+Escalation reason: $escalate_reason
+
+Continue this work. The workspace may already contain partial changes from
+previous attempts -- check its current state before relying on anything
+described above."
+
+  local t2_output t2_exit
+  t2_output=$(timeout 300s opencode run --auto --model "$tier2_model" "$handoff_prompt" 2>&1)
+  t2_exit=$?
+  _herdr_report_opencode_idle
+  echo "$t2_output"
+
+  local t2_reason=""
+  if [[ $t2_exit -eq 124 ]]; then
+    t2_reason="timeout after 300s"
+  elif [[ $t2_exit -ne 0 ]]; then
+    t2_reason="exit code $t2_exit"
+  elif echo "$t2_output" | grep -qiE "$hard_fail_re"; then
+    t2_reason="hard provider failure signal"
+  fi
+  _aistack_log --arg stage tier2_attempt --argjson exit_code "$t2_exit" --arg reason "$t2_reason"
+  unset -f _aistack_log
+
+  if [[ -n "$t2_reason" ]]; then
+    echo "✗ Tier 2 also triggered a failure signal ($t2_reason) -- no further tier to escalate to."
+    return 1
+  fi
+
+  echo "✓ Tier 2 completed."
+  return 0
 }
 
 function aidev() {
