@@ -1,0 +1,13 @@
+- name: openai/local-coder-commit
+  edit_format: ask
+  extra_params:
+    chat_template_kwargs:
+      enable_thinking: false
+    max_tokens: 512
+
+- name: openai/local-coder-review
+  edit_format: ask
+  extra_params:
+    chat_template_kwargs:
+      enable_thinking: false
+    max_tokens: 4096
