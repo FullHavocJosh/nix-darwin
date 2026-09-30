@@ -249,6 +249,7 @@ in
       "agavra/tap"
     ];
     brews = [
+      "aider"
       "ansible"
       "ansible-lint"
       "argocd"
