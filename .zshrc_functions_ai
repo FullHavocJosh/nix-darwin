@@ -975,81 +975,116 @@ function aistack_func() {
     jq -nc --arg ts "$(date -u +%FT%TZ)" "$@" '{ts:$ts} + $ARGS.named' 2>/dev/null >> "$ledger"
   }
 
-  # ---- Tier 0: plan, interactively ----
-  # Tier 0 proposes a directive and stops; it does not hand off to tier 1
-  # until the user approves it. Typing anything other than empty/"abort" is
-  # taken as feedback and fed back into a revision round -- no menu, just
-  # comment and it replans.
+  # ---- Tier 0: plan, live and interactively ----
+  # Drops into a real interactive `aider` session against llama.cpp -- same
+  # backend/model as the headless local-coder-plan calls, just live: you
+  # talk it through with the model instead of getting one scripted round.
+  # --chat-mode ask keeps it read-only (consistent with tier 0 never editing
+  # anywhere else in this pipeline), but is otherwise a normal aider chat --
+  # push back, ask it to reconsider, whatever; there is no menu.
+  #
+  # aider's --message forces a one-shot non-interactive send, so it can't
+  # also seed the chat and then stay interactive -- the task/pipeline
+  # context is printed to the terminal instead, and the first real message
+  # is typed by hand.
+  #
+  # The hand-off doesn't need tier 0 to have write-tool access: aider
+  # already logs the conversation to --chat-history-file as a side effect of
+  # chatting, in ask mode same as any other. When you exit (Ctrl-D or
+  # /exit), the LAST assistant reply in that file becomes tier 1's
+  # directive. Exiting before getting a reply you're happy with -- or before
+  # chatting at all -- aborts; no tiers run.
+  #
+  # The task is seeded into the model's actual context via --read, not just
+  # printed to the terminal: printing alone only tells the human, and
+  # verified live, a human reply that doesn't restate the task produces a
+  # generic answer disconnected from it -- tier 1 went and explored the repo
+  # instead of creating the requested file, on a directive that said "analyze
+  # the provided code" with no code ever having been provided. --read makes
+  # the task part of the model's context from the first turn regardless of
+  # what's typed.
+  local endpoint="${LLAMA_CPP_HOST:-http://macminim1.rollet.family:8080}"
+  local settings_file="$HOME/.config/aider/model-settings.yml"
+  local chat_history_file="$cache_dir/aistack-plan-chat-$$.md"
+  local seed_file="$cache_dir/aistack-plan-seed-$$.md"
+  rm -f "$chat_history_file" "$seed_file"
+
+  if ! command -v aider &>/dev/null; then
+    echo "✗ aider not installed -- cannot run tier 0's interactive planning session." >&2
+    unset -f _aistack_log
+    return 1
+  fi
+
+  cat > "$seed_file" <<SEEDEOF
+# aistack tier 0 -- planning context
+
+You are the planning/supervising stage of a cost-tiered coding pipeline:
+- Tier 0 (you): llama.cpp, local, free. Plan and supervise only, never edit.
+- Tier 1: OpenCode Zen's free tier. Does the actual editing.
+- Tier 2: Claude via GitHub Copilot. Paid, last resort.
+
+## Task
+
+$task
+
+Discuss this task with the user and refine a plan together. When they are
+happy with it, your LAST reply before they exit should be the final
+directive for tier 1: what to do, any constraints, and how to check success.
+SEEDEOF
+
+  echo "── Tier 0 (llama-cpp): live planning session -- exit (Ctrl-D or /exit) when you're happy with the plan ──"
+  echo ""
+  echo "TASK: $task"
+  echo ""
+  echo "Talking to llama.cpp. It plans and supervises; OpenCode Zen's free tier"
+  echo "does the actual editing; Claude via GitHub Copilot is the paid last"
+  echo "resort. Describe the task, push back on its plan, ask it to revise --"
+  echo "whatever its last reply says before you exit becomes tier 1's directive."
+  echo ""
+
+  aider \
+    --model "openai/local-coder-plan" \
+    --openai-api-base "${endpoint}/v1" \
+    --openai-api-key "sk-local" \
+    --model-settings-file "$settings_file" \
+    --no-git \
+    --chat-mode ask \
+    --no-show-model-warnings \
+    --no-check-update \
+    --no-analytics \
+    --no-detect-urls \
+    --read "$seed_file" \
+    --chat-history-file "$chat_history_file" \
+    --input-history-file /tmp/.aider-local-input-history
+
+  rm -f "$seed_file"
+
   local directive=""
-  local feedback=""
-  local plan_round=0
-  while true; do
-    plan_round=$((plan_round + 1))
-    echo "── Tier 0 (llama-cpp, planning, round $plan_round) ──"
-    local plan_prompt
-    if [[ -z "$feedback" ]]; then
-      plan_prompt="You are the planning stage of a tiered coding-agent pipeline.
+  if [[ -f "$chat_history_file" ]]; then
+    local last_reply
+    last_reply=$(perl -ne '
+      if (/^#### /) { $collecting = 0; @buf = (); next; }
+      if (/^> Tokens:/) { $collecting = 0; next; }
+      $collecting = 1;
+      push @buf, $_ if $collecting;
+      END { print @buf }
+    ' "$chat_history_file")
+    directive=$(echo "$last_reply" | _aider_extract_response)
+    rm -f "$chat_history_file"
+  fi
 
-TASK:
-$task
-
-Produce a concise directive for a separate coding agent that will execute
-this task: what to do, any constraints, and how to check success. Do not
-write code yourself. Output only the directive, no preamble."
-    else
-      plan_prompt="You are the planning stage of a tiered coding-agent pipeline,
-revising your previous directive based on user feedback.
-
-TASK:
-$task
-
-YOUR PREVIOUS DIRECTIVE:
-$directive
-
-USER FEEDBACK ON THAT DIRECTIVE:
-$feedback
-
-Revise the directive to address this feedback. Output only the revised
-directive, no preamble."
-    fi
-
-    local plan_output plan_exit
-    plan_output=$(_run_aider_local "local-coder-plan" 300 "$plan_prompt" 2>&1)
-    plan_exit=$?
-
-    if [[ $plan_exit -eq 0 && -n "$plan_output" ]]; then
-      directive="$plan_output"
-    else
-      echo "⚠ Tier 0 planning failed -- falling back to the raw task as the directive."
-      directive="$task"
-    fi
-    echo "$directive"
-    _aistack_log --arg stage plan --argjson round "$plan_round" --argjson exit_code "$plan_exit"
-
+  if [[ -n "$directive" ]]; then
     echo ""
-    echo -n "Approve this plan for tier 1? Press Enter to approve, type feedback to revise, or 'abort' to cancel: "
-    local reply
-    read -r reply
-    case "${(L)reply}" in
-      "")
-        break
-        ;;
-      abort)
-        echo "Aborted before tier 1."
-        _aistack_log --arg stage aborted --argjson round "$plan_round"
-        unset -f _aistack_log
-        return 1
-        ;;
-      *)
-        feedback="$reply"
-        continue
-        ;;
-    esac
-  done
+    echo "Directive for tier 1:"
+    echo "$directive"
+    _aistack_log --arg stage plan --arg mode interactive
+  else
+    echo "No usable reply captured -- aborting before tier 1."
+    _aistack_log --arg stage aborted --arg mode interactive
+    unset -f _aistack_log
+    return 1
+  fi
 
-  # ---- Tier 1: execution loop, monitored by tier 0 ----
-  local tier1_model="opencode/$(_get_free_zen_model)"
-  local max_iters=3
   # ---- Tier 1: execution loop, monitored by tier 0 ----
   local tier1_model="opencode/$(_get_free_zen_model)"
   local max_iters=3
