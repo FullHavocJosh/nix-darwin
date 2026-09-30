@@ -273,7 +273,7 @@
     }
   },
   "plugin": ["@zenobius/opencode-skillful"],
-  "model": "opencode/claude-sonnet-4-6",
+  "model": "opencode/big-pickle",
   "instructions": ["{env:HOME}/.config/opencode/verbosity-guardian-rule.md"],
   "skills": {
     "paths": []
