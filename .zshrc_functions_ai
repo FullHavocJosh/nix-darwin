@@ -278,20 +278,112 @@ function _is_opencode_free_model() {
   local model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
   [[ -z "$model" ]] && return 1
   
-  # Check if model is one of the free models
+  # OpenCode Zen suffixes every free-tier model id with "-free", except its
+  # rotating stealth model "big-pickle" -- matched by suffix instead of a
+  # hardcoded id whitelist because the free roster rotates: ids that used to
+  # be here (deepseek-v4-flash-free, minimax-m2.5-free/m2.7-free,
+  # nemotron-3-super-free, qwen3.6-plus-free) are gone from the catalog as
+  # of 2026-09-29, replaced by a different set. A whitelist goes stale
+  # silently; a suffix match self-adapts.
   case "$model" in
-    opencode/big-pickle|\
-    opencode/deepseek-v4-flash-free|\
-    opencode/minimax-m2.5-free|\
-    opencode/minimax-m2.7-free|\
-    opencode/nemotron-3-super-free|\
-    opencode/qwen3.6-plus-free)
+    opencode/big-pickle|opencode/*-free)
       return 0  # Is a free model
       ;;
     *)
       return 1  # Is a Claude/paid model
       ;;
   esac
+}
+
+# Discover free-tier (cost 0) OpenCode Zen models that support tool calls
+# (required for the agentic edit/bash loop) and pick the best one for a
+# coding agent. Prefers "big-pickle" when present and active -- Zen's own
+# stealth model, purpose-built for coding agents and reported to punch above
+# its weight in independent agentic-coding tests, vs. general-purpose free
+# models like Space Bunny that benchmark better for code *review* than for
+# driving an edit/bash tool loop. Falls back to the most recently released
+# free+toolcall model otherwise, since the models.dev catalog carries no
+# benchmark field to rank on directly.
+# Prints a bare model id (e.g. "big-pickle"); returns 1 on any failure
+# (network, opencode missing, catalog shape changed) so callers fall back.
+function _discover_best_free_zen_model() {
+  local raw
+  raw=$(timeout 15 opencode models --verbose opencode 2>/dev/null)
+  [[ -z "$raw" ]] && return 1
+
+  local script='
+import sys, json, re
+
+text = sys.stdin.read()
+lines = [l for l in text.splitlines() if not re.match(r"^[\w.-]+/[\w.-]+$", l)]
+blob = "\n".join(lines)
+
+decoder = json.JSONDecoder()
+models = []
+rest = blob
+while True:
+    rest = rest.lstrip()
+    if not rest:
+        break
+    try:
+        obj, idx = decoder.raw_decode(rest)
+    except ValueError:
+        break
+    models.append(obj)
+    rest = rest[idx:]
+
+free = [
+    m for m in models
+    if m.get("status") == "active"
+    and m.get("cost", {}).get("input") == 0
+    and m.get("cost", {}).get("output") == 0
+    and m.get("capabilities", {}).get("toolcall")
+]
+if not free:
+    sys.exit(1)
+
+pickle = [m for m in free if m["id"] == "big-pickle"]
+best = pickle[0] if pickle else max(free, key=lambda m: m.get("release_date", ""))
+print(best["id"])
+'
+  python3 -c "$script" <<< "$raw"
+}
+
+# Cached wrapper around _discover_best_free_zen_model -- same pattern as
+# _get_copilot_claude_model. Refreshes at most once a day; falls back to a
+# stale cache, then to the hardcoded "big-pickle" fallback, if discovery
+# fails outright.
+# Usage: _get_free_zen_model
+function _get_free_zen_model() {
+  local cache_dir="$HOME/.cache/nix-darwin-ai"
+  local cache_file="$cache_dir/opencode-zen-free.txt"
+  local ttl=86400
+  local fallback="big-pickle"
+
+  mkdir -p "$cache_dir" 2>/dev/null
+
+  if [[ -f "$cache_file" ]]; then
+    local age=$(( $(date +%s) - $(stat -f %m "$cache_file" 2>/dev/null || echo 0) ))
+    if [[ $age -lt $ttl ]]; then
+      cat "$cache_file"
+      return 0
+    fi
+  fi
+
+  local discovered
+  discovered=$(_discover_best_free_zen_model 2>/dev/null)
+  if [[ -n "$discovered" ]]; then
+    echo "$discovered" > "$cache_file"
+    echo "$discovered"
+    return 0
+  fi
+
+  # Discovery failed: prefer a stale cache over the hardcoded fallback.
+  if [[ -f "$cache_file" ]]; then
+    cat "$cache_file"
+  else
+    echo "$fallback"
+  fi
 }
 
 # Get the current OpenCode model from config
