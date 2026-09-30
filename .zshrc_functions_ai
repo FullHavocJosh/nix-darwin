@@ -1053,9 +1053,26 @@ SEEDEOF
   echo "does the actual editing; Claude via GitHub Copilot is the paid last"
   echo "resort. Describe the task, push back on its plan, ask it to revise --"
   echo "whatever its last reply says before you exit becomes tier 1's directive."
-  echo ""
   echo "(llama.cpp is a slow local model -- after you send a message, a reply can"
   echo "take a while with nothing visible in between. That's normal, not stuck.)"
+  echo ""
+
+  # Inside a repo, let aider see it: dropping --no-git gets a real repo-map
+  # (structure/symbols, auto-built by aider, no --read needed for it) instead
+  # of tier 0 answering repo questions from the task text alone. Confirmed
+  # live without this: asked "what's the purpose of this repo?", it guessed
+  # from the directory name in the question and falsely claimed the guess
+  # came from the attached seed file, which has no repo content at all.
+  # Outside a repo there's nothing to map, so --no-git stays (also avoids
+  # aider searching upward for an enclosing repo it shouldn't touch).
+  local -a git_flags
+  if [[ -n "$repo_root" ]]; then
+    git_flags=()
+    echo "Repo-aware: $repo_root"
+  else
+    git_flags=(--no-git)
+    echo "No repo detected in the current directory -- tier 0 has no repo context."
+  fi
   echo ""
 
   aider \
@@ -1063,7 +1080,7 @@ SEEDEOF
     --openai-api-base "${endpoint}/v1" \
     --openai-api-key "sk-local" \
     --model-settings-file "$settings_file" \
-    --no-git \
+    "${git_flags[@]}" \
     --chat-mode ask \
     --no-show-model-warnings \
     --no-check-update \
