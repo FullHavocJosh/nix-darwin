@@ -1065,9 +1065,17 @@ SEEDEOF
   # came from the attached seed file, which has no repo content at all.
   # Outside a repo there's nothing to map, so --no-git stays (also avoids
   # aider searching upward for an enclosing repo it shouldn't touch).
+  #
+  # --map-tokens raised from aider's 1024 default: confirmed live on a real
+  # 222-file repo, 1024 tokens wasn't enough for the map to include the root
+  # flake.nix at all, and tier 0 confidently answered "no Nix profiles
+  # present" in a repo that's entirely Nix config. 2048 is aider's own
+  # documented ceiling ("map-tokens > 2048 is not recommended -- too much
+  # irrelevant code can confuse LLMs", seen live when this was set to 4096)
+  # -- not a measured minimum, just the most aider itself endorses.
   local -a git_flags
   if [[ -n "$repo_root" ]]; then
-    git_flags=()
+    git_flags=(--map-tokens 2048)
     echo "Repo-aware: $repo_root"
   else
     git_flags=(--no-git)
@@ -1082,6 +1090,7 @@ SEEDEOF
     --model-settings-file "$settings_file" \
     "${git_flags[@]}" \
     --chat-mode ask \
+    --yes-always \
     --no-show-model-warnings \
     --no-check-update \
     --no-analytics \
