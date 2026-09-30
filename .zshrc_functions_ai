@@ -866,6 +866,150 @@ function _get_ai_command() {
   local task_type="${1:-sonnet}"
   echo "_run_ai_direct $task_type"
 }
+# aistack -- tiered cost-escalation coding stack.
+#
+# Tier 0: llama.cpp (local, free, always tried first) --
+#   model llama.cpp/local-coder, per opencode.json's llama.cpp provider.
+# Tier 1: OpenCode Zen free tier (cloud, free, tried on tier-0 failure) --
+#   model opencode/$(_get_free_zen_model), currently big-pickle.
+# Tier 2: Claude, via GitHub Copilot (cloud, paid, last resort) --
+#   model github-copilot/$(_get_copilot_claude_model sonnet), same routing
+#   convention as every other "claude-code" invocation in this file (never
+#   claude --print / the Anthropic API directly).
+#
+# Every tier runs through `opencode run --model <X> "<prompt>"` -- full
+# agent mode (edit/write/bash tools active), same call shape as
+# _run_ai_agent. Escalation is a single retry per tier, not a supervised
+# multi-turn loop: each tier gets exactly one `opencode run` attempt, and
+# either its output looks sufficient or the next tier gets the whole
+# transcript so far and continues.
+#
+# Escalation triggers (deterministic, checked in this order -- no second
+# model call judges the first; that "judge" role is a real gap, not an
+# oversight: see the design notes this shipped with):
+#   1. `opencode run` timed out or exited non-zero.
+#   2. Output matches a known hard-provider-failure string (rate limit,
+#      403, free-tier/quota errors) -- these are infrastructure failures,
+#      not model-quality failures, so they escalate immediately rather
+#      than retrying the same tier.
+#   3. Output matches a self-reported incapacity phrase ("I cannot",
+#      "too complex", "recommend a stronger model", etc). This is a real
+#      known weakness (small models misjudge their own competence in both
+#      directions) and is the least trustworthy of the three signals.
+#
+# What this deliberately does NOT do (v1 scope, not a bug):
+#   - No workspace-diff check ("did this tier actually change anything")
+#     by default -- would false-escalate every read-only/Q&A task straight
+#     to the paid tier. Opt in with --require-changes for tasks you know
+#     should produce an edit.
+#   - No USD spend cap on the Tier 2 attempt -- `opencode run` here has no
+#     budget-cap flag to enforce one; only the per-tier wall-clock timeout
+#     bounds a runaway Tier 2 call.
+#   - No mid-run monitoring -- each `opencode run` is one shot; there is no
+#     token-by-token or tool-call-by-tool-call supervision within a tier.
+#
+# Every attempt (tier, model, exit code, wall time, escalation reason) is
+# logged to ~/.cache/nix-darwin-ai/aistack-log.jsonl for later calibration
+# of these triggers -- see the routing-calibration note in the design docs.
+#
+# Usage: aistack [--require-changes] "<task description>"
+function aistack_func() {
+  local require_changes=false
+  if [[ "$1" == "--require-changes" ]]; then
+    require_changes=true
+    shift
+  fi
+
+  local task="$1"
+  if [[ -z "$task" ]]; then
+    echo "Usage: aistack [--require-changes] \"<task description>\"" >&2
+    return 1
+  fi
+
+  local repo_root
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+
+  local cache_dir="$HOME/.cache/nix-darwin-ai"
+  mkdir -p "$cache_dir" 2>/dev/null
+  local ledger="$cache_dir/aistack-log.jsonl"
+
+  local -a tier_names tier_models tier_timeouts
+  tier_names=("llama-cpp" "opencode-free" "claude-code")
+  tier_models=(
+    "llama.cpp/local-coder"
+    "opencode/$(_get_free_zen_model)"
+    "github-copilot/$(_get_copilot_claude_model sonnet)"
+  )
+  tier_timeouts=(600 300 300)
+
+  local hard_fail_re='rate.?limit|http.?429|freetiererror|can only be used from within opencode|usage cap|quota exceeded|http.?403'
+  local self_report_re="i (cannot|can't|am unable)|insufficient (context|capability)|recommend (a |an )?(stronger|larger|more capable) model|too complex for (this|me)"
+
+  local prompt="$task"
+  local tier
+  for tier in 1 2 3; do
+    local model="${tier_models[$tier]}"
+    local name="${tier_names[$tier]}"
+    local to="${tier_timeouts[$tier]}"
+    echo "── Tier $tier ($name): $model ──"
+
+    local diff_before=""
+    [[ -n "$repo_root" ]] && diff_before=$(git -C "$repo_root" diff --stat)
+
+    local start_ts=$(date +%s)
+    local output exit_code
+    output=$(timeout "${to}s" opencode run --model "$model" "$prompt" 2>&1)
+    exit_code=$?
+    _herdr_report_opencode_idle
+    local elapsed=$(( $(date +%s) - start_ts ))
+
+    echo "$output"
+
+    local reason=""
+    if [[ $exit_code -eq 124 ]]; then
+      reason="timeout after ${to}s"
+    elif [[ $exit_code -ne 0 ]]; then
+      reason="exit code $exit_code"
+    elif echo "$output" | grep -qiE "$hard_fail_re"; then
+      reason="hard provider failure signal"
+    elif echo "$output" | grep -qiE "$self_report_re"; then
+      reason="model self-reported insufficient capability"
+    elif [[ "$require_changes" == true && -n "$repo_root" ]]; then
+      local diff_after=$(git -C "$repo_root" diff --stat)
+      [[ "$diff_before" == "$diff_after" ]] && reason="no workspace changes produced"
+    fi
+
+    jq -nc --arg ts "$(date -u +%FT%TZ)" --argjson tier "$tier" --arg name "$name" \
+      --arg model "$model" --argjson exit_code "$exit_code" --argjson elapsed_s "$elapsed" \
+      --arg reason "$reason" \
+      '{ts:$ts, tier:$tier, name:$name, model:$model, exit_code:$exit_code, elapsed_s:$elapsed_s, escalated:($reason != ""), reason:$reason}' \
+      >> "$ledger" 2>/dev/null
+
+    if [[ -z "$reason" ]]; then
+      echo "✓ Tier $tier ($name) completed. No escalation triggered."
+      return 0
+    fi
+
+    if [[ $tier -eq 3 ]]; then
+      echo "✗ Tier 3 ($name) also triggered an escalation signal ($reason) -- no further tier to hand off to."
+      return 1
+    fi
+
+    echo "⚠ Escalating ($reason) -- handing off to the next tier."
+    prompt="ORIGINAL TASK:
+$task
+
+PREVIOUS ATTEMPT -- Tier $tier ($name, $model):
+$output
+
+Escalation reason: $reason
+
+Continue this work. The workspace may already contain partial changes from
+the previous attempt -- check its current state before relying on anything
+described above."
+  done
+}
+
 
 function aidev() {
   local GREEN='\033[0;32m'
