@@ -1,3 +1,10 @@
+# Model aliases for gpc/gpa's local-model calls (see _run_aider_local in
+# .zshrc_functions_ai). Both point at whatever GGUF llama-server currently
+# has loaded via the generic "local-coder" alias -- the split here is by
+# use case (short commit message vs. thorough review), not by model.
+# extra_params.chat_template_kwargs.enable_thinking=false stops thinking-
+# capable models (GLM, Qwen3) from prepending a <think> block to every
+# answer regardless of --reasoning-format.
 - name: openai/local-coder-commit
   edit_format: ask
   extra_params:
