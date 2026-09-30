@@ -461,6 +461,84 @@ function _get_matching_files() {
     fi
   done
 }
+# Scans stdin (added diff lines) for identifier = "value" / identifier: "value"
+# assignments where the value is 20+ chars and high-entropy, regardless of
+# what the identifier is named -- the keyword checks in _check_for_secrets
+# only fire for specific names (password, api_key, token, secret). This
+# catches a real secret assigned to anything else (DB_CONN, WEBHOOK_SIG,
+# a typo'd name, an unfamiliar internal convention).
+#
+# Threshold is picked per apparent charset since max possible entropy differs:
+# hex has only 16 symbols (max 4.0 bits/char) so real hex secrets still read
+# as high entropy well below that ceiling; base64/mixed charsets go up to 6
+# bits/char, so English-like or structured text sits much lower relative to
+# a real random value even at the same length.
+#
+# Output: one flagged match per line, tab-separated (redacted-value, entropy,
+# full source line) -- redaction keeps only the first/last 4 chars so the
+# report itself never contains the actual secret value.
+function _entropy_scan_secrets() {
+  python3 -c "
+import sys, re, math
+from collections import Counter
+
+DENY_VALUES = {
+    'changeme', 'change_me', 'password', 'passwd', 'secret', 'example',
+    'placeholder', 'foobar', 'test', 'dummy', 'fake', 'sample',
+}
+
+# Public content-addressable checksums are supposed to be high-entropy --
+# that's the whole point of a hash. Nix (sha256/outputHash/narHash/vendorHash/
+# cargoHash package pinning), npm/yarn (integrity), and general (md5/sha1/
+# sha512/digest/checksum) all use these field names for values that are
+# never secret. Matched as a substring against the key so e.g. "vendorHash"
+# and "cargoSha256" both hit without listing every real-world variant.
+DENY_KEY_SUBSTRINGS = (
+    'sha256', 'sha512', 'sha1', 'md5', 'hash', 'integrity', 'checksum',
+    'digest',
+)
+
+def shannon_entropy(s):
+    if not s:
+        return 0.0
+    counts = Counter(s)
+    length = len(s)
+    return -sum((c / length) * math.log2(c / length) for c in counts.values())
+
+def entropy_threshold(value):
+    if re.fullmatch(r'[0-9a-fA-F]+', value):
+        return 3.0
+    if re.fullmatch(r'[A-Za-z0-9+/=]+', value):
+        return 4.5
+    return 4.0
+
+ASSIGN_RE = re.compile(r'''(?P<key>[A-Za-z_][A-Za-z0-9_]*)\s*[=:]\s*['\"](?P<value>[A-Za-z0-9+/=_-]{20,})['\"]''')
+
+for line in sys.stdin:
+    line = line.rstrip('\n')
+    for m in ASSIGN_RE.finditer(line):
+        key = m.group('key')
+        value = m.group('value')
+        klower = key.lower()
+        vlower = value.lower()
+        if any(sub in klower for sub in DENY_KEY_SUBSTRINGS):
+            continue  # known checksum/hash field, high entropy by design, not a secret
+        if vlower in DENY_VALUES:
+            continue
+        if re.fullmatch(r'\\\$\{?[A-Za-z_][A-Za-z0-9_]*\}?', value):
+            continue  # \$VAR / \${VAR} reference, not a literal value
+        if re.fullmatch(r'\{\{.*\}\}', value):
+            continue  # {{ template }} placeholder
+        if re.fullmatch(r'[A-Z][A-Z0-9_]{7,}', value):
+            continue  # ALL_CAPS_PLACEHOLDER style, same exclusion the password check uses
+        h = shannon_entropy(value)
+        if h >= entropy_threshold(value):
+            redacted = value[:4] + '...' + value[-4:] if len(value) > 12 else '***'
+            print(f'{redacted}\t{h:.2f}\t{line.strip()}')
+"
+}
+
+
 
 # Helper function: Check staged changes for secrets/credentials
 # Returns 0 if safe to proceed, 1 if secrets found and user wants to abort
@@ -551,7 +629,24 @@ function _check_for_secrets() {
     suspicious_lines="${suspicious_lines}$(echo "$added_lines" | grep -B5 -E -- "-----BEGIN.*PRIVATE KEY-----" | head -14)\n"
     secrets_found=true
   fi
-  
+
+  # Entropy-based check: catches secrets the keyword checks above miss because
+  # the variable name isn't "password"/"api_key"/"token"/etc -- any
+  # identifier = "value" (or identifier: "value") assignment with a 20+ char
+  # value is a candidate, scored by Shannon entropy against a threshold tuned
+  # per apparent charset (hex/base64/generic), independent of the name on the
+  # left. Scoped to assignment syntax specifically so it doesn't flood on
+  # this repo's own legitimate high-entropy content that never appears in
+  # that shape: git SHAs in commit-message comments, SSH public keys (their
+  # own "ssh-ed25519 <key> comment" format, not "var = value"), nix store
+  # hashes (embedded in paths, not assignments).
+  local entropy_matches=$(echo "$filtered_lines" | _entropy_scan_secrets)
+  if [ -n "$entropy_matches" ]; then
+    secrets_report="${secrets_report}  • High-entropy value in an unrecognized field\n$(echo "$entropy_matches" | awk -F'\t' '{print "    - " $1 " (entropy " $2 ")"}')\n"
+    suspicious_lines="${suspicious_lines}$(echo "$entropy_matches" | awk -F'\t' '{print $3}')\n"
+    secrets_found=true
+  fi
+
   if $secrets_found; then
     echo ""
     echo "🚨 SECRETS DETECTED IN STAGED CHANGES! 🚨"
