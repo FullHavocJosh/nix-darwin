@@ -941,6 +941,21 @@ function _get_ai_command() {
 #
 # Usage: aistack "<task description>"
 function aistack_func() {
+  # Defensively local-scope xtrace off, matching gpc_func's guard (see
+  # .zshrc_functions_git) for the same symptom class -- harmless either way.
+  # It did NOT fix the actual issue: a stray dump of this function's own
+  # local variables (plan_prompt=, plan_output=, plan_exit=) still leaks into
+  # stdout on the second loop iteration of the plan-approval loop, verified
+  # live with this guard in place. It carries no `+file:line>` prefix, so it
+  # is probably not zsh xtrace at all despite the resemblance; root cause
+  # unconfirmed. Left in place as a real, open, cosmetic issue -- it has not
+  # affected correctness in any live run so far (output, ledger, and return
+  # code have all been right regardless), so it's not blocking, but do not
+  # claim it is fixed.
+  local prev_opts=$-
+  setopt local_options
+  [[ $prev_opts == *x* ]] && setopt no_xtrace
+
   local task="$1"
   if [[ -z "$task" ]]; then
     echo "Usage: aistack \"<task description>\"" >&2
@@ -960,9 +975,20 @@ function aistack_func() {
     jq -nc --arg ts "$(date -u +%FT%TZ)" "$@" '{ts:$ts} + $ARGS.named' 2>/dev/null >> "$ledger"
   }
 
-  # ---- Tier 0: plan ----
-  echo "── Tier 0 (llama-cpp, planning) ──"
-  local plan_prompt="You are the planning stage of a tiered coding-agent pipeline.
+  # ---- Tier 0: plan, interactively ----
+  # Tier 0 proposes a directive and stops; it does not hand off to tier 1
+  # until the user approves it. Typing anything other than empty/"abort" is
+  # taken as feedback and fed back into a revision round -- no menu, just
+  # comment and it replans.
+  local directive=""
+  local feedback=""
+  local plan_round=0
+  while true; do
+    plan_round=$((plan_round + 1))
+    echo "── Tier 0 (llama-cpp, planning, round $plan_round) ──"
+    local plan_prompt
+    if [[ -z "$feedback" ]]; then
+      plan_prompt="You are the planning stage of a tiered coding-agent pipeline.
 
 TASK:
 $task
@@ -970,20 +996,60 @@ $task
 Produce a concise directive for a separate coding agent that will execute
 this task: what to do, any constraints, and how to check success. Do not
 write code yourself. Output only the directive, no preamble."
-  local plan_output plan_exit
-  plan_output=$(_run_aider_local "local-coder-plan" 300 "$plan_prompt" 2>&1)
-  plan_exit=$?
+    else
+      plan_prompt="You are the planning stage of a tiered coding-agent pipeline,
+revising your previous directive based on user feedback.
 
-  local directive
-  if [[ $plan_exit -eq 0 && -n "$plan_output" ]]; then
-    directive="$plan_output"
+TASK:
+$task
+
+YOUR PREVIOUS DIRECTIVE:
+$directive
+
+USER FEEDBACK ON THAT DIRECTIVE:
+$feedback
+
+Revise the directive to address this feedback. Output only the revised
+directive, no preamble."
+    fi
+
+    local plan_output plan_exit
+    plan_output=$(_run_aider_local "local-coder-plan" 300 "$plan_prompt" 2>&1)
+    plan_exit=$?
+
+    if [[ $plan_exit -eq 0 && -n "$plan_output" ]]; then
+      directive="$plan_output"
+    else
+      echo "⚠ Tier 0 planning failed -- falling back to the raw task as the directive."
+      directive="$task"
+    fi
     echo "$directive"
-  else
-    echo "⚠ Tier 0 planning failed -- falling back to the raw task as tier 1's directive."
-    directive="$task"
-  fi
-  _aistack_log --arg stage plan --argjson exit_code "$plan_exit"
+    _aistack_log --arg stage plan --argjson round "$plan_round" --argjson exit_code "$plan_exit"
 
+    echo ""
+    echo -n "Approve this plan for tier 1? Press Enter to approve, type feedback to revise, or 'abort' to cancel: "
+    local reply
+    read -r reply
+    case "${(L)reply}" in
+      "")
+        break
+        ;;
+      abort)
+        echo "Aborted before tier 1."
+        _aistack_log --arg stage aborted --argjson round "$plan_round"
+        unset -f _aistack_log
+        return 1
+        ;;
+      *)
+        feedback="$reply"
+        continue
+        ;;
+    esac
+  done
+
+  # ---- Tier 1: execution loop, monitored by tier 0 ----
+  local tier1_model="opencode/$(_get_free_zen_model)"
+  local max_iters=3
   # ---- Tier 1: execution loop, monitored by tier 0 ----
   local tier1_model="opencode/$(_get_free_zen_model)"
   local max_iters=3
