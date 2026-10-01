@@ -28,13 +28,12 @@
 export AWS_REGION="us-east-1"
 export AWS_PROFILE="services"
 
-# llama.cpp provider endpoint (host:port, no path). Default targets the
-# macminim1 Mac mini's remote llama-server. Laptop hosts (llamacpp-local.nix)
-# set this earlier via environment.variables (nix-darwin writes it into
-# /etc/zshenv, sourced before this file) to run a local server instead of
-# depending on macminim1's reachability -- the ${VAR:-default} form here is
-# required, not cosmetic: this file is sourced by .zshrc AFTER /etc/zshenv,
-# so a plain unconditional export would silently clobber that laptop value
-# back to macminim1 on every new shell.
-export LLAMA_CPP_HOST="${LLAMA_CPP_HOST:-http://macminim1.rollet.family:8080}"
+# llama.cpp provider endpoint (host:port, no path). Every host runs its own
+# llama.cpp server locally -- never connect to another device's server.
+# Hosts with llamacpp-local.nix set this earlier via environment.variables
+# (nix-darwin writes it into /etc/zshenv, sourced before this file); the
+# ${VAR:-default} form here is required, not cosmetic: this file is sourced
+# by .zshrc AFTER /etc/zshenv, so a plain unconditional export would
+# silently clobber that value on every new shell.
+export LLAMA_CPP_HOST="${LLAMA_CPP_HOST:-http://localhost:8080}"
 
