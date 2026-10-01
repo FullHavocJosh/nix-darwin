@@ -90,6 +90,23 @@ if its anchor text is missing, i.e. upstream changed the file it targets.
    recomputes unconditionally, wired up to a new user-invoked /usage-sync
    command (usage-sync.md, installed to ~/.claude/commands/) for an
    explicit manual resync.
+
+7. Self-heal for a stranded pre-gating monthly-cost compute block
+   (statusline.py): patch 4's own idempotency marker for its statusline.py
+   edit is the substring "fetch_monthly_cost" -- which an intermediate,
+   ungated one-liner version of that edit (installed by this script before
+   PR #88's spend_limit-gating fix landed) already contained too. So on any
+   machine that ran this script before that fix, the marker check always
+   reported "already applied" and permanently stranded the file on that
+   intermediate text, since the fix only updated NEW_STATUSLINE_COMPUTE in
+   place without changing the marker or accounting for what had already
+   been written to disk. That in turn blocked patches 5 and 6 as well,
+   since their own statusline.py anchors are text that only exists once
+   the gated version has actually landed. Adds a small, separate,
+   silent-when-inapplicable migration step (OLD_STATUSLINE_COMPUTE_V1,
+   _migrate_stranded_v1_monthly_cost_compute()) that detects exactly that
+   stranded intermediate text and upgrades it in place before the regular
+   patch 4 _apply_patch call runs.
 """
 
 import os
@@ -752,6 +769,21 @@ NEW_STATUSLINE_COMPUTE = '''    usage = basic["usage"]
 
     ds = DisplayState('''
 
+# When PR #88's gating fix (2026-09-22) rewrote NEW_STATUSLINE_COMPUTE above
+# to the gated form, it left OLD_STATUSLINE_COMPUTE pointed at the original
+# pre-patch-4 text (no monthly_cost_part at all). Any machine that had
+# already run the pre-#88 version of this script was left with this
+# intermediate, ungated one-liner instead -- and the _apply_patch call below
+# keys its idempotency check on the substring "fetch_monthly_cost", which
+# this intermediate text also already contains, so that call always reports
+# "already applied" and can never advance a machine stuck here to the gated
+# version. _migrate_stranded_v1_monthly_cost_compute() below detects and
+# repairs exactly this one stranded intermediate state.
+OLD_STATUSLINE_COMPUTE_V1 = '''    usage = basic["usage"]
+    monthly_cost_part = format_monthly_cost(fetch_monthly_cost(background=True))
+
+    ds = DisplayState('''
+
 OLD_STATUSLINE_WIRING = '''        cost_per_turn=calculate_cost_per_turn(cost, metrics["turn_count"]),
         bar_length=bar_length,
     )'''
@@ -1389,6 +1421,30 @@ def _ensure_file(target, content, label):
     print(f"[claude-tui-usage-patch] {label} wrote {target}")
 
 
+def _migrate_stranded_v1_monthly_cost_compute(target):
+    """Self-heal a known-stranded intermediate state in statusline.py's
+    monthly-cost compute block (see OLD_STATUSLINE_COMPUTE_V1's comment for
+    the full story). Silent no-op when the intermediate text isn't present
+    -- that's the expected case on every machine that was never stuck there,
+    so it's not a warning-worthy condition the way a missing anchor
+    normally is."""
+    try:
+        with open(target, "r") as f:
+            src = f.read()
+    except OSError:
+        return
+    if OLD_STATUSLINE_COMPUTE_V1 not in src:
+        return
+    patched = src.replace(OLD_STATUSLINE_COMPUTE_V1, NEW_STATUSLINE_COMPUTE)
+    tmp = target + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(patched)
+    os.replace(tmp, target)
+    print(
+        f"[claude-tui-usage-patch] self-heal: migrated stranded pre-gating "
+        f"monthly-cost compute block in {target}"
+    )
+
 
 def main() -> int:
     if len(sys.argv) != 2:
@@ -1466,6 +1522,7 @@ def main() -> int:
         [(OLD_COMPACT_LINE_V2, NEW_COMPACT_LINE_V2)],
         "monthly cost + drop model (render.py compact line)",
     )
+    _migrate_stranded_v1_monthly_cost_compute(f"{libexec}/claude-code-statusline/statusline.py")
     _apply_patch(
         f"{libexec}/claude-code-statusline/statusline.py",
         "fetch_monthly_cost",
