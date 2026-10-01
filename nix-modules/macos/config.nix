@@ -607,6 +607,89 @@
           else
             echo "herdr already up to date, skipping live-handoff"
           fi
+
+          # Every live herdr pane keeps running the zsh it started with -- a
+          # function/alias change from this rebuild (gpr/gpa/gpc, aistack, etc)
+          # is invisible to it until something re-sources the dotfiles in that
+          # shell. Broadcast that on every activation, not just when herdr
+          # itself updated above (dotfiles can change on their own).
+          #
+          # Applies to every live pane, not just ones labeled "zsh" -- a pane
+          # can have nvim/tuicr/btop/an AI agent running in it, and the goal is
+          # to source the dotfiles in its underlying shell and leave whatever
+          # was running exactly where it was, not skip the pane or replace what
+          # it was doing. `herdr pane process-info` reports the real foreground
+          # process (not the static "label", which is the pane's intended
+          # purpose, not its live state) -- when it differs from the pane's own
+          # shell_pid, something else owns the terminal right now.
+          #
+          # For those panes: suspend the foreground job with a literal Ctrl-Z
+          # (0x1a) over `pane send-text` -- verified live against both a plain
+          # `sleep` and a real ncurses app (btop): `pane send-keys <id> ctrl+z`
+          # (the logical key name) measurably lags before the suspend lands, so
+          # this polls process-info for it to actually settle back to the shell
+          # rather than assuming it took effect immediately. If it never
+          # settles (some apps disable SIGTSTP on purpose), the pane is left
+          # completely alone -- better to skip a refresh than send
+          # "source ~/.zshrc" as literal keystrokes into whatever's still
+          # running there. Once settled: source the dotfiles, then `fg` to
+          # resume the suspended job exactly where it left off -- confirmed
+          # live that btop came back with its own window undisturbed, same
+          # pid, not relaunched.
+          #
+          # One pane is never a suspend target: whichever one is itself mid-
+          # `darwin-rebuild`, i.e. this very activation run, if it was launched
+          # from inside a herdr pane. Suspending that foreground job would
+          # suspend the activation script out from under itself. Matched by a
+          # cmdline substring, not a pid (this script's own pid isn't visible
+          # to a plain `herdr pane list` scan the way a shell job's is).
+          echo "Refreshing herdr panes with latest dotfiles..."
+          herdr pane list 2>/dev/null | jq -c '.result.panes[]?' | while read -r pane_json; do
+            pane_id=$(echo "$pane_json" | jq -r '.pane_id')
+            agent_status=$(echo "$pane_json" | jq -r '.agent_status // empty')
+            # A "working" agent pane is mid-stream -- actively reading from its
+            # provider's network connection, not just sitting at its own input
+            # prompt. A suspend/resume pause is brief (under a second once it
+            # lands) and a TCP socket tolerates that fine on its own, but there
+            # is no way to rule out a provider- or client-side idle timeout
+            # tripping during it, and this is exactly the kind of live session
+            # a corrupted resume would actually cost something real. Skip it;
+            # it will pick up the refresh once it goes idle and gets run again
+            # (or the next rebuild).
+            [ "$agent_status" = "working" ] && continue
+            info=$(herdr pane process-info --pane "$pane_id" 2>/dev/null)
+            shell_pid=$(echo "$info" | jq -r '.result.process_info.shell_pid // empty')
+            fg_pid=$(echo "$info" | jq -r '.result.process_info.foreground_processes[0].pid // empty')
+            fg_cmdline=$(echo "$info" | jq -r '.result.process_info.foreground_processes[0].cmdline // empty')
+            [ -z "$shell_pid" ] && continue
+            case "$fg_cmdline" in
+              *darwin-rebuild*) continue ;;
+            esac
+
+            had_job=false
+            if [ -n "$fg_pid" ] && [ "$fg_pid" != "$shell_pid" ]; then
+              had_job=true
+              herdr pane send-text "$pane_id" $'\x1a' >/dev/null 2>&1
+              settled=false
+              for _ in 1 2 3 4 5 6 7 8 9 10; do
+                sleep 0.3
+                now_pid=$(herdr pane process-info --pane "$pane_id" 2>/dev/null | jq -r '.result.process_info.foreground_processes[0].pid // empty')
+                if [ "$now_pid" = "$shell_pid" ]; then
+                  settled=true
+                  break
+                fi
+              done
+              if [ "$settled" != true ]; then
+                echo "Herdr pane '$pane_id' did not yield its shell after Ctrl-Z -- leaving it alone"
+                continue
+              fi
+            fi
+
+            herdr pane run "$pane_id" "source ~/.zshrc" >/dev/null 2>&1 || echo "Failed to refresh herdr pane '$pane_id'"
+            if [ "$had_job" = true ]; then
+              herdr pane run "$pane_id" "fg" >/dev/null 2>&1 || echo "Failed to resume foreground job in herdr pane '$pane_id'"
+            fi
+          done
         fi
     USERSCRIPT
   '';
