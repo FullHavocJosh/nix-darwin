@@ -62,6 +62,17 @@ if its anchor text is missing, i.e. upstream changed the file it targets.
    spend_limit being present in rate_limits (2026-09-22 follow-up), so it
    never shows on a personal Pro/Max login -- only a real work/gateway
    account, which is what carries a genuine per-token dollar budget.
+
+5. Running monthly token count (new monthly_tokens.py, display_state.py,
+   render.py, statusline.py): patch 4's monthly estimate is a dollar figure
+   gated to a work/gateway seat, so a flat-subscription Pro/Max login never
+   saw any running monthly total at all. Adds monthly_tokens.py -- same
+   find_sessions/parse_session walk as monthly_cost.py, summing each
+   session's input+cache_read+cache_creation+output token counts instead of
+   pricing them -- and shows it for every account, ungated. Placed directly
+   in the context-bar block (next to the per-turn token count/limit) rather
+   than after the usage widget, since it answers a different question
+   ("how much this month" vs. "how full is the current window").
 """
 
 import sys
@@ -906,6 +917,288 @@ def format_monthly_cost(total):
     return f"{GRAY}${total:.2f}/mo{RESET}"
 '''
 
+# --- Patch 5: running monthly token count, next to the context bar --------
+
+MONTHLY_TOKENS_MODULE_SOURCE = '''# nix-darwin: local-monthly-tokens patch
+"""Local running monthly token count for the statusline.
+
+Sums every Claude Code session transcript on this machine ending in the
+current UTC calendar month (input + cache_read + cache_creation + output),
+using the same find_sessions/parse_session walk monthly_cost.py already
+does for its own per-session breakdown -- see that module's docstring for
+the same caveats (local-machine only, all accounts on this machine this
+month, last-message-month attribution). Shown for every account, unlike
+monthly_cost.py's dollar estimate which is gated to a work/gateway seat
+with a real spend_limit -- a running token count is meaningful on a flat
+subscription seat too.
+"""
+
+import importlib.util
+import os
+import threading
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+from .network import _read_json_file, _write_json_file, _try_acquire_lock, _release_lock
+from .settings import get_setting
+
+CLAUDE_DIR = ".claude"
+MONTHLY_TOKENS_CACHE_PATH = os.path.join(os.path.expanduser("~"), CLAUDE_DIR, "monthly-tokens-cache.json")
+MONTHLY_TOKENS_LOCK_PATH = MONTHLY_TOKENS_CACHE_PATH + ".lock"
+
+_SESSION_STATS_PATH = (
+    Path(__file__).resolve().parent.parent / "claude-code-session-stats" / "session-stats.py"
+)
+
+_session_stats_module = None
+_session_stats_load_failed = False
+
+
+def _load_session_stats_module():
+    """Dynamically load the sibling session-stats.py script as a module --
+    duplicated from monthly_cost.py rather than imported from it, so this
+    module has no load-order dependency on that patch having applied."""
+    global _session_stats_module, _session_stats_load_failed
+    if _session_stats_module is not None:
+        return _session_stats_module
+    if _session_stats_load_failed:
+        return None
+    if not _SESSION_STATS_PATH.exists():
+        _session_stats_load_failed = True
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location("claude_code_session_stats_tok", _SESSION_STATS_PATH)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    except Exception:
+        _session_stats_load_failed = True
+        return None
+    _session_stats_module = mod
+    return mod
+
+
+def _current_month_key(now=None):
+    now = now or datetime.now(timezone.utc)
+    return f"{now.year:04d}-{now.month:02d}"
+
+
+def _compute_monthly_tokens():
+    mod = _load_session_stats_module()
+    if mod is None:
+        return None
+
+    month_key = _current_month_key()
+    total = 0
+    try:
+        sessions = mod.find_sessions(days=32)
+    except Exception:
+        return None
+
+    for s in sessions:
+        try:
+            report = mod.parse_session(s["path"])
+        except Exception:
+            continue
+        end_time = report.get("end_time")
+        if not end_time:
+            continue
+        try:
+            end_dt = datetime.fromisoformat(str(end_time).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if _current_month_key(end_dt) != month_key:
+            continue
+        tok = report.get("tokens", {})
+        total += (
+            tok.get("input_total", 0)
+            + tok.get("cache_read_total", 0)
+            + tok.get("cache_creation_total", 0)
+            + tok.get("output_total", 0)
+        )
+
+    return total
+
+
+def fetch_monthly_tokens(background=False):
+    """Cached local monthly token total. Returns an int, or None when
+    disabled, unavailable (session-stats.py missing), or never yet computed
+    and a background refresh was just kicked off."""
+    if not get_setting("monthly_tokens", "enabled", default=True):
+        return None
+
+    ttl = max(300, get_setting("monthly_tokens", "ttl", default=900))
+    cache = _read_json_file(MONTHLY_TOKENS_CACHE_PATH)
+    now = time.time()
+    month_key = _current_month_key()
+
+    is_stale = (
+        not cache
+        or cache.get("month") != month_key
+        or now - cache.get("fetched_at", 0) >= ttl
+    )
+    if not is_stale:
+        return cache.get("total")
+
+    if background:
+        t = threading.Thread(target=fetch_monthly_tokens, kwargs={"background": False}, daemon=True)
+        t.start()
+        return cache.get("total") if cache and cache.get("month") == month_key else None
+
+    lock_fd = _try_acquire_lock(MONTHLY_TOKENS_LOCK_PATH)
+    if lock_fd is None:
+        return cache.get("total") if cache else None
+
+    try:
+        refreshed = _read_json_file(MONTHLY_TOKENS_CACHE_PATH)
+        if refreshed and refreshed.get("month") == month_key and now - refreshed.get("fetched_at", 0) < ttl:
+            return refreshed.get("total")
+
+        total = _compute_monthly_tokens()
+        if total is None:
+            return cache.get("total") if cache and cache.get("month") == month_key else None
+
+        fresh = {"fetched_at": now, "month": month_key, "total": total}
+        try:
+            _write_json_file(MONTHLY_TOKENS_CACHE_PATH, fresh)
+        except OSError:
+            pass
+        return total
+    finally:
+        _release_lock(lock_fd)
+
+
+def format_monthly_tokens(total):
+    """Format a monthly token total as a compact '150k tok/mo' suffix, or ''."""
+    if total is None:
+        return ""
+    from .formatting import GRAY, RESET
+    from claude_tui_components.utils import format_tokens
+
+    return f"{GRAY}{format_tokens(total)} tok/mo{RESET}"
+'''
+
+OLD_DISPLAY_STATE_TOK = '''    cache_pct: int = 0
+    cost_per_turn: str = ""
+    monthly_cost_part: str = ""
+
+    # Layout
+    bar_length: int = 20'''
+
+NEW_DISPLAY_STATE_TOK = '''    cache_pct: int = 0
+    cost_per_turn: str = ""
+    monthly_cost_part: str = ""
+    monthly_tokens_part: str = ""
+
+    # Layout
+    bar_length: int = 20'''
+
+OLD_COMPACT_LINE_TOK = '''def build_compact_line(ds):
+    """Build compact single-line from DisplayState.
+
+    nix-darwin: drops the model name (redundant with what's visible
+    elsewhere in the UI per user request) and appends a local monthly-cost
+    estimate after the usage widget."""
+    parts = []
+    if is_visible("line1", "context_bar"):
+        ctx = f"{ds.bar}"
+        if is_visible("line1", "token_count"):
+            ctx += f" {format_token_suffix(ds.tokens_str, ds.limit_str)}"
+        parts.append(ctx)
+    if ds.usage:
+        usage_str = format_usage_constraint(ds.usage, length=ds.bar_length)
+        if usage_str:
+            if ds.monthly_cost_part:
+                usage_str += f" {GRAY}·{RESET} {ds.monthly_cost_part}"
+            parts.append(usage_str)
+    elif ds.monthly_cost_part:
+        parts.append(ds.monthly_cost_part)
+    sep = f" {GRAY}⋮{RESET} "
+    return sep.join(parts) if parts else ""'''
+
+NEW_COMPACT_LINE_TOK = '''def build_compact_line(ds):
+    """Build compact single-line from DisplayState.
+
+    nix-darwin: drops the model name (redundant with what's visible
+    elsewhere in the UI per user request), appends a running monthly token
+    count next to the context bar, and appends a local monthly-cost
+    estimate after the usage widget."""
+    parts = []
+    if is_visible("line1", "context_bar"):
+        ctx = f"{ds.bar}"
+        if is_visible("line1", "token_count"):
+            ctx += f" {format_token_suffix(ds.tokens_str, ds.limit_str)}"
+        if ds.monthly_tokens_part:
+            ctx += f" {GRAY}·{RESET} {ds.monthly_tokens_part}"
+        parts.append(ctx)
+    if ds.usage:
+        usage_str = format_usage_constraint(ds.usage, length=ds.bar_length)
+        if usage_str:
+            if ds.monthly_cost_part:
+                usage_str += f" {GRAY}·{RESET} {ds.monthly_cost_part}"
+            parts.append(usage_str)
+    elif ds.monthly_cost_part:
+        parts.append(ds.monthly_cost_part)
+    sep = f" {GRAY}⋮{RESET} "
+    return sep.join(parts) if parts else ""'''
+
+OLD_STATUSLINE_IMPORT_TOK = '''from statusline_core.transcript import (
+    parse_input_data,
+    parse_transcript,
+)
+from claude_tui_components.utils import format_tokens
+from claude_tui_core.monthly_cost import fetch_monthly_cost, format_monthly_cost'''
+
+NEW_STATUSLINE_IMPORT_TOK = '''from statusline_core.transcript import (
+    parse_input_data,
+    parse_transcript,
+)
+from claude_tui_components.utils import format_tokens
+from claude_tui_core.monthly_cost import fetch_monthly_cost, format_monthly_cost
+from claude_tui_core.monthly_tokens import fetch_monthly_tokens, format_monthly_tokens'''
+
+OLD_STATUSLINE_COMPUTE_TOK = '''    usage = basic["usage"]
+    # nix-darwin: spend_limit only ever appears behind a work/gateway account
+    # (see patch 4 docstring) -- personal Pro/Max logins never get it. Gate
+    # the local monthly-cost estimate on it so a personal-account session
+    # never shows a dollar figure that isn't how that seat is billed.
+    monthly_cost_part = (
+        format_monthly_cost(fetch_monthly_cost(background=True))
+        if usage and "spend_limit" in usage
+        else ""
+    )
+
+    ds = DisplayState('''
+
+NEW_STATUSLINE_COMPUTE_TOK = '''    usage = basic["usage"]
+    # nix-darwin: spend_limit only ever appears behind a work/gateway account
+    # (see patch 4 docstring) -- personal Pro/Max logins never get it. Gate
+    # the local monthly-cost estimate on it so a personal-account session
+    # never shows a dollar figure that isn't how that seat is billed.
+    monthly_cost_part = (
+        format_monthly_cost(fetch_monthly_cost(background=True))
+        if usage and "spend_limit" in usage
+        else ""
+    )
+    # nix-darwin: running monthly token count, shown for every account
+    # (unlike monthly_cost_part above) -- a token total is meaningful on a
+    # flat subscription seat too, not just a dollar-metered gateway account.
+    monthly_tokens_part = format_monthly_tokens(fetch_monthly_tokens(background=True))
+
+    ds = DisplayState('''
+
+OLD_STATUSLINE_WIRING_TOK = '''        cost_per_turn=calculate_cost_per_turn(cost, metrics["turn_count"]),
+        bar_length=bar_length,
+        monthly_cost_part=monthly_cost_part,
+    )'''
+
+NEW_STATUSLINE_WIRING_TOK = '''        cost_per_turn=calculate_cost_per_turn(cost, metrics["turn_count"]),
+        bar_length=bar_length,
+        monthly_cost_part=monthly_cost_part,
+        monthly_tokens_part=monthly_tokens_part,
+    )'''
+
+
 
 def _apply_patch(target, marker, replacements, label):
     """Apply one or more (old, new) replacements to target as a single unit,
@@ -1049,6 +1342,34 @@ def main() -> int:
         ],
         "monthly cost (statusline.py wiring)",
     )
+    _ensure_file(
+        f"{libexec}/claude_tui_core/monthly_tokens.py",
+        MONTHLY_TOKENS_MODULE_SOURCE,
+        "monthly tokens module",
+    )
+    _apply_patch(
+        f"{libexec}/claude-code-statusline/statusline_core/display_state.py",
+        "monthly_tokens_part",
+        [(OLD_DISPLAY_STATE_TOK, NEW_DISPLAY_STATE_TOK)],
+        "monthly tokens (display_state.py field)",
+    )
+    _apply_patch(
+        f"{libexec}/claude-code-statusline/statusline_core/render.py",
+        "monthly_tokens_part",
+        [(OLD_COMPACT_LINE_TOK, NEW_COMPACT_LINE_TOK)],
+        "monthly tokens next to context (render.py compact line)",
+    )
+    _apply_patch(
+        f"{libexec}/claude-code-statusline/statusline.py",
+        "fetch_monthly_tokens",
+        [
+            (OLD_STATUSLINE_IMPORT_TOK, NEW_STATUSLINE_IMPORT_TOK),
+            (OLD_STATUSLINE_COMPUTE_TOK, NEW_STATUSLINE_COMPUTE_TOK),
+            (OLD_STATUSLINE_WIRING_TOK, NEW_STATUSLINE_WIRING_TOK),
+        ],
+        "monthly tokens (statusline.py wiring)",
+    )
+
     return 0
 
 
