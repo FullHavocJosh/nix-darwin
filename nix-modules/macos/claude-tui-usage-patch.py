@@ -104,9 +104,31 @@ if its anchor text is missing, i.e. upstream changed the file it targets.
    since their own statusline.py anchors are text that only exists once
    the gated version has actually landed. Adds a small, separate,
    silent-when-inapplicable migration step (OLD_STATUSLINE_COMPUTE_V1,
-   _migrate_stranded_v1_monthly_cost_compute()) that detects exactly that
+   _migrate_stranded_text()) that detects exactly that
    stranded intermediate text and upgrades it in place before the regular
    patch 4 _apply_patch call runs.
+
+8. Monthly-cost budget-bar, replacing the plain $X.XX/mo text (monthly_cost.py,
+   statusline.py): patch 4's spend_limit gating never actually fired for a
+   real monthly dollar cap -- confirmed empirically by capturing this
+   account's real statusline stdin payload directly: rate_limits is null,
+   so five_hour/seven_day/spend_limit are all unreachable, not just absent
+   for this account. The $800/mo Claude Code gateway credit cap this
+   account genuinely has (visible in /usage's own "Usage credits" section,
+   which reads from a source the statusline script has no access to) was
+   therefore never renderable from rate_limits at all. Replaces the dead
+   spend_limit gate with an explicit monthly_cost.budget setting
+   (~/.claude/claudeui.json) -- format_monthly_cost() renders total/budget
+   as a $-labeled progress bar ("$ 3% $26.70/$800") when a budget is
+   configured, empty otherwise (so an unconfigured Pro/Max seat still never
+   sees a dollar figure). Introduces three more "stranded intermediate
+   text" versions of the statusline.py compute block for the same
+   generic-marker reason as patch 7 -- v1 (pre-gating), v2 (gated, patch 7's
+   fix), and v2+tok (v2 with patch 5's monthly_tokens_part already layered
+   on top, confirmed to be this machine's actual real state) -- all
+   migrated via the same _migrate_stranded_text() helper,
+   generalized to take the replacement text as a parameter instead of
+   hardcoding NEW_STATUSLINE_COMPUTE.
 """
 
 import os
@@ -756,7 +778,12 @@ OLD_STATUSLINE_COMPUTE = '''    usage = basic["usage"]
 
     ds = DisplayState('''
 
-NEW_STATUSLINE_COMPUTE = '''    usage = basic["usage"]
+# v2: PR #88's gating fix (2026-09-22). Superseded below once empirical
+# testing (statusline.py's real stdin payload, captured directly) confirmed
+# rate_limits is always null on this account/session -- spend_limit never
+# actually reaches the statusline, so the gate below never once fired for
+# real; kept only as OLD_STATUSLINE_COMPUTE_V2's migration anchor.
+OLD_STATUSLINE_COMPUTE_V2 = '''    usage = basic["usage"]
     # nix-darwin: spend_limit only ever appears behind a work/gateway account
     # (see patch 4 docstring) -- personal Pro/Max logins never get it. Gate
     # the local monthly-cost estimate on it so a personal-account session
@@ -766,6 +793,22 @@ NEW_STATUSLINE_COMPUTE = '''    usage = basic["usage"]
         if usage and "spend_limit" in usage
         else ""
     )
+
+    ds = DisplayState('''
+
+# v3: monthly-cost budget-bar patch. rate_limits.spend_limit is unreachable
+# (see OLD_STATUSLINE_COMPUTE_V2's comment), so gating on it is dead code --
+# replaced with an explicit, user-configured monthly_cost.budget setting
+# (see MONTHLY_COST_MODULE_SOURCE's format_monthly_cost()). format_monthly_cost
+# itself stays silent when no budget is configured, so this call is safe to
+# leave unconditional here, the same way monthly_tokens_part already is.
+NEW_STATUSLINE_COMPUTE = '''    usage = basic["usage"]
+    # nix-darwin: monthly-cost budget-bar patch (v3) -- format_monthly_cost()
+    # renders a $-budget progress bar when monthly_cost.budget is configured
+    # (claudeui.json), and stays empty otherwise. No usage/rate_limits gating
+    # here: rate_limits.spend_limit was confirmed empirically to never reach
+    # the statusline on this account, so gating on it was dead code.
+    monthly_cost_part = format_monthly_cost(fetch_monthly_cost(background=True), length=bar_length)
 
     ds = DisplayState('''
 
@@ -805,10 +848,15 @@ own token counts priced through claude_tui_core.models' pricing table --
 the same list-price convention claude-code-session-stats already uses for
 its own per-session cost breakdown.
 
-Only ever computed and shown when the current statusline's rate_limits carry
-a spend_limit window -- i.e. only behind a work/gateway account, per
-statusline.py's monthly_cost_part gating (patch 4). A personal Pro/Max
-login never triggers this at all.
+Rendered as a `$`-progress-bar against a user-configured monthly budget
+(monthly_cost.budget in ~/.claude/claudeui.json) -- see format_monthly_cost()
+below. Originally gated on rate_limits carrying a spend_limit window (a
+work/gateway account's real $ cap), but that was confirmed empirically to
+never actually reach the statusline on this account (rate_limits is null in
+the real stdin payload), so it's gated on the budget setting instead. Empty
+when no budget is configured -- a personal Pro/Max login never sees a dollar
+figure that isn't how that seat is billed, same intent as the original
+spend_limit gating, just via an explicit opt-in instead of dead API data.
 
 Caveats, worth surfacing to the user:
 - Local-machine only. Doesn't see sessions run on another device, or any
@@ -1003,13 +1051,24 @@ def fetch_monthly_cost(background=False, force=False):
         _release_lock(lock_fd)
 
 
-def format_monthly_cost(total):
-    """Format a monthly-cost float as a compact '$X.XX/mo' suffix, or ''."""
+def format_monthly_cost(total, length=20):
+    """Format the monthly-cost estimate as a $-budget progress bar when
+    monthly_cost.budget is configured (e.g. {"monthly_cost": {"budget": 800}}
+    in ~/.claude/claudeui.json), matching the real cap the account is known
+    to carry even though rate_limits.spend_limit itself is unreachable. ''
+    when no budget is configured or total is unavailable -- see this
+    module's docstring for why that's the right default."""
     if total is None:
         return ""
+    budget = get_setting("monthly_cost", "budget", default=None)
+    if not budget:
+        return ""
     from .formatting import GRAY, RESET
+    from claude_tui_components.lines import build_bar_line
 
-    return f"{GRAY}${total:.2f}/mo{RESET}"
+    ratio = min(total / budget, 1.0) if budget > 0 else 0.0
+    suffix = f"{GRAY}${total:.2f}/${budget:.0f}{RESET}"
+    return build_bar_line(ratio, length, pct_label="$", suffix=suffix)
 '''
 
 # --- Patch 5: running monthly token count, next to the context bar --------
@@ -1282,7 +1341,17 @@ OLD_COMPACT_LINE_TOK = '''def build_compact_line(ds):
     sep = f" {GRAY}⋮{RESET} "
     return sep.join(parts) if parts else ""'''
 
-NEW_COMPACT_LINE_TOK = '''def build_compact_line(ds):
+# monthly_tokens_part was briefly shown in the compact line (next to the
+# context bar), then removed per user request -- "64.1M tok/mo" wasn't a
+# metric they wanted tracked at a glance. OLD_COMPACT_LINE_V2_TOK is the
+# with-tokens text patch 5 actually installed (textually identical to what
+# OLD_COMPACT_LINE_TOK already is, once the tokens line is dropped, so
+# there's no separate "NEW" constant here -- the target state already
+# exists above). Reverted via _migrate_stranded_text() below rather than a
+# plain _apply_patch(), since any machine that already has patch 5 applied
+# is -- by definition -- already past OLD_COMPACT_LINE_TOK (the v0 anchor
+# _apply_patch would otherwise look for).
+OLD_COMPACT_LINE_V2_TOK = '''def build_compact_line(ds):
     """Build compact single-line from DisplayState.
 
     nix-darwin: drops the model name (redundant with what's visible
@@ -1324,19 +1393,38 @@ from claude_tui_core.monthly_cost import fetch_monthly_cost, format_monthly_cost
 from claude_tui_core.monthly_tokens import fetch_monthly_tokens, format_monthly_tokens'''
 
 OLD_STATUSLINE_COMPUTE_TOK = '''    usage = basic["usage"]
-    # nix-darwin: spend_limit only ever appears behind a work/gateway account
-    # (see patch 4 docstring) -- personal Pro/Max logins never get it. Gate
-    # the local monthly-cost estimate on it so a personal-account session
-    # never shows a dollar figure that isn't how that seat is billed.
-    monthly_cost_part = (
-        format_monthly_cost(fetch_monthly_cost(background=True))
-        if usage and "spend_limit" in usage
-        else ""
-    )
+    # nix-darwin: monthly-cost budget-bar patch (v3) -- format_monthly_cost()
+    # renders a $-budget progress bar when monthly_cost.budget is configured
+    # (claudeui.json), and stays empty otherwise. No usage/rate_limits gating
+    # here: rate_limits.spend_limit was confirmed empirically to never reach
+    # the statusline on this account, so gating on it was dead code.
+    monthly_cost_part = format_monthly_cost(fetch_monthly_cost(background=True), length=bar_length)
 
     ds = DisplayState('''
 
 NEW_STATUSLINE_COMPUTE_TOK = '''    usage = basic["usage"]
+    # nix-darwin: monthly-cost budget-bar patch (v3) -- format_monthly_cost()
+    # renders a $-budget progress bar when monthly_cost.budget is configured
+    # (claudeui.json), and stays empty otherwise. No usage/rate_limits gating
+    # here: rate_limits.spend_limit was confirmed empirically to never reach
+    # the statusline on this account, so gating on it was dead code.
+    monthly_cost_part = format_monthly_cost(fetch_monthly_cost(background=True), length=bar_length)
+    # nix-darwin: running monthly token count, shown for every account
+    # (unlike monthly_cost_part above) -- a token total is meaningful on a
+    # flat subscription seat too, not just a dollar-metered gateway account.
+    monthly_tokens_part = format_monthly_tokens(fetch_monthly_tokens(background=True))
+
+    ds = DisplayState('''
+
+# Combined-state anchor: any machine that already had BOTH patch 4 (v2,
+# spend_limit-gated) and patch 5 (monthly_tokens_part) applied before this
+# v3 budget-bar change landed has a compute block that is v2's gated text
+# PLUS the monthly_tokens_part addition, as one contiguous unit -- which
+# matches neither OLD_STATUSLINE_COMPUTE_V1/_V2 (patch-4-only shapes) nor
+# OLD_STATUSLINE_COMPUTE (pristine). Confirmed this is exactly the real
+# state patch 5's own rollout already put this machine in. Migrated
+# directly to NEW_STATUSLINE_COMPUTE_TOK (v3 + tokens) in one hop.
+OLD_STATUSLINE_COMPUTE_V2_TOK = '''    usage = basic["usage"]
     # nix-darwin: spend_limit only ever appears behind a work/gateway account
     # (see patch 4 docstring) -- personal Pro/Max logins never get it. Gate
     # the local monthly-cost estimate on it so a personal-account session
@@ -1421,29 +1509,28 @@ def _ensure_file(target, content, label):
     print(f"[claude-tui-usage-patch] {label} wrote {target}")
 
 
-def _migrate_stranded_v1_monthly_cost_compute(target):
-    """Self-heal a known-stranded intermediate state in statusline.py's
-    monthly-cost compute block (see OLD_STATUSLINE_COMPUTE_V1's comment for
-    the full story). Silent no-op when the intermediate text isn't present
-    -- that's the expected case on every machine that was never stuck there,
-    so it's not a warning-worthy condition the way a missing anchor
-    normally is."""
+def _migrate_stranded_text(target, old_text, new_text, label):
+    """Self-heal a known-stranded intermediate state in a patched file --
+    generic over which file/block, since the same "a too-generic marker let
+    a machine get stuck mid-upgrade" failure mode has shown up more than
+    once (see OLD_STATUSLINE_COMPUTE_V1/_V2's comments for the fullest
+    writeup). Silent no-op when old_text isn't present -- that's the
+    expected case on every machine that was never stuck in that particular
+    intermediate state, so it's not a warning-worthy condition the way a
+    missing anchor normally is."""
     try:
         with open(target, "r") as f:
             src = f.read()
     except OSError:
         return
-    if OLD_STATUSLINE_COMPUTE_V1 not in src:
+    if old_text not in src:
         return
-    patched = src.replace(OLD_STATUSLINE_COMPUTE_V1, NEW_STATUSLINE_COMPUTE)
+    patched = src.replace(old_text, new_text)
     tmp = target + ".tmp"
     with open(tmp, "w") as f:
         f.write(patched)
     os.replace(tmp, target)
-    print(
-        f"[claude-tui-usage-patch] self-heal: migrated stranded pre-gating "
-        f"monthly-cost compute block in {target}"
-    )
+    print(f"[claude-tui-usage-patch] self-heal: migrated {label} in {target}")
 
 
 def main() -> int:
@@ -1522,10 +1609,28 @@ def main() -> int:
         [(OLD_COMPACT_LINE_V2, NEW_COMPACT_LINE_V2)],
         "monthly cost + drop model (render.py compact line)",
     )
-    _migrate_stranded_v1_monthly_cost_compute(f"{libexec}/claude-code-statusline/statusline.py")
+    _statusline_target = f"{libexec}/claude-code-statusline/statusline.py"
+    _migrate_stranded_text(
+        _statusline_target,
+        OLD_STATUSLINE_COMPUTE_V1,
+        NEW_STATUSLINE_COMPUTE,
+        "stranded pre-gating (v1) monthly-cost compute block",
+    )
+    _migrate_stranded_text(
+        _statusline_target,
+        OLD_STATUSLINE_COMPUTE_V2,
+        NEW_STATUSLINE_COMPUTE,
+        "stranded gated (v2) monthly-cost compute block",
+    )
+    _migrate_stranded_text(
+        _statusline_target,
+        OLD_STATUSLINE_COMPUTE_V2_TOK,
+        NEW_STATUSLINE_COMPUTE_TOK,
+        "stranded gated+tokens (v2+tok) monthly-cost compute block",
+    )
     _apply_patch(
-        f"{libexec}/claude-code-statusline/statusline.py",
-        "fetch_monthly_cost",
+        _statusline_target,
+        "monthly-cost budget-bar patch (v3)",
         [
             (OLD_STATUSLINE_IMPORT, NEW_STATUSLINE_IMPORT),
             (OLD_STATUSLINE_COMPUTE, NEW_STATUSLINE_COMPUTE),
@@ -1544,11 +1649,11 @@ def main() -> int:
         [(OLD_DISPLAY_STATE_TOK, NEW_DISPLAY_STATE_TOK)],
         "monthly tokens (display_state.py field)",
     )
-    _apply_patch(
+    _migrate_stranded_text(
         f"{libexec}/claude-code-statusline/statusline_core/render.py",
-        "monthly_tokens_part",
-        [(OLD_COMPACT_LINE_TOK, NEW_COMPACT_LINE_TOK)],
-        "monthly tokens next to context (render.py compact line)",
+        OLD_COMPACT_LINE_V2_TOK,
+        OLD_COMPACT_LINE_TOK,
+        "monthly tokens removed from compact line (render.py)",
     )
     _apply_patch(
         f"{libexec}/claude-code-statusline/statusline.py",
