@@ -104,7 +104,7 @@ if its anchor text is missing, i.e. upstream changed the file it targets.
    since their own statusline.py anchors are text that only exists once
    the gated version has actually landed. Adds a small, separate,
    silent-when-inapplicable migration step (OLD_STATUSLINE_COMPUTE_V1,
-   _migrate_stranded_monthly_cost_compute()) that detects exactly that
+   _migrate_stranded_text()) that detects exactly that
    stranded intermediate text and upgrades it in place before the regular
    patch 4 _apply_patch call runs.
 
@@ -126,7 +126,7 @@ if its anchor text is missing, i.e. upstream changed the file it targets.
    generic-marker reason as patch 7 -- v1 (pre-gating), v2 (gated, patch 7's
    fix), and v2+tok (v2 with patch 5's monthly_tokens_part already layered
    on top, confirmed to be this machine's actual real state) -- all
-   migrated via the same _migrate_stranded_monthly_cost_compute() helper,
+   migrated via the same _migrate_stranded_text() helper,
    generalized to take the replacement text as a parameter instead of
    hardcoding NEW_STATUSLINE_COMPUTE.
 """
@@ -1341,7 +1341,17 @@ OLD_COMPACT_LINE_TOK = '''def build_compact_line(ds):
     sep = f" {GRAY}⋮{RESET} "
     return sep.join(parts) if parts else ""'''
 
-NEW_COMPACT_LINE_TOK = '''def build_compact_line(ds):
+# monthly_tokens_part was briefly shown in the compact line (next to the
+# context bar), then removed per user request -- "64.1M tok/mo" wasn't a
+# metric they wanted tracked at a glance. OLD_COMPACT_LINE_V2_TOK is the
+# with-tokens text patch 5 actually installed (textually identical to what
+# OLD_COMPACT_LINE_TOK already is, once the tokens line is dropped, so
+# there's no separate "NEW" constant here -- the target state already
+# exists above). Reverted via _migrate_stranded_text() below rather than a
+# plain _apply_patch(), since any machine that already has patch 5 applied
+# is -- by definition -- already past OLD_COMPACT_LINE_TOK (the v0 anchor
+# _apply_patch would otherwise look for).
+OLD_COMPACT_LINE_V2_TOK = '''def build_compact_line(ds):
     """Build compact single-line from DisplayState.
 
     nix-darwin: drops the model name (redundant with what's visible
@@ -1499,13 +1509,15 @@ def _ensure_file(target, content, label):
     print(f"[claude-tui-usage-patch] {label} wrote {target}")
 
 
-def _migrate_stranded_monthly_cost_compute(target, old_text, new_text, label):
-    """Self-heal a known-stranded intermediate state in statusline.py's
-    monthly-cost compute block (see OLD_STATUSLINE_COMPUTE_V1/_V2's comments
-    for the full story of each one). Silent no-op when old_text isn't
-    present -- that's the expected case on every machine that was never
-    stuck in that particular intermediate state, so it's not a
-    warning-worthy condition the way a missing anchor normally is."""
+def _migrate_stranded_text(target, old_text, new_text, label):
+    """Self-heal a known-stranded intermediate state in a patched file --
+    generic over which file/block, since the same "a too-generic marker let
+    a machine get stuck mid-upgrade" failure mode has shown up more than
+    once (see OLD_STATUSLINE_COMPUTE_V1/_V2's comments for the fullest
+    writeup). Silent no-op when old_text isn't present -- that's the
+    expected case on every machine that was never stuck in that particular
+    intermediate state, so it's not a warning-worthy condition the way a
+    missing anchor normally is."""
     try:
         with open(target, "r") as f:
             src = f.read()
@@ -1598,19 +1610,19 @@ def main() -> int:
         "monthly cost + drop model (render.py compact line)",
     )
     _statusline_target = f"{libexec}/claude-code-statusline/statusline.py"
-    _migrate_stranded_monthly_cost_compute(
+    _migrate_stranded_text(
         _statusline_target,
         OLD_STATUSLINE_COMPUTE_V1,
         NEW_STATUSLINE_COMPUTE,
         "stranded pre-gating (v1) monthly-cost compute block",
     )
-    _migrate_stranded_monthly_cost_compute(
+    _migrate_stranded_text(
         _statusline_target,
         OLD_STATUSLINE_COMPUTE_V2,
         NEW_STATUSLINE_COMPUTE,
         "stranded gated (v2) monthly-cost compute block",
     )
-    _migrate_stranded_monthly_cost_compute(
+    _migrate_stranded_text(
         _statusline_target,
         OLD_STATUSLINE_COMPUTE_V2_TOK,
         NEW_STATUSLINE_COMPUTE_TOK,
@@ -1637,11 +1649,11 @@ def main() -> int:
         [(OLD_DISPLAY_STATE_TOK, NEW_DISPLAY_STATE_TOK)],
         "monthly tokens (display_state.py field)",
     )
-    _apply_patch(
+    _migrate_stranded_text(
         f"{libexec}/claude-code-statusline/statusline_core/render.py",
-        "monthly_tokens_part",
-        [(OLD_COMPACT_LINE_TOK, NEW_COMPACT_LINE_TOK)],
-        "monthly tokens next to context (render.py compact line)",
+        OLD_COMPACT_LINE_V2_TOK,
+        OLD_COMPACT_LINE_TOK,
+        "monthly tokens removed from compact line (render.py)",
     )
     _apply_patch(
         f"{libexec}/claude-code-statusline/statusline.py",
