@@ -498,6 +498,17 @@ DENY_KEY_SUBSTRINGS = (
     'digest',
 )
 
+# Terraform Cloud/Enterprise resource IDs (workspace, variable set,
+# workspace variable, run, policy, policy set, team, state version, run
+# trigger, notification config, agent pool, org token) are HashiCorp's own
+# opaque identifiers -- intentionally high-entropy by design, but public
+# resource references routinely committed in version control (ops-meta.yaml,
+# .tf/.tfvars), never secrets themselves. varset-5wmb2JhJyap54iuo and
+# ws-nzYBA3TcUc1ayfSR are the two shapes that prompted this.
+TFC_RESOURCE_ID_RE = re.compile(
+    r'^(ws|var|varset|run|apply|plan|cv|pol|polset|team|sv|rt|notif|agent|agentpool|oc|at)-[A-Za-z0-9]{10,}$'
+)
+
 def shannon_entropy(s):
     if not s:
         return 0.0
@@ -531,15 +542,14 @@ for line in sys.stdin:
             continue  # {{ template }} placeholder
         if re.fullmatch(r'[A-Z][A-Z0-9_]{7,}', value):
             continue  # ALL_CAPS_PLACEHOLDER style, same exclusion the password check uses
+        if TFC_RESOURCE_ID_RE.match(value):
+            continue  # Terraform Cloud/Enterprise resource ID, not a secret
         h = shannon_entropy(value)
         if h >= entropy_threshold(value):
             redacted = value[:4] + '...' + value[-4:] if len(value) > 12 else '***'
             print(f'{redacted}\t{h:.2f}\t{line.strip()}')
 "
 }
-
-
-
 # Helper function: Check staged changes for secrets/credentials
 # Returns 0 if safe to proceed, 1 if secrets found and user wants to abort
 function _check_for_secrets() {
