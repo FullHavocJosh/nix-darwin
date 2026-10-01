@@ -11,62 +11,28 @@ let
   # All models share one llama-server alias ("local-coder"), so nothing
   # elsewhere in .zshrc_functions_ai/_git needs to know which one is loaded;
   # only the display label (_llamacpp_model_short) reads this state file.
+  # Pruned to agentic-coding-specialized models only (2026-10-01): a local
+  # model that can't reliably drive a tool-calling loop isn't useful for
+  # aidev/opencode/pi regardless of how good it is at plain chat. Confirmed
+  # live, not assumed: glm-4.7-flash (ex-default, "general + coding", not
+  # agentic-tuned) hung 5+ minutes with zero output on a real multi-tool
+  # repo-exploration task (pi + read/grep/find/ls/bash). Swapping to
+  # qwen3-coder-30b-a3b -- same size class (30B-A3B MoE), explicitly
+  # agentic-coding-specialized -- answered the same task correctly in well
+  # under a minute. qwen3-4b-instruct (its own note already said "not
+  # coding-specialized") and gemma-4-26b-a4b (a standing, confirmed upstream
+  # llama.cpp bug on any tool-calling request) were never real candidates
+  # for this either. Removed, not just deprioritized: the model-downloader
+  # below deletes a GGUF's file once its entry is gone from this list, and
+  # three general-purpose multi-GB checkpoints sitting unused on disk serve
+  # no one.
   localModels = [
-    {
-      # Replaces the former qwen2.5-coder-14b slot: that checkpoint's own
-      # config.json capped out at 32768 with no rope_scaling/YaRN entry,
-      # too small for aidev/opencode's own system prompt regardless of
-      # available RAM (verified: it's an architectural training-time limit,
-      # not a memory tradeoff). Qwen3-4B-Instruct-2507's own config.json
-      # natively supports up to 262144 with no scaling needed -- smaller and
-      # faster than the checkpoint it replaces, with real context headroom.
-      # Not a dedicated coding checkpoint (Qwen3-Coder's smallest official
-      # release is the 30B-A3B already in this list) but capable at code for
-      # its size.
-      id = "qwen3-4b-instruct";
-      label = "Qwen3-4B-Instruct-2507";
-      hfRepo = "bartowski/Qwen_Qwen3-4B-Instruct-2507-GGUF";
-      hfFilename = "Qwen_Qwen3-4B-Instruct-2507-Q8_0.gguf";
-      localFilename = "qwen3-4b-instruct-2507-q8_0.gguf";
-      ctxSize = 163840;
-      note = "general-purpose (not coding-specialized), ~4.3GB (Q8_0), 163K context (native max 262144, no scaling)";
-    }
-    {
-      # google/gemma-4-26B-A4B-it's own config.json natively supports up to
-      # 262144 -- no YaRN/scaling needed. 163840 leaves real margin under that
-      # cap while comfortably covering aidev/opencode's own system prompt.
-      id = "gemma-4-26b-a4b";
-      label = "Gemma-4-26B-A4B";
-      hfRepo = "bartowski/google_gemma-4-26B-A4B-it-GGUF";
-      hfFilename = "google_gemma-4-26B-A4B-it-Q4_K_M.gguf";
-      localFilename = "gemma-4-26b-a4b-it-q4_k_m.gguf";
-      ctxSize = 163840;
-      # KNOWN BROKEN for aidev/opencode: hits a genuine, Gemma-4-specific
-      # llama.cpp server bug ("NotImplemented: map: filter-mapping not
-      # implemented", https://github.com/ggml-org/llama.cpp/issues/21547,
-      # open as of writing) on any tool-calling request, regardless of
-      # --jinja/--reasoning-format. Confirmed live: the same flags that fix
-      # Qwen do nothing for Gemma. Fine for gpc/gpa (no tool calls there).
-      note = "MoE, general + coding, ~17GB (Q4_K_M), 160K context (native max 256K) -- aidev/opencode BROKEN, upstream bug";
-    }
-    {
-      # zai-org/GLM-4.7-Flash's own config.json natively supports up to
-      # 202752, rope_scaling is null (no scaling needed). The model
-      # confirmed working with opencode's tool-calling in community reports
-      # (unlike gemma-4-26b-a4b above) -- this is the model to pick for
-      # aidev/opencode use until Gemma-4's llama.cpp bug is fixed upstream.
-      id = "glm-4.7-flash";
-      label = "GLM-4.7-Flash";
-      hfRepo = "bartowski/zai-org_GLM-4.7-Flash-GGUF";
-      hfFilename = "zai-org_GLM-4.7-Flash-Q4_K_M.gguf";
-      localFilename = "glm-4.7-flash-q4_k_m.gguf";
-      ctxSize = 163840;
-      note = "MoE (30B-A3B), general + coding, ~18.5GB (Q4_K_M), 160K context (native max ~200K), works with aidev/opencode tool-calling";
-    }
     {
       # Qwen/Qwen3-Coder-30B-A3B-Instruct's own config.json natively supports
       # up to 262144, rope_scaling null (no scaling needed). Purpose-built by
       # Qwen for agentic coding/tool-calling; MoE (128 experts, 8 active).
+      # First in this list, so `builtins.head localModels` below makes it the
+      # default.
       id = "qwen3-coder-30b-a3b";
       label = "Qwen3-Coder-30B-A3B";
       hfRepo = "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF";
@@ -250,9 +216,11 @@ let
     # default, but opencode's tool-calling requests against Qwen2.5-Coder
     # crashed with "NotImplemented: map: filter-mapping not implemented"
     # until both were set explicitly -- confirmed live, reproduced with and
-    # without. Does not fix the same-looking error on gemma-4-26b-a4b (see
-    # its note above -- that one's a genuine Gemma-4-specific llama.cpp bug),
-    # but is harmless there and fixes it for qwen2.5-coder-14b/glm-4.7-flash.
+    # without. Did not fix the same-looking error on gemma-4-26b-a4b (a
+    # genuine Gemma-4-specific llama.cpp bug, not this) -- moot now that
+    # model is gone from localModels above, kept as a warning for anyone
+    # tempted to re-add a non-agentic Gemma checkpoint expecting this flag
+    # pair to save it.
     exec ${pkgs.llama-cpp}/bin/llama-server \
       --model           "$MODEL_FILE" \
       --host            "127.0.0.1" \

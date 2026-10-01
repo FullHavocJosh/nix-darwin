@@ -1423,9 +1423,6 @@ function _llamacpp_model_tier() {
 # id must match exactly, label is just for display.
 function _llamacpp_local_model_label() {
   case "$1" in
-    qwen3-4b-instruct) echo "Qwen3-4B-Instruct-2507" ;;
-    gemma-4-26b-a4b)   echo "Gemma-4-26B-A4B" ;;
-    glm-4.7-flash)     echo "GLM-4.7-Flash" ;;
     qwen3-coder-30b-a3b) echo "Qwen3-Coder-30B-A3B" ;;
     devstral-small-2-24b) echo "Devstral-Small-2-24B" ;;
     *)                 echo "$1" ;;
@@ -1438,7 +1435,7 @@ function _llamacpp_model_short() {
     _llamacpp_local_model_label "$(cat "$state_file")"
     return
   fi
-  echo "${LLAMA_CPP_MODEL_LABEL:-Qwen2.5-Coder-7B}"
+  echo "${LLAMA_CPP_MODEL_LABEL:-Qwen3-Coder-30B-A3B}"
 }
 
 
@@ -2099,36 +2096,29 @@ function aiselect() {
         local local_cfg_dir="$HOME/.config/llama-cpp"
         if [[ -d "$local_cfg_dir" ]]; then
           local state_file="$local_cfg_dir/selected-model"
-          local current_id="qwen3-4b-instruct"
+          local current_id="qwen3-coder-30b-a3b"
           [[ -f "$state_file" ]] && current_id="$(cat "$state_file")"
           local new_id="$current_id"
           if $_auto_timeout; then
-            # No response within 5s on the main menu: default all the way to
-            # llama.cpp + GLM-4.7-Flash -- the model confirmed working with
-            # opencode's tool-calling (gemma-4-26b-a4b hits a genuine
-            # Gemma-4-specific llama.cpp bug on any tool-call request, see
-            # its note in llamacpp-local.nix).
-            new_id="glm-4.7-flash"
+            # No response within 5s on the main menu: default to llama.cpp +
+            # Qwen3-Coder-30B-A3B -- both remaining local models are
+            # agentic-coding-specialized (localModels in llamacpp-local.nix
+            # was pruned to just these two), this one is first/default there.
+            new_id="qwen3-coder-30b-a3b"
             echo ""
             echo "No selection in 5s -- defaulting to llama.cpp / $(_llamacpp_local_model_label "$new_id")."
           else
             echo ""
             echo "Select local model (llama-server restarts to switch -- cold start ~1-3 min):"
-            echo "  1) Qwen3-4B-Instruct-2507 (general-purpose, ~4.3GB, 160K ctx)$([[ "$current_id" == "qwen3-4b-instruct" ]] && echo " ${GREEN}[current]${NC}")"
-            echo "  2) Gemma-4-26B-A4B MoE (general + coding, ~17GB, 160K ctx)$([[ "$current_id" == "gemma-4-26b-a4b" ]] && echo " ${GREEN}[current]${NC}") ${YELLOW}[aidev/opencode broken, upstream bug]${NC}"
-            echo "  3) GLM-4.7-Flash MoE (general + coding, ~18.5GB, 160K ctx)$([[ "$current_id" == "glm-4.7-flash" ]] && echo " ${GREEN}[current]${NC}") ${GREEN}[works with aidev/opencode]${NC}"
-            echo "  4) Qwen3-Coder-30B-A3B MoE (agentic coding, ~18.6GB, 160K ctx)$([[ "$current_id" == "qwen3-coder-30b-a3b" ]] && echo " ${GREEN}[current]${NC}")"
-            echo "  5) Devstral-Small-2-24B (agentic coding, ~14.3GB, 160K ctx)$([[ "$current_id" == "devstral-small-2-24b" ]] && echo " ${GREEN}[current]${NC}")"
+            echo "  1) Qwen3-Coder-30B-A3B MoE (agentic coding, ~18.6GB, 160K ctx)$([[ "$current_id" == "qwen3-coder-30b-a3b" ]] && echo " ${GREEN}[current]${NC}")"
+            echo "  2) Devstral-Small-2-24B (agentic coding, ~14.3GB, 160K ctx)$([[ "$current_id" == "devstral-small-2-24b" ]] && echo " ${GREEN}[current]${NC}")"
             echo ""
-            echo -n "Selection (1-5) [Enter = keep current]: "
+            echo -n "Selection (1-2) [Enter = keep current]: "
             read -r model_choice
 
             case "$model_choice" in
-              1) new_id="qwen3-4b-instruct" ;;
-              2) new_id="gemma-4-26b-a4b" ;;
-              3) new_id="glm-4.7-flash" ;;
-              4) new_id="qwen3-coder-30b-a3b" ;;
-              5) new_id="devstral-small-2-24b" ;;
+              1) new_id="qwen3-coder-30b-a3b" ;;
+              2) new_id="devstral-small-2-24b" ;;
               "") ;;
               *) echo "${YELLOW}⚠${NC} Invalid selection, keeping $(_llamacpp_local_model_label "$current_id")" ;;
             esac
