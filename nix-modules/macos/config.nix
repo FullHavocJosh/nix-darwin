@@ -607,6 +607,24 @@
           else
             echo "herdr already up to date, skipping live-handoff"
           fi
+
+          # Every live herdr pane keeps running the zsh it started with -- a
+          # function/alias change from this rebuild (gpr/gpa/gpc, aistack, etc)
+          # is invisible to it until something re-sources the dotfiles in that
+          # shell. Broadcast that on every activation, not just when herdr
+          # itself updated above (dotfiles can change on their own). Scoped to
+          # panes herdr labels "zsh" -- the plain-shell panes this workspace's
+          # own convention creates one of per project, deliberately excluding
+          # "nvim"/"tuicr"/"aidev"/other tool panes: those aren't a zsh REPL
+          # waiting at a prompt, and `pane run` sends text + Enter as if typed,
+          # so injecting into one would interleave with whatever it's actually
+          # doing. A "zsh" pane mid-foreground-command has the same exposure --
+          # there's no per-pane idle signal for a plain shell the way agent
+          # panes report agent_status, so this trusts that convention instead.
+          echo "Refreshing zsh panes with latest dotfiles..."
+          herdr pane list 2>/dev/null | jq -r '.result.panes[]? | select(.label=="zsh") | .pane_id' | while read -r pane_id; do
+            herdr pane run "$pane_id" "source ~/.zshrc" 2>&1 || echo "Failed to refresh herdr pane '$pane_id'"
+          done
         fi
     USERSCRIPT
   '';
