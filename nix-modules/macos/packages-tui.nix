@@ -213,6 +213,12 @@ let
           fi
         fi
 
+        # --- pi: tier 1 of aistack, global npm install ---
+        if ! npm ls -g @earendil-works/pi-coding-agent &>/dev/null; then
+          echo "[token-optimization] Installing pi-coding-agent..."
+          npm install -g @earendil-works/pi-coding-agent 2>&1 || echo "WARNING: pi-coding-agent install failed" >&2
+        fi
+
         # --- caveman: Claude Code plugin (skill + hooks + statusline) ---
         if command -v claude &>/dev/null && [ ! -f "$MARKER_DIR/caveman-plugin-installed" ]; then
           echo "[token-optimization] Installing caveman plugin..."

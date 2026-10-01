@@ -1022,29 +1022,14 @@ function aistack_func() {
     echo "✓ Tier 1 (llama.cpp) is up."
   fi
 
+  # No API key anywhere on this host (checked by _validate_opencode_zen,
+  # which is a presence check, not a live call) -- skip tier 2 silently, no
+  # login prompt. Some hosts (e.g. a work machine) deliberately never get a
+  # personal OpenCode Zen key, so asking every run would just be noise.
   if ! _validate_opencode_zen; then
-    echo "⚠ Tier 2's OpenCode Zen API key is not configured."
-    echo -n "[L]ogin now / [I]gnore tier 2 for this session / [A]bort: "
-    local reply
-    read -r reply
-    case "${reply:l}" in
-      l|login)
-        opencode auth login
-        if ! _validate_opencode_zen; then
-          tier2_available=false
-          tier2_unavailable_reason="OpenCode Zen login did not complete"
-        fi
-        ;;
-      i|ignore)
-        tier2_available=false
-        tier2_unavailable_reason="OpenCode Zen API key not configured"
-        ;;
-      *)
-        echo "Aborting."
-        unset -f _aistack_log
-        return 1
-        ;;
-    esac
+    echo "ℹ Tier 2's OpenCode Zen API key isn't configured on this host -- skipping tier 2, tier 3 (claude-code) is next in line if needed."
+    tier2_available=false
+    tier2_unavailable_reason="OpenCode Zen API key not configured on this host"
   fi
   if $tier2_available && [[ -z "$(_get_free_zen_model 2>/dev/null)" ]]; then
     echo "⚠ Tier 2's OpenCode Zen free-model discovery failed (credential present, but the live API call to list free models didn't succeed)."
