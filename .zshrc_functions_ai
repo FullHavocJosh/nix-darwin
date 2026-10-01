@@ -506,7 +506,7 @@ function _run_aider_local() {
   local model_alias="$1"
   local timeout_secs="$2"
   local prompt="$3"
-  local endpoint="${LLAMA_CPP_HOST:-http://macminim1.rollet.family:8080}"
+  local endpoint="${LLAMA_CPP_HOST:-http://localhost:8080}"
   local settings_file="$HOME/.config/aider/model-settings.yml"
 
   if ! command -v aider &>/dev/null; then
@@ -879,86 +879,97 @@ function _get_ai_command() {
   local task_type="${1:-sonnet}"
   echo "_run_ai_direct $task_type"
 }
-# aistack -- tiered cost-escalation coding stack with a real supervisor.
+# aistack -- 4-tier cost-escalation coding stack.
 #
 # Tier 0: llama.cpp, via aider (--chat-mode ask, read-only, no edit tools).
-#   Plans once at the start, then re-judges tier 1's progress after every
-#   iteration. Tier 0 never edits the workspace itself -- it only plans and
-#   monitors. (Earlier draft ran tier 0 through `opencode run` in full agent
-#   mode; that deadlocked for 600s on a trivial prompt because the agent-mode
-#   system/tool-schema prompt is expensive to prefill on this local model.
-#   aider's ask-mode calls are the same path gpc/gpa already use for local-
-#   model commit messages and reviews, and are proven fast.)
-# Tier 1: OpenCode Zen free tier -- model opencode/$(_get_free_zen_model),
-#   currently big-pickle. Does the actual editing, iteratively, under tier
-#   0's supervision.
-# Tier 2: Claude, via GitHub Copilot -- model
-#   github-copilot/$(_get_copilot_claude_model sonnet), same routing
-#   convention as every other "claude-code" invocation in this file. Last
-#   resort, single attempt.
+#   The zero-interaction/scripted tier: used for every background judgment
+#   call throughout this pipeline (and by gpr/gpa/gpc's own security
+#   scans/checks, outside aistack entirely) -- never the live entry point.
+# Tier 1: llama.cpp, via `pi` (full agent -- read/write/edit/bash/grep/find/
+#   ls), live and interactive. The starting point: attempts the task
+#   directly, and decides for itself -- not via an external heuristic --
+#   whether to escalate, by ending its final reply with a parsed
+#   `TIER1_STATUS: done|escalate -- <reason>` marker it's instructed to
+#   always include.
+# Tier 2: OpenCode Zen free tier -- model opencode/$(_get_free_zen_model),
+#   currently big-pickle. Tier 1's worker when a task is too complex or
+#   would take too long for tier 1 to finish efficiently. Iterative, under
+#   tier 0's judgment (same scripted-judge role as before).
+# Tier 3: Claude, via GitHub Copilot -- model
+#   github-copilot/$(_get_copilot_claude_model sonnet). Final escalation,
+#   single attempt: either tier 2 isn't completing things efficiently, or
+#   tier 0 flags tier 2's otherwise-complete result as needing review.
 #
 # Flow:
-#   1. Tier 0 plans (local-coder-plan): produces the directive tier 1 works
-#      from. If tier 0 itself fails to respond, the raw task is used as the
-#      directive instead -- planning failure degrades gracefully, it doesn't
-#      block the pipeline.
-#   2. Tier 1 runs the directive through `opencode run --auto` (full agent
-#      mode -- edit/write/bash tools). --auto is required: this repo's
-#      opencode.json has edit/write permission set to "ask", which in
-#      headless mode auto-REJECTS every edit/write call with no error --
-#      confirmed live, a plain `opencode run` here cannot touch a single
-#      file. --auto approves anything not explicitly denied; the deny rules
-#      in opencode.json's permission.bash block (rm -rf /, mkfs, etc) still
-#      apply regardless of --auto.
-#   3. After each iteration, tier 0 judges (local-coder-judge): given the
-#      task, the directive, tier 1's latest output, and a `git diff --stat`
-#      snapshot, it returns one of progressing/stuck/done/regressing. `done`
-#      ends the run successfully. `stuck`/`regressing` two checkpoints in a
-#      row (not just once -- a single bad checkpoint is noise) escalates to
-#      tier 2. If the judge call itself fails, that fails open as
-#      "progressing" -- an infra hiccup in the monitor isn't a reason to burn
-#      the paid tier.
-#   4. Tier 1 gets at most 3 iterations total; exhausting them without a
-#      `done` verdict also escalates to tier 2.
-#   5. Any hard-failure signal (timeout, non-zero exit, a known rate-limit/
-#      quota/403 string) at tier 1 escalates immediately, no retry, no wait
-#      for the next judge checkpoint -- these are infrastructure failures,
-#      not quality judgments the judge is positioned to make.
-#   6. Tier 2 gets the full history (task, directive, tier 1's last output,
-#      escalation reason) and one attempt. Same hard-failure check applies;
-#      if it also fails there is nowhere further to go.
+#   1. Tier 1 (pi) runs live and interactively, full tool access, seeded
+#      with the task as its first message (pi supports an initial message
+#      that stays interactive afterward -- no --read-a-seed-file workaround
+#      needed the way aider's one-shot --message required for tier 0).
+#      Work on it yourself, push back, whatever -- when you exit, the LAST
+#      assistant message in that session's JSONL is read back and checked
+#      for the status marker.
+#   2. No session, or no assistant reply ever landed (exited before any
+#      exchange): aborts, no further tiers run -- the tier-1 equivalent of
+#      the old "exit before approving a plan" abort path.
+#   3. `TIER1_STATUS: done` (or no parseable marker -- tier 1 answering a
+#      question, or just not complying with the instruction, isn't treated
+#      as a reason to burn tier 2/3): ends successfully here.
+#   4. `TIER1_STATUS: escalate -- <reason>`: hands off to tier 2 --
+#      task + tier 1's own final reply (which states what it attempted and
+#      why) + current `git diff --stat` (whatever tier 1 already changed,
+#      if anything -- tier 1 has real edit tools, unlike the old tier 0).
+#   5. Tier 2 runs through `opencode run --auto` (full agent mode).
+#      --auto is required: this repo's opencode.json has edit/write
+#      permission set to "ask", which in headless mode auto-REJECTS every
+#      edit/write call with no error -- confirmed live, a plain
+#      `opencode run` here cannot touch a single file. --auto approves
+#      anything not explicitly denied; the deny rules in opencode.json's
+#      permission.bash block (rm -rf /, mkfs, etc) still apply regardless.
+#   6. After each tier-2 iteration, tier 0 judges (local-coder-judge):
+#      given the task, tier 1's assessment, tier 2's latest output, and a
+#      diff snapshot, it returns progressing/stuck/done/regressing.
+#      `stuck`/`regressing` two checkpoints in a row (not just once --
+#      a single bad checkpoint is noise) escalates to tier 3. A judge-call
+#      failure fails open as "progressing" -- an infra hiccup in the
+#      monitor isn't a reason to burn the paid tier.
+#   7. Tier 2 gets at most 3 iterations total; exhausting them without a
+#      `done` verdict also escalates to tier 3.
+#   8. Any hard-failure signal (timeout, non-zero exit, a known rate-limit/
+#      quota/403 string) at tier 2 escalates immediately, no retry, no wait
+#      for the next judge checkpoint.
+#   9. A clean tier-2 `done` gets one more tier-0 check: "does this
+#      specific result warrant review by a stronger model before being
+#      considered complete?" A `review` verdict escalates to tier 3 too,
+#      framed in the handoff as a review pass, not a fix -- the "or if
+#      tier 2 requires additional review/validation" case.
+#  10. Tier 3 gets the full history (task, tier 1's assessment, tier 2's
+#      last output, escalation/review reason) and one attempt. Same
+#      hard-failure check applies; if it also fails there is nowhere
+#      further to go.
 #
 # What this deliberately does not do (v1 scope, not a bug):
-#   - No spend cap on the tier 2 attempt -- only its wall-clock timeout
+#   - No spend cap on the tier 3 attempt -- only its wall-clock timeout
 #     bounds it.
-#   - Tier 0 never edits, even if it judges itself capable of the whole task
-#     in one step -- every task goes through at least one tier-1 iteration.
-#     A future version could let tier 0 short-circuit trivial tasks; this one
-#     always delegates.
+#   - Tier 1's own escalation judgment is trusted, not re-verified -- there
+#     is no second model cross-checking whether tier 1 was right to call
+#     something too complex (or not complex enough).
 #
-# Every stage (plan, each tier-1 attempt, each judge verdict, the tier-2
-# attempt) is logged to ~/.cache/nix-darwin-ai/aistack-log.jsonl.
+# Every stage (tier-1 session, each tier-2 attempt, each judge/review
+# verdict, an abort, the tier-3 attempt) is logged to
+# ~/.cache/nix-darwin-ai/aistack-log.jsonl.
 #
 # Usage: aistack "<task description>"
 function aistack_func() {
   # Defensively local-scope xtrace off, matching gpc_func's guard (see
   # .zshrc_functions_git) for the same symptom class -- harmless either way.
-  # It did NOT fix the actual issue: a stray dump of this function's own
-  # local variables (plan_prompt=, plan_output=, plan_exit=) still leaks into
-  # stdout on the second loop iteration of the plan-approval loop, verified
-  # live with this guard in place. It carries no `+file:line>` prefix, so it
-  # is probably not zsh xtrace at all despite the resemblance; root cause
-  # unconfirmed. Left in place as a real, open, cosmetic issue -- it has not
-  # affected correctness in any live run so far (output, ledger, and return
-  # code have all been right regardless), so it's not blocking, but do not
-  # claim it is fixed.
+  # Carried over from the previous design; root cause was never confirmed
+  # there either (see git history), noting again in case it resurfaces.
   local prev_opts=$-
   setopt local_options
   [[ $prev_opts == *x* ]] && setopt no_xtrace
 
   # Task is optional: run bare `aistack` with no argument and describe the
-  # task live in the chat instead -- tier 0 is already a live conversation,
-  # so requiring it as a shell arg up front was redundant with that.
+  # task live in the pi session instead.
   local task="$1"
 
   local repo_root
@@ -969,79 +980,163 @@ function aistack_func() {
   local ledger="$cache_dir/aistack-log.jsonl"
 
   local hard_fail_re='rate.?limit|http.?429|freetiererror|can only be used from within opencode|usage cap|quota exceeded|http.?403'
+  local endpoint="${LLAMA_CPP_HOST:-http://localhost:8080}"
 
   _aistack_log() {
     jq -nc --arg ts "$(date -u +%FT%TZ)" "$@" '{ts:$ts} + $ARGS.named' 2>/dev/null >> "$ledger"
   }
+  # ---- Preflight: verify each tier is actually usable before starting ----
+  # Tier 1 is mandatory -- no ignore option, aistack has nowhere to start
+  # without it. Tiers 2/3 can be explicitly ignored for this run; tier 1
+  # is told about it below so its own escalation judgment has accurate
+  # information instead of escalating into a dead end.
+  local tier2_available=true tier2_unavailable_reason=""
+  local tier3_available=true tier3_unavailable_reason=""
 
-  # ---- Tier 0: plan, live and interactively ----
-  # Drops into a real interactive `aider` session against llama.cpp -- same
-  # backend/model as the headless local-coder-plan calls, just live: you
-  # talk it through with the model instead of getting one scripted round.
-  # --chat-mode ask keeps it read-only (consistent with tier 0 never editing
-  # anywhere else in this pipeline), but is otherwise a normal aider chat --
-  # push back, ask it to reconsider, whatever; there is no menu.
-  #
-  # aider's --message forces a one-shot non-interactive send, so it can't
-  # also seed the chat and then stay interactive -- the task/pipeline
-  # context is printed to the terminal instead, and the first real message
-  # is typed by hand.
-  #
-  # The hand-off doesn't need tier 0 to have write-tool access: aider
-  # already logs the conversation to --chat-history-file as a side effect of
-  # chatting, in ask mode same as any other. When you exit (Ctrl-D or
-  # /exit), the LAST assistant reply in that file becomes tier 1's
-  # directive. Exiting before getting a reply you're happy with -- or before
-  # chatting at all -- aborts; no tiers run.
-  #
-  # If a task was given, it's seeded into the model's actual context via
-  # --read, not just printed to the terminal: printing alone only tells the
-  # human, and verified live, a human reply that doesn't restate the task
-  # produces a generic answer disconnected from it -- tier 1 went and
-  # explored the repo instead of creating the requested file, on a
-  # directive that said "analyze the provided code" with no code ever
-  # having been provided. --read makes the task part of the model's context
-  # from the first turn regardless of what's typed. With no task given,
-  # the seed instead tells the model to ask what you want done.
-  local endpoint="${LLAMA_CPP_HOST:-http://macminim1.rollet.family:8080}"
-  local settings_file="$HOME/.config/aider/model-settings.yml"
-  local chat_history_file="$cache_dir/aistack-plan-chat-$$.md"
-  local seed_file="$cache_dir/aistack-plan-seed-$$.md"
-  rm -f "$chat_history_file" "$seed_file"
+  if ! curl -s --max-time 3 "${endpoint}/v1/models" 2>/dev/null | grep -q '"id"'; then
+    echo "⚠ Tier 1's llama.cpp server is not reachable at $endpoint."
+    if [[ -d "$HOME/.config/llama-cpp" ]]; then
+      echo -n "Start it now? [Y/n] "
+      local reply
+      read -r reply
+      if [[ "${reply:l}" != "n" ]]; then
+        launchctl kickstart -k "gui/$(id -u)/org.nixos.llama-server-local" 2>/dev/null
+        echo -n "Waiting for llama-server to come up"
+        local waited=0
+        while ! curl -s --max-time 2 "${endpoint}/v1/models" 2>/dev/null | grep -q '"id"'; do
+          echo -n "."
+          sleep 5
+          waited=$((waited + 5))
+          [[ $waited -ge 240 ]] && break
+        done
+        echo ""
+      fi
+    else
+      echo "Not a switchable local server (no ~/.config/llama-cpp) -- start it manually, then re-run aistack."
+    fi
+    if ! curl -s --max-time 3 "${endpoint}/v1/models" 2>/dev/null | grep -q '"id"'; then
+      echo "✗ Tier 1 is required and still unavailable -- aborting."
+      unset -f _aistack_log
+      return 1
+    fi
+    echo "✓ Tier 1 (llama.cpp) is up."
+  fi
 
-  if ! command -v aider &>/dev/null; then
-    echo "✗ aider not installed -- cannot run tier 0's interactive planning session." >&2
+  if ! _validate_opencode_zen; then
+    echo "⚠ Tier 2's OpenCode Zen API key is not configured."
+    echo -n "[L]ogin now / [I]gnore tier 2 for this session / [A]bort: "
+    local reply
+    read -r reply
+    case "${reply:l}" in
+      l|login)
+        opencode auth login
+        if ! _validate_opencode_zen; then
+          tier2_available=false
+          tier2_unavailable_reason="OpenCode Zen login did not complete"
+        fi
+        ;;
+      i|ignore)
+        tier2_available=false
+        tier2_unavailable_reason="OpenCode Zen API key not configured"
+        ;;
+      *)
+        echo "Aborting."
+        unset -f _aistack_log
+        return 1
+        ;;
+    esac
+  fi
+  if $tier2_available && [[ -z "$(_get_free_zen_model 2>/dev/null)" ]]; then
+    echo "⚠ Tier 2's OpenCode Zen free-model discovery failed (credential present, but the live API call to list free models didn't succeed)."
+    echo -n "[I]gnore tier 2 for this session / [A]bort: "
+    local reply
+    read -r reply
+    case "${reply:l}" in
+      i|ignore)
+        tier2_available=false
+        tier2_unavailable_reason="OpenCode Zen free-model discovery failed"
+        ;;
+      *)
+        echo "Aborting."
+        unset -f _aistack_log
+        return 1
+        ;;
+    esac
+  fi
+
+  if ! command -v claude &>/dev/null || ! claude auth status 2>/dev/null | jq -e '.loggedIn == true' >/dev/null 2>&1; then
+    echo "⚠ Tier 3's Claude Code is not logged in."
+    echo -n "[L]ogin now / [I]gnore tier 3 for this session / [A]bort: "
+    local reply
+    read -r reply
+    case "${reply:l}" in
+      l|login)
+        claude auth login
+        if ! claude auth status 2>/dev/null | jq -e '.loggedIn == true' >/dev/null 2>&1; then
+          tier3_available=false
+          tier3_unavailable_reason="Claude Code login did not complete"
+        fi
+        ;;
+      i|ignore)
+        tier3_available=false
+        tier3_unavailable_reason="Claude Code not logged in"
+        ;;
+      *)
+        echo "Aborting."
+        unset -f _aistack_log
+        return 1
+        ;;
+    esac
+  fi
+  echo ""
+
+
+  # ---- Tier 1: live, interactive, pi + llama.cpp -- the entry point ----
+  if ! command -v pi &>/dev/null; then
+    echo "✗ pi not installed -- cannot run tier 1's interactive session." >&2
     unset -f _aistack_log
     return 1
   fi
 
-  local task_section
-  if [[ -n "$task" ]]; then
-    task_section="## Task
+  # Isolated config dir: pi's models.json has no env-var interpolation for
+  # baseUrl (only apiKey/headers), so the resolved endpoint is baked in
+  # fresh each run rather than relying on a static file -- same reason
+  # aider's endpoint is passed as a CLI flag, not hardcoded. Kept separate
+  # from ~/.pi/agent so aistack never touches a provider config the user
+  # might set up for pi directly.
+  local pi_dir="$cache_dir/pi-agent"
+  mkdir -p "$pi_dir"
+  cat > "$pi_dir/models.json" <<PIEOF
+{
+  "providers": {
+    "llama-cpp": {
+      "baseUrl": "${endpoint}/v1",
+      "api": "openai-completions",
+      "apiKey": "sk-local",
+      "models": [ { "id": "local-coder" } ]
+    }
+  }
+}
+PIEOF
 
-$task"
-  else
-    task_section="## Task
+  local tier2_note="- Tier 2: OpenCode Zen's free tier -- your worker if the task is too\n  complex or would take too long for you to finish efficiently."
+  $tier2_available || tier2_note="- Tier 2 is UNAVAILABLE this session ($tier2_unavailable_reason). You have no worker to escalate to for complex tasks."
+  local tier3_note="- Tier 3: Claude Code -- the final escalation, either because tier 2\n  isn't completing things efficiently, or because tier 2's result needs\n  additional review."
+  $tier3_available || tier3_note="- Tier 3 is UNAVAILABLE this session ($tier3_unavailable_reason).$($tier2_available && echo ' If tier 2 also cannot finish this, there is nowhere further to escalate.')"
 
-Not given yet -- ask the user what they'd like done, then help plan it."
-  fi
+  local pi_system_prompt="You are Tier 1 of a cost-tiered coding pipeline running locally (llama.cpp).
+- Tier 1 (you): attempt the task directly using your tools.
+$tier2_note
+$tier3_note
 
-  cat > "$seed_file" <<SEEDEOF
-# aistack tier 0 -- planning context
+Work on the task yourself when you can. When you are finished -- whether
+you completed it, or have decided it needs to go to tier 2 -- end your
+FINAL reply with exactly one line, nothing after it:
+TIER1_STATUS: done -- <one sentence>
+or
+TIER1_STATUS: escalate -- <one sentence reason>"
 
-You are the planning/supervising stage of a cost-tiered coding pipeline:
-- Tier 0 (you): llama.cpp, local, free. Plan and supervise only, never edit.
-- Tier 1: OpenCode Zen's free tier. Does the actual editing.
-- Tier 2: Claude via GitHub Copilot. Paid, last resort.
-
-$task_section
-
-Discuss this task with the user and refine a plan together. When they are
-happy with it, your LAST reply before they exit should be the final
-directive for tier 1: what to do, any constraints, and how to check success.
-SEEDEOF
-
-  echo "── Tier 0 (llama-cpp): live planning session -- exit (Ctrl-D or /exit) when you're happy with the plan ──"
+  echo "── Tier 1 (llama-cpp via pi): live session -- exit (Ctrl-D or /exit) when done ──"
   echo ""
   if [[ -n "$task" ]]; then
     echo "TASK: $task"
@@ -1049,120 +1144,169 @@ SEEDEOF
     echo "No task given -- describe what you want done as your first message below."
   fi
   echo ""
-  echo "Talking to llama.cpp. It plans and supervises; OpenCode Zen's free tier"
-  echo "does the actual editing; Claude via GitHub Copilot is the paid last"
-  echo "resort. Describe the task, push back on its plan, ask it to revise --"
-  echo "whatever its last reply says before you exit becomes tier 1's directive."
-  echo "(llama.cpp is a slow local model -- after you send a message, a reply can"
-  echo "take a while with nothing visible in between. That's normal, not stuck.)"
-  echo ""
-
-  # Inside a repo, let aider see it: dropping --no-git gets a real repo-map
-  # (structure/symbols, auto-built by aider, no --read needed for it) instead
-  # of tier 0 answering repo questions from the task text alone. Confirmed
-  # live without this: asked "what's the purpose of this repo?", it guessed
-  # from the directory name in the question and falsely claimed the guess
-  # came from the attached seed file, which has no repo content at all.
-  # Outside a repo there's nothing to map, so --no-git stays (also avoids
-  # aider searching upward for an enclosing repo it shouldn't touch).
-  #
-  # --map-tokens raised from aider's 1024 default: confirmed live on a real
-  # 222-file repo, 1024 tokens wasn't enough for the map to include the root
-  # flake.nix at all, and tier 0 confidently answered "no Nix profiles
-  # present" in a repo that's entirely Nix config. 2048 is aider's own
-  # documented ceiling ("map-tokens > 2048 is not recommended -- too much
-  # irrelevant code can confuse LLMs", seen live when this was set to 4096)
-  # -- not a measured minimum, just the most aider itself endorses.
-  local -a git_flags
   if [[ -n "$repo_root" ]]; then
-    git_flags=(--map-tokens 2048)
     echo "Repo-aware: $repo_root"
   else
-    git_flags=(--no-git)
-    echo "No repo detected in the current directory -- tier 0 has no repo context."
+    echo "No repo detected in the current directory."
   fi
+  $tier2_available || echo "Tier 2 unavailable this session: $tier2_unavailable_reason"
+  $tier3_available || echo "Tier 3 unavailable this session: $tier3_unavailable_reason"
+  echo "(llama.cpp is a slow local model -- a reply can take a while with"
+  echo "nothing visible in between. That's normal, not stuck.)"
   echo ""
 
-  aider \
-    --model "openai/local-coder-plan" \
-    --openai-api-base "${endpoint}/v1" \
-    --openai-api-key "sk-local" \
-    --model-settings-file "$settings_file" \
-    "${git_flags[@]}" \
-    --chat-mode ask \
-    --yes-always \
-    --no-show-model-warnings \
-    --no-check-update \
-    --no-analytics \
-    --no-detect-urls \
-    --read "$seed_file" \
-    --chat-history-file "$chat_history_file" \
-    --input-history-file /tmp/.aider-local-input-history
+  # Isolate this run's session: find -newer against a marker created right
+  # before launch, rather than guessing pi's cwd-to-directory-name slug
+  # encoding (confirmed live it's not a plain `/`->`-` substitution) --
+  # the newest .jsonl under this dedicated dir after the marker is
+  # unambiguously this run's, since nothing else writes here.
+  local session_marker
+  session_marker=$(mktemp "$pi_dir/.run-marker-XXXXXX")
 
-  rm -f "$seed_file"
-
-  local directive=""
-  if [[ -f "$chat_history_file" ]]; then
-    local last_reply
-    last_reply=$(perl -ne '
-      if (/^#### /) { $collecting = 0; @buf = (); next; }
-      if (/^> Tokens:/) { $collecting = 0; next; }
-      $collecting = 1;
-      push @buf, $_ if $collecting;
-      END { print @buf }
-    ' "$chat_history_file")
-    directive=$(echo "$last_reply" | _aider_extract_response)
-    rm -f "$chat_history_file"
+  # --theme makes catppuccin-mocha/catppuccin-latte selectable (via /settings
+  # or --use-theme) without forcing them -- default stays unset, which pi
+  # resolves to its own "system" theme (queries the terminal's colors and
+  # builds a matching palette, falling back to bare ANSI indices only if the
+  # terminal reports nothing). That matches the terminal first, catppuccin
+  # available as the house fallback, same as every other TUI in this repo.
+  local pi_theme_dir="$HOME/.config/pi/themes"
+  if [[ -n "$task" ]]; then
+    PI_CODING_AGENT_DIR="$pi_dir" pi --provider llama-cpp --model local-coder \
+      --no-skills --no-extensions \
+      --tools read,write,edit,bash,grep,find,ls \
+      --theme "$pi_theme_dir" \
+      --append-system-prompt "$pi_system_prompt" \
+      "$task"
+  else
+    PI_CODING_AGENT_DIR="$pi_dir" pi --provider llama-cpp --model local-coder \
+      --no-skills --no-extensions \
+      --tools read,write,edit,bash,grep,find,ls \
+      --theme "$pi_theme_dir" \
+      --append-system-prompt "$pi_system_prompt"
   fi
 
-  if [[ -n "$directive" ]]; then
-    # No task was given up front -- the directive agreed live in chat is the
-    # closest thing to one now, and later tier1/judge/tier2 prompts all
-    # reference $task (e.g. "ORIGINAL TASK: $task"); backfill it rather than
-    # leave those blank.
-    [[ -z "$task" ]] && task="$directive"
-    echo ""
-    echo "Directive for tier 1:"
-    echo "$directive"
-    _aistack_log --arg stage plan --arg mode interactive
-  else
-    echo "No usable reply captured -- aborting before tier 1."
+  local session_file
+  session_file=$(find "$pi_dir/sessions" -name '*.jsonl' -newer "$session_marker" 2>/dev/null | sort | tail -1)
+  rm -f "$session_marker"
+
+  local tier1_final=""
+  local had_real_tool_use=false
+  if [[ -n "$session_file" && -f "$session_file" ]]; then
+    tier1_final=$(jq -rs '
+      [.[] | select(.type=="message" and .message.role=="assistant")]
+      | last
+      | .message.content[]? | select(.type=="text") | .text
+    ' "$session_file" 2>/dev/null)
+    # Confirms at least one tool call actually executed (a real toolCall
+    # JSON object that got a non-error toolResult back), not just text that
+    # looks like one -- confirmed live, this model's first attempt at a
+    # tool call once leaked as literal `<function=write>...</function>`
+    # text instead of a real tool call, and the task silently did not
+    # happen despite the model's prose claiming it would.
+    if jq -se '[.[] | select(.type=="message" and .message.role=="toolResult" and (.message.isError==false))] | length > 0' "$session_file" 2>/dev/null | grep -q true; then
+      had_real_tool_use=true
+    fi
+  fi
+
+  if [[ -z "$tier1_final" ]]; then
+    echo "No reply captured from tier 1 -- aborting, no further tiers run."
     _aistack_log --arg stage aborted --arg mode interactive
     unset -f _aistack_log
     return 1
   fi
 
-  # ---- Tier 1: execution loop, monitored by tier 0 ----
-  local tier1_model="opencode/$(_get_free_zen_model)"
+  [[ -z "$task" ]] && task="$tier1_final"
+
+  local tier1_status=""
+  if echo "$tier1_final" | grep -qiE '^TIER1_STATUS:[[:space:]]*escalate'; then
+    tier1_status="escalate"
+  elif echo "$tier1_final" | grep -qiE '^TIER1_STATUS:[[:space:]]*done'; then
+    tier1_status="done"
+  elif $had_real_tool_use; then
+    echo "⚠ Tier 1 didn't end with a status marker, but did complete at least one real tool action -- treating as done."
+    tier1_status="done"
+  else
+    echo "⚠ Tier 1 ended without a status marker and no confirmed successful tool use."
+    echo "Its last reply may have been malformed (e.g. an unrecognized tool-call format emitted as plain text instead of a real call) or it may have been a question that needed no tool use at all. Its last reply:"
+    echo ""
+    echo "$tier1_final"
+    echo ""
+    echo -n "[D]one anyway / [E]scalate to tier 2 / [A]bort: "
+    local reply
+    read -r reply
+    case "${reply:l}" in
+      e|escalate) tier1_status="escalate" ;;
+      a|abort)
+        _aistack_log --arg stage aborted --arg mode interactive
+        unset -f _aistack_log
+        return 1
+        ;;
+      *) tier1_status="done" ;;
+    esac
+  fi
+
+  local tier1_reason
+  tier1_reason=$(echo "$tier1_final" | grep -oiE '^TIER1_STATUS:.*' | head -1)
+  _aistack_log --arg stage tier1_session --arg status "$tier1_status"
+
+  if [[ "$tier1_status" == "done" ]]; then
+    echo "✓ Tier 1 completed. No escalation triggered."
+    unset -f _aistack_log
+    return 0
+  fi
+
+  if ! $tier2_available && ! $tier3_available; then
+    echo "✗ Tier 1 wants to escalate, but both tier 2 and tier 3 are unavailable this session -- nothing further to do."
+    _aistack_log --arg stage aborted --arg mode "no_tiers_available"
+    unset -f _aistack_log
+    return 1
+  fi
+
+
+  # ---- Tier 2: execution loop, monitored by tier 0 ----
+  echo "⚠ Tier 1 escalating: ${tier1_reason:-no reason given}"
+  local tier2_model=""
   local max_iters=3
   local stuck_count=0
-  local prompt="$directive"
+  local prompt="ORIGINAL TASK:
+$task
+
+TIER 1'S ASSESSMENT:
+$tier1_final
+
+Continue this work. The workspace may already contain partial changes
+from tier 1 -- check its current state before relying on anything above."
   local escalate_reason=""
-  local t1_output=""
+  local t2_output=""
   local iter
 
+  if ! $tier2_available; then
+    echo "⚠ Tier 2 is unavailable this session ($tier2_unavailable_reason) -- skipping straight to tier 3."
+    escalate_reason="tier 2 unavailable this session ($tier2_unavailable_reason)"
+  else
+  tier2_model="opencode/$(_get_free_zen_model)"
   for iter in 1 2 3; do
-    echo "── Tier 1 iter $iter/$max_iters (opencode-free): $tier1_model ──"
+    echo "── Tier 2 iter $iter/$max_iters (opencode-free): $tier2_model ──"
 
     local start_ts=$(date +%s)
-    local t1_exit
-    t1_output=$(timeout 300s opencode run --auto --model "$tier1_model" "$prompt" 2>&1)
-    t1_exit=$?
+    local t2_exit
+    t2_output=$(timeout 300s opencode run --auto --model "$tier2_model" "$prompt" 2>&1)
+    t2_exit=$?
     _herdr_report_opencode_idle
     local elapsed=$(( $(date +%s) - start_ts ))
-    echo "$t1_output"
+    echo "$t2_output"
 
     local hard_reason=""
-    if [[ $t1_exit -eq 124 ]]; then
+    if [[ $t2_exit -eq 124 ]]; then
       hard_reason="timeout after 300s"
-    elif [[ $t1_exit -ne 0 ]]; then
-      hard_reason="exit code $t1_exit"
-    elif echo "$t1_output" | grep -qiE "$hard_fail_re"; then
+    elif [[ $t2_exit -ne 0 ]]; then
+      hard_reason="exit code $t2_exit"
+    elif echo "$t2_output" | grep -qiE "$hard_fail_re"; then
       hard_reason="hard provider failure signal"
     fi
 
-    _aistack_log --arg stage tier1_attempt --argjson iter "$iter" \
-      --argjson exit_code "$t1_exit" --argjson elapsed_s "$elapsed" --arg reason "$hard_reason"
+    _aistack_log --arg stage tier2_attempt --argjson iter "$iter" \
+      --argjson exit_code "$t2_exit" --argjson elapsed_s "$elapsed" --arg reason "$hard_reason"
 
     if [[ -n "$hard_reason" ]]; then
       escalate_reason="$hard_reason"
@@ -1178,11 +1322,11 @@ SEEDEOF
 ORIGINAL TASK:
 $task
 
-DIRECTIVE GIVEN TO THE CODING AGENT:
-$directive
+TIER 1'S ASSESSMENT (why this was escalated to tier 2):
+$tier1_final
 
 CODING AGENT'S LATEST OUTPUT (iteration $iter of $max_iters):
-$t1_output
+$t2_output
 
 WORKSPACE DIFF SO FAR:
 $diff_stat
@@ -1205,7 +1349,41 @@ regressing -- optionally followed by a one-line reason. Do not write code."
 
     case "$verdict" in
       done)
-        echo "✓ Tier 0 judged the task complete after tier 1 iteration $iter."
+        # One more tier-0 check before calling it final: does this result
+        # specifically warrant review by a stronger model? ("...or if tier
+        # 2 requires additional review/validation" -- a clean done verdict
+        # doesn't rule that out on its own.)
+        echo "── Tier 0 (llama-cpp, review check) ──"
+        local review_prompt="A coding agent just finished this task:
+
+ORIGINAL TASK:
+$task
+
+FINAL OUTPUT:
+$t2_output
+
+WORKSPACE DIFF:
+$diff_stat
+
+Does this specific result warrant review by a stronger model before being
+considered complete (e.g. security-sensitive, high-risk, or unusually
+large/complex changes)? Respond with exactly one word: review or done."
+        local review_output review_exit review_verdict="done"
+        review_output=$(_run_aider_local "local-coder-judge" 180 "$review_prompt" 2>&1)
+        review_exit=$?
+        if [[ $review_exit -eq 0 && -n "$review_output" ]]; then
+          review_verdict=$(echo "$review_output" | grep -oiE '^(review|done)' | head -1 | tr 'A-Z' 'a-z')
+          [[ -z "$review_verdict" ]] && review_verdict="done"
+        fi
+        _aistack_log --arg stage review --arg verdict "$review_verdict"
+
+        if [[ "$review_verdict" == "review" ]]; then
+          echo "⚠ Tier 0 requested review of tier 2's completed work."
+          escalate_reason="tier 2 completed, but tier 0 flagged the result for review"
+          break
+        fi
+
+        echo "✓ Tier 0 judged the task complete after tier 2 iteration $iter."
         unset -f _aistack_log
         return 0
         ;;
@@ -1222,42 +1400,52 @@ regressing -- optionally followed by a one-line reason. Do not write code."
     esac
 
     if [[ $iter -eq $max_iters ]]; then
-      escalate_reason="tier 1 exhausted $max_iters iterations without a done verdict"
+      escalate_reason="tier 2 exhausted $max_iters iterations without a done verdict"
       break
     fi
 
     prompt="ORIGINAL TASK:
 $task
 
-DIRECTIVE:
-$directive
+TIER 1'S ASSESSMENT:
+$tier1_final
 
 PREVIOUS ATTEMPT (iteration $iter) OUTPUT:
-$t1_output
+$t2_output
 
 Tier 0's assessment: $verdict. Continue this work. The workspace may
 already contain partial changes -- check its current state before relying
 on anything above."
   done
+  fi
 
   if [[ -z "$escalate_reason" ]]; then
-    echo "✓ Tier 1 completed. No escalation triggered."
+    echo "✓ Tier 2 completed. No further escalation triggered."
     unset -f _aistack_log
     return 0
   fi
 
-  # ---- Tier 2: last resort, single attempt ----
-  echo "⚠ Escalating to Tier 2 ($escalate_reason)."
-  local tier2_model="github-copilot/$(_get_copilot_claude_model sonnet)"
-  echo "── Tier 2 (claude-code): $tier2_model ──"
+  # ---- Tier 3: last resort, single attempt ----
+  echo "⚠ Escalating to Tier 3 ($escalate_reason)."
+  if ! $tier3_available; then
+    echo "✗ Tier 3 (claude-code) is unavailable this session ($tier3_unavailable_reason) -- no further tier to escalate to."
+    return 1
+  fi
+  echo "── Tier 3 (claude-code) ──"
+  local tier2_section
+  if $tier2_available; then
+    tier2_section="TIER 2'S LAST ATTEMPT ($tier2_model):
+$t2_output"
+  else
+    tier2_section="TIER 2 did not run: $tier2_unavailable_reason"
+  fi
   local handoff_prompt="ORIGINAL TASK:
 $task
 
-DIRECTIVE:
-$directive
+TIER 1'S ASSESSMENT:
+$tier1_final
 
-TIER 1'S LAST ATTEMPT ($tier1_model):
-$t1_output
+$tier2_section
 
 Escalation reason: $escalate_reason
 
@@ -1265,29 +1453,28 @@ Continue this work. The workspace may already contain partial changes from
 previous attempts -- check its current state before relying on anything
 described above."
 
-  local t2_output t2_exit
-  t2_output=$(timeout 300s opencode run --auto --model "$tier2_model" "$handoff_prompt" 2>&1)
-  t2_exit=$?
-  _herdr_report_opencode_idle
-  echo "$t2_output"
+  local t3_output t3_exit
+  t3_output=$(timeout 300s claude -p --permission-mode bypassPermissions "$handoff_prompt" 2>&1)
+  t3_exit=$?
+  echo "$t3_output"
 
-  local t2_reason=""
-  if [[ $t2_exit -eq 124 ]]; then
-    t2_reason="timeout after 300s"
-  elif [[ $t2_exit -ne 0 ]]; then
-    t2_reason="exit code $t2_exit"
-  elif echo "$t2_output" | grep -qiE "$hard_fail_re"; then
-    t2_reason="hard provider failure signal"
+  local t3_reason=""
+  if [[ $t3_exit -eq 124 ]]; then
+    t3_reason="timeout after 300s"
+  elif [[ $t3_exit -ne 0 ]]; then
+    t3_reason="exit code $t3_exit"
+  elif echo "$t3_output" | grep -qiE "$hard_fail_re"; then
+    t3_reason="hard provider failure signal"
   fi
-  _aistack_log --arg stage tier2_attempt --argjson exit_code "$t2_exit" --arg reason "$t2_reason"
+  _aistack_log --arg stage tier3_attempt --argjson exit_code "$t3_exit" --arg reason "$t3_reason"
   unset -f _aistack_log
 
-  if [[ -n "$t2_reason" ]]; then
-    echo "✗ Tier 2 also triggered a failure signal ($t2_reason) -- no further tier to escalate to."
+  if [[ -n "$t3_reason" ]]; then
+    echo "✗ Tier 3 also triggered a failure signal ($t3_reason) -- no further tier to escalate to."
     return 1
   fi
 
-  echo "✓ Tier 2 completed."
+  echo "✓ Tier 3 completed."
   return 0
 }
 
@@ -1440,7 +1627,7 @@ function _llamacpp_model_short() {
 
 
 function _validate_llamacpp() {
-  local endpoint="${LLAMA_CPP_HOST:-http://macminim1.rollet.family:8080}"
+  local endpoint="${LLAMA_CPP_HOST:-http://localhost:8080}"
   local response
   response=$(curl -s --max-time 3 "${endpoint}/health" 2>/dev/null)
   if echo "$response" | grep -q '"status"'; then
@@ -1769,7 +1956,7 @@ function aiselect() {
     echo "  • gpa (code review)         → $opencode_model → Direct API"
     echo ""
     if [[ "$current_provider" == "llama-cpp" ]]; then
-      local endpoint="${LLAMA_CPP_HOST:-http://macminim1.rollet.family:8080}"
+      local endpoint="${LLAMA_CPP_HOST:-http://localhost:8080}"
       local cloud_provider=$(_get_cloud_fallback_provider)
       local cloud_model=$(_get_cloud_model "sonnet")
       echo ""
@@ -2091,8 +2278,8 @@ function aiselect() {
         _aiselect_commit "llama-cpp"
 
         # Model sub-picker only applies to hosts with a switchable local
-        # server (llamacpp-local.nix creates this dir); macminim1's remote
-        # server always serves whatever it was built with, nothing to pick.
+        # server (llamacpp-local.nix creates this dir) -- every host runs its
+        # own llama.cpp locally, nothing remote to pick on hosts without it.
         local local_cfg_dir="$HOME/.config/llama-cpp"
         if [[ -d "$local_cfg_dir" ]]; then
           local state_file="$local_cfg_dir/selected-model"
@@ -2163,13 +2350,13 @@ function aiselect() {
         echo "═══════════════════════════════════════════════════════════"
         return 0
       else
-        echo "${RED}✗${NC} llama.cpp server not reachable at ${LLAMA_CPP_HOST:-http://macminim1.rollet.family:8080}"
+        echo "${RED}✗${NC} llama.cpp server not reachable at ${LLAMA_CPP_HOST:-http://localhost:8080}"
         echo ""
         if [[ -d "$HOME/.config/llama-cpp" ]]; then
           echo "Start it: launchctl kickstart -k gui/\$(id -u)/org.nixos.llama-server-local"
           echo "Then re-run aiselect."
         else
-          echo "Start macminim1's remote llama-server, then re-run aiselect."
+          echo "This host has no local llama.cpp module configured -- add llamacpp-local.nix and rebuild, then re-run aiselect."
         fi
         return 1
       fi
