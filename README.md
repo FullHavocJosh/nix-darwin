@@ -140,7 +140,7 @@ Defined in `flake.nix`:
 
 #### Shared (all macOS profiles, via `packages-tui.nix`)
 
-- **llama-server** launchd service — runs Qwen2.5-Coder-7B-Q8 via llama.cpp on `127.0.0.1:8080`; model auto-downloaded on activation
+- **llama-server** launchd service — runs Qwen3-Coder-30B-A3B via llama.cpp on `127.0.0.1:8080` (agentic-coding-specialized; switchable to Devstral-Small-2-24B via `aiselect`); model auto-downloaded on activation
 
 **Switch profiles:**
 
