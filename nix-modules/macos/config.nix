@@ -611,8 +611,15 @@
           # Every live herdr pane keeps running the zsh it started with -- a
           # function/alias change from this rebuild (gpr/gpa/gpc, aistack, etc)
           # is invisible to it until something re-sources the dotfiles in that
-          # shell. Broadcast that on every activation, not just when herdr
-          # itself updated above (dotfiles can change on their own).
+          # shell, and so is a brand-new environment.variables entry (e.g.
+          # AI_LOCAL_DEFAULT from llamacpp-local.nix): /etc/zshenv only ever
+          # runs its env-setting block once per shell process (guarded by
+          # __ETC_ZSHENV_SOURCED/__NIX_DARWIN_SET_ENVIRONMENT_DONE), so a pane
+          # opened before a var was added keeps missing it forever -- plain
+          # `source ~/.zshrc` was confirmed live to NOT fix this (it doesn't
+          # touch /etc/zshenv at all). Broadcast both refreshes on every
+          # activation, not just when herdr itself updated above (dotfiles and
+          # system env vars can both change on their own).
           #
           # Applies to every live pane, not just ones labeled "zsh" -- a pane
           # can have nvim/tuicr/btop/an AI agent running in it, and the goal is
@@ -632,7 +639,8 @@
           # settles (some apps disable SIGTSTP on purpose), the pane is left
           # completely alone -- better to skip a refresh than send
           # "source ~/.zshrc" as literal keystrokes into whatever's still
-          # running there. Once settled: source the dotfiles, then `fg` to
+          # running there. Once settled: refresh env vars and source the
+          # dotfiles, then `fg` to
           # resume the suspended job exactly where it left off -- confirmed
           # live that btop came back with its own window undisturbed, same
           # pid, not relaunched.
@@ -643,7 +651,7 @@
           # suspend the activation script out from under itself. Matched by a
           # cmdline substring, not a pid (this script's own pid isn't visible
           # to a plain `herdr pane list` scan the way a shell job's is).
-          echo "Refreshing herdr panes with latest dotfiles..."
+          echo "Refreshing herdr panes with latest dotfiles and env vars..."
           herdr pane list 2>/dev/null | jq -c '.result.panes[]?' | while read -r pane_json; do
             pane_id=$(echo "$pane_json" | jq -r '.pane_id')
             agent_status=$(echo "$pane_json" | jq -r '.agent_status // empty')
@@ -685,7 +693,7 @@
               fi
             fi
 
-            herdr pane run "$pane_id" "source ~/.zshrc" >/dev/null 2>&1 || echo "Failed to refresh herdr pane '$pane_id'"
+            herdr pane run "$pane_id" 'set_env=$(grep -o "/nix/store/[^[:space:]]*-set-environment" /etc/zshenv 2>/dev/null); [ -n "$set_env" ] && source "$set_env"; source ~/.zshrc' >/dev/null 2>&1 || echo "Failed to refresh herdr pane '$pane_id'"
             if [ "$had_job" = true ]; then
               herdr pane run "$pane_id" "fg" >/dev/null 2>&1 || echo "Failed to resume foreground job in herdr pane '$pane_id'"
             fi
