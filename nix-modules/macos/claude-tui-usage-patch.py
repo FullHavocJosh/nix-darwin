@@ -73,8 +73,26 @@ if its anchor text is missing, i.e. upstream changed the file it targets.
    in the context-bar block (next to the per-turn token count/limit) rather
    than after the usage widget, since it answers a different question
    ("how much this month" vs. "how full is the current window").
+
+6. Resync mechanism for both monthly totals (monthly_cost.py,
+   monthly_tokens.py, new usage-sync.md command): patches 4 and 5 only ever
+   recompute on a 15-minute TTL, so either total can sit visibly stale for
+   up to that long after new usage lands, with no way to force a recompute
+   on demand. There's no hook event for Claude Code's built-in /usage
+   command -- it's intercepted client-side before any hook fires, per
+   code.claude.com/docs/en/hooks -- so this can't piggyback on /usage
+   itself. Adds two independent fixes instead: (a) each fetch now also
+   compares the newest session-transcript mtime for the current month (a
+   cheap stat-only find_sessions() scan, no content parsing) against the
+   mtime recorded at the last recompute, and treats the cache as stale the
+   moment any session's transcript changes, not just after the TTL
+   elapses; (b) a force=True parameter that skips every staleness check and
+   recomputes unconditionally, wired up to a new user-invoked /usage-sync
+   command (usage-sync.md, installed to ~/.claude/commands/) for an
+   explicit manual resync.
 """
 
+import os
 import sys
 
 NETWORK_MARKER = "# nix-darwin: per-account usage cache patch"
@@ -773,6 +791,14 @@ Caveats, worth surfacing to the user:
 - A session that started last month and continued into this one has its
   *entire* cost attributed to whichever month its last message landed in
   (matching the granularity claude-code-session-stats already uses).
+
+Resync: besides the plain TTL below, every fetch also compares the newest
+session-transcript mtime for the current month against the mtime recorded
+at the last recompute (both via find_sessions()'s cheap stat-only scan --
+no transcript content is parsed just to check staleness), so a session that
+wrote new turns invalidates the cache immediately rather than waiting out
+the TTL. force=True additionally skips every staleness check and recomputes
+unconditionally, for the /usage-sync command.
 """
 
 import importlib.util
@@ -829,6 +855,30 @@ def _current_month_key(now=None):
     return f"{now.year:04d}-{now.month:02d}"
 
 
+def _newest_session_mtime(mod, month_key):
+    """Newest mtime (epoch float) among this month's session transcripts, or
+    None if unknown. find_sessions() only stats files -- it never opens or
+    parses transcript content -- so this is cheap enough to call on every
+    fetch, not just on a recompute."""
+    if mod is None:
+        return None
+    try:
+        sessions = mod.find_sessions(days=32)
+    except Exception:
+        return None
+    newest = None
+    for s in sessions:
+        modified = s.get("modified")
+        if modified is None:
+            continue
+        if _current_month_key(modified) != month_key:
+            continue
+        ts = modified.timestamp()
+        if newest is None or ts > newest:
+            newest = ts
+    return newest
+
+
 def _compute_monthly_cost():
     mod = _load_session_stats_module()
     if mod is None:
@@ -860,10 +910,11 @@ def _compute_monthly_cost():
     return total
 
 
-def fetch_monthly_cost(background=False):
+def fetch_monthly_cost(background=False, force=False):
     """Cached local monthly-cost estimate. Returns a float, or None when
     disabled, unavailable (session-stats.py missing), or never yet computed
-    and a background refresh was just kicked off."""
+    and a background refresh was just kicked off. force=True bypasses the
+    TTL and mtime checks and always recomputes (used by /usage-sync)."""
     if not get_setting("monthly_cost", "enabled", default=True):
         return None
 
@@ -871,17 +922,23 @@ def fetch_monthly_cost(background=False):
     cache = _read_json_file(MONTHLY_COST_CACHE_PATH)
     now = time.time()
     month_key = _current_month_key()
+    mod = _load_session_stats_module()
+    newest_mtime = _newest_session_mtime(mod, month_key)
 
     is_stale = (
-        not cache
+        force
+        or not cache
         or cache.get("month") != month_key
         or now - cache.get("fetched_at", 0) >= ttl
+        or (newest_mtime is not None and newest_mtime > cache.get("newest_mtime", 0))
     )
     if not is_stale:
         return cache.get("total")
 
     if background:
-        t = threading.Thread(target=fetch_monthly_cost, kwargs={"background": False}, daemon=True)
+        t = threading.Thread(
+            target=fetch_monthly_cost, kwargs={"background": False, "force": force}, daemon=True
+        )
         t.start()
         return cache.get("total") if cache and cache.get("month") == month_key else None
 
@@ -890,15 +947,21 @@ def fetch_monthly_cost(background=False):
         return cache.get("total") if cache else None
 
     try:
-        refreshed = _read_json_file(MONTHLY_COST_CACHE_PATH)
-        if refreshed and refreshed.get("month") == month_key and now - refreshed.get("fetched_at", 0) < ttl:
-            return refreshed.get("total")
+        if not force:
+            refreshed = _read_json_file(MONTHLY_COST_CACHE_PATH)
+            if (
+                refreshed
+                and refreshed.get("month") == month_key
+                and now - refreshed.get("fetched_at", 0) < ttl
+                and (newest_mtime is None or newest_mtime <= refreshed.get("newest_mtime", 0))
+            ):
+                return refreshed.get("total")
 
         total = _compute_monthly_cost()
         if total is None:
             return cache.get("total") if cache and cache.get("month") == month_key else None
 
-        fresh = {"fetched_at": now, "month": month_key, "total": total}
+        fresh = {"fetched_at": now, "month": month_key, "total": total, "newest_mtime": newest_mtime or 0}
         try:
             _write_json_file(MONTHLY_COST_CACHE_PATH, fresh)
         except OSError:
@@ -931,6 +994,14 @@ month, last-message-month attribution). Shown for every account, unlike
 monthly_cost.py's dollar estimate which is gated to a work/gateway seat
 with a real spend_limit -- a running token count is meaningful on a flat
 subscription seat too.
+
+Resync: besides the plain TTL below, every fetch also compares the newest
+session-transcript mtime for the current month against the mtime recorded
+at the last recompute (both via find_sessions()'s cheap stat-only scan --
+no transcript content is parsed just to check staleness), so a session that
+wrote new turns invalidates the cache immediately rather than waiting out
+the TTL. force=True additionally skips every staleness check and recomputes
+unconditionally, for the /usage-sync command.
 """
 
 import importlib.util
@@ -983,6 +1054,29 @@ def _current_month_key(now=None):
     return f"{now.year:04d}-{now.month:02d}"
 
 
+def _newest_session_mtime(mod, month_key):
+    """Newest mtime (epoch float) among this month's session transcripts, or
+    None if unknown -- duplicated from monthly_cost.py for the same
+    no-load-order-dependency reason as _load_session_stats_module above."""
+    if mod is None:
+        return None
+    try:
+        sessions = mod.find_sessions(days=32)
+    except Exception:
+        return None
+    newest = None
+    for s in sessions:
+        modified = s.get("modified")
+        if modified is None:
+            continue
+        if _current_month_key(modified) != month_key:
+            continue
+        ts = modified.timestamp()
+        if newest is None or ts > newest:
+            newest = ts
+    return newest
+
+
 def _compute_monthly_tokens():
     mod = _load_session_stats_module()
     if mod is None:
@@ -1020,10 +1114,11 @@ def _compute_monthly_tokens():
     return total
 
 
-def fetch_monthly_tokens(background=False):
+def fetch_monthly_tokens(background=False, force=False):
     """Cached local monthly token total. Returns an int, or None when
     disabled, unavailable (session-stats.py missing), or never yet computed
-    and a background refresh was just kicked off."""
+    and a background refresh was just kicked off. force=True bypasses the
+    TTL and mtime checks and always recomputes (used by /usage-sync)."""
     if not get_setting("monthly_tokens", "enabled", default=True):
         return None
 
@@ -1031,17 +1126,23 @@ def fetch_monthly_tokens(background=False):
     cache = _read_json_file(MONTHLY_TOKENS_CACHE_PATH)
     now = time.time()
     month_key = _current_month_key()
+    mod = _load_session_stats_module()
+    newest_mtime = _newest_session_mtime(mod, month_key)
 
     is_stale = (
-        not cache
+        force
+        or not cache
         or cache.get("month") != month_key
         or now - cache.get("fetched_at", 0) >= ttl
+        or (newest_mtime is not None and newest_mtime > cache.get("newest_mtime", 0))
     )
     if not is_stale:
         return cache.get("total")
 
     if background:
-        t = threading.Thread(target=fetch_monthly_tokens, kwargs={"background": False}, daemon=True)
+        t = threading.Thread(
+            target=fetch_monthly_tokens, kwargs={"background": False, "force": force}, daemon=True
+        )
         t.start()
         return cache.get("total") if cache and cache.get("month") == month_key else None
 
@@ -1050,15 +1151,21 @@ def fetch_monthly_tokens(background=False):
         return cache.get("total") if cache else None
 
     try:
-        refreshed = _read_json_file(MONTHLY_TOKENS_CACHE_PATH)
-        if refreshed and refreshed.get("month") == month_key and now - refreshed.get("fetched_at", 0) < ttl:
-            return refreshed.get("total")
+        if not force:
+            refreshed = _read_json_file(MONTHLY_TOKENS_CACHE_PATH)
+            if (
+                refreshed
+                and refreshed.get("month") == month_key
+                and now - refreshed.get("fetched_at", 0) < ttl
+                and (newest_mtime is None or newest_mtime <= refreshed.get("newest_mtime", 0))
+            ):
+                return refreshed.get("total")
 
         total = _compute_monthly_tokens()
         if total is None:
             return cache.get("total") if cache and cache.get("month") == month_key else None
 
-        fresh = {"fetched_at": now, "month": month_key, "total": total}
+        fresh = {"fetched_at": now, "month": month_key, "total": total, "newest_mtime": newest_mtime or 0}
         try:
             _write_json_file(MONTHLY_TOKENS_CACHE_PATH, fresh)
         except OSError:
@@ -1076,6 +1183,33 @@ def format_monthly_tokens(total):
     from claude_tui_components.utils import format_tokens
 
     return f"{GRAY}{format_tokens(total)} tok/mo{RESET}"
+'''
+
+# --- Patch 6: /usage-sync command, forces an immediate resync ------------
+
+USAGE_SYNC_COMMAND_SOURCE = '''---
+description: Force the statusline's monthly token count and monthly cost estimate to resync right now, bypassing their cache TTL
+allowed-tools: Bash
+---
+
+Run this to force claude-tui's monthly token/cost totals (shown on the statusline next to the context bar and usage widget) to recompute immediately, bypassing their normal ~15-minute cache TTL. Use this when those numbers look stale or out of sync with actual usage.
+
+```bash
+python3 - <<'PYEOF'
+import sys
+sys.path.insert(0, "/opt/homebrew/opt/claude-tui/libexec")
+from claude_tui_core.monthly_tokens import fetch_monthly_tokens, format_monthly_tokens
+from claude_tui_core.monthly_cost import fetch_monthly_cost, format_monthly_cost
+
+tokens = fetch_monthly_tokens(background=False, force=True)
+cost = fetch_monthly_cost(background=False, force=True)
+
+print(f"Monthly tokens resynced: {format_monthly_tokens(tokens) or '(unavailable)'}")
+print(f"Monthly cost resynced:   {format_monthly_cost(cost) or '(unavailable -- not a work/gateway account)'}")
+PYEOF
+```
+
+Show the output as-is. Do not add commentary.
 '''
 
 OLD_DISPLAY_STATE_TOK = '''    cache_pct: int = 0
@@ -1368,6 +1502,11 @@ def main() -> int:
             (OLD_STATUSLINE_WIRING_TOK, NEW_STATUSLINE_WIRING_TOK),
         ],
         "monthly tokens (statusline.py wiring)",
+    )
+    _ensure_file(
+        os.path.expanduser("~/.claude/commands/usage-sync.md"),
+        USAGE_SYNC_COMMAND_SOURCE,
+        "usage-sync command",
     )
 
     return 0
