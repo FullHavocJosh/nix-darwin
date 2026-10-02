@@ -2073,8 +2073,9 @@ function _gpa_review_batch_with_timeout() {
   local total_batches="$3"
   local tier_override="${4:-auto}"  # Optional tier override
 
-  # Local 7B model: ~15-30s per batch. Cloud APIs: ~5-15s.
-  # Use 60s for local (generous but not painful), 90s for cloud.
+  # Local 7B model: ~15-30s per batch, but slower local models (e.g. qwen3-4b)
+  # can run well past that. Cloud APIs: ~5-15s.
+  # Use 180s for local (3x the old 60s, generous for slower local models), 90s for cloud.
   # Pass total_batches=1 so tier defaults to "local" only when genuinely local.
   # For cloud tiers (haiku/sonnet/opus) always use 90s.
   local _tier_for_timeout="$tier_override"
@@ -2083,7 +2084,7 @@ function _gpa_review_batch_with_timeout() {
   fi
   local timeout max_retries
   if [[ "$_tier_for_timeout" == "local" ]]; then
-    timeout=60
+    timeout=180
     max_retries=2
   else
     timeout=90
