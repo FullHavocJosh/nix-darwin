@@ -49,6 +49,11 @@ delivery = "herdr"
 [ui]
 show_agent_labels_on_pane_borders = true
 
+# Ctrl+right-click passes right-click through to the pane app's own context
+# menu (e.g. nvim) instead of opening herdr's pane menu. Matches the ctrl+
+# scheme used by all other herdr bindings above.
+right_click_passthrough_modifier = "ctrl"
+
 agent_panel_sort = "spaces"
 status_indicators = "dots"
 [theme]
