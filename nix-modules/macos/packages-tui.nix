@@ -219,6 +219,18 @@ let
           npm install -g @earendil-works/pi-coding-agent 2>&1 || echo "WARNING: pi-coding-agent install failed" >&2
         fi
 
+        # --- ralph-tui: runs aistack's plan task by task (needs Bun >= 1.0, installed via brew above) ---
+        # Pinned to the version aistack was built and tested against (0.12.0). The first run of ralph-tui
+        # also copies four ralph-tui-* skills into ~/.claude/skills on its own.
+        if command -v bun &>/dev/null; then
+          if [ ! -x "$HOME/.bun/bin/ralph-tui" ]; then
+            echo "[token-optimization] Installing ralph-tui..."
+            bun install -g ralph-tui@0.12.0 2>&1 || echo "WARNING: ralph-tui install failed" >&2
+          fi
+        else
+          echo "WARNING: bun not found, skipping ralph-tui (aistack needs it)" >&2
+        fi
+
         # --- caveman: Claude Code plugin (skill + hooks + statusline) ---
         if command -v claude &>/dev/null && [ ! -f "$MARKER_DIR/caveman-plugin-installed" ]; then
           echo "[token-optimization] Installing caveman plugin..."
@@ -262,6 +274,7 @@ in
       "atuin"
       "bash-language-server"
       "btop"
+      "bun"
       "cava"
       "cmake"
       "coreutils"

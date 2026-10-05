@@ -21,6 +21,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
   export PATH=$PATH:"$HOME/opt/homebrew/bin/tfswitch"
   export K9S_CONFIG_DIR="$HOME/.config/k9s"
   export PATH=$PATH:"$HOME/.lmstudio/bin"
+  export PATH=$PATH:"$HOME/.bun/bin"
 
   # Ansible venv - activate manually with 'ansible-venv-activate' when needed
   # This prevents the old Python 3.9 from taking precedence over system Python

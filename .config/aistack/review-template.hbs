@@ -1,0 +1,23 @@
+{{!-- aistack review template: read-only review that writes one report file. --}}
+## Your Task: {{taskId}} - {{taskTitle}}
+
+{{#if taskDescription}}
+{{taskDescription}}
+{{/if}}
+
+{{#if acceptanceCriteria}}
+### Done when
+{{acceptanceCriteria}}
+{{/if}}
+
+## Rules
+- This is a READ-ONLY review. Do not modify, create or delete any file except the report named above.
+- Read the code and tests, run the verify commands only if they are safe, and base every finding on what you saw.
+- Be concrete: file and line, what is wrong, why it matters, how to fix it. Order findings most serious first.
+- Judge three things separately: security, accuracy, completeness.
+- The report's FIRST line must be exactly `Verdict: PASS` or `Verdict: FAIL`. Use FAIL for any security problem,
+  any acceptance criterion not met, or missing/meaningless tests.
+
+When the report is written, end your final message with this exact line, once:
+<promise>COMPLETE</promise>
+Do not write that marker anywhere else in your reply.

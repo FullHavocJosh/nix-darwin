@@ -1,0 +1,53 @@
+{{!-- aistack work template: Ralph's default json template, plus a question channel and a safer completion rule. --}}
+{{#if prdContent}}
+## PRD: {{prdName}}
+{{#if prdDescription}}
+{{prdDescription}}
+{{/if}}
+{{/if}}
+
+{{#if codebasePatterns}}
+## Codebase Patterns (Study These First)
+{{codebasePatterns}}
+{{/if}}
+
+## Your Task: {{taskId}} - {{taskTitle}}
+
+{{#if taskDescription}}
+### Description
+{{taskDescription}}
+{{/if}}
+
+{{#if acceptanceCriteria}}
+### Acceptance Criteria
+{{acceptanceCriteria}}
+{{/if}}
+
+{{#if notes}}
+### Notes
+{{notes}}
+{{/if}}
+
+{{#if recentProgress}}
+## Recent Progress
+{{recentProgress}}
+{{/if}}
+
+## Workflow
+1. Read the existing code first and follow its conventions.
+2. Implement this single task so every acceptance criterion holds.
+3. Run the task's checks yourself (see the verification commands in the notes) and fix what fails.
+4. Do NOT create git commits and do NOT touch files unrelated to this task. Leave changes uncommitted.
+5. Append a short entry to `.aistack/progress.md`: what you did, files changed, gotchas.
+
+## If you are blocked
+Only when you need a decision you cannot safely make yourself (an ambiguous requirement, a security or design
+trade-off, a destructive or irreversible action, missing credentials or access), do NOT guess. Write the question to
+`.aistack/questions/{{taskId}}.md` (short and specific, with the options you propose and your recommendation), make
+no further changes, and stop. In that case do not use the completion marker below.
+
+## Completion marker
+When the work is finished and you have run its checks, end your final message with this exact line, once:
+<promise>COMPLETE</promise>
+Never write that marker anywhere else in your reply, including when you explain that you could not finish or are
+blocked. Without a finished, passing result, leave it out.
