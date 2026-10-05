@@ -110,6 +110,15 @@
             local skill_name
             skill_name=$(basename "$skill_dir")
             local target="$HOME/.claude/skills/$skill_name"
+            # A real directory here (e.g. one ralph-tui copied in on its own) would make `ln -sfn` nest the link
+            # inside it instead of replacing it, and the repo copy would never be the one Claude Code loads.
+            # Move it aside rather than delete it.
+            if [ -d "$target" ] && [ ! -L "$target" ]; then
+              local displaced="$HOME/.claude/.skills-displaced/$skill_name-$(date +%Y%m%d%H%M%S)"
+              mkdir -p "$HOME/.claude/.skills-displaced"
+              echo "Displacing real directory $target (the model-skills copy replaces it): $displaced"
+              mv "$target" "$displaced"
+            fi
             if [ ! -L "$target" ] || [ "$(readlink "$target")" != "$skill_dir" ]; then
               echo "Linking Claude skill: $skill_name → $skill_dir"
               ln -sfn "$skill_dir" "$target"
@@ -448,13 +457,22 @@
             esac
 
             if grep -q "\"$SERVER_NAME\"" "$HOME/.claude.json" 2>/dev/null; then
-              echo "  $SERVER_NAME already registered, skipping."
-              continue
+              # Two registrations that can never work: a command whose __HOME__ placeholder was never substituted
+              # (ENOENT on a literal "__HOME__/..." path, seen on token-savior), and credential env values stored
+              # empty because ''${VAR} was expanded by the activation shell, where those variables are not set. Drop
+              # them; they are registered again below with the ''${VAR} placeholder stored literally.
+              if jq -e --arg s "$SERVER_NAME" '((.mcpServers[$s].command // "") | contains("__HOME__")) or ([.mcpServers[$s].env // {} | to_entries[] | select(.value == "")] | length > 0)' "$HOME/.claude.json" >/dev/null 2>&1; then
+                echo "  $SERVER_NAME was registered with an unsubstituted __HOME__ or empty env values; re-registering."
+                claude mcp remove --scope user "$SERVER_NAME" 2>/dev/null || true
+              else
+                echo "  $SERVER_NAME already registered, skipping."
+                continue
+              fi
             fi
 
-            COMMAND=$(jq -r ".mcpServers[\"$SERVER_NAME\"].command" "$MCP_CONFIG")
+            COMMAND=$(jq -r ".mcpServers[\"$SERVER_NAME\"].command | gsub(\"__HOME__\"; \"$HOME\")" "$MCP_CONFIG")
             ARGS=$(jq -r ".mcpServers[\"$SERVER_NAME\"].args // [] | map(\"'\" + gsub(\"__HOME__\"; \"$HOME\") + \"'\") | join(\" \")" "$MCP_CONFIG")
-            ENV_PAIRS=$(jq -r ".mcpServers[\"$SERVER_NAME\"].env // {} | to_entries | map(\"-e \" + .key + \"=\" + (.value | gsub(\"__HOME__\"; \"$HOME\"))) | join(\" \")" "$MCP_CONFIG")
+            ENV_PAIRS=$(jq -r ".mcpServers[\"$SERVER_NAME\"].env // {} | to_entries | map(\"-e '\" + .key + \"=\" + (.value | gsub(\"__HOME__\"; \"$HOME\")) + \"'\") | join(\" \")" "$MCP_CONFIG")
 
             CMD="claude mcp add --scope user $SERVER_NAME $ENV_PAIRS -- $COMMAND $ARGS"
             eval "$CMD" 2>/dev/null && \
@@ -529,6 +547,36 @@
             # silently reintroduced eager skill loading (and the ~17K token cost that
             # comes with it) on every darwin-rebuild regardless of what opencode.json's
             # own skills.paths was committed as.
+
+            # OpenCode starts every MCP server it is given when it launches, which costs far more context than Claude
+            # Code, which loads tools on demand. So OpenCode gets two kinds of entries: the always-needed servers in the
+            # repo's opencode.json (mcp-stack-fullhavoc, plus context-guardian-perfectserve on the work profile), and one
+            # mcp-lazy proxy that exposes two tools and starts each upstream server only when one of its tools is first
+            # used. The proxy's server list, ~/.mcp-lazy/servers.json, is rebuilt on every rebuild from the servers Claude
+            # Code has registered (profile exclusions already applied) minus the ones mcp-stack-fullhavoc replaces, so
+            # both tools offer the same servers. mcp-lazy starts upstream servers with its own environment plus the env in
+            # servers.json and does not expand ''${VAR}: credentials are left out of servers.json and are handed to the
+            # proxy by name through its `environment` below ({env:NAME}, resolved by OpenCode at launch from the exports
+            # in ~/.zshrc_personal). The tool index is cached by mcp-lazy; the first session after a change is slower.
+            MCP_LAZY_JQ="$HOME/nix-darwin/.config/mcp/claude-to-mcp-lazy.jq"
+            MCP_LAZY_SUPERSEDED='["mcp-context-guardian-fullhavoc","context-guardian","verbosity-guardian"]'
+            if [ -f "$HOME/.claude.json" ] && [ -f "$MCP_LAZY_JQ" ]; then
+              if LAZY=$(jq --arg home "$HOME" --argjson superseded "$MCP_LAZY_SUPERSEDED" -f "$MCP_LAZY_JQ" "$HOME/.claude.json" 2>/dev/null) && [ -n "$LAZY" ] && [ "$LAZY" != "{}" ]; then
+                mkdir -p "$HOME/.mcp-lazy"
+                if jq -n --argjson s "$LAZY" '{servers: $s}' > "$HOME/.mcp-lazy/servers.json.new"; then
+                  mv "$HOME/.mcp-lazy/servers.json.new" "$HOME/.mcp-lazy/servers.json"
+                  echo "mcp-lazy servers (started on demand by OpenCode): $(printf '%s' "$LAZY" | jq -r 'keys | join(", ")')"
+                fi
+                if [ -f "$MCP_CONFIG" ]; then
+                  LAZY_ENV=$(jq '[.mcpServers[].env // {} | to_entries[] | select(.value | test("^\\$\\{[A-Za-z0-9_]+\\}$")) | .key] | unique | map({(.): "{env:\(.)}"}) | add // {}' "$MCP_CONFIG" 2>/dev/null)
+                  if [ -n "$LAZY_ENV" ] && UPDATED=$(jq --argjson e "$LAZY_ENV" 'if .mcp["mcp-lazy"] then .mcp["mcp-lazy"].environment = ((.mcp["mcp-lazy"].environment // {}) + $e) else . end' "$OPENCODE_CONFIG" 2>/dev/null) && [ -n "$UPDATED" ]; then
+                    printf '%s\n' "$UPDATED" > "$OPENCODE_CONFIG"
+                  fi
+                fi
+              else
+                echo "Warning: could not build the mcp-lazy server list from Claude Code; leaving ~/.mcp-lazy/servers.json as it is."
+              fi
+            fi
 
             for EXCLUDED in $MCP_EXCLUDE_SERVERS; do
               if jq -e --arg s "$EXCLUDED" '.mcp[$s]' "$OPENCODE_CONFIG" &>/dev/null; then

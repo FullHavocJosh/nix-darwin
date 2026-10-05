@@ -91,7 +91,7 @@ in
         fi
       fi
 
-      # MCP server credentials for opnsense/truenas/doppler. Unlike Claude Code
+      # MCP server credentials for opnsense/truenas/doppler/awx/hetzner. Unlike Claude Code
       # (which stores literal values in ~/.claude.json via `claude mcp add-json`),
       # OpenCode's opencode.json resolves "{env:VAR}" from the process environment
       # at server-launch time, so these need to be real exported shell vars.
@@ -99,12 +99,17 @@ in
       # fresh here every run), same as the kubeconfig export above -- real secret
       # values must never land in the (public) git history.
       echo ""
-      echo "Injecting MCP server credentials (opnsense/truenas/doppler) into $ZSHRC_PERSONAL..."
+      echo "Injecting MCP server credentials (opnsense/truenas/doppler/awx/hetzner) into $ZSHRC_PERSONAL..."
       OPNSENSE_URL_VAL=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get OPNSENSE_URI --project FullHavocJosh --config root_opnsense --plain 2>/dev/null)
       OPNSENSE_API_KEY_VAL=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get OPNSENSE_API_KEY --project FullHavocJosh --config root_opnsense --plain 2>/dev/null)
       OPNSENSE_API_SECRET_VAL=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get OPNSENSE_API_SECRET --project FullHavocJosh --config root_opnsense --plain 2>/dev/null)
       TRUENAS_API_KEY_VAL=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get TRUENAS_API_KEY --project FullHavocJosh --config root_truenas --plain 2>/dev/null)
       DOPPLER_TOKEN_VAL=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" configure get token --plain 2>/dev/null)
+      # Hetzner and AWX both live in the hetzner-cluster Doppler config: the Hetzner Cloud API token is stored as
+      # HCLOUD_TOKEN and the AWX personal access token as AWX_ADMIN_PAT; the MCP servers want HETZNER_API_TOKEN
+      # and AWX_TOKEN. The AWX address is not a secret and is documented in aicontexts.
+      HETZNER_API_TOKEN_VAL=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get HCLOUD_TOKEN --project FullHavocJosh --config root_hetzner-cluster --plain 2>/dev/null)
+      AWX_TOKEN_VAL=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get AWX_ADMIN_PAT --project FullHavocJosh --config root_hetzner-cluster --plain 2>/dev/null)
 
       if [ -f "$ZSHRC_PERSONAL" ]; then
         {
@@ -115,6 +120,9 @@ in
           [ -n "$TRUENAS_API_KEY_VAL" ] && printf 'export TRUENAS_URL=%q\n' "https://truenas.rollet.family"
           [ -n "$TRUENAS_API_KEY_VAL" ] && printf 'export TRUENAS_API_KEY=%q\n' "$TRUENAS_API_KEY_VAL"
           [ -n "$DOPPLER_TOKEN_VAL" ] && printf 'export DOPPLER_TOKEN=%q\n' "$DOPPLER_TOKEN_VAL"
+          [ -n "$HETZNER_API_TOKEN_VAL" ] && printf 'export HETZNER_API_TOKEN=%q\n' "$HETZNER_API_TOKEN_VAL"
+          [ -n "$AWX_TOKEN_VAL" ] && printf 'export AWX_BASE_URL=%q\n' "https://awx.rollet.family"
+          [ -n "$AWX_TOKEN_VAL" ] && printf 'export AWX_TOKEN=%q\n' "$AWX_TOKEN_VAL"
         } >> "$ZSHRC_PERSONAL"
         chown havoc:staff "$ZSHRC_PERSONAL"
         chmod 600 "$ZSHRC_PERSONAL"

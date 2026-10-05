@@ -241,35 +241,22 @@
   "mcp": {
     "context-guardian-perfectserve": {
       "type": "local",
-      "command": [
-        "node",
-        "{env:HOME}/mcp-context-guardian-perfectserve/dist/index.js"
-      ]
+      "command": ["node", "{env:HOME}/mcp-context-guardian-perfectserve/dist/index.js"]
     },
     "mcp-stack-fullhavoc": {
       "type": "local",
-      "command": [
-        "{env:HOME}/mcp-stack-fullhavoc/.venv/bin/mcp-stack-fullhavoc"
-      ],
+      "command": ["uv", "run", "--project", "{env:HOME}/mcp-stack-fullhavoc", "mcp-stack-fullhavoc"],
       "environment": {
         "VG_THRESHOLDS": "comment_ratio=0.4,pr_words=350,ticket_words=500,similarity=0.75,fixme_chatter=5"
       }
     },
     "mcp-lazy": {
       "type": "local",
-      "command": ["npx", "-y", "mcp-lazy", "serve"],
+      "command": ["npx", "-y", "mcp-lazy@0.1.7", "serve"],
       "environment": {
         "JIRA_USERNAME": "{env:ATLASSIAN_EMAIL}",
         "JIRA_API_TOKEN": "{env:ATLASSIAN_API_TOKEN}"
       }
-    },
-    "doppler": {
-      "type": "local",
-      "command": ["npx", "-y", "@dopplerhq/mcp-server@1.0.5"]
-    },
-    "prettier": {
-      "type": "local",
-      "command": ["npx", "-y", "@prettier/mcp@0.0.1"]
     }
   },
   "plugin": ["@zenobius/opencode-skillful"],
