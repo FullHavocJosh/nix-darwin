@@ -3,6 +3,13 @@
   networking.hostName = "MacBookM2Pro";
   networking.computerName = "MacBookM2Pro";
 
+  # Makes plain gpc/gpa behave like gpc-local/gpa-local (local-only, no cloud
+  # fallback) on this host by default -- see the guards at the top of
+  # gpc()/gpa() in .zshrc_functions_git. Moved here from llamacpp-local.nix.
+  # Does NOT affect aiselect or aidev/opencode. Override for one shell session
+  # with `unset AI_LOCAL_DEFAULT`.
+  environment.variables.AI_LOCAL_DEFAULT = "1";
+
   # Remote Login, scoped to the home LAN and Tailscale tailnet only -- the
   # laptop travels to untrusted networks, so SSH must stay closed everywhere
   # else. macminim1 needs to reach this machine to converge

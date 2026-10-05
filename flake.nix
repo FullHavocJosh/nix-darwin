@@ -28,7 +28,6 @@
           ./nix-modules/macos/config.nix
           ./nix-modules/macos/personal.nix
           ./nix-modules/macos/laptop.nix
-          ./nix-modules/macos/llamacpp-local.nix
           ./nix-modules/macos/lmstudio.nix
           nix-homebrew.darwinModules.nix-homebrew
         ];
@@ -42,7 +41,6 @@
           ./nix-modules/macos/config.nix
           ./nix-modules/macos/personal.nix
           ./nix-modules/macos/desktop.nix
-          ./nix-modules/macos/llamacpp.nix
           ./nix-modules/macos/lmstudio.nix
           nix-homebrew.darwinModules.nix-homebrew
         ];
@@ -56,7 +54,6 @@
           ./nix-modules/macos/packages-gui.nix
           ./nix-modules/macos/config.nix
           ./nix-modules/macos/work.nix
-          ./nix-modules/macos/llamacpp-local.nix
           ./nix-modules/macos/lmstudio.nix
           nix-homebrew.darwinModules.nix-homebrew
         ];
