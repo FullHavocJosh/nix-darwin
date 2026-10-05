@@ -47,7 +47,7 @@ let
           exit 0
         fi
 
-        export STATUSLINE_MODE="full"
+        export STATUSLINE_MODE="compact"
         export PATH="/opt/homebrew/bin:$PATH"
         SETUP_SCRIPT=$(mktemp)
         cat > "$SETUP_SCRIPT" << 'SETUPEOF'
@@ -75,7 +75,7 @@ let
             if os.path.exists(settings_file):
                 os.rename(settings_file, backup)
 
-    mode = os.environ.get("STATUSLINE_MODE", "full")
+    mode = os.environ.get("STATUSLINE_MODE", "compact")
     statusline_cmd = "claudetui statusline"
     if mode == "compact":
         statusline_cmd += " --compact"
@@ -83,6 +83,7 @@ let
     settings["statusLine"] = {
         "type": "command",
         "command": statusline_cmd,
+        "refreshInterval": 10,
     }
 
     hooks = settings.get("hooks", {})
