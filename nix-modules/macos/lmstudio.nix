@@ -3,6 +3,9 @@
   username,
   ...
 }:
+let
+  lmStudioBin = "/Applications/LM Studio.app/Contents/MacOS/LM Studio";
+in
 {
   # Points gpc/gpa/gpr's local-model calls (see _run_aider_local and
   # _validate_llamacpp in .zshrc_functions_ai) at this host's own LM Studio
@@ -35,9 +38,13 @@
   # to the running one and exits 0, so it does not respawn in a loop.
   launchd.daemons.lmstudio = {
     serviceConfig = {
+      # The sh wrapper exits 0 when LM Studio is not installed on this host, which
+      # SuccessfulExit=false below treats as "do not restart" -- so a host that
+      # imports this module before the app is installed does not spin.
       ProgramArguments = [
-        "/Applications/LM Studio.app/Contents/MacOS/LM Studio"
-        "--run-as-service"
+        "/bin/sh"
+        "-c"
+        "[ -x ${lib.escapeShellArg lmStudioBin} ] || exit 0; exec ${lib.escapeShellArg lmStudioBin} --run-as-service"
       ];
       EnvironmentVariables = {
         HOME = "/Users/${username}";

@@ -1655,9 +1655,18 @@ function _validate_llamacpp() {
     # LM Studio has no /health (it answers 200 with an error body); /v1/models
     # lists downloaded models whether or not one is loaded, and the server
     # loads LOCAL_LLM_MODEL on the first request.
+    local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
     response=$(curl -s --max-time 3 "${endpoint}/v1/models" 2>/dev/null)
-    echo "$response" | grep -q "\"${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}\"" && return 0
-    return 1
+    echo "$response" | grep -q "\"${lms_model}\"" || return 1
+    # LM Link also lists other devices' models in /v1/models, and a request for a
+    # model key held by a linked device can be served there. Require a copy on
+    # this machine's own disk so prompts never leave the host (matters most for
+    # the work laptop). Skipped if lms or jq is missing.
+    if command -v lms &>/dev/null && command -v jq &>/dev/null; then
+      lms ls --json 2>/dev/null | jq -e --arg m "$lms_model" \
+        'any(.[]; .modelKey == $m and .deviceIdentifier == null)' >/dev/null || return 1
+    fi
+    return 0
   fi
   response=$(curl -s --max-time 3 "${endpoint}/health" 2>/dev/null)
   if echo "$response" | grep -q '"status"'; then
