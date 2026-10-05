@@ -1,18 +1,18 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "provider": {
-    "llama.cpp": {
+    "lmstudio": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "llama.cpp",
+      "name": "LM Studio",
       "options": {
         "baseURL": "{env:LLAMA_CPP_HOST}/v1"
       },
       "models": {
-        "local-coder": {
-          "name": "llama.cpp",
+        "qwen/qwen3.5-9b": {
+          "name": "Qwen3.5 9B (LM Studio)",
           "limit": {
-            "context": 163840,
-            "output": 16384
+            "context": 32768,
+            "output": 8192
           }
         }
       }

@@ -66,6 +66,13 @@ in
   networking.hostName = "MacBookM3Pro";
   networking.computerName = "MacBookM3Pro";
 
+  # Makes plain gpc/gpa behave like gpc-local/gpa-local (local-only, no cloud
+  # fallback) on this host by default -- see the guards at the top of
+  # gpc()/gpa() in .zshrc_functions_git. Moved here from llamacpp-local.nix.
+  # Does NOT affect aiselect or aidev/opencode. Override for one shell session
+  # with `unset AI_LOCAL_DEFAULT`.
+  environment.variables.AI_LOCAL_DEFAULT = "1";
+
   system.defaults = {
     dock.persistent-apps = [ ];
   };

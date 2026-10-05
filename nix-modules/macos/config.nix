@@ -612,7 +612,7 @@
           # function/alias change from this rebuild (gpr/gpa/gpc, aistack, etc)
           # is invisible to it until something re-sources the dotfiles in that
           # shell, and so is a brand-new environment.variables entry (e.g.
-          # AI_LOCAL_DEFAULT from llamacpp-local.nix): /etc/zshenv only ever
+          # AI_LOCAL_DEFAULT from laptop.nix/work.nix): /etc/zshenv only ever
           # runs its env-setting block once per shell process (guarded by
           # __ETC_ZSHENV_SOURCED/__NIX_DARWIN_SET_ENVIRONMENT_DONE), so a pane
           # opened before a var was added keeps missing it forever -- plain

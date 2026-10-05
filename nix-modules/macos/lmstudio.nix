@@ -58,7 +58,13 @@ let
     LOG_PREFIX="[lmstudio-model-provisioner]"
 
     mkdir -p "$HOME/.lmstudio"
-    log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $LOG_PREFIX $*" | tee -a "$LOG"; }
+    # The activation script already redirects this script's stdout into $LOG, so
+    # echoing there as well wrote every line twice. Print only when run by hand.
+    log() {
+      local line
+      line="$(date '+%Y-%m-%d %H:%M:%S') $LOG_PREFIX $*"
+      if [ -t 1 ]; then echo "$line" | tee -a "$LOG"; else echo "$line" >> "$LOG"; fi
+    }
 
     if [ ! -x "$LMS" ]; then
       log "lms not found at $LMS (LM Studio not installed or never launched), skipping"
@@ -78,6 +84,22 @@ let
     if [ "$READY" -ne 1 ]; then
       log "ERROR: LM Studio service not reachable after 60s, giving up"
       exit 1
+    fi
+
+    # Serve models from this machine. LM Link resolves a model key through the
+    # preferred device, so if that points at a peer, a request that passes the
+    # local-copy check in _validate_llamacpp is still loaded and run on the peer
+    # (seen on MacMiniM1, 2026-10-05: the 9B ran on MacBookM2Pro). Reset it to
+    # this device on every rebuild; pick a peer by hand with
+    # `lms link set-preferred-device <id>` when you want one.
+    LINK_CFG="$HOME/.lmstudio/.internal/lm-link-config.json"
+    if [ -f "$LINK_CFG" ]; then
+      SELF_ID=$("$JQ" -r '.json.deviceIdentifier // empty' "$LINK_CFG")
+      PREF_ID=$("$JQ" -r '.json.preferredDeviceIdentifier // empty' "$LINK_CFG")
+      if [ -n "$SELF_ID" ] && [ "$SELF_ID" != "$PREF_ID" ]; then
+        log "LM Link preferred device is not this machine -- setting it to $SELF_ID"
+        "$LMS" link set-preferred-device "$SELF_ID" >> "$LOG" 2>&1 || log "WARNING: could not set the preferred device"
+      fi
     fi
 
     RAM_MB=$(( $(/usr/sbin/sysctl -n hw.memsize) / 1048576 ))
@@ -122,10 +144,11 @@ let
   '';
 in
 {
-  # Points gpc/gpa/gpr's local-model calls (see _run_aider_local and
-  # _validate_llamacpp in .zshrc_functions_ai) at this host's own LM Studio
-  # server instead of a llama.cpp server. Every host talks to localhost, so
-  # nothing here depends on another machine being reachable.
+  # LM Studio is the only local LLM runtime on every host (llama.cpp modules and
+  # their launchd servers were removed). gpc/gpa/gpr, aistack tier 1 and
+  # aidev/opencode all talk to this host's own LM Studio on localhost, so nothing
+  # here depends on another machine being reachable. MacMiniM1 additionally runs
+  # Ollama (desktop.nix) for the AzerothCore bot chat; that is separate.
   #
   # Qwen3.5-9B was chosen over the 27B by measurement, on a ~30k-token prompt
   # (2026-10-05): M2 Pro prefill 156 tok/s vs 47 tok/s, and a 165k context cap
@@ -136,7 +159,6 @@ in
   # that is what the daemon below keeps up.
   environment.variables = {
     LLAMA_CPP_HOST = lib.mkForce "http://localhost:1234";
-    LOCAL_LLM_BACKEND = "lmstudio";
     LOCAL_LLM_MODEL = localModel;
   };
 

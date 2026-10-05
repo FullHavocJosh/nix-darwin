@@ -209,7 +209,7 @@ function _get_opencode_model() {
 
   # Special case: llama.cpp - always return the local model
   if [[ "$provider" == "llama-cpp" ]] || [[ "$provider" == "llama.cpp" ]]; then
-    echo "llama.cpp/local-coder"
+    echo "lmstudio/${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
     return 0
   fi
 
@@ -258,7 +258,7 @@ function _get_opencode_model() {
       echo "github-copilot/$(_get_copilot_claude_model "$task_type")"
       ;;
     llama-cpp|llama.cpp)
-      echo "llama.cpp/local-coder"
+      echo "lmstudio/${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
       ;;
     *)
       echo "github-copilot/$(_get_copilot_claude_model sonnet)"
@@ -493,7 +493,7 @@ function _aider_extract_response() {
 }
 
 # Runs a one-shot, read-only (--chat-mode ask, no file attached, no git
-# operations) Aider query against the local llama-server and prints the
+# operations) Aider query against this host's LM Studio and prints the
 # model's cleaned text response. The prompt is passed as the message body,
 # not a --read file, matching how gpc/gpa already embed the diff directly in
 # the prompt text rather than pointing at a file on disk.
@@ -506,39 +506,38 @@ function _run_aider_local() {
   local model_alias="$1"
   local timeout_secs="$2"
   local prompt="$3"
-  local endpoint="${LLAMA_CPP_HOST:-http://localhost:8080}"
-  local settings_file="$HOME/.config/aider/model-settings.yml"
-  local aider_model="openai/$model_alias"
-  local tmp_settings=""
+  local endpoint="${LLAMA_CPP_HOST:-http://localhost:1234}"
+  local settings_file aider_model tmp_settings
 
   if ! command -v aider &>/dev/null; then
     echo "Error: aider not installed" >&2
     return 1
   fi
 
-  # LOCAL_LLM_BACKEND=lmstudio (set per host in lmstudio.nix): LM Studio serves
-  # real model ids, not llama-server's "local-coder-*" aliases, so aider is
-  # pointed at LOCAL_LLM_MODEL directly and gets a one-entry settings file
-  # carrying the same per-purpose max_tokens model-settings.yml gives each alias.
+  # LM Studio serves real model ids, not the old llama-server "local-coder-*"
+  # aliases, so aider is pointed at LOCAL_LLM_MODEL (set per host in
+  # lmstudio.nix) and gets a one-entry settings file carrying a per-purpose
+  # max_tokens (the alias only picks the cap).
   # reasoning_effort=none goes in extra_body: Qwen3.5 reasons by default and
   # spends max_tokens on it, returning empty content. Verified on LM Studio:
   # chat_template_kwargs.enable_thinking, think=false, reasoning_effort=low and
   # a /no_think suffix all failed to stop it; aider's --reasoning-effort flag
-  # drops the value; only extra_body.reasoning_effort=none worked.
-  if [[ "${LOCAL_LLM_BACKEND:-llamacpp}" == "lmstudio" ]]; then
-    local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
-    local lms_max_tokens
-    case "$model_alias" in
-      local-coder-commit) lms_max_tokens=512 ;;
-      local-coder-plan)   lms_max_tokens=1024 ;;
-      local-coder-judge)  lms_max_tokens=256 ;;
-      *)                  lms_max_tokens=4096 ;;
-    esac
-    tmp_settings=$(mktemp "${TMPDIR:-/tmp}/aider-lms-settings.XXXXXX") || {
-      echo "Error: could not create aider settings file" >&2
-      return 1
-    }
-    cat > "$tmp_settings" <<EOF
+  # drops the value; only extra_body.reasoning_effort=none worked. Only aider
+  # (one-shot commit/review/judge calls) disables reasoning; aistack tier 1
+  # (pi, a live session) keeps it.
+  local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
+  local lms_max_tokens
+  case "$model_alias" in
+    local-coder-commit) lms_max_tokens=512 ;;
+    local-coder-plan)   lms_max_tokens=1024 ;;
+    local-coder-judge)  lms_max_tokens=256 ;;
+    *)                  lms_max_tokens=4096 ;;
+  esac
+  tmp_settings=$(mktemp "${TMPDIR:-/tmp}/aider-lms-settings.XXXXXX") || {
+    echo "Error: could not create aider settings file" >&2
+    return 1
+  }
+  cat > "$tmp_settings" <<EOF
 - name: openai/${lms_model}
   edit_format: ask
   extra_params:
@@ -546,9 +545,8 @@ function _run_aider_local() {
     extra_body:
       reasoning_effort: none
 EOF
-    settings_file="$tmp_settings"
-    aider_model="openai/${lms_model}"
-  fi
+  settings_file="$tmp_settings"
+  aider_model="openai/${lms_model}"
 
   local raw_output
   raw_output=$(timeout "${timeout_secs}s" aider \
@@ -571,11 +569,11 @@ EOF
   [[ -n "$tmp_settings" ]] && rm -f "$tmp_settings"
 
   if [ $exit_code -eq 124 ]; then
-    echo "Error: llama-server timeout after ${timeout_secs}s" >&2
+    echo "Error: LM Studio timeout after ${timeout_secs}s" >&2
     return 1
   elif [ $exit_code -ne 0 ]; then
     if echo "$raw_output" | grep -qi "connection\|connect\|refused"; then
-      echo "Error: llama-server not reachable (is llama-server running?)" >&2
+      echo "Error: LM Studio not reachable (run: lms server start)" >&2
     else
       echo "Error: aider failed (exit code: $exit_code): $raw_output" >&2
     fi
@@ -1017,7 +1015,7 @@ function aistack_func() {
   local ledger="$cache_dir/aistack-log.jsonl"
 
   local hard_fail_re='rate.?limit|http.?429|freetiererror|can only be used from within opencode|usage cap|quota exceeded|http.?403'
-  local endpoint="${LLAMA_CPP_HOST:-http://localhost:8080}"
+  local endpoint="${LLAMA_CPP_HOST:-http://localhost:1234}"
 
   _aistack_log() {
     jq -nc --arg ts "$(date -u +%FT%TZ)" "$@" '{ts:$ts} + $ARGS.named' 2>/dev/null >> "$ledger"
@@ -1030,33 +1028,23 @@ function aistack_func() {
   local tier2_available=true tier2_unavailable_reason=""
   local tier3_available=true tier3_unavailable_reason=""
 
-  if ! curl -s --max-time 3 "${endpoint}/v1/models" 2>/dev/null | grep -q '"id"'; then
-    echo "⚠ Tier 1's llama.cpp server is not reachable at $endpoint."
-    if [[ -d "$HOME/.config/llama-cpp" ]]; then
-      echo -n "Start it now? [Y/n] "
-      local reply
-      read -r reply
-      if [[ "${reply:l}" != "n" ]]; then
-        launchctl kickstart -k "gui/$(id -u)/org.nixos.llama-server-local" 2>/dev/null
-        echo -n "Waiting for llama-server to come up"
-        local waited=0
-        while ! curl -s --max-time 2 "${endpoint}/v1/models" 2>/dev/null | grep -q '"id"'; do
-          echo -n "."
-          sleep 5
-          waited=$((waited + 5))
-          [[ $waited -ge 240 ]] && break
-        done
-        echo ""
-      fi
-    else
-      echo "Not a switchable local server (no ~/.config/llama-cpp) -- start it manually, then re-run aistack."
+  if ! _validate_llamacpp; then
+    echo "⚠ Tier 1's local LLM (LM Studio, ${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}) is not usable at $endpoint."
+    echo -n "Start the LM Studio server now? [Y/n] "
+    local reply
+    read -r reply
+    if [[ "${reply:l}" != "n" ]]; then
+      local lms_bin
+      lms_bin=$(command -v lms 2>/dev/null || echo "$HOME/.lmstudio/bin/lms")
+      "$lms_bin" server start >/dev/null 2>&1
     fi
-    if ! curl -s --max-time 3 "${endpoint}/v1/models" 2>/dev/null | grep -q '"id"'; then
+    if ! _validate_llamacpp; then
       echo "✗ Tier 1 is required and still unavailable -- aborting."
+      echo "  The model must be on this machine's disk and LM Link's preferred device must be this machine (see ~/.lmstudio/provision.log)."
       unset -f _aistack_log
       return 1
     fi
-    echo "✓ Tier 1 (llama.cpp) is up."
+    echo "✓ Tier 1 (LM Studio) is up."
   fi
 
   # No API key anywhere on this host (checked by _validate_opencode_zen,
@@ -1127,15 +1115,16 @@ function aistack_func() {
   # from ~/.pi/agent so aistack never touches a provider config the user
   # might set up for pi directly.
   local pi_dir="$cache_dir/pi-agent"
+  local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
   mkdir -p "$pi_dir"
   cat > "$pi_dir/models.json" <<PIEOF
 {
   "providers": {
-    "llama-cpp": {
+    "lmstudio": {
       "baseUrl": "${endpoint}/v1",
       "api": "openai-completions",
       "apiKey": "sk-local",
-      "models": [ { "id": "local-coder" } ]
+      "models": [ { "id": "${lms_model}", "reasoning": true } ]
     }
   }
 }
@@ -1146,7 +1135,7 @@ PIEOF
   local tier3_note="- Tier 3: Claude Code -- the final escalation, either because tier 2\n  isn't completing things efficiently, or because tier 2's result needs\n  additional review."
   $tier3_available || tier3_note="- Tier 3 is UNAVAILABLE this session ($tier3_unavailable_reason).$($tier2_available && echo ' If tier 2 also cannot finish this, there is nowhere further to escalate.')"
 
-  local pi_system_prompt="You are Tier 1 of a cost-tiered coding pipeline running locally (llama.cpp).
+  local pi_system_prompt="You are Tier 1 of a cost-tiered coding pipeline running locally (LM Studio).
 - Tier 1 (you): attempt the task directly using your tools.
 $tier2_note
 $tier3_note
@@ -1158,7 +1147,7 @@ TIER1_STATUS: done -- <one sentence>
 or
 TIER1_STATUS: escalate -- <one sentence reason>"
 
-  echo "── Tier 1 (llama-cpp via pi): live session -- exit (Ctrl-D or /exit) when done ──"
+  echo "── Tier 1 (LM Studio via pi): live session -- exit (Ctrl-D or /exit) when done ──"
   echo ""
   if [[ -n "$task" ]]; then
     echo "TASK: $task"
@@ -1173,7 +1162,7 @@ TIER1_STATUS: escalate -- <one sentence reason>"
   fi
   $tier2_available || echo "Tier 2 unavailable this session: $tier2_unavailable_reason"
   $tier3_available || echo "Tier 3 unavailable this session: $tier3_unavailable_reason"
-  echo "(llama.cpp is a slow local model -- a reply can take a while with"
+  echo "(LM Studio's local model is slow -- a reply can take a while with"
   echo "nothing visible in between. That's normal, not stuck.)"
   echo ""
 
@@ -1193,14 +1182,14 @@ TIER1_STATUS: escalate -- <one sentence reason>"
   # available as the house fallback, same as every other TUI in this repo.
   local pi_theme_dir="$HOME/.config/pi/themes"
   if [[ -n "$task" ]]; then
-    PI_CODING_AGENT_DIR="$pi_dir" pi --provider llama-cpp --model local-coder \
+    PI_CODING_AGENT_DIR="$pi_dir" pi --provider lmstudio --model "$lms_model" \
       --no-skills --no-extensions \
       --tools read,write,edit,bash,grep,find,ls \
       --theme "$pi_theme_dir" \
       --append-system-prompt "$pi_system_prompt" \
       "$task"
   else
-    PI_CODING_AGENT_DIR="$pi_dir" pi --provider llama-cpp --model local-coder \
+    PI_CODING_AGENT_DIR="$pi_dir" pi --provider lmstudio --model "$lms_model" \
       --no-skills --no-extensions \
       --tools read,write,edit,bash,grep,find,ls \
       --theme "$pi_theme_dir" \
@@ -1548,7 +1537,7 @@ function aidev() {
       fi
       ;;
     llama-cpp)
-      local local_model="llama.cpp/local-coder"
+      local local_model="lmstudio/${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
       echo "${GREEN}✓${NC} Model:    ⚪ $(_llamacpp_model_short) → $local_model"
       echo ""
       _aidev_opencode "$local_model" $print_mode "${filtered_args[@]}"
@@ -1624,62 +1613,48 @@ function _llamacpp_model_tier() {
   local ram_bytes ram_gb
   ram_bytes=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
   ram_gb=$(( ram_bytes / 1024 / 1024 / 1024 ))
-  echo "qwen2.5-coder-7b Q8 (~8 GB, ${ram_gb} GB device)"
+  echo "${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b} (LM Studio, ${ram_gb} GB device)"
 }
 
 
-# Keep in sync with `localModels` in nix-modules/macos/llamacpp-local.nix --
-# id must match exactly, label is just for display.
-function _llamacpp_local_model_label() {
-  case "$1" in
-    qwen3-coder-30b-a3b) echo "Qwen3-Coder-30B-A3B" ;;
-    devstral-small-2-24b) echo "Devstral-Small-2-24B" ;;
-    *)                 echo "$1" ;;
-  esac
-}
-
+# Name kept for the callers; the local model is now whatever LOCAL_LLM_MODEL
+# names (set per host in lmstudio.nix).
 function _llamacpp_model_short() {
-  local state_file="$HOME/.config/llama-cpp/selected-model"
-  if [[ -f "$state_file" ]]; then
-    _llamacpp_local_model_label "$(cat "$state_file")"
-    return
-  fi
-  echo "${LLAMA_CPP_MODEL_LABEL:-Qwen3-Coder-30B-A3B}"
+  echo "${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
 }
 
 
 function _validate_llamacpp() {
-  local endpoint="${LLAMA_CPP_HOST:-http://localhost:8080}"
+  local endpoint="${LLAMA_CPP_HOST:-http://localhost:1234}"
+  local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
   local response
-  if [[ "${LOCAL_LLM_BACKEND:-llamacpp}" == "lmstudio" ]]; then
-    # LM Studio has no /health (it answers 200 with an error body); /v1/models
-    # lists downloaded models whether or not one is loaded, and the server
-    # loads LOCAL_LLM_MODEL on the first request.
-    local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
-    response=$(curl -s --max-time 3 "${endpoint}/v1/models" 2>/dev/null)
-    echo "$response" | grep -q "\"${lms_model}\"" || return 1
-    # LM Link also lists other devices' models in /v1/models, and a request for a
-    # model key held by a linked device can be served there. Require a copy on
-    # this machine's own disk so prompts never leave the host (matters most for
-    # the work laptop). Fails closed: if lms or jq cannot be found the check
-    # cannot run, so the model is rejected rather than trusted. To use a linked
-    # device's model on purpose (e.g. the 27B held by MacBookM2Pro, from another
-    # host), set LOCAL_LLM_ALLOW_LINK=1 for that call:
-    #   LOCAL_LLM_MODEL=qwen/qwen3.8-27b LOCAL_LLM_ALLOW_LINK=1 gpa
-    if [[ -z "${LOCAL_LLM_ALLOW_LINK:-}" ]]; then
-      local lms_bin
-      lms_bin=$(command -v lms 2>/dev/null || echo "$HOME/.lmstudio/bin/lms")
-      [[ -x "$lms_bin" ]] && command -v jq &>/dev/null || return 1
-      "$lms_bin" ls --json 2>/dev/null | jq -e --arg m "$lms_model" \
-        'any(.[]; .modelKey == $m and .deviceIdentifier == null)' >/dev/null || return 1
+  # LM Studio has no /health (it answers 200 with an error body); /v1/models
+  # lists downloaded models whether or not one is loaded, and the server loads
+  # LOCAL_LLM_MODEL on the first request.
+  response=$(curl -s --max-time 3 "${endpoint}/v1/models" 2>/dev/null)
+  echo "$response" | grep -q "\"${lms_model}\"" || return 1
+  # LM Link also lists other devices' models in /v1/models, and a request for a
+  # model key can be served by a linked device. Require (1) a copy on this
+  # machine's own disk and (2) that LM Link's preferred device is this machine,
+  # because LM Link loads a model on the preferred device even when a local copy
+  # exists. This keeps prompts on the host (matters most for the work laptop).
+  # Fails closed: if lms or jq cannot be found the check cannot run, so the
+  # model is rejected rather than trusted. To use a linked device's model on
+  # purpose (e.g. the 27B held by MacBookM2Pro, from another host), set
+  # LOCAL_LLM_ALLOW_LINK=1 for that call and point the preferred device at the
+  # peer with `lms link set-preferred-device <id>`:
+  #   LOCAL_LLM_MODEL=qwen/qwen3.8-27b LOCAL_LLM_ALLOW_LINK=1 gpa
+  if [[ -z "${LOCAL_LLM_ALLOW_LINK:-}" ]]; then
+    local lms_bin link_cfg="$HOME/.lmstudio/.internal/lm-link-config.json"
+    lms_bin=$(command -v lms 2>/dev/null || echo "$HOME/.lmstudio/bin/lms")
+    [[ -x "$lms_bin" ]] && command -v jq &>/dev/null || return 1
+    "$lms_bin" ls --json 2>/dev/null | jq -e --arg m "$lms_model" \
+      'any(.[]; .modelKey == $m and .deviceIdentifier == null)' >/dev/null || return 1
+    if [[ -f "$link_cfg" ]]; then
+      jq -e '.json | (.deviceIdentifier != null) and ((.preferredDeviceIdentifier // .deviceIdentifier) == .deviceIdentifier)' "$link_cfg" >/dev/null || return 1
     fi
-    return 0
   fi
-  response=$(curl -s --max-time 3 "${endpoint}/health" 2>/dev/null)
-  if echo "$response" | grep -q '"status"'; then
-    return 0
-  fi
-  return 1
+  return 0
 }
 
 function _validate_claude_code() {
@@ -2002,20 +1977,20 @@ function aiselect() {
     echo "  • gpa (code review)         → $opencode_model → Direct API"
     echo ""
     if [[ "$current_provider" == "llama-cpp" ]]; then
-      local endpoint="${LLAMA_CPP_HOST:-http://localhost:8080}"
+      local endpoint="${LLAMA_CPP_HOST:-http://localhost:1234}"
       local cloud_provider=$(_get_cloud_fallback_provider)
       local cloud_model=$(_get_cloud_model "sonnet")
       echo ""
-      echo "Hybrid Routing (llama-cpp + cloud escalation):"
+      echo "Hybrid Routing (LM Studio + cloud escalation):"
       echo "  Local endpoint:   $endpoint"
-      echo "  Local tier:       $([[ -d "$HOME/.config/llama-cpp" ]] && echo "$(_llamacpp_model_short) (local, switchable via aiselect)" || _llamacpp_model_tier)"
+      echo "  Local tier:       $(_llamacpp_model_tier)"
       echo "  Cloud provider:   $cloud_provider"
       echo "  Cloud model:      $cloud_model"
       echo ""
       echo "  gpc  → ⚪ local always  (commit messages)"
       echo "  gpr  → ⚪ local always  (PR creation)"
       echo "  gpa  → ⚪ local (small diffs) → 🟢 Haiku (medium) → 🔵 Sonnet (large or critical/security)"
-      echo "  aidev → ⚪ local (claude with llama.cpp, currently: $(_llamacpp_model_short))"
+      echo "  aidev → ⚪ local (claude with LM Studio, currently: $(_llamacpp_model_short))"
     fi
     echo ""
     echo "Note: Run 'aiselect' to change provider. Changes apply immediately"
@@ -2081,15 +2056,15 @@ function aiselect() {
     echo "Cloud AI providers require internet. Available options:"
     echo "  • Wait for internet connection to be restored"
     if _validate_llamacpp; then
-      echo "  • llama.cpp is running and can be used for gpc/gpa (limited)"
+      echo "  • LM Studio is running and can be used for gpc/gpa (limited)"
       echo ""
-      echo "Note: llama.cpp cannot run full OpenCode sessions (context limit)"
+      echo "Note: the local model cannot run full OpenCode sessions (context limit)"
       echo "      but works for git commit messages and simple code review."
     else
-      echo "  • Start llama-server for offline git commit message generation"
+      echo "  • Start LM Studio's server for offline git commit message generation"
       echo ""
-      echo "To start llama-server:"
-      echo "  brew services start llama-cpp"
+      echo "To start it:"
+      echo "  lms server start"
     fi
     echo ""
     echo "═══════════════════════════════════════════════════════════"
@@ -2133,7 +2108,7 @@ function aiselect() {
   echo "  1) $claude_code_status Anthropic"
   echo "  2) $github_copilot_status GitHub Copilot"
   echo "  3) $opencode_zen_status OpenCode Zen (API key)"
-  echo "  4) $llamacpp_status llama.cpp (local: $(_llamacpp_model_short)) -- also usable via aidev/opencode"
+  echo "  4) $llamacpp_status LM Studio (local: $(_llamacpp_model_short)) -- also usable via aidev/opencode"
   echo ""
   echo "Note: gpc always prefers llama.cpp when reachable, and gpa does too"
   echo "      on hosts that default to local (AI_LOCAL_DEFAULT) -- regardless"
@@ -2319,91 +2294,25 @@ function aiselect() {
       fi
       ;;
     4)
-      # llama.cpp (local llama-server)
+      # LM Studio (local)
       if $llamacpp_available; then
         _aiselect_commit "llama-cpp"
 
-        # Model sub-picker only applies to hosts with a switchable local
-        # server (llamacpp-local.nix creates this dir) -- every host runs its
-        # own llama.cpp locally, nothing remote to pick on hosts without it.
-        local local_cfg_dir="$HOME/.config/llama-cpp"
-        if [[ -d "$local_cfg_dir" ]]; then
-          local state_file="$local_cfg_dir/selected-model"
-          local current_id="qwen3-coder-30b-a3b"
-          [[ -f "$state_file" ]] && current_id="$(cat "$state_file")"
-          local new_id="$current_id"
-          if $_auto_timeout; then
-            # No response within 5s on the main menu: default to llama.cpp +
-            # Qwen3-Coder-30B-A3B -- both remaining local models are
-            # agentic-coding-specialized (localModels in llamacpp-local.nix
-            # was pruned to just these two), this one is first/default there.
-            new_id="qwen3-coder-30b-a3b"
-            echo ""
-            echo "No selection in 5s -- defaulting to llama.cpp / $(_llamacpp_local_model_label "$new_id")."
-          else
-            echo ""
-            echo "Select local model (llama-server restarts to switch -- cold start ~1-3 min):"
-            echo "  1) Qwen3-Coder-30B-A3B MoE (agentic coding, ~18.6GB, 160K ctx)$([[ "$current_id" == "qwen3-coder-30b-a3b" ]] && echo " ${GREEN}[current]${NC}")"
-            echo "  2) Devstral-Small-2-24B (agentic coding, ~14.3GB, 160K ctx)$([[ "$current_id" == "devstral-small-2-24b" ]] && echo " ${GREEN}[current]${NC}")"
-            echo ""
-            echo -n "Selection (1-2) [Enter = keep current]: "
-            read -r model_choice
-
-            case "$model_choice" in
-              1) new_id="qwen3-coder-30b-a3b" ;;
-              2) new_id="devstral-small-2-24b" ;;
-              "") ;;
-              *) echo "${YELLOW}⚠${NC} Invalid selection, keeping $(_llamacpp_local_model_label "$current_id")" ;;
-            esac
-          fi
-
-
-          if [[ "$new_id" != "$current_id" ]]; then
-            echo "$new_id" > "$state_file"
-            echo ""
-            echo "${GREEN}✓${NC} Switching to $(_llamacpp_local_model_label "$new_id")..."
-            if launchctl kickstart -k "gui/$(id -u)/org.nixos.llama-server-local" 2>/dev/null; then
-              echo -n "Waiting for llama-server to come up"
-              local waited=0
-              while ! curl -s --max-time 2 "${LLAMA_CPP_HOST:-http://localhost:8080}/health" 2>/dev/null | grep -q '"status"'; do
-                echo -n "."
-                sleep 5
-                waited=$((waited + 5))
-                if [[ $waited -ge 240 ]]; then
-                  echo ""
-                  echo "${YELLOW}⚠${NC} Still loading after 4 min -- check /tmp/llama-server-local.log"
-                  break
-                fi
-              done
-              echo ""
-              if curl -s --max-time 2 "${LLAMA_CPP_HOST:-http://localhost:8080}/health" 2>/dev/null | grep -q '"status"'; then
-                echo "${GREEN}✓${NC} llama-server ready with $(_llamacpp_local_model_label "$new_id")"
-              fi
-            else
-              echo "${YELLOW}⚠${NC} Could not restart llama-server-local automatically."
-              echo "Run manually: launchctl kickstart -k gui/\$(id -u)/org.nixos.llama-server-local"
-            fi
-          fi
-        fi
-
         echo ""
-        echo "${GREEN}✓${NC} Using llama.cpp (local: $(_llamacpp_model_short))"
+        echo "${GREEN}✓${NC} Using LM Studio (local: $(_llamacpp_model_short))"
         echo ""
-        echo "aidev/opencode will now use llama.cpp (currently: $(_llamacpp_model_short))."
-        echo "gpc/gpr always prefer llama.cpp when reachable regardless of this"
+        echo "aidev/opencode will now use LM Studio (currently: $(_llamacpp_model_short))."
+        echo "gpc/gpr always prefer the local LLM when reachable regardless of this"
         echo "setting; gpa escalates to cloud on larger diffs or critical findings"
         echo "unless this host defaults gpc/gpa/gpr to local-only (AI_LOCAL_DEFAULT)."
         echo "═══════════════════════════════════════════════════════════"
         return 0
       else
-        echo "${RED}✗${NC} llama.cpp server not reachable at ${LLAMA_CPP_HOST:-http://localhost:8080}"
+        echo "${RED}✗${NC} LM Studio is not usable at ${LLAMA_CPP_HOST:-http://localhost:1234} for ${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
         echo ""
-        if [[ -d "$HOME/.config/llama-cpp" ]]; then
-          echo "Start it: launchctl kickstart -k gui/\$(id -u)/org.nixos.llama-server-local"
-          echo "Then re-run aiselect."
-        else
-          echo "This host has no local llama.cpp module configured -- add llamacpp-local.nix and rebuild, then re-run aiselect."
-        fi
+        echo "Start it: lms server start"
+        echo "The model must be on this machine's disk and LM Link's preferred device must be this machine"
+        echo "(a rebuild's provisioner handles both; see ~/.lmstudio/provision.log). Then re-run aiselect."
         return 1
       fi
       ;;
