@@ -508,15 +508,51 @@ function _run_aider_local() {
   local prompt="$3"
   local endpoint="${LLAMA_CPP_HOST:-http://localhost:8080}"
   local settings_file="$HOME/.config/aider/model-settings.yml"
+  local aider_model="openai/$model_alias"
+  local tmp_settings=""
 
   if ! command -v aider &>/dev/null; then
     echo "Error: aider not installed" >&2
     return 1
   fi
 
+  # LOCAL_LLM_BACKEND=lmstudio (set per host in lmstudio.nix): LM Studio serves
+  # real model ids, not llama-server's "local-coder-*" aliases, so aider is
+  # pointed at LOCAL_LLM_MODEL directly and gets a one-entry settings file
+  # carrying the same per-purpose max_tokens model-settings.yml gives each alias.
+  # reasoning_effort=none goes in extra_body: Qwen3.5 reasons by default and
+  # spends max_tokens on it, returning empty content. Verified on LM Studio:
+  # chat_template_kwargs.enable_thinking, think=false, reasoning_effort=low and
+  # a /no_think suffix all failed to stop it; aider's --reasoning-effort flag
+  # drops the value; only extra_body.reasoning_effort=none worked.
+  if [[ "${LOCAL_LLM_BACKEND:-llamacpp}" == "lmstudio" ]]; then
+    local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
+    local lms_max_tokens
+    case "$model_alias" in
+      local-coder-commit) lms_max_tokens=512 ;;
+      local-coder-plan)   lms_max_tokens=1024 ;;
+      local-coder-judge)  lms_max_tokens=256 ;;
+      *)                  lms_max_tokens=4096 ;;
+    esac
+    tmp_settings=$(mktemp "${TMPDIR:-/tmp}/aider-lms-settings.XXXXXX") || {
+      echo "Error: could not create aider settings file" >&2
+      return 1
+    }
+    cat > "$tmp_settings" <<EOF
+- name: openai/${lms_model}
+  edit_format: ask
+  extra_params:
+    max_tokens: ${lms_max_tokens}
+    extra_body:
+      reasoning_effort: none
+EOF
+    settings_file="$tmp_settings"
+    aider_model="openai/${lms_model}"
+  fi
+
   local raw_output
   raw_output=$(timeout "${timeout_secs}s" aider \
-    --model "openai/$model_alias" \
+    --model "$aider_model" \
     --openai-api-base "${endpoint}/v1" \
     --openai-api-key "sk-local" \
     --model-settings-file "$settings_file" \
@@ -532,6 +568,7 @@ function _run_aider_local() {
     --chat-history-file /tmp/.aider-local-chat-history.md \
     --message "$prompt" 2>&1)
   local exit_code=$?
+  [[ -n "$tmp_settings" ]] && rm -f "$tmp_settings"
 
   if [ $exit_code -eq 124 ]; then
     echo "Error: llama-server timeout after ${timeout_secs}s" >&2
@@ -1614,6 +1651,14 @@ function _llamacpp_model_short() {
 function _validate_llamacpp() {
   local endpoint="${LLAMA_CPP_HOST:-http://localhost:8080}"
   local response
+  if [[ "${LOCAL_LLM_BACKEND:-llamacpp}" == "lmstudio" ]]; then
+    # LM Studio has no /health (it answers 200 with an error body); /v1/models
+    # lists downloaded models whether or not one is loaded, and the server
+    # loads LOCAL_LLM_MODEL on the first request.
+    response=$(curl -s --max-time 3 "${endpoint}/v1/models" 2>/dev/null)
+    echo "$response" | grep -q "\"${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}\"" && return 0
+    return 1
+  fi
   response=$(curl -s --max-time 3 "${endpoint}/health" 2>/dev/null)
   if echo "$response" | grep -q '"status"'; then
     return 0
