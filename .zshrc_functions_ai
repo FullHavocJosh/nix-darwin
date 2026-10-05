@@ -2082,6 +2082,16 @@ function ai_security_audit() {
   echo "═══════════════════════════════════════════════════════════"
 }
 
+# pi: local LM Studio qwen/qwen3.5-9b only. Strip AWS creds so Bedrock models
+# are not auto-detected, strip infra secrets the model could read via env,
+# skip AGENTS.md/CLAUDE.md (they reference MCP servers pi does not have),
+# and skip startup network calls. Models are defined in ~/.pi/agent/models.json.
+function pi() {
+  env -u AWS_PROFILE -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+    -u AWS_BEARER_TOKEN_BEDROCK -u TRUENAS_API_KEY -u OPNSENSE_API_SECRET \
+    command pi -nc --offline "$@"
+}
+
 export AI_PROVIDER=$(_get_ai_provider)
 
 function _ensure_envvars_permissions() {
