@@ -142,6 +142,22 @@ Defined in `flake.nix`:
 
 - **LM Studio** launchd daemon (`lmstudio.nix`) — runs LM Studio headless (`--run-as-service`) on `localhost:1234`; `qwen/qwen3.5-9b` is used for gpc/gpa/gpr and aistack tier 1, and the provisioner downloads whichever models in its list fit the host's RAM
 
+#### aistack (planner-led coding stack)
+
+`aistack make a new mcp server` (or `aistack`, then type it in pi) opens a live pi session on the local LM Studio
+model. It drafts `.aistack/prd.json` and `.aistack/verify.json` with you, and only after you confirm the plan runs it:
+
+- tier 1: pi + LM Studio plans, follows the run and reports back; asks you whenever a tier needs a decision
+- tier 2: OpenCode Big Pickle builds each task (Claude Sonnet instead when the host has no OpenCode Zen key)
+- tier 3: Claude Code Sonnet takes over a task tier 2 cannot get to pass, and reviews the result read-only for
+  security, accuracy and completeness
+
+The run is `.config/aistack/ralph_driver.py` (detached, state in `<project>/.aistack/runs/`), driving
+[Ralph TUI](https://ralph-tui.com) one task at a time. A task counts as done only when its `verify.json` commands
+exit 0, because Ralph's own completion marker can be a false positive. pi reaches the run through the MCP tools in
+`.config/aistack/ralph_mcp.py`. In the main checkout of a git repo it offers a `gpr` worktree first. Nothing is
+committed; use `gpc`/`gpa` afterwards. Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_driver.py`.
+
 **Switch profiles:**
 
 ```bash
