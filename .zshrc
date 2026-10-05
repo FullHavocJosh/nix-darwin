@@ -59,10 +59,6 @@ eval "$(fzf --zsh)"
 # Enable zoxide.
 eval "$(zoxide init zsh)"
 
-# Added by LM Studio CLI (lms)
-export PATH="$PATH:/Users/havoc/.lmstudio/bin"
-# End of LM Studio CLI section
-
 export PATH="/opt/homebrew/opt/node@24/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
 export PATH="$HOME/.cargo/bin:$PATH"
