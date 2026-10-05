@@ -1033,6 +1033,9 @@ tracker = "json"
 maxIterations = 1
 iterationDelay = 1000
 autoCommit = false
+# Ralph only filters *_API_KEY, *_SECRET_KEY and *_SECRET from the agents it launches, so DOPPLER_TOKEN, AWX_TOKEN,
+# HETZNER_API_TOKEN and similar exports from ~/.zshrc_personal would reach agents that can run shell commands.
+envExclude = ["*_TOKEN", "*_PAT", "*_PASSWORD", "DOPPLER_*"]
 defaultAgent = "$worker"
 
 [errorHandling]
