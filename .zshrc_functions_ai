@@ -1661,12 +1661,16 @@ function _validate_llamacpp() {
     # LM Link also lists other devices' models in /v1/models, and a request for a
     # model key held by a linked device can be served there. Require a copy on
     # this machine's own disk so prompts never leave the host (matters most for
-    # the work laptop). Skipped if lms or jq is missing. To use a linked device's
-    # model on purpose (e.g. the 27B held by MacBookM2Pro, from another host),
-    # set LOCAL_LLM_ALLOW_LINK=1 for that call:
+    # the work laptop). Fails closed: if lms or jq cannot be found the check
+    # cannot run, so the model is rejected rather than trusted. To use a linked
+    # device's model on purpose (e.g. the 27B held by MacBookM2Pro, from another
+    # host), set LOCAL_LLM_ALLOW_LINK=1 for that call:
     #   LOCAL_LLM_MODEL=qwen/qwen3.8-27b LOCAL_LLM_ALLOW_LINK=1 gpa
-    if [[ -z "${LOCAL_LLM_ALLOW_LINK:-}" ]] && command -v lms &>/dev/null && command -v jq &>/dev/null; then
-      lms ls --json 2>/dev/null | jq -e --arg m "$lms_model" \
+    if [[ -z "${LOCAL_LLM_ALLOW_LINK:-}" ]]; then
+      local lms_bin
+      lms_bin=$(command -v lms 2>/dev/null || echo "$HOME/.lmstudio/bin/lms")
+      [[ -x "$lms_bin" ]] && command -v jq &>/dev/null || return 1
+      "$lms_bin" ls --json 2>/dev/null | jq -e --arg m "$lms_model" \
         'any(.[]; .modelKey == $m and .deviceIdentifier == null)' >/dev/null || return 1
     fi
     return 0
