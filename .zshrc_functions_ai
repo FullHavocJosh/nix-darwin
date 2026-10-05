@@ -498,6 +498,22 @@ function _aider_extract_response() {
 # not a --read file, matching how gpc/gpa already embed the diff directly in
 # the prompt text rather than pointing at a file on disk.
 #
+# Timeouts for the local model, in seconds. Override per shell with AI_LOCAL_COMMIT_TIMEOUT / AI_LOCAL_REVIEW_TIMEOUT.
+# A call has to cover the model's JIT load when it is not loaded (8-13s measured for the 9B, 22s for the 27B), prompt
+# processing, and then generation, which dominates: measured generation speed of qwen3.5-9b is 10.6 tok/s on the
+# MacMiniM1 and 22.5 tok/s on the MacBookM2Pro (prefill 72 and 156 tok/s). So a commit message (max_tokens 512,
+# ~1.5k-token prompt) can take ~90s on the slowest host, and a review (max_tokens 4096, ~1k-token prompt) ~430s when
+# the model uses its whole budget. The old 60s / 180s / 240s limits cut those off, and gpc/gpa then fail with
+# "timeout" even though the model was working. The defaults leave about 3x headroom for the commit and 2x for the
+# review; a hung model is still bounded.
+function _local_llm_timeout() {
+  case "$1" in
+    commit) echo "${AI_LOCAL_COMMIT_TIMEOUT:-300}" ;;
+    review) echo "${AI_LOCAL_REVIEW_TIMEOUT:-900}" ;;
+    *)      echo "${AI_LOCAL_REVIEW_TIMEOUT:-900}" ;;
+  esac
+}
+
 # Usage: _run_aider_local <model-alias> <timeout-seconds> <prompt>
 # Returns: 0 on success (stdout = cleaned response), 1 on failure (stderr =
 # error message matching the same "timeout"/"not reachable" wording the old
@@ -569,7 +585,7 @@ EOF
   [[ -n "$tmp_settings" ]] && rm -f "$tmp_settings"
 
   if [ $exit_code -eq 124 ]; then
-    echo "Error: LM Studio timeout after ${timeout_secs}s" >&2
+    echo "Error: LM Studio timeout after ${timeout_secs}s (raise AI_LOCAL_COMMIT_TIMEOUT or AI_LOCAL_REVIEW_TIMEOUT)" >&2
     return 1
   elif [ $exit_code -ne 0 ]; then
     if echo "$raw_output" | grep -qi "connection\|connect\|refused"; then
@@ -676,7 +692,7 @@ function _run_ai_plain() {
       # fixed earlier). The chat_template_kwargs.enable_thinking=false fix is
       # preserved via .config/aider/model-settings.yml's openai/local-coder-commit
       # entry instead of being inlined in the request body here.
-      _run_aider_local "local-coder-commit" 60 "$truncated_prompt"
+      _run_aider_local "local-coder-commit" "$(_local_llm_timeout commit)" "$truncated_prompt"
       return $?
       ;;
 
@@ -817,12 +833,12 @@ If there are no issues to report, respond with exactly: []
       fi
 
       # Routed through Aider instead of a direct curl call -- see the matching
-      # comment in _run_ai_plain's llama-cpp branch. 240s (not the old 90s,
-      # calibrated for a much smaller/faster 7B model on remote hardware):
-      # measured live against GLM-4.7-Flash locally, a ~1.6k-token review
-      # prompt took 191s end to end.
+      # comment in _run_ai_plain's llama-cpp branch. The limit comes from
+      # _local_llm_timeout (900s by default; see the measurements there): a
+      # review that uses its whole 4096-token output budget needs ~430s at
+      # the 9B's slowest measured generation speed.
       local aider_output
-      aider_output=$(_run_aider_local "local-coder-review" 240 "$truncated_prompt")
+      aider_output=$(_run_aider_local "local-coder-review" "$(_local_llm_timeout review)" "$truncated_prompt")
       local aider_exit=$?
       if [ $aider_exit -ne 0 ]; then
         echo "$aider_output" >&2
