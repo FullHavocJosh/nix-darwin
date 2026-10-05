@@ -110,6 +110,15 @@
             local skill_name
             skill_name=$(basename "$skill_dir")
             local target="$HOME/.claude/skills/$skill_name"
+            # A real directory here (e.g. one ralph-tui copied in on its own) would make `ln -sfn` nest the link
+            # inside it instead of replacing it, and the repo copy would never be the one Claude Code loads.
+            # Move it aside rather than delete it.
+            if [ -d "$target" ] && [ ! -L "$target" ]; then
+              local displaced="$HOME/.claude/.skills-displaced/$skill_name-$(date +%Y%m%d%H%M%S)"
+              mkdir -p "$HOME/.claude/.skills-displaced"
+              echo "Displacing real directory $target (the model-skills copy replaces it): $displaced"
+              mv "$target" "$displaced"
+            fi
             if [ ! -L "$target" ] || [ "$(readlink "$target")" != "$skill_dir" ]; then
               echo "Linking Claude skill: $skill_name → $skill_dir"
               ln -sfn "$skill_dir" "$target"
@@ -448,11 +457,18 @@
             esac
 
             if grep -q "\"$SERVER_NAME\"" "$HOME/.claude.json" 2>/dev/null; then
-              echo "  $SERVER_NAME already registered, skipping."
-              continue
+              # A registration made before the command's __HOME__ placeholder was substituted can never start
+              # (ENOENT on a literal "__HOME__/..." path, seen on token-savior); drop it and register it again below.
+              if jq -e --arg s "$SERVER_NAME" '(.mcpServers[$s].command // "") | contains("__HOME__")' "$HOME/.claude.json" >/dev/null 2>&1; then
+                echo "  $SERVER_NAME has an unsubstituted __HOME__ in its command; re-registering."
+                claude mcp remove --scope user "$SERVER_NAME" 2>/dev/null || true
+              else
+                echo "  $SERVER_NAME already registered, skipping."
+                continue
+              fi
             fi
 
-            COMMAND=$(jq -r ".mcpServers[\"$SERVER_NAME\"].command" "$MCP_CONFIG")
+            COMMAND=$(jq -r ".mcpServers[\"$SERVER_NAME\"].command | gsub(\"__HOME__\"; \"$HOME\")" "$MCP_CONFIG")
             ARGS=$(jq -r ".mcpServers[\"$SERVER_NAME\"].args // [] | map(\"'\" + gsub(\"__HOME__\"; \"$HOME\") + \"'\") | join(\" \")" "$MCP_CONFIG")
             ENV_PAIRS=$(jq -r ".mcpServers[\"$SERVER_NAME\"].env // {} | to_entries | map(\"-e \" + .key + \"=\" + (.value | gsub(\"__HOME__\"; \"$HOME\"))) | join(\" \")" "$MCP_CONFIG")
 
@@ -529,6 +545,25 @@
             # silently reintroduced eager skill loading (and the ~17K token cost that
             # comes with it) on every darwin-rebuild regardless of what opencode.json's
             # own skills.paths was committed as.
+
+            # Keep OpenCode's MCP servers 1:1 with Claude Code's. Derive them from what Claude Code actually has
+            # registered (user scope, populated by the sync above, so profile exclusions are already applied),
+            # converted by claude-to-opencode.jq. Credentials are never copied: they become {env:NAME}, which
+            # OpenCode resolves from the environment when it launches the server (the same way the opnsense,
+            # truenas and doppler variables exported from ~/.zshrc_personal already work). The static mcp list in the
+            # repo's opencode.json is only the fallback for a host without Claude Code. OpenCode keeps a background
+            # service, so a running one needs a restart to pick up changes.
+            OC_JQ="$HOME/nix-darwin/.config/mcp/claude-to-opencode.jq"
+            if [ -f "$HOME/.claude.json" ] && [ -f "$OC_JQ" ]; then
+              if OC_MCP=$(jq --arg home "$HOME" -f "$OC_JQ" "$HOME/.claude.json" 2>/dev/null) && [ -n "$OC_MCP" ] && [ "$OC_MCP" != "{}" ]; then
+                if UPDATED=$(jq --argjson m "$OC_MCP" '.mcp = $m' "$OPENCODE_CONFIG" 2>/dev/null) && [ -n "$UPDATED" ]; then
+                  printf '%s\n' "$UPDATED" > "$OPENCODE_CONFIG"
+                  echo "OpenCode MCP servers synced from Claude Code: $(printf '%s' "$OC_MCP" | jq -r 'keys | join(", ")')"
+                fi
+              else
+                echo "Warning: could not derive OpenCode MCP servers from Claude Code; keeping the repo's static list."
+              fi
+            fi
 
             for EXCLUDED in $MCP_EXCLUDE_SERVERS; do
               if jq -e --arg s "$EXCLUDED" '.mcp[$s]' "$OPENCODE_CONFIG" &>/dev/null; then
