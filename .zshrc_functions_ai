@@ -295,95 +295,17 @@ function _is_opencode_free_model() {
   esac
 }
 
-# Discover free-tier (cost 0) OpenCode Zen models that support tool calls
-# (required for the agentic edit/bash loop) and pick the best one for a
-# coding agent. Prefers "big-pickle" when present and active -- Zen's own
-# stealth model, purpose-built for coding agents and reported to punch above
-# its weight in independent agentic-coding tests, vs. general-purpose free
-# models like Space Bunny that benchmark better for code *review* than for
-# driving an edit/bash tool loop. Falls back to the most recently released
-# free+toolcall model otherwise, since the models.dev catalog carries no
-# benchmark field to rank on directly.
-# Prints a bare model id (e.g. "big-pickle"); returns 1 on any failure
-# (network, opencode missing, catalog shape changed) so callers fall back.
+# Free OpenCode Zen model choice lives in ~/.config/aistack/zen_models.py: the models.dev catalog says what is free,
+# `opencode models` says what this account is offered, zen-policy.json (from the Zen docs) says which free models are
+# zero-retention. The helpers that used to be here called `opencode models --verbose opencode`, which opencode v2
+# rejects, so discovery failed silently and a hardcoded "big-pickle" was used no matter what: nothing would have
+# noticed Big Pickle turning paid or being retired. Kept as thin wrappers; they print the reason when nothing is free.
+# Prints a bare model id; returns 1 when there is no free model.
 function _discover_best_free_zen_model() {
-  local raw
-  raw=$(timeout 15 opencode models --verbose opencode 2>/dev/null)
-  [[ -z "$raw" ]] && return 1
-
-  local script='
-import sys, json, re
-
-text = sys.stdin.read()
-lines = [l for l in text.splitlines() if not re.match(r"^[\w.-]+/[\w.-]+$", l)]
-blob = "\n".join(lines)
-
-decoder = json.JSONDecoder()
-models = []
-rest = blob
-while True:
-    rest = rest.lstrip()
-    if not rest:
-        break
-    try:
-        obj, idx = decoder.raw_decode(rest)
-    except ValueError:
-        break
-    models.append(obj)
-    rest = rest[idx:]
-
-free = [
-    m for m in models
-    if m.get("status") == "active"
-    and m.get("cost", {}).get("input") == 0
-    and m.get("cost", {}).get("output") == 0
-    and m.get("capabilities", {}).get("toolcall")
-]
-if not free:
-    sys.exit(1)
-
-pickle = [m for m in free if m["id"] == "big-pickle"]
-best = pickle[0] if pickle else max(free, key=lambda m: m.get("release_date", ""))
-print(best["id"])
-'
-  python3 -c "$script" <<< "$raw"
+  python3 "${AISTACK_DIR:-$HOME/.config/aistack}/zen_models.py" best
 }
-
-# Cached wrapper around _discover_best_free_zen_model -- same pattern as
-# _get_copilot_claude_model. Refreshes at most once a day; falls back to a
-# stale cache, then to the hardcoded "big-pickle" fallback, if discovery
-# fails outright.
-# Usage: _get_free_zen_model
 function _get_free_zen_model() {
-  local cache_dir="$HOME/.cache/nix-darwin-ai"
-  local cache_file="$cache_dir/opencode-zen-free.txt"
-  local ttl=86400
-  local fallback="big-pickle"
-
-  mkdir -p "$cache_dir" 2>/dev/null
-
-  if [[ -f "$cache_file" ]]; then
-    local age=$(( $(date +%s) - $(stat -f %m "$cache_file" 2>/dev/null || echo 0) ))
-    if [[ $age -lt $ttl ]]; then
-      cat "$cache_file"
-      return 0
-    fi
-  fi
-
-  local discovered
-  discovered=$(_discover_best_free_zen_model 2>/dev/null)
-  if [[ -n "$discovered" ]]; then
-    echo "$discovered" > "$cache_file"
-    echo "$discovered"
-    return 0
-  fi
-
-  # Discovery failed: prefer a stale cache over the hardcoded fallback.
-  if [[ -f "$cache_file" ]]; then
-    cat "$cache_file"
-  else
-    echo "$fallback"
-  fi
+  _discover_best_free_zen_model
 }
 
 # Get the current OpenCode model from config
@@ -1028,6 +950,16 @@ function _aistack_tier0() {
   [[ "$code" == "200" ]] && echo lumo || echo local
 }
 
+# Is the project's GitHub repository private? Prints yes or no. Anything that cannot be confirmed as public (no
+# remote, no gh login, offline, not GitHub) counts as private, so code is never sent by accident to a free model that
+# may train on it. AISTACK_REPO_PRIVATE=yes|no overrides.
+function _aistack_repo_private() {
+  [[ "${AISTACK_REPO_PRIVATE:-}" == (yes|no) ]] && { echo "$AISTACK_REPO_PRIVATE"; return 0; }
+  local v
+  v=$(cd "$1" 2>/dev/null && timeout 10 gh repo view --json isPrivate -q .isPrivate 2>/dev/null)
+  [[ "$v" == "false" ]] && echo no || echo yes
+}
+
 # aistack -- planner-led coding stack.
 #
 #   aistack [task words...]      e.g.  aistack make a new mcp server
@@ -1064,7 +996,7 @@ function aistack_func() {
   local f reply
 
   # ---- preflight ---------------------------------------------------------------------------------------------
-  for f in ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh; do
+  for f in ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh zen_models.py zen-policy.json; do
     if [[ ! -e "$adir/$f" ]]; then
       echo "✗ $adir/$f is missing -- run darwin-rebuild so the aistack files are stowed." >&2
       return 1
@@ -1097,19 +1029,10 @@ function aistack_func() {
     return 1
   fi
 
-  local worker="claude-work" fallback="claude-work" fallback_attempts=0 worker_label="Claude Sonnet" zen_model=""
-  local fallback_label="Claude Sonnet"
-  if _validate_opencode_zen 2>/dev/null; then
-    zen_model=$(_get_free_zen_model 2>/dev/null)
-  fi
-  if [[ -n "$zen_model" ]]; then
-    worker="opencode-pickle"; worker_label="OpenCode ${zen_model}"; fallback_attempts=1
-  else
-    echo "ℹ OpenCode Zen is not available on this host: tier 1 (Big Pickle) is skipped and Claude Sonnet is the worker."
-  fi
-  if [[ -n "$zen_model" && "$zen_model" != "big-pickle" ]]; then
-    echo "ℹ Big Pickle is not the free Zen model available right now; tier 1 uses $zen_model instead."
-  fi
+  # Tier 1 is chosen later (it depends on whether the repository is private). Until then, and when no free model
+  # exists, Claude Code Sonnet does the building: that is billed, so aistack says so and asks first.
+  local worker="claude-work" fallback="claude-work" fallback_attempts=0 zen_model=""
+  local worker_label="Claude Code Sonnet (latest, billed)" fallback_label="Claude Code Sonnet (latest, billed)"
   local reviewer="claude-review"
 
   # ---- project and state ---------------------------------------------------------------------------------------
@@ -1143,6 +1066,34 @@ function aistack_func() {
     tier0_label="Lumo on MacMiniM1, which drafts the plan"
   else
     tier0_label="the local model ($lms_model), because MacMiniM1's Lumo is unreachable"
+  fi
+
+  # ---- tier 1: a free Zen model chosen for this repository; Claude (billed) only when there is none ---------------
+  local t1_note=""
+  if _validate_opencode_zen 2>/dev/null; then
+    local private choice
+    private=$(_aistack_repo_private "$project")
+    choice=$(python3 "$adir/zen_models.py" choose --private "$private" 2>/dev/null)
+    if [[ -z "$choice" ]]; then
+      echo "⚠ tier 1: could not run $adir/zen_models.py to choose a free model."
+    else
+      zen_model=$(jq -r '.model // empty' <<<"$choice" 2>/dev/null)
+      jq -r '.warnings[]?' <<<"$choice" 2>/dev/null | while IFS= read -r w; do echo "⚠ tier 1: $w"; done
+      t1_note=$(jq -r '.notes[0] // empty' <<<"$choice" 2>/dev/null)
+    fi
+    if [[ -n "$zen_model" ]]; then
+      worker="opencode-pickle"; worker_label="OpenCode $zen_model (free)"; fallback_attempts=1
+    fi
+  else
+    echo "⚠ tier 1: OpenCode Zen is not set up on this host (no API key)."
+  fi
+  if [[ -z "$zen_model" ]]; then
+    echo "⚠ Tier 1 has no free model, so Claude Code Sonnet (billed) would build the tasks as well as review them."
+    if [[ "${AISTACK_ASSUME_YES:-}" != "1" ]]; then
+      echo -n "Continue with Claude as tier 1? [Y/n] "
+      read -r reply
+      [[ "${reply:l}" == "n" ]] && return 1
+    fi
   fi
 
   # ---- per-project files ---------------------------------------------------------------------------------------
@@ -1204,11 +1155,12 @@ TOML
     > "$pi_dir/models.json"
   jq -n --arg py "$(command -v python3)" --arg bridge "$adir/ralph_mcp.py" --arg root "$project" \
     --arg worker "$worker" --arg fallback "$fallback" --arg reviewer "$reviewer" --arg fa "$fallback_attempts" \
-    --arg ralph "$ralph_bin" --arg tier0 "$tier0" --arg state "$state_dir" --arg wtmode "$wt_mode" \
+    --arg ralph "$ralph_bin" --arg tier0 "$tier0" --arg state "$state_dir" --arg wtmode "$wt_mode" --arg reviewmode "${AISTACK_REVIEW_MODE:-batch}" \
     '{mcpServers: {ralph: {command: $py, args: [$bridge],
        env: {RALPH_MCP_ROOTS: $root, AISTACK_WORKER_AGENT: $worker, AISTACK_FALLBACK_AGENT: $fallback,
              AISTACK_REVIEW_AGENT: $reviewer, AISTACK_FALLBACK_ATTEMPTS: $fa, RALPH_TUI_BIN: $ralph,
-             AISTACK_TIER0: $tier0, AISTACK_STATE_DIR: $state, AISTACK_WORKTREE_MODE: $wtmode},
+             AISTACK_TIER0: $tier0, AISTACK_STATE_DIR: $state, AISTACK_WORKTREE_MODE: $wtmode,
+             AISTACK_REVIEW_MODE: $reviewmode},
        exposure: "direct", timeout: 200,
        description: "Runs the confirmed plan through Ralph: worker agents, verification, retries, review. Poll ralph_status."}}}' \
     > "$pi_dir/mcp.json"
@@ -1219,8 +1171,8 @@ TOML
   prompt=${prompt//@@PLAN_DIR@@/$state_dir/plan}
   prompt=${prompt//@@STATE_DIR@@/$state_dir}
   prompt=${prompt//@@WORKER@@/$worker_label}
-  prompt=${prompt//@@FALLBACK@@/$fallback_label (latest)}
-  prompt=${prompt//@@REVIEWER@@/Claude Sonnet (latest)}
+  prompt=${prompt//@@FALLBACK@@/$fallback_label}
+  prompt=${prompt//@@REVIEWER@@/Claude Code Sonnet (latest, billed)}
   prompt=${prompt//@@TIER0_LABEL@@/$tier0_label}
   prompt=${prompt//@@TIER0@@/$(<"$adir/planner-tier0-$tier0.md")}
 
@@ -1236,8 +1188,8 @@ TOML
   else
     echo "Tier 0 (plan):       local $lms_model   [MacMiniM1's Lumo is unreachable]"
   fi
-  echo "Tier 1 (build):      $worker_label"
-  echo "Tier 2 (fallback, review): Claude Sonnet (latest)"
+  echo "Tier 1 (build):      $worker_label${t1_note:+   [$t1_note]}"
+  echo "Tier 2 (fallback, review): Claude Code Sonnet (latest, BILLED: used sparingly, one review for the whole run)"
   echo "Describe what you want; pi will draft a plan for you to confirm before anything runs."
   echo "(The local model is slow: a reply can take a while with nothing visible. That is normal.)"
   echo ""

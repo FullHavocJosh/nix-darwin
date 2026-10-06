@@ -155,12 +155,27 @@ non-git directory they work in place. A later run reuses the worktree while it e
 - tier 0: planning. Lumo on MacMiniM1 drafts the task breakdown (`lumo_consult`); if MacMiniM1 is unreachable at
   launch (probed with a 4 s timeout), or Lumo fails mid-session, the local `qwen/qwen3.5-9b` plans instead. pi + LM
   Studio stays the coordinator either way (it talks to you and calls the `ralph_*` tools, which Lumo cannot do)
-- tier 1: OpenCode Big Pickle (free Zen model) builds each task (Claude Sonnet instead when the host has no OpenCode
-  Zen key; another free model with a notice if Big Pickle is not available)
+- tier 1: a free OpenCode Zen model builds each task, chosen for the repository: public repos use Big Pickle, private
+  repos (and anything `gh repo view` cannot confirm as public) only a zero-retention free model (`space-bunny-free`,
+  then `longcat-2.5-preview-free`), because Big Pickle's terms say collected data may be used to improve the model.
+  `zen_models.py` decides from the models.dev catalog (what is free), `opencode models` (what the account is offered) and
+  `zen-policy.json` (which free models are zero-retention, copied from https://opencode.ai/docs/zen/ with the date it
+  was checked; aistack warns when that is over 60 days old). If Big Pickle stops being free, is retired, or is no longer
+  offered, launch says so (`⚠ tier 1: big-pickle is not a free Zen option anymore: <reason>`) and uses the next free
+  model. With no free model, or no Zen key, Claude Code Sonnet builds instead and aistack asks first (it is billed).
+  No GitHub Copilot fallback: Copilot has been usage-billed since 2026-06-01, so it is not a free option
 - tier 2: Claude Code Sonnet (the `sonnet` alias, always the latest Sonnet) takes over a task tier 1 cannot get to
-  pass, and reviews the result read-only for security, accuracy and completeness
+  pass, and reviews the result read-only for security, accuracy and completeness. **Billed**, so it is used sparingly:
+  one review call covers the whole run (not one per task), each Claude call has a spending cap and medium effort, and
+  the events and the final summary count the billed calls
 
 `AISTACK_TIER0=local` forces the local planner; the banner shows which tier 0 was chosen.
+
+Knobs (environment): `AISTACK_REPO_PRIVATE=yes|no` overrides the visibility check, `AISTACK_ASSUME_YES=1` skips the
+"continue with Claude as tier 1?" question, `AISTACK_REVIEW_MODE=batch|each|off` (default `batch`: one review call per
+round; `each` is one per task; `off` skips it), `AISTACK_CLAUDE_BUDGET_WORK` (default 3) and
+`AISTACK_CLAUDE_BUDGET_REVIEW` (default 1.5) cap the USD one Claude call may spend, `AISTACK_CLAUDE_EFFORT` (default
+`medium`), `AISTACK_BILLED_AGENTS` (comma list; default the agents whose name starts with `claude`).
 
 Migrating from the old layout: earlier versions kept `.aistack/` and `.ralph-tui/` inside the project, and in this
 dotfiles repo stow even linked them into `$HOME` (`~/.aistack -> nix-darwin/.aistack`). `.stow-local-ignore` now

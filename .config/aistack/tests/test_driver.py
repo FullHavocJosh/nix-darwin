@@ -144,7 +144,7 @@ check("agent output landed in the worktree, not the main checkout", os.path.exis
 check("no .aistack or .ralph-tui in the main checkout or the worktree",
       not any(os.path.exists(base + "/" + n) for base in (p, wd) for n in (".aistack", ".ralph-tui")))
 check("ralph ran from the state dir (its .ralph-tui lives there)", open(ST(p) + "/fake-cwd.txt").read().splitlines()[0] == ST(p) + "/ralph")
-check("review report and run files are in the state dir", os.path.exists(ST(p) + "/reviews/T1.md") and os.path.isdir(ST(p) + "/runs/" + r["run_id"]))
+check("review report and run files are in the state dir", os.path.exists(ST(p) + "/reviews/batch-1.md") and os.path.isdir(ST(p) + "/runs/" + r["run_id"]))
 dirty = os.popen(f"cd {p} && git status --porcelain --ignored | grep -vE '^(\\?\\?|!!) .worktrees/'").read().strip()
 check("main checkout stays clean (apart from the worktree dir itself)", dirty == "", dirty)
 prd = json.load(open(ST(p) + "/plan/prd.json")); prd["userStories"][0]["passes"] = False; json.dump(prd, open(ST(p) + "/plan/prd.json", "w"))
@@ -159,6 +159,44 @@ v = m.tool_validate({"project_dir": p}); r = m.tool_run({"project_dir": p, "plan
 check("a failed worktree creation refuses to start the run", r["started"] is False and "creating the worktree" in r["problem"], r)
 check("and leaves no run files behind", not os.path.isdir(ST(p) + "/runs"))
 del os.environ["AISTACK_WORKTREE_CMD"]
+
+print("J: billed tiers are used sparingly: one review call per round, billed calls counted")
+def counts_of(p): return json.load(open(ST(p) + "/fake-scenario.json.counts"))
+os.environ["AISTACK_BILLED_AGENTS"] = "fallback,reviewer"
+p, m = make_project({}, tasks=("T1", "T2", "T3"))
+rid = start(m, p); s, evs = pump(m, p, rid, ("done", "failed", "lost"))
+check("three tasks reviewed with ONE review call", s["state"] == "done" and counts_of(p).get("R-batch") == 1 and not any(k.startswith("R-T") for k in counts_of(p)), counts_of(p))
+check("all three tasks got their verdict from the batch report", all(t["review"] == "PASS" for t in s["tasks"].values()), s["tasks"])
+done = [json.loads(l) for l in open(ST(p) + "/runs/%s/events.jsonl" % rid) if "run_complete" in l][0]
+check("run summary counts the billed calls (0 work, 1 review)", done["billed_calls"] == {"work": 0, "review": 1}, done.get("billed_calls"))
+check("review_started is marked billed", any(e["type"] == "review_started" and e.get("billed") for e in evs), [e["type"] for e in evs])
+
+p, m = make_project({"work": {"T1": ["fail", "fail", "ok"]}}, tasks=("T1",))
+rid = start(m, p); s, evs = pump(m, p, rid, ("done", "failed", "lost"))
+started = [e for e in evs if e["type"] == "task_started"]
+check("only the fallback attempt is marked billed", [e["billed"] for e in started] == [False, False, True], [(e["agent"], e["billed"]) for e in started])
+check("the escalation to the billed agent says so", any(e["type"] == "escalating" and "(billed)" in e["message"] for e in evs))
+done = [json.loads(l) for l in open(ST(p) + "/runs/%s/events.jsonl" % rid) if "run_complete" in l][0]
+check("summary: 1 billed work call + 1 billed review", done["billed_calls"] == {"work": 1, "review": 1}, done.get("billed_calls"))
+
+p, m = make_project({"review": {"T1": ["PASS"], "T2": ["FAIL", "PASS"]}}, tasks=("T1", "T2"))
+rid = start(m, p); s, evs = pump(m, p, rid, ("waiting_user", "done", "failed"))
+check("a mixed batch verdict pauses only for the failing task", s["state"] == "waiting_user" and (s["waiting_for"] or {}).get("tasks") == ["T2"], s["waiting_for"])
+check("T1 passed in the same single review call", s["tasks"]["T1"]["review"] == "PASS" and counts_of(p).get("R-batch") == 1, (s["tasks"], counts_of(p)))
+m.tool_respond({"project_dir": p, "run_id": rid, "action": "rework", "text": "fix T2"})
+s, evs2 = pump(m, p, rid, ("done", "failed", "lost"))
+check("the rework round reviews only T2, in one more call", s["state"] == "done" and counts_of(p).get("R-batch") == 2, counts_of(p))
+check("the rework notes carry the batch report", "finding one for T2" in open(ST(p) + "/runs/%s/tasks/T2.prd.json" % rid).read())
+
+os.environ["AISTACK_REVIEW_MODE"] = "each"
+p, m = make_project({}, tasks=("T1", "T2"))
+rid = start(m, p); s, evs = pump(m, p, rid, ("done", "failed", "lost"))
+check("review mode 'each' keeps one call per task", s["state"] == "done" and counts_of(p).get("R-T1") == 1 and counts_of(p).get("R-T2") == 1 and "R-batch" not in counts_of(p), counts_of(p))
+os.environ["AISTACK_REVIEW_MODE"] = "off"
+p, m = make_project({}, tasks=("T1",))
+rid = start(m, p); s, evs = pump(m, p, rid, ("done", "failed", "lost"))
+check("review mode 'off' makes no review call", s["state"] == "done" and not any(k.startswith("R-") for k in counts_of(p)) and s["tasks"]["T1"]["review"] == "SKIPPED", s["tasks"])
+del os.environ["AISTACK_REVIEW_MODE"]; del os.environ["AISTACK_BILLED_AGENTS"]
 
 print("H: lumo_consult (tier 0) sends only allowed files, with auth and the no-fetch header")
 import threading

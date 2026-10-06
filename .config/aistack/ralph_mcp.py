@@ -237,7 +237,12 @@ def tool_run(a):
            "fallback_attempts": int(env.get("AISTACK_FALLBACK_ATTEMPTS", "1")),
            "attempt_timeout_s": int(env.get("AISTACK_ATTEMPT_TIMEOUT_S", "1500")),
            "verify_timeout_s": int(env.get("AISTACK_VERIFY_TIMEOUT_S", "300")),
+           "review_mode": env.get("AISTACK_REVIEW_MODE", "batch"),
            "ralph_bin": env.get("RALPH_TUI_BIN", os.path.expanduser("~/.bun/bin/ralph-tui"))}
+    # agents whose calls cost money (Claude Code); AISTACK_BILLED_AGENTS (comma list) overrides
+    named = [cfg["worker_agent"], cfg["fallback_agent"], cfg["reviewer_agent"]]
+    cfg["billed_agents"] = ([x for x in env["AISTACK_BILLED_AGENTS"].split(",") if x] if "AISTACK_BILLED_AGENTS" in env
+                            else sorted({x for x in named if x.startswith("claude")}))
     json.dump(cfg, open(os.path.join(d, "config.json"), "w"), indent=2)
     driver = env.get("AISTACK_DRIVER", os.path.join(HERE, "ralph_driver.py"))
     log = open(os.path.join(d, "driver.log"), "w")

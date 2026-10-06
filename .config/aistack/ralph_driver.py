@@ -73,6 +73,10 @@ class Run:
         self.control_off = 0
         self.child = None
         self.cancelled = False
+        self.billed_agents = set(self.cfg.get("billed_agents") or [])
+        self.billed = {"work": 0, "review": 0}   # calls to billed agents (Claude): the cost the user cares about
+        self.reports = {}        # task id -> the review report that judged it
+        self.batch_n = 0
         self.tasks = {}          # id -> dict(title, status, attempts, ...)
         self.skipped = set()
         self.extra_notes = {}    # id -> list[str] guidance accumulated across attempts / user answers
@@ -270,7 +274,10 @@ class Run:
             self.save(current_task=tid, phase="work")
             t["attempts"] += 1
             n = t["attempts"]
-            self.event("task_started", tid, f"{tid} attempt {n} with {agent}: {t['title']}", agent=agent, attempt=n)
+            billed = agent in self.billed_agents
+            self.billed["work"] += 1 if billed else 0
+            self.event("task_started", tid, f"{tid} attempt {n} with {agent}{' [billed]' if billed else ''}: {t['title']}",
+                       agent=agent, attempt=n, billed=billed)
             qf = self.question_file(tid)
             if os.path.exists(qf):
                 os.replace(qf, qf + ".stale")
@@ -300,7 +307,8 @@ class Run:
             self.extra_notes.setdefault(tid, []).append(f"Attempt {n} ({agent}) failed verification:\n{tail(out, 1500)}")
             i += 1
             if i < len(plan) and plan[i] != agent:
-                self.event("escalating", tid, f"escalating {tid} from {agent} to {plan[i]}")
+                self.event("escalating", tid, f"escalating {tid} from {agent} to {plan[i]}"
+                           + (" (billed)" if plan[i] in self.billed_agents else ""), billed=plan[i] in self.billed_agents)
         t.update(status="blocked")
         return "blocked"
 
@@ -325,7 +333,9 @@ class Run:
         path = os.path.join(self.dir, "tasks", f"review-{tid}.prd.json")
         write_json(path, {"name": "review", "description": "read-only review", "userStories": [rs]})
         for attempt in (1, 2):
-            self.event("review_started", tid, f"reviewing {tid} with {self.cfg['reviewer_agent']}")
+            if self.cfg["reviewer_agent"] in self.billed_agents:
+                self.billed["review"] += 1
+            self.event("review_started", tid, f"reviewing {tid} with {self.cfg['reviewer_agent']}", billed=self.cfg["reviewer_agent"] in self.billed_agents)
             code, summary, log = self.run_ralph(self.cfg["reviewer_agent"], path, f"review-{tid}-{attempt}",
                                                 self.review_template)
             if self.cancelled:
@@ -337,12 +347,70 @@ class Run:
                 if m:
                     verdict = m.group(1).upper()
                     self.tasks[tid]["review"] = verdict
+                    self.reports[tid] = rf
                     body = "\n".join(text.splitlines()[1:14])
                     self.event("review_result", tid, f"{tid} review: {verdict}", verdict=verdict, report=rf, excerpt=body)
                     return verdict
             self.event("review_error", tid, f"review of {tid} produced no valid report (attempt {attempt})", tail=tail(summary, 600))
         self.tasks[tid]["review"] = "MISSING"
         return "MISSING"
+
+    def review_batch(self, tids):
+        """ONE review call for all the given tasks (one billed Claude call instead of one per task). The report starts
+        with an overall verdict, then one 'Task <id>: PASS|FAIL' line per task. Returns {task id: verdict}, or None when
+        the run was cancelled."""
+        self.batch_n += 1
+        rf = os.path.join(self.rev_dir, f"batch-{self.batch_n}.md")
+        listing = "\n".join(
+            f"- {t}: {self.story(t).get('title', '')} | done when: " + "; ".join(self.story(t).get("acceptanceCriteria", []))
+            for t in tids)
+        brief = (f"Review the work done for tasks {', '.join(tids)} in this repository, in ONE pass. The task specs are in "
+                 f"{self.prd_path} and their checks in {self.verify_path}. Tasks:\n{listing}\n"
+                 f"Use `git status` and `git diff` to see what changed instead of reading every file, and read only what you "
+                 f"need. Do NOT modify source or test files. Judge (1) security: injection, unsafe file/shell/network use, "
+                 f"secrets, unvalidated input, dangerous defaults; (2) accuracy: does the code do what each description and its "
+                 f"acceptance criteria say, edge cases included; (3) completeness: every criterion met, tests present and "
+                 f"meaningful, nothing half-done. Write the report to {rf}. Its FIRST line must be exactly 'Verdict: PASS' or "
+                 f"'Verdict: FAIL' (FAIL if any task fails). Then one line per task, exactly 'Task <id>: PASS' or "
+                 f"'Task <id>: FAIL - <reason>'. Then findings with file and line references, most serious first. Be concise.")
+        rs = {"id": "R-batch", "title": f"Review {len(tids)} task(s)", "description": brief,
+              "acceptanceCriteria": [f"{rf} exists and its first line is 'Verdict: PASS' or 'Verdict: FAIL'"],
+              "priority": 1, "passes": False}
+        path = os.path.join(self.dir, "tasks", f"review-batch-{self.batch_n}.prd.json")
+        write_json(path, {"name": "review", "description": "read-only review of the whole run", "userStories": [rs]})
+        agent = self.cfg["reviewer_agent"]
+        for attempt in (1, 2):
+            if agent in self.billed_agents:
+                self.billed["review"] += 1
+            self.event("review_started", None, f"reviewing {', '.join(tids)} in one pass with {agent}"
+                       + (" [billed]" if agent in self.billed_agents else ""), billed=agent in self.billed_agents)
+            code, summary, log = self.run_ralph(agent, path, f"review-batch-{self.batch_n}-{attempt}", self.review_template)
+            if self.cancelled:
+                return None
+            if os.path.exists(rf):
+                text = open(rf).read()
+                first = text.splitlines()[0].strip() if text.strip() else ""
+                m = re.match(r"(?i)^\**\s*verdict:\s*(pass|fail)", first)
+                if m:
+                    overall = m.group(1).upper()
+                    per = {t.group(1): t.group(2).upper() for t in
+                           re.finditer(r"(?im)^\**\s*task\s+([A-Za-z0-9_-]+)\**\s*:\s*\**\s*(pass|fail)", text)}
+                    verdicts = {t: per.get(t, overall) for t in tids}
+                    if overall == "FAIL" and "FAIL" not in verdicts.values():
+                        verdicts = {t: "FAIL" for t in tids}      # a FAIL verdict never turns into all-PASS
+                    for t, v in verdicts.items():
+                        self.tasks[t]["review"] = v
+                        self.reports[t] = rf
+                        self.event("review_result", t, f"{t} review: {v}", verdict=v, report=rf,
+                                   excerpt="\n".join(text.splitlines()[1:14]))
+                    return verdicts
+            self.event("review_error", None, f"review of {', '.join(tids)} produced no valid report (attempt {attempt})", tail=tail(summary, 600))
+        for t in tids:
+            self.tasks[t]["review"] = "MISSING"
+        return {t: "MISSING" for t in tids}
+
+    def report_path(self, tid):
+        return self.reports.get(tid) or os.path.join(self.rev_dir, f"{tid}.md")
 
     # ---- main loop --------------------------------------------------------
     def main(self):
@@ -382,20 +450,32 @@ class Run:
             # ---- review phase
             self.save(phase="review", current_task=None)
             failed = []
-            for tid in [t for t, v in sorted(self.tasks.items(), key=lambda kv: kv[1]["order"])
-                        if v["status"] == "verified" and v["review"] != "PASS"]:
-                verdict = self.review_task(tid)
-                if verdict is None:
+            pending = [t for t, v in sorted(self.tasks.items(), key=lambda kv: kv[1]["order"])
+                       if v["status"] == "verified" and v["review"] not in ("PASS", "ACCEPTED", "SKIPPED")]
+            mode = self.cfg.get("review_mode", "batch")      # batch: one call per review round; each: one per task; off
+            if mode == "off":
+                for t in pending:
+                    self.tasks[t]["review"] = "SKIPPED"
+                self.event("review_skipped", None, "review is switched off (AISTACK_REVIEW_MODE=off)")
+            elif mode == "each":
+                for tid in pending:
+                    verdict = self.review_task(tid)
+                    if verdict is None:
+                        return self.finish("cancelled")
+                    if verdict != "PASS":
+                        failed.append(tid)
+            elif pending:
+                verdicts = self.review_batch(pending)
+                if verdicts is None:
                     return self.finish("cancelled")
-                if verdict != "PASS":
-                    failed.append(tid)
+                failed = [t for t in pending if verdicts.get(t) != "PASS"]
             if not failed:
                 break
             self.save(phase="review_decision")
             msg = self.wait_for_user("review did not pass for " + ", ".join(failed) +
                                      ". Per task: rework (re-run it with the findings), or accept as is.",
                                      ["rework", "accept"], None, tasks=failed,
-                                     reports={t: os.path.join(self.rev_dir, f"{t}.md") for t in failed})
+                                     reports={t: self.report_path(t) for t in failed})
             if msg.get("action") == "abort":
                 return self.finish("cancelled")
             targets = msg.get("tasks") or failed
@@ -406,7 +486,7 @@ class Run:
                     break
                 continue
             for t in targets:
-                rep = open(os.path.join(self.rev_dir, f"{t}.md")).read() if os.path.exists(os.path.join(self.rev_dir, f"{t}.md")) else ""
+                rep = open(self.report_path(t)).read() if os.path.exists(self.report_path(t)) else ""
                 self.extra_notes.setdefault(t, []).append(f"The reviewer found problems. Fix them.\n{tail(rep, 2000)}\nUser note: {msg.get('text','')}")
                 self.set_passes(t, False)
                 self.tasks[t].update(status="pending", attempts=0, review=None)
@@ -417,10 +497,12 @@ class Run:
         summary = {t: {"status": v["status"], "review": v["review"], "attempts": v["attempts"]} for t, v in self.tasks.items()}
         if outcome == "done":
             self.save(state="done", phase="finished", current_task=None, waiting_for=None)
-            self.event("run_complete", None, "all tasks verified and reviewed", summary=summary)
+            self.event("run_complete", None, "all tasks verified and reviewed; billed calls: "
+                       f"{self.billed['work']} work + {self.billed['review']} review", summary=summary, billed_calls=dict(self.billed))
         else:
             self.save(state="cancelled", current_task=None, waiting_for=None)
-            self.event("run_cancelled", None, "run stopped", summary=summary)
+            self.event("run_cancelled", None, f"run stopped; billed calls so far: {self.billed['work']} work + {self.billed['review']} review",
+                       summary=summary, billed_calls=dict(self.billed))
         return 0
 
 

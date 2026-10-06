@@ -21,11 +21,25 @@ cnt_path = sc_path + ".counts"
 counts = json.load(open(cnt_path)) if os.path.exists(cnt_path) else {}
 review = tid.startswith("R-")
 key = tid[2:] if review else tid
-seq = sc.get("review" if review else "work", {}).get(key, ["PASS" if review else "ok"])
 n = counts.get(tid, 0)
-act = seq[min(n, len(seq) - 1)]
 counts[tid] = n + 1
 json.dump(counts, open(cnt_path, "w"))
+if tid == "R-batch":
+    # one review call for all tasks: the report path is in the acceptance criterion ("<path> exists and ...")
+    report = story["acceptanceCriteria"][0].split(" exists and")[0]
+    plan = json.load(open(os.path.join(state, "plan", "prd.json")))["userStories"]
+    verdict = {}
+    for st in plan:
+        sq = sc.get("review", {}).get(st["id"], ["PASS"])
+        verdict[st["id"]] = sq[min(n, len(sq) - 1)]
+    print(f"[00:00:00] [INFO] [session] fake {agent} batch review #{n + 1}: {verdict}")
+    os.makedirs(os.path.dirname(report), exist_ok=True)
+    overall = "FAIL" if "FAIL" in verdict.values() else "PASS"
+    open(report, "w").write(f"Verdict: {overall}\n" + "".join(f"Task {t}: {v}\n" for t, v in verdict.items())
+                            + "".join(f"\n- finding one for {t}\n- finding two\n" for t in verdict))
+    sys.exit(0)
+seq = sc.get("review" if review else "work", {}).get(key, ["PASS" if review else "ok"])
+act = seq[min(n, len(seq) - 1)]
 print(f"[00:00:00] [INFO] [session] fake {agent} on {tid} action={act}")
 print(f"[00:00:00] [INFO] [agent] notes seen: {story.get('notes','')[:200]!r}")
 if review:

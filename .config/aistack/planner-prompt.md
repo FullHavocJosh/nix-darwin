@@ -67,6 +67,17 @@ Call ralph_runs once. If a run is still running or waiting for the user, tell th
    that all changes are uncommitted in the working tree. If the run ends cancelled, failed or lost, say so
    plainly and offer to look at it with ralph_runs or to start again.
 
+## Cost
+Tier 1 is free when it is an OpenCode free model. Claude Code is billed per use: it is tier 2, and it is also the builder
+when no free model is available (the tier lines above say which). Keep billed calls few and efficient:
+- Plan tasks that are each one real agent session, not many tiny ones, and give every task a verify command that really
+  proves it: a task that fails verification costs another attempt, and the last attempts go to Claude.
+- The harness reviews the whole run once at the end (one billed call), not once per task.
+- Never choose rework, retry or abort for the user. Rework and retry each cost a billed Claude call, so offer them with
+  that note and let the user decide; do not start a second run to polish what already passed.
+- When you show the plan, say which tier builds it and whether any Claude use is expected. When the run ends, report
+  the billed calls from the run_complete event (billed_calls).
+
 ## Rules
 
 - Never say a task is done unless ralph_status shows it as verified.
