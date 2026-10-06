@@ -1,12 +1,7 @@
 """Scenario tests for ralph_driver.py + ralph_mcp.py against a fake ralph-tui (no AI, no network).
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_driver.py
 """
-import importlib
-import json
-import os
-import sys
-import tempfile
-import time
+import json, os, sys, tempfile, time, importlib, shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)   # .config/aistack, where the bridge, driver and templates live

@@ -8,14 +8,7 @@ Runs are detached processes (ralph_driver.py); tool calls return quickly, and ra
 Safety: only works inside RALPH_MCP_ROOTS (colon-separated); agent names come from the environment the
 launcher sets (AISTACK_WORKER_AGENT / AISTACK_FALLBACK_AGENT / AISTACK_REVIEW_AGENT), not from tool arguments.
 """
-import hashlib
-import json
-import os
-import re
-import signal
-import subprocess
-import sys
-import time
+import hashlib, json, os, re, signal, subprocess, sys, time
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 ROOTS = [os.path.realpath(p) for p in os.environ.get("RALPH_MCP_ROOTS", "").split(":") if p]
