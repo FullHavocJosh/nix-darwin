@@ -158,6 +158,49 @@ exit 0, because Ralph's own completion marker can be a false positive. pi reache
 `.config/aistack/ralph_mcp.py`. In the main checkout of a git repo it offers a `gpr` worktree first. Nothing is
 committed; use `gpc`/`gpa` afterwards. Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_driver.py`.
 
+#### Lumo tier 0 (cloud planner, `macos_desktop` only)
+
+Proton Lumo as a tool-less planning model, hosted on MacMiniM1 (`nix-modules/macos/lumo.nix`, scripts in
+`.config/lumo/`). Three LaunchDaemons run as `havoc`, so nothing needs a login session:
+
+- `lumo-tamer`: [lumo-tamer](https://github.com/ZeroTricks/lumo-tamer), an **unofficial** OpenAI-compatible server
+  for Lumo (port 3003, API key). Pinned to one reviewed commit and built by an activation-time provisioner.
+  Using it may violate Proton's terms of service (its README says so).
+- `lumo-planner`: `.config/lumo/lumo_planner.py`, a stdlib proxy (port 8765). Lumo cannot call tools, so it is
+  told to end replies with `NEED:` lines (a path, `ls`, `find`, `grep`, or keywords); the proxy answers them from
+  `~/home-infrastructure` and loops until Lumo gives a final plan. No local model is involved. A name-based deny
+  list (`.env`, keys, tfvars, kubeconfig, `*secret*`, ...) is enforced in code. It listens beyond loopback only
+  when Doppler holds `LUMO_PLANNER_API_KEY` (bearer token), and refuses to otherwise.
+- `lumo-watchdog` (every 5 min): checks `tamer auth status`, the server, and every 30 min a real one-word Lumo
+  request; alerts through ntfy on failure and on recovery; optionally re-authenticates by itself.
+
+`lumoplan` opens a tool-less pi session on it (`pi --no-tools ... --provider lumo-planner`). Handing the plan to
+the tier 1 planner is not wired up yet. Note the proxy serves the Mini's `home-infrastructure` checkout only.
+
+Doppler `FullHavocJosh/root_macmini` (all optional, daemons fall back to local files):
+`LUMO_VAULT_KEY` (restores a _missing_ key file only), `LUMO_TAMER_API_KEY`, `LUMO_PLANNER_API_KEY`,
+`LUMO_NTFY_URL` (full topic URL), `LUMO_NTFY_TOKEN` (ntfy access token).
+
+First setup / re-auth by hand (cannot be declarative; Proton shows a CAPTCHA and 2FA). Do it on a machine with a
+browser and tunnel the debug port to the Mini, never copy a vault between machines:
+
+```bash
+# laptop: Chromium with its own profile, sign in at https://lumo.proton.me
+/Applications/Chromium.app/Contents/MacOS/Chromium --remote-debugging-port=9222 --user-data-dir=$HOME/.lumo-tamer-chromium
+# laptop: reverse tunnel, then on the Mini (inside that ssh session):
+ssh -R 9222:localhost:9222 havoc@macminim1.rollet.family
+cd ~/lumo-tamer && tamer auth browser     # Enter accepts http://localhost:9222
+```
+
+Automatic re-auth (opt-in): on the Mini start `Chromium --user-data-dir=$HOME/.lumo-chromium
+https://lumo.proton.me` in the GUI, sign in, quit, then `mkdir -p ~/.lumo-watchdog && touch
+~/.lumo-watchdog/auto-reauth`. When auth fails the watchdog launches that profile headless, runs `tamer auth
+browser`, and restarts tamer (at most once an hour). It works only while Proton keeps that browser session alive;
+otherwise the ntfy alert tells you to re-authenticate by hand.
+
+Moving from a hand-made setup: remove `~/Library/LaunchAgents/com.fullhavoc.lumo-*.plist` (launchctl bootout
+`gui/501/com.fullhavoc.lumo-tamer` and `-planner`) before the first `darwin-rebuild switch`, or both fight for the ports.
+
 **Switch profiles:**
 
 ```bash
