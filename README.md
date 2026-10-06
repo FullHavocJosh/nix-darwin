@@ -192,22 +192,21 @@ Doppler `FullHavocJosh/root_macmini` (all optional, daemons fall back to local f
 `LUMO_VAULT_KEY` (restores a _missing_ key file only), `LUMO_TAMER_API_KEY`, `LUMO_PLANNER_API_KEY`,
 `LUMO_NTFY_URL` (full topic URL), `LUMO_NTFY_TOKEN` (ntfy access token).
 
-First setup / re-auth by hand (cannot be declarative; Proton shows a CAPTCHA and 2FA). Do it on a machine with a
-browser and tunnel the debug port to the Mini, never copy a vault between machines:
+First setup and every re-auth: run `lumoreauth` on the MacBook (`.config/lumo/reauth.sh`). The Mini is headless, so the
+sign-in happens here: it opens Chromium with a temporary profile, you sign in to Lumo (Proton shows CAPTCHA and 2FA),
+and it runs `tamer auth browser` on the Mini through an SSH reverse tunnel to that browser, restarts tamer and shows
+the auth status. The profile is deleted on exit, because lumo-tamer's docs say not to reuse the same tokens on two
+machines. `lumoreauth --check` tests everything except the handover (Chromium starts, the tunnel carries its debug
+port) and changes nothing on the Mini. When auth fails, the watchdog's ntfy alert tells you to run it. Fully automatic
+re-auth is not possible while a CAPTCHA/2FA sign-in is required.
 
-```bash
-# laptop: Chromium with its own profile, sign in at https://lumo.proton.me
-/Applications/Chromium.app/Contents/MacOS/Chromium --remote-debugging-port=9222 --user-data-dir=$HOME/.lumo-tamer-chromium
-# laptop: reverse tunnel, then on the Mini (inside that ssh session):
-ssh -R 9222:localhost:9222 havoc@macminim1.rollet.family
-cd ~/lumo-tamer && tamer auth browser     # Enter accepts http://localhost:9222
-```
+(The watchdog still has an opt-in headless re-auth for a Chromium profile signed in on the Mini itself
+(`~/.lumo-chromium` plus `~/.lumo-watchdog/auto-reauth`). It needs a GUI session on the Mini, so it is unused.)
 
-Automatic re-auth (opt-in): on the Mini start `Chromium --user-data-dir=$HOME/.lumo-chromium
-https://lumo.proton.me` in the GUI, sign in, quit, then `mkdir -p ~/.lumo-watchdog && touch
-~/.lumo-watchdog/auto-reauth`. When auth fails the watchdog launches that profile headless, runs `tamer auth
-browser`, and restarts tamer (at most once an hour). It works only while Proton keeps that browser session alive;
-otherwise the ntfy alert tells you to re-authenticate by hand.
+The MacBook has no tamer of its own: pi's `lumo-planner` provider (planner proxy, port 8765) and `lumo` provider
+(tamer directly, port 3003) both point at the Mini. Both need Doppler `LUMO_PLANNER_API_KEY` / `LUMO_TAMER_API_KEY`.
+`lumo.nix` allows the Mini's Python and node through the application firewall for this; both are protected by
+their API keys only, so keep them to the LAN.
 
 Moving from a hand-made setup: remove `~/Library/LaunchAgents/com.fullhavoc.lumo-*.plist` (launchctl bootout
 `gui/501/com.fullhavoc.lumo-tamer` and `-planner`) before the first `darwin-rebuild switch`, or both fight for the ports.

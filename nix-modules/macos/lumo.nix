@@ -46,7 +46,7 @@ in
     # The macOS application firewall (enabled on the Mini) drops inbound connections to binaries it has not been
     # told to allow, and Homebrew's Python is not on its list, so the planner answered on loopback only. Allow
     # exactly the interpreter the planner runs under. Redone on every activation: the Cellar path changes when
-    # Homebrew upgrades Python. tamer (node) is deliberately NOT allowed; only the planner talks to it, locally.
+    # Homebrew upgrades Python. tamer's node is allowed separately below.
     py_base=$(sudo -u havoc HOME=${home} /opt/homebrew/bin/python3 -c 'import sys; print(sys.base_prefix)' 2>/dev/null)
     py_app=$(realpath "$py_base/Resources/Python.app/Contents/MacOS/Python" 2>/dev/null)
     if [ -n "$py_app" ] && [ -x "$py_app" ]; then
@@ -55,6 +55,18 @@ in
       echo "[lumo-planner] application firewall: incoming connections allowed for $py_app"
     else
       echo "[lumo-planner] WARNING: Homebrew Python.app not found, firewall rule not added" >&2
+    fi
+
+    # tamer (node) as well, so the MacBook can use the Mini's tamer directly (pi provider "lumo"). tamer's own
+    # API key (Doppler LUMO_TAMER_API_KEY) is the only protection, so this is LAN only. Any other node program
+    # that listens on the Mini becomes reachable too; none does today.
+    node_bin=$(realpath "$(sudo -u havoc HOME=${home} /opt/homebrew/bin/node -p 'process.execPath' 2>/dev/null)" 2>/dev/null)
+    if [ -n "$node_bin" ] && [ -x "$node_bin" ]; then
+      /usr/libexec/ApplicationFirewall/socketfilterfw --add "$node_bin" >/dev/null
+      /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$node_bin" >/dev/null
+      echo "[lumo-tamer] application firewall: incoming connections allowed for $node_bin"
+    else
+      echo "[lumo-tamer] WARNING: node not found, firewall rule not added" >&2
     fi
   '';
 
