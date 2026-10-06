@@ -509,6 +509,22 @@ TFC_RESOURCE_ID_RE = re.compile(
     r'^(ws|var|varset|run|apply|plan|cv|pol|polset|team|sv|rt|notif|agent|agentpool|oc|at)-[A-Za-z0-9]{10,}$'
 )
 
+# Code identifiers (CamelCase / snake_case names such as the OOXML schema types CT_TextCharacterProperties and
+# ST_HyperlinkSymbol in the Office skills, enum names, class names) read as high-entropy because they are long and
+# mixed-case, but they are words. A random secret of letters only is unlikely (a 20-char base62 token has no digit
+# 3 percent of the time) and has few vowels (about 19 percent of letters), identifiers about 30 to 40 percent.
+SCHEMA_TYPE_RE = re.compile(r'^(CT|ST|EG|AG)_[A-Za-z0-9_]+$')
+
+def looks_like_identifier(value):
+    if SCHEMA_TYPE_RE.match(value):
+        return True
+    if not re.fullmatch(r'[A-Za-z]+(_[A-Za-z]+)*', value) or len(value) > 64:
+        return False                     # digits, +/= or other symbols: could be a real secret
+    boundaries = value.count('_') + len(re.findall(r'[a-z][A-Z]', value))
+    letters = [c for c in value if c.isalpha()]
+    vowel_ratio = sum(c in 'aeiouAEIOU' for c in letters) / len(letters)
+    return boundaries >= 1 and vowel_ratio >= 0.28
+
 def shannon_entropy(s):
     if not s:
         return 0.0
@@ -544,6 +560,8 @@ for line in sys.stdin:
             continue  # ALL_CAPS_PLACEHOLDER style, same exclusion the password check uses
         if TFC_RESOURCE_ID_RE.match(value):
             continue  # Terraform Cloud/Enterprise resource ID, not a secret
+        if looks_like_identifier(value):
+            continue  # a code identifier (CamelCase / snake_case words, OOXML schema type), not a secret
         h = shannon_entropy(value)
         if h >= entropy_threshold(value):
             redacted = value[:4] + '...' + value[-4:] if len(value) > 12 else '***'
@@ -650,10 +668,14 @@ function _check_for_secrets() {
   # that shape: git SHAs in commit-message comments, SSH public keys (their
   # own "ssh-ed25519 <key> comment" format, not "var = value"), nix store
   # hashes (embedded in paths, not assignments).
-  local entropy_matches=$(echo "$filtered_lines" | _entropy_scan_secrets)
+  # Unique by (redacted value, entropy) and capped: the same value in several copies of a file would otherwise be
+  # listed once per copy, and a few hundred entries make the AI analysis below unreadable and too long to answer.
+  local entropy_matches=$(echo "$filtered_lines" | _entropy_scan_secrets | awk -F'\t' '!seen[$1 FS $2]++')
   if [ -n "$entropy_matches" ]; then
-    secrets_report="${secrets_report}  • High-entropy value in an unrecognized field\n$(echo "$entropy_matches" | awk -F'\t' '{print "    - " $1 " (entropy " $2 ")"}')\n"
-    suspicious_lines="${suspicious_lines}$(echo "$entropy_matches" | awk -F'\t' '{print $3}')\n"
+    local entropy_total=$(echo "$entropy_matches" | wc -l | tr -d ' ')
+    secrets_report="${secrets_report}  • High-entropy value in an unrecognized field ($entropy_total distinct)\n$(echo "$entropy_matches" | head -25 | awk -F'\t' '{print "    - " $1 " (entropy " $2 ")"}')\n"
+    [ "$entropy_total" -gt 25 ] && secrets_report="${secrets_report}    ... and $((entropy_total - 25)) more\n"
+    suspicious_lines="${suspicious_lines}$(echo "$entropy_matches" | head -25 | awk -F'\t' '{print $3}' | cut -c1-200)\n"
     secrets_found=true
   fi
 
@@ -666,18 +688,29 @@ function _check_for_secrets() {
     echo ""
     echo "ℹ Analyzing detections..."
     echo ""
-    local review_result=$(echo "Secrets detection flagged the following in my staged git changes. Review the full context of each match (including nearby comments) and determine whether these are real secrets or false positives.
+    local review_result exit_code
+    review_result=$(echo "Secrets detection flagged the following in my staged git changes. Review the full context of each match (including nearby comments) and determine whether these are real secrets or false positives.
 
 IMPORTANT: End your analysis with exactly one of these on its own line:
 - VERDICT: ALL_CLEAR (if all detections are false positives)
 - VERDICT: NEEDS_REVIEW (if any detection is a real secret)
 
+Keep the analysis short: at most 15 lines, grouping detections that are the same kind of thing.
+
 Detections:
-$(echo -e "$secrets_report")
+$(echo -e "$secrets_report" | head -60)
 
 Context from diff (matching lines with surrounding lines for context):
-$(echo -e "$suspicious_lines")" | _run_ai_plain "sonnet" 2>&1)
-    local exit_code=$?
+$(echo -e "$suspicious_lines" | head -c 4000)" | AI_LOCAL_ALIAS=local-coder-secrets _run_ai_plain "sonnet" 2>&1)
+    # (declared apart from the assignment: `local x=$(cmd)` makes $? the status of `local`, which is always 0, so a
+    # failed analysis used to pass as a finished one)
+    exit_code=$?
+    if [ $exit_code -ne 0 ] || [ -z "$review_result" ]; then
+      # An analysis that did not happen is not "all clear": it takes the same path as NEEDS_REVIEW below
+      # (auto mode aborts, interactive offers the review/ignore/abort menu).
+      review_result="⚠ AI analysis unavailable: ${review_result:-no output}. The detections above are unreviewed."
+      exit_code=0
+    fi
     if [ $exit_code -eq 0 ] && [ -n "$review_result" ]; then
       echo "═══════════════════════════════════════════════════════════"
       echo "$review_result"
@@ -731,8 +764,8 @@ $(echo -e "$suspicious_lines")" | _run_ai_plain "sonnet" 2>&1)
             echo "$review_result"
           } > "$prompt_file"
           local repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-          local model=$(jq -r '.model // empty' ~/.config/opencode/opencode.json 2>/dev/null)
-          (cd "$repo_root" && opencode mini --model "$model" --prompt "I have staged git changes with potential secrets. Read $prompt_file for the full context and help me review whether these are real secrets or false positives.")
+          # opencode v2 rejects --model on the TUI command ("Unrecognized flag"); it uses the model from opencode.json
+          (cd "$repo_root" && opencode --prompt "I have staged git changes with potential secrets. Read $prompt_file for the full context and help me review whether these are real secrets or false positives.")
           rm -f "$prompt_file"
           return 1
           ;;

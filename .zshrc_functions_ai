@@ -469,6 +469,7 @@ function _run_aider_local() {
     local-coder-commit) lms_max_tokens=512 ;;   # one 72-char line; measured ~15-40 tokens
     local-coder-plan)   lms_max_tokens=1024 ;;
     local-coder-judge)  lms_max_tokens=256 ;;
+    local-coder-secrets) lms_max_tokens=1536 ;;   # gpa's secrets analysis: a short verdict, but longer than a commit message
     local-coder-review) lms_max_tokens=3072 ;;  # JSON array capped at 10 issues (~1k tokens)
     *)                  lms_max_tokens=4096 ;;
   esac
@@ -626,7 +627,7 @@ function _run_ai_plain() {
       # fixed earlier). The chat_template_kwargs.enable_thinking=false fix is
       # preserved via .config/aider/model-settings.yml's openai/local-coder-commit
       # entry instead of being inlined in the request body here.
-      _run_aider_local "local-coder-commit" "$(_local_llm_timeout commit)" "$truncated_prompt"
+      _run_aider_local "${AI_LOCAL_ALIAS:-local-coder-commit}" "$(_local_llm_timeout commit)" "$truncated_prompt"
       return $?
       ;;
 
