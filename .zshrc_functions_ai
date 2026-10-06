@@ -1174,6 +1174,7 @@ TOML
   prompt=${prompt//@@FALLBACK@@/$fallback_label}
   prompt=${prompt//@@REVIEWER@@/Claude Code Sonnet (latest, billed)}
   prompt=${prompt//@@TIER0_LABEL@@/$tier0_label}
+  prompt=${prompt//@@LOCAL_MODEL@@/$lms_model}
   prompt=${prompt//@@TIER0@@/$(<"$adir/planner-tier0-$tier0.md")}
 
   echo "── aistack ──"
@@ -1199,7 +1200,7 @@ TOML
   extra=(${=AISTACK_PI_EXTRA})
   (
     cd "$project" || exit 1
-    PI_CODING_AGENT_DIR="$pi_dir" pi --provider lmstudio --model "$lms_model" --no-skills \
+    PI_CODING_AGENT_DIR="$pi_dir" pi --provider lmstudio --model "$lms_model" --name "aistack: plan ${tier0}, build ${zen_model:-claude}, review claude" --no-skills \
       --append-system-prompt "$prompt" --tools "$tools" "${extra[@]}" ${task:+"$task"}
   )
   local rc=$?
