@@ -1227,19 +1227,18 @@ TOML
   return $rc
 }
 
-# opencode's TUI treats its first positional as the [project] directory, so a
-# prompt passed positionally gets cd'd into ("Failed to change directory to
-# <cwd>/<prompt>"). Interactive mode must pass it via --prompt; only `run`
-# accepts the message positionally.
+# opencode v2: the top-level TUI has no --model flag and treats its first positional as the [project] directory.
+# Interactive mode uses `opencode mini`, which takes --model and --prompt; only `run` accepts the message
+# positionally.
 function _aidev_opencode() {
   local model="$1" print_mode="$2"
   shift 2
   if $print_mode; then
-    opencode --model "$model" run "$@"
+    opencode run --model "$model" "$@"
   elif (( $# > 0 )); then
-    opencode --model "$model" --prompt "$*"
+    opencode mini --model "$model" --prompt "$*"
   else
-    opencode --model "$model"
+    opencode mini --model "$model"
   fi
 }
 
