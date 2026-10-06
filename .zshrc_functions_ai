@@ -1196,6 +1196,9 @@ TOML
   echo ""
 
   local tools="read,grep,find,ls,write,edit,mcp__ralph__ralph_validate_plan,mcp__ralph__ralph_run,mcp__ralph__ralph_status,mcp__ralph__ralph_respond,mcp__ralph__ralph_cancel,mcp__ralph__ralph_runs"
+  # lumo_consult only when tier 0 is Lumo; pi's --tools is an allowlist, so a tool missing here is invisible to the model
+  # (it was left out once, and the planner then reported "Lumo is unavailable" without ever calling it)
+  [[ "$tier0" == "lumo" ]] && tools="$tools,mcp__ralph__lumo_consult"
   local -a extra
   extra=(${=AISTACK_PI_EXTRA})
   (
