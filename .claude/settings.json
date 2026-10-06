@@ -1,5 +1,10 @@
 {
   "enableAllProjectMcpServers": true,
+  "disableAutoMode": "disable",
+  "useAutoModeDuringPlan": false,
+  "permissions": {
+    "defaultMode": "default"
+  },
   "hooks": {
     "PreToolUse": [
       {
