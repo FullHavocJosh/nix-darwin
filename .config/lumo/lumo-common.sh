@@ -1,0 +1,22 @@
+# Shared by the lumo-* scripts (sourced, not executed). zsh.
+# Secrets come from Doppler (FullHavocJosh/root_macmini); every value is optional so a
+# daemon still starts from the local files when Doppler is unreachable.
+export PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
+export HOME=${HOME:-/Users/havoc}
+
+LUMO_TAMER_DIR=${LUMO_TAMER_DIR:-$HOME/lumo-tamer}
+LUMO_TAMER_PORT=${LUMO_TAMER_PORT:-3003}
+LUMO_PLANNER_PORT=${LUMO_PLANNER_PORT:-8765}
+LUMO_DOPPLER_PROJECT=${LUMO_DOPPLER_PROJECT:-FullHavocJosh}
+LUMO_DOPPLER_CONFIG=${LUMO_DOPPLER_CONFIG:-root_macmini}
+
+# lumo_secret NAME -> value on stdout, empty when unset or Doppler is unreachable
+lumo_secret() {
+  doppler secrets get "$1" --project "$LUMO_DOPPLER_PROJECT" --config "$LUMO_DOPPLER_CONFIG" \
+    --plain 2>/dev/null
+}
+
+# lumo_tamer_key -> the apiKey tamer's config.yaml serves with
+lumo_tamer_key() {
+  sed -n 's/^ *apiKey: *"\(.*\)" *$/\1/p' "$LUMO_TAMER_DIR/config.yaml" 2>/dev/null | head -1
+}

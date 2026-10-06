@@ -613,3 +613,4 @@ alias gp='git pull && git submodule update --init --recursive'
 
 alias aishow='aiselect --show'
 alias aistack='aistack_func'
+alias lumoplan='lumoplan_func'

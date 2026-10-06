@@ -42,6 +42,7 @@
           ./nix-modules/macos/personal.nix
           ./nix-modules/macos/desktop.nix
           ./nix-modules/macos/lmstudio.nix
+          ./nix-modules/macos/lumo.nix
           nix-homebrew.darwinModules.nix-homebrew
         ];
       };

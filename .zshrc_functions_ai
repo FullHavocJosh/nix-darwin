@@ -544,9 +544,10 @@ function _run_aider_local() {
   local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
   local lms_max_tokens
   case "$model_alias" in
-    local-coder-commit) lms_max_tokens=512 ;;
+    local-coder-commit) lms_max_tokens=512 ;;   # one 72-char line; measured ~15-40 tokens
     local-coder-plan)   lms_max_tokens=1024 ;;
     local-coder-judge)  lms_max_tokens=256 ;;
+    local-coder-review) lms_max_tokens=3072 ;;  # JSON array capped at 10 issues (~1k tokens)
     *)                  lms_max_tokens=4096 ;;
   esac
   tmp_settings=$(mktemp "${TMPDIR:-/tmp}/aider-lms-settings.XXXXXX") || {
@@ -565,7 +566,10 @@ EOF
   aider_model="openai/${lms_model}"
 
   local raw_output
-  raw_output=$(timeout "${timeout_secs}s" aider \
+  # BROWSER=true: with --yes-always aider auto-accepts its "Open URL for more info?" offer when a call
+  # hits a token limit and would open aider.chat/docs/troubleshooting/token-limits.html in a browser.
+  # Python's webbrowser honors $BROWSER, so the page is "opened" with /usr/bin/true instead.
+  raw_output=$(BROWSER=true timeout "${timeout_secs}s" aider \
     --model "$aider_model" \
     --openai-api-base "${endpoint}/v1" \
     --openai-api-key "sk-local" \
@@ -593,6 +597,14 @@ EOF
     else
       echo "Error: aider failed (exit code: $exit_code): $raw_output" >&2
     fi
+    return 1
+  fi
+
+  # Aider prints this and exits 0 when finish_reason is "length". What is left is a truncated answer (a
+  # cut-off review/commit message) plus aider's error text, which must not be used as the model's reply.
+  # (anchored at line start so a review that merely quotes the phrase does not trigger it)
+  if echo "$raw_output" | grep -Eq "^Model [^ ]+ has hit a token limit!"; then
+    echo "Error: local model hit its token limit (alias $model_alias, max_tokens ${lms_max_tokens}) -- output was truncated and was discarded" >&2
     return 1
   fi
 
@@ -851,16 +863,18 @@ If there are no issues to report, respond with exactly: []
       ;;
       
     llama-cpp)
-      # Truncate prompt to ~4000 chars (~1000 tokens) to keep prompt processing
-      # reasonable -- this controls INPUT size, independent of the generous
-      # output max_tokens (4096, see .config/aider/model-settings.yml's
-      # openai/local-coder-review entry) gpa's security review wants for
-      # thorough multi-finding output.
-      local truncated_prompt="${prompt:0:4000}"
+      # Cap the prompt to keep prompt processing reasonable, but keep BOTH ends: the review prompt ends
+      # with the instructions ("Output ONLY a JSON array ...", the issue limit), so a plain prefix cut dropped
+      # them and the model answered with an unbounded markdown review that ran into max_tokens (seen twice
+      # on 2026-10-06, ~3.8k output tokens, cut off mid-sentence). The middle of the diff is what gets omitted.
+      # (Output max_tokens comes from _run_aider_local's per-alias cap.)
+      local max_chars=6000 tail_chars=2400
+      local truncated_prompt="$prompt"
       local prompt_len=${#prompt}
-      if [ $prompt_len -gt 4000 ]; then
-        truncated_prompt="${truncated_prompt}
-... [diff truncated at 4000 chars — ${prompt_len} total]"
+      if [ $prompt_len -gt $max_chars ]; then
+        truncated_prompt="${prompt:0:$((max_chars - tail_chars))}
+... [diff middle omitted: ${prompt_len} chars total, first $((max_chars - tail_chars)) and last ${tail_chars} kept] ...
+${prompt: -$tail_chars}"
       fi
 
       # Routed through Aider instead of a direct curl call -- see the matching
@@ -989,6 +1003,16 @@ function _get_ai_command() {
   local task_type="${1:-sonnet}"
   echo "_run_ai_direct $task_type"
 }
+# lumoplan -- tier 0 of aistack: a tool-less pi session whose model is Lumo (Proton), reached through
+# the lumo-planner proxy on MacMiniM1 (lumo.nix, README "Lumo tier 0"). Lumo asks for repo files with
+# NEED lines and the proxy fetches them from the Mini's home-infrastructure checkout. Nothing here
+# edits files or runs tools; hand the plan to aistack/tier 1 to execute it.
+#
+#   lumoplan [prompt words...]   e.g.  lumoplan plan adding a new ArgoCD app for ntfy
+function lumoplan_func() {
+  pi --no-tools --no-extensions --no-skills --provider lumo-planner --model lumo-planner "$@"
+}
+
 # aistack -- planner-led coding stack.
 #
 #   aistack [task words...]      e.g.  aistack make a new mcp server
