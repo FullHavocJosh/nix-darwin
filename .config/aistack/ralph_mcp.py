@@ -5,6 +5,11 @@ Tools: ralph_validate_plan, ralph_run, ralph_status, ralph_respond, ralph_cancel
 Runs are detached processes (ralph_driver.py); tool calls return quickly, and ralph_status can wait up to
 45s for news so the chat agent can follow a run without a tight loop (MCP clients time out near 60s).
 
+Nothing aistack-related is written into the repository: plan files, runs, questions, reviews and Ralph's own
+state live in the state dir (AISTACK_STATE_DIR, ~/.aistack/<project key>). When the launcher found a main
+checkout (AISTACK_WORKTREE_MODE=create), the git worktree + draft PR is created by ralph_run, after the user has
+confirmed the plan; the agents then work there.
+
 Safety: only works inside RALPH_MCP_ROOTS (colon-separated); agent names come from the environment the
 launcher sets (AISTACK_WORKER_AGENT / AISTACK_FALLBACK_AGENT / AISTACK_REVIEW_AGENT), not from tool arguments.
 """
@@ -35,8 +40,21 @@ def rj(path, default=None):
         return default
 
 
+def state_dir(project):
+    """Where aistack keeps everything for this project, outside the repository."""
+    d = os.environ.get("AISTACK_STATE_DIR")
+    if d:
+        return os.path.realpath(os.path.expanduser(d))
+    home = os.environ.get("AISTACK_HOME") or os.path.expanduser("~/.aistack")
+    return os.path.join(home, f"{os.path.basename(project)}-{hashlib.sha1(project.encode()).hexdigest()[:10]}")
+
+
+def plan_dir(project):
+    return os.path.join(state_dir(project), "plan")
+
+
 def runs_dir(project):
-    return os.path.join(project, ".aistack", "runs")
+    return os.path.join(state_dir(project), "runs")
 
 
 def alive(pid):
@@ -49,8 +67,8 @@ def alive(pid):
 
 # ---- plan validation ------------------------------------------------------------
 def load_plan(project):
-    prd_p = os.path.join(project, ".aistack", "prd.json")
-    ver_p = os.path.join(project, ".aistack", "verify.json")
+    prd_p = os.path.join(plan_dir(project), "prd.json")
+    ver_p = os.path.join(plan_dir(project), "verify.json")
     raw = ""
     for p in (prd_p, ver_p):
         try:
@@ -63,7 +81,7 @@ def load_plan(project):
 def validate(prd, verify):
     problems = []
     if not isinstance(prd, dict):
-        return ["Missing or invalid .aistack/prd.json (must be a JSON object)"]
+        return ["Missing or invalid prd.json in the plan dir (must be a JSON object)"]
     if not prd.get("name"):
         problems.append("prd.json: 'name' is required")
     stories = prd.get("userStories")
@@ -109,7 +127,7 @@ def validate(prd, verify):
     for n in list(deps):
         visit(n, [])
     if not isinstance(verify, dict):
-        problems.append("Missing or invalid .aistack/verify.json (object mapping task id -> list of commands)")
+        problems.append("Missing or invalid verify.json in the plan dir (object mapping task id -> list of commands)")
         return problems
     for tid in deps:
         cmds = verify.get(tid)
@@ -132,10 +150,10 @@ def tool_validate(a):
     prd, verify, h = load_plan(project)
     problems = validate(prd, verify)
     if problems:
-        return {"ok": False, "problems": problems}
+        return {"ok": False, "problems": problems, "plan_dir": plan_dir(project)}
     tasks = [{"id": s["id"], "title": s["title"], "priority": s["priority"], "dependsOn": s.get("dependsOn", []),
               "verify": verify[s["id"]]} for s in prd["userStories"]]
-    return {"ok": True, "plan_hash": h, "name": prd["name"], "tasks": tasks,
+    return {"ok": True, "plan_hash": h, "name": prd["name"], "tasks": tasks, "plan_dir": plan_dir(project),
             "next": "Show this plan to the user. Only after they confirm it, call ralph_run with this plan_hash."}
 
 
@@ -158,6 +176,38 @@ def run_state(project, rid):
     return st
 
 
+DEFAULT_WORKTREE_CMD = ("source ~/.zshrc_functions_git 2>/dev/null; source ~/.zshrc_functions_ai 2>/dev/null; "
+                        "gpr_func feat \"$AISTACK_BRANCH\"")
+
+
+def ensure_workdir(project, prd):
+    """Where the agents work. In a main checkout (AISTACK_WORKTREE_MODE=create) the first confirmed plan creates a gpr
+    worktree + draft PR, later runs reuse it while it exists. Elsewhere the project itself is the work dir."""
+    meta_p = os.path.join(state_dir(project), "project.json")
+    meta = rj(meta_p, {})
+    if meta.get("work_dir") and os.path.isdir(meta["work_dir"]):
+        return meta["work_dir"], False, None
+    if os.environ.get("AISTACK_WORKTREE_MODE") != "create":
+        return project, False, None
+    slug = re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", str(prd.get("name", "plan")).lower())).strip("-")[:28] or "plan"
+    branch = f"aistack-{slug}-{time.strftime('%H%M')}"
+    env = dict(os.environ, AISTACK_BRANCH=branch)
+    cmd = os.environ.get("AISTACK_WORKTREE_CMD")
+    argv = ["/bin/sh", "-c", cmd] if cmd else ["zsh", "-c", DEFAULT_WORKTREE_CMD]
+    try:
+        r = subprocess.run(argv, cwd=project, env=env, capture_output=True, text=True, timeout=170, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return None, False, f"creating the worktree failed: {e}"
+    wd = os.path.join(project, ".worktrees", branch)
+    if not os.path.isdir(wd):
+        tail = (r.stdout + r.stderr)[-600:]
+        return None, False, f"creating the worktree {wd} failed (exit {r.returncode}): {tail}"
+    meta.update(work_dir=wd, branch=branch, source_dir=project, created=time.strftime("%Y-%m-%dT%H:%M:%S"))
+    os.makedirs(state_dir(project), exist_ok=True)
+    json.dump(meta, open(meta_p, "w"), indent=2)
+    return wd, True, None
+
+
 def tool_run(a):
     project = project_of(a)
     prd, verify, h = load_plan(project)
@@ -169,11 +219,15 @@ def tool_run(a):
     rid0 = latest_run(project)
     if rid0 and run_state(project, rid0).get("state") in ("running", "waiting_user", "starting"):
         return {"started": False, "problem": f"run {rid0} is still active; use ralph_status / ralph_respond / ralph_cancel"}
+    workdir, created, err = ensure_workdir(project, prd)
+    if err:
+        return {"started": False, "problem": err}
     rid = time.strftime("%Y%m%d-%H%M%S")
     d = os.path.join(runs_dir(project), rid)
     os.makedirs(d, exist_ok=True)
     env = os.environ
-    cfg = {"prd": ".aistack/prd.json", "verify": ".aistack/verify.json",
+    cfg = {"prd": os.path.join(plan_dir(project), "prd.json"), "verify": os.path.join(plan_dir(project), "verify.json"),
+           "work_dir": workdir, "state_dir": state_dir(project),
            "worker_agent": env.get("AISTACK_WORKER_AGENT", "opencode-pickle"),
            "fallback_agent": env.get("AISTACK_FALLBACK_AGENT", "claude-work"),
            "reviewer_agent": env.get("AISTACK_REVIEW_AGENT", "claude-review"),
@@ -183,14 +237,20 @@ def tool_run(a):
            "fallback_attempts": int(env.get("AISTACK_FALLBACK_ATTEMPTS", "1")),
            "attempt_timeout_s": int(env.get("AISTACK_ATTEMPT_TIMEOUT_S", "1500")),
            "verify_timeout_s": int(env.get("AISTACK_VERIFY_TIMEOUT_S", "300")),
+           "review_mode": env.get("AISTACK_REVIEW_MODE", "batch"),
            "ralph_bin": env.get("RALPH_TUI_BIN", os.path.expanduser("~/.bun/bin/ralph-tui"))}
+    # agents whose calls cost money (Claude Code); AISTACK_BILLED_AGENTS (comma list) overrides
+    named = [cfg["worker_agent"], cfg["fallback_agent"], cfg["reviewer_agent"]]
+    cfg["billed_agents"] = ([x for x in env["AISTACK_BILLED_AGENTS"].split(",") if x] if "AISTACK_BILLED_AGENTS" in env
+                            else sorted({x for x in named if x.startswith("claude")}))
     json.dump(cfg, open(os.path.join(d, "config.json"), "w"), indent=2)
     driver = env.get("AISTACK_DRIVER", os.path.join(HERE, "ralph_driver.py"))
     log = open(os.path.join(d, "driver.log"), "w")
-    p = subprocess.Popen([sys.executable, driver, project, rid], cwd=project, stdin=subprocess.DEVNULL,
+    p = subprocess.Popen([sys.executable, driver, state_dir(project), rid], cwd=workdir, stdin=subprocess.DEVNULL,
                          stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
     json.dump({"state": "starting", "pid": p.pid, "run_id": rid}, open(os.path.join(d, "state.json"), "w"))
-    return {"started": True, "run_id": rid, "worker": cfg["worker_agent"], "fallback": cfg["fallback_agent"],
+    return {"started": True, "run_id": rid, "work_dir": workdir, "worktree_created": created,
+            "worker": cfg["worker_agent"], "fallback": cfg["fallback_agent"],
             "reviewer": cfg["reviewer_agent"], "next": "Call ralph_status with wait_s=40 repeatedly and relay each batch of new events to the user."}
 
 
@@ -333,6 +393,9 @@ def lumo_readable(project, rel):
 def tool_lumo_consult(a):
     import urllib.request
     project = project_of(a)
+    if os.environ.get("AISTACK_TIER0") == "local":
+        # the launcher found macminim1 unreachable: do not wait for a timeout, plan locally
+        return {"ok": False, "problem": "Lumo (tier 0) was unreachable when aistack started; plan without it"}
     request = (a.get("request") or "").strip()
     if not request:
         return {"ok": False, "problem": "request is empty"}
@@ -353,7 +416,7 @@ def tool_lumo_consult(a):
         headers["Authorization"] = f"Bearer {key}"
     body = json.dumps({"model": "lumo-planner", "messages": [{"role": "user", "content": prompt}]}).encode()
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, body, headers), timeout=240) as r:
+        with urllib.request.urlopen(urllib.request.Request(url, body, headers), timeout=180) as r:
             plan = json.load(r)["choices"][0]["message"]["content"]
     except Exception as e:
         return {"ok": False, "problem": f"Lumo is not available ({type(e).__name__}: {e}); plan without it",
@@ -365,12 +428,13 @@ S = lambda props, req: {"type": "object", "properties": props, "required": req}
 STR = {"type": "string"}
 INT = {"type": "integer"}
 TOOLS = {
-    "ralph_validate_plan": (tool_validate, "Check .aistack/prd.json and .aistack/verify.json (schema, dependencies, a verify command "
-        "per task). Returns ok plus a plan_hash, or a list of problems to fix. Call it before showing the plan to the user.",
+    "ralph_validate_plan": (tool_validate, "Check the plan files prd.json and verify.json in the plan dir (schema, dependencies, a verify command "
+        "per task). Returns ok plus a plan_hash and the plan_dir, or a list of problems to fix. Call it before showing the plan to the user.",
         S({"project_dir": STR}, ["project_dir"])),
     "ralph_run": (tool_run, "Start the confirmed plan in the background: a worker agent builds each task, the harness runs its "
         "verify commands, failures are retried then escalated, then a read-only reviewer checks security/accuracy/completeness. "
-        "Needs the plan_hash from ralph_validate_plan, and only call it after the user has confirmed the plan.",
+        "Needs the plan_hash from ralph_validate_plan, and only call it after the user has confirmed the plan. When aistack was started in a main "
+        "checkout this first creates the git worktree and draft PR (about 15 s) where the agents will work; the result says where (work_dir).",
         S({"project_dir": STR, "plan_hash": STR}, ["project_dir", "plan_hash"])),
     "ralph_status": (tool_status, "Progress of a run: state, per-task status, and new events since `since`. Pass wait_s (up to 45) to "
         "wait for news. Relay new events to the user every time. state 'waiting_user' means the run is paused for the user.",

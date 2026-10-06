@@ -9,8 +9,10 @@ Why a driver instead of one `ralph-tui run` over the whole PRD:
     pauses, surfaces it, and resumes with the answer.
   * Escalation (worker -> fallback agent), a read-only review pass, and "wait for the user" all live here.
 
-Everything is file based under <project>/.aistack/runs/<run_id>/ so the MCP bridge (and a restarted chat
-session) can read state, and write control messages, without talking to this process.
+Everything is file based under <state>/runs/<run_id>/ so the MCP bridge (and a restarted chat session) can read
+state, and write control messages, without talking to this process. <state> is ~/.aistack/<project key> (never the
+repository): plan files, runs, questions, reviews, progress, Ralph's own .ralph-tui and its iteration logs all live
+there. Only the agents' code changes land in the work dir (the git worktree, or the project itself).
 """
 import json, os, re, shlex, signal, subprocess, sys, time
 
@@ -43,18 +45,27 @@ def tail(text, n=TAIL_CHARS):
 
 
 class Run:
-    def __init__(self, project, run_id):
-        self.project = os.path.realpath(project)
+    def __init__(self, state_dir, run_id):
+        self.state_dir = os.path.realpath(state_dir)
         self.id = run_id
-        self.dir = os.path.join(self.project, ".aistack", "runs", run_id)
+        self.dir = os.path.join(self.state_dir, "runs", run_id)
         self.cfg = read_json(os.path.join(self.dir, "config.json"), {})
+        # where the agents change code and where verify commands run: the git worktree, or the project itself
+        self.project = os.path.realpath(self.cfg["work_dir"])
         self.ralph = self.cfg.get("ralph_bin") or os.path.expanduser("~/.bun/bin/ralph-tui")
-        self.prd_path = os.path.join(self.project, self.cfg.get("prd", ".aistack/prd.json"))
-        self.verify_path = os.path.join(self.project, self.cfg.get("verify", ".aistack/verify.json"))
-        self.q_dir = os.path.join(self.project, ".aistack", "questions")
-        self.rev_dir = os.path.join(self.project, ".aistack", "reviews")
-        for d in (self.dir, os.path.join(self.dir, "tasks"), os.path.join(self.dir, "logs"), self.q_dir, self.rev_dir):
+        self.prd_path = self.cfg.get("prd") or os.path.join(self.state_dir, "plan", "prd.json")
+        self.verify_path = self.cfg.get("verify") or os.path.join(self.state_dir, "plan", "verify.json")
+        self.q_dir = os.path.join(self.state_dir, "questions")
+        self.rev_dir = os.path.join(self.state_dir, "reviews")
+        self.progress_path = os.path.join(self.state_dir, "progress.md")
+        # ralph-tui keeps session state, lock, config and reports in <cwd>/.ralph-tui, so it runs from a directory
+        # under the state dir; the agent wrappers cd to AISTACK_WORKDIR before starting the real agent
+        self.ralph_cwd = os.path.join(self.state_dir, "ralph")
+        for d in (self.dir, os.path.join(self.dir, "tasks"), os.path.join(self.dir, "logs"), self.q_dir, self.rev_dir,
+                  self.ralph_cwd, os.path.join(self.state_dir, "iterations")):
             os.makedirs(d, exist_ok=True)
+        self.work_template = self.render_template(self.cfg["work_template"])
+        self.review_template = self.render_template(self.cfg["review_template"])
         self.events_path = os.path.join(self.dir, "events.jsonl")
         self.control_path = os.path.join(self.dir, "control.jsonl")
         self.state_path = os.path.join(self.dir, "state.json")
@@ -62,12 +73,30 @@ class Run:
         self.control_off = 0
         self.child = None
         self.cancelled = False
+        self.billed_agents = set(self.cfg.get("billed_agents") or [])
+        self.billed = {"work": 0, "review": 0}   # calls to billed agents (Claude): the cost the user cares about
+        self.reports = {}        # task id -> the review report that judged it
+        self.batch_n = 0
         self.tasks = {}          # id -> dict(title, status, attempts, ...)
         self.skipped = set()
         self.extra_notes = {}    # id -> list[str] guidance accumulated across attempts / user answers
         self.state = {"state": "starting", "phase": "work", "current_task": None, "waiting_for": None}
         self.env = dict(os.environ)
         self.env["PATH"] = os.path.expanduser("~/.bun/bin") + os.pathsep + self.env.get("PATH", "")
+        self.env.update(AISTACK_WORKDIR=self.project, AISTACK_STATE_DIR=self.state_dir, AISTACK_REVIEWS_DIR=self.rev_dir)
+
+    def render_template(self, src):
+        """Per-run copy of a prompt template with the state-dir paths filled in (agents write questions, reports and
+        progress notes there, outside the repository)."""
+        text = open(src).read()
+        for token, value in {"@@QUESTIONS_DIR@@": self.q_dir, "@@PROGRESS_FILE@@": self.progress_path,
+                             "@@REVIEWS_DIR@@": self.rev_dir, "@@PRD_FILE@@": self.prd_path,
+                             "@@VERIFY_FILE@@": self.verify_path}.items():
+            text = text.replace(token, value)
+        out = os.path.join(self.dir, os.path.basename(src))
+        with open(out, "w") as f:
+            f.write(text)
+        return out
 
     # ---- state / events -------------------------------------------------
     def event(self, kind, task=None, message="", **extra):
@@ -156,10 +185,10 @@ class Run:
         log = os.path.join(self.dir, "logs", f"{label}.log")
         argv = [self.ralph, "run", "--headless", "--no-setup", "--agent", agent, "--prd", prd_file,
                 "--iterations", "1", "--prompt", template,
-                "--progress-file", os.path.join(self.project, ".aistack", "progress.md")]
+                "--progress-file", self.progress_path, "--output-dir", os.path.join(self.state_dir, "iterations")]
         timeout = int(self.cfg.get("attempt_timeout_s", 1500))
         with open(log, "w") as lf:
-            self.child = subprocess.Popen(argv, cwd=self.project, env=self.env, stdin=subprocess.DEVNULL,
+            self.child = subprocess.Popen(argv, cwd=self.ralph_cwd, env=self.env, stdin=subprocess.DEVNULL,
                                           stdout=lf, stderr=subprocess.STDOUT, start_new_session=True)
             try:
                 code = self.child.wait(timeout=timeout)
@@ -245,12 +274,15 @@ class Run:
             self.save(current_task=tid, phase="work")
             t["attempts"] += 1
             n = t["attempts"]
-            self.event("task_started", tid, f"{tid} attempt {n} with {agent}: {t['title']}", agent=agent, attempt=n)
+            billed = agent in self.billed_agents
+            self.billed["work"] += 1 if billed else 0
+            self.event("task_started", tid, f"{tid} attempt {n} with {agent}{' [billed]' if billed else ''}: {t['title']}",
+                       agent=agent, attempt=n, billed=billed)
             qf = self.question_file(tid)
             if os.path.exists(qf):
                 os.replace(qf, qf + ".stale")
             prd_file = self.single_prd(tid, story, self.compose_notes(tid, story))
-            code, summary, log = self.run_ralph(agent, prd_file, f"{tid}-{n}", self.cfg["work_template"])
+            code, summary, log = self.run_ralph(agent, prd_file, f"{tid}-{n}", self.work_template)
             if self.cancelled:
                 return "cancelled"
             self.event("agent_finished", tid, f"{agent} exited {code}", log=log, tail=tail(summary, 600))
@@ -275,7 +307,8 @@ class Run:
             self.extra_notes.setdefault(tid, []).append(f"Attempt {n} ({agent}) failed verification:\n{tail(out, 1500)}")
             i += 1
             if i < len(plan) and plan[i] != agent:
-                self.event("escalating", tid, f"escalating {tid} from {agent} to {plan[i]}")
+                self.event("escalating", tid, f"escalating {tid} from {agent} to {plan[i]}"
+                           + (" (billed)" if plan[i] in self.billed_agents else ""), billed=plan[i] in self.billed_agents)
         t.update(status="blocked")
         return "blocked"
 
@@ -285,23 +318,26 @@ class Run:
         rf = os.path.join(self.rev_dir, f"{tid}.md")
         if os.path.exists(rf):
             os.replace(rf, rf + ".prev")
+        report = rf
         brief = (f"Review the work done for task {tid} ({story.get('title','')}) in this repository. The task spec is in "
-                 f".aistack/prd.json and its checks are in .aistack/verify.json. Read the files the task created or "
+                 f"{self.prd_path} and its checks are in {self.verify_path}. Read the files the task created or "
                  f"changed. Do NOT modify source or test files. Check: (1) security: injection, unsafe file/shell/network "
                  f"use, secrets, unvalidated input, dangerous defaults; (2) accuracy: does the code do what the description "
                  f"and acceptance criteria say, including edge cases; (3) completeness: every acceptance criterion met, "
                  f"tests present and meaningful, nothing half-done. Run the verify commands if safe. Write the report to "
-                 f".aistack/reviews/{tid}.md. Its FIRST line must be exactly 'Verdict: PASS' or 'Verdict: FAIL', then findings "
+                 f"{report}. Its FIRST line must be exactly 'Verdict: PASS' or 'Verdict: FAIL', then findings "
                  f"with file and line references, most serious first.")
         rs = {"id": f"R-{tid}", "title": f"Review {tid}: {story.get('title','')}", "description": brief,
-              "acceptanceCriteria": [f".aistack/reviews/{tid}.md exists and its first line is 'Verdict: PASS' or 'Verdict: FAIL'"],
+              "acceptanceCriteria": [f"{report} exists and its first line is 'Verdict: PASS' or 'Verdict: FAIL'"],
               "priority": 1, "passes": False}
         path = os.path.join(self.dir, "tasks", f"review-{tid}.prd.json")
         write_json(path, {"name": "review", "description": "read-only review", "userStories": [rs]})
         for attempt in (1, 2):
-            self.event("review_started", tid, f"reviewing {tid} with {self.cfg['reviewer_agent']}")
+            if self.cfg["reviewer_agent"] in self.billed_agents:
+                self.billed["review"] += 1
+            self.event("review_started", tid, f"reviewing {tid} with {self.cfg['reviewer_agent']}", billed=self.cfg["reviewer_agent"] in self.billed_agents)
             code, summary, log = self.run_ralph(self.cfg["reviewer_agent"], path, f"review-{tid}-{attempt}",
-                                                self.cfg["review_template"])
+                                                self.review_template)
             if self.cancelled:
                 return None
             if os.path.exists(rf):
@@ -311,12 +347,70 @@ class Run:
                 if m:
                     verdict = m.group(1).upper()
                     self.tasks[tid]["review"] = verdict
+                    self.reports[tid] = rf
                     body = "\n".join(text.splitlines()[1:14])
                     self.event("review_result", tid, f"{tid} review: {verdict}", verdict=verdict, report=rf, excerpt=body)
                     return verdict
             self.event("review_error", tid, f"review of {tid} produced no valid report (attempt {attempt})", tail=tail(summary, 600))
         self.tasks[tid]["review"] = "MISSING"
         return "MISSING"
+
+    def review_batch(self, tids):
+        """ONE review call for all the given tasks (one billed Claude call instead of one per task). The report starts
+        with an overall verdict, then one 'Task <id>: PASS|FAIL' line per task. Returns {task id: verdict}, or None when
+        the run was cancelled."""
+        self.batch_n += 1
+        rf = os.path.join(self.rev_dir, f"batch-{self.batch_n}.md")
+        listing = "\n".join(
+            f"- {t}: {self.story(t).get('title', '')} | done when: " + "; ".join(self.story(t).get("acceptanceCriteria", []))
+            for t in tids)
+        brief = (f"Review the work done for tasks {', '.join(tids)} in this repository, in ONE pass. The task specs are in "
+                 f"{self.prd_path} and their checks in {self.verify_path}. Tasks:\n{listing}\n"
+                 f"Use `git status` and `git diff` to see what changed instead of reading every file, and read only what you "
+                 f"need. Do NOT modify source or test files. Judge (1) security: injection, unsafe file/shell/network use, "
+                 f"secrets, unvalidated input, dangerous defaults; (2) accuracy: does the code do what each description and its "
+                 f"acceptance criteria say, edge cases included; (3) completeness: every criterion met, tests present and "
+                 f"meaningful, nothing half-done. Write the report to {rf}. Its FIRST line must be exactly 'Verdict: PASS' or "
+                 f"'Verdict: FAIL' (FAIL if any task fails). Then one line per task, exactly 'Task <id>: PASS' or "
+                 f"'Task <id>: FAIL - <reason>'. Then findings with file and line references, most serious first. Be concise.")
+        rs = {"id": "R-batch", "title": f"Review {len(tids)} task(s)", "description": brief,
+              "acceptanceCriteria": [f"{rf} exists and its first line is 'Verdict: PASS' or 'Verdict: FAIL'"],
+              "priority": 1, "passes": False}
+        path = os.path.join(self.dir, "tasks", f"review-batch-{self.batch_n}.prd.json")
+        write_json(path, {"name": "review", "description": "read-only review of the whole run", "userStories": [rs]})
+        agent = self.cfg["reviewer_agent"]
+        for attempt in (1, 2):
+            if agent in self.billed_agents:
+                self.billed["review"] += 1
+            self.event("review_started", None, f"reviewing {', '.join(tids)} in one pass with {agent}"
+                       + (" [billed]" if agent in self.billed_agents else ""), billed=agent in self.billed_agents)
+            code, summary, log = self.run_ralph(agent, path, f"review-batch-{self.batch_n}-{attempt}", self.review_template)
+            if self.cancelled:
+                return None
+            if os.path.exists(rf):
+                text = open(rf).read()
+                first = text.splitlines()[0].strip() if text.strip() else ""
+                m = re.match(r"(?i)^\**\s*verdict:\s*(pass|fail)", first)
+                if m:
+                    overall = m.group(1).upper()
+                    per = {t.group(1): t.group(2).upper() for t in
+                           re.finditer(r"(?im)^\**\s*task\s+([A-Za-z0-9_-]+)\**\s*:\s*\**\s*(pass|fail)", text)}
+                    verdicts = {t: per.get(t, overall) for t in tids}
+                    if overall == "FAIL" and "FAIL" not in verdicts.values():
+                        verdicts = {t: "FAIL" for t in tids}      # a FAIL verdict never turns into all-PASS
+                    for t, v in verdicts.items():
+                        self.tasks[t]["review"] = v
+                        self.reports[t] = rf
+                        self.event("review_result", t, f"{t} review: {v}", verdict=v, report=rf,
+                                   excerpt="\n".join(text.splitlines()[1:14]))
+                    return verdicts
+            self.event("review_error", None, f"review of {', '.join(tids)} produced no valid report (attempt {attempt})", tail=tail(summary, 600))
+        for t in tids:
+            self.tasks[t]["review"] = "MISSING"
+        return {t: "MISSING" for t in tids}
+
+    def report_path(self, tid):
+        return self.reports.get(tid) or os.path.join(self.rev_dir, f"{tid}.md")
 
     # ---- main loop --------------------------------------------------------
     def main(self):
@@ -356,20 +450,32 @@ class Run:
             # ---- review phase
             self.save(phase="review", current_task=None)
             failed = []
-            for tid in [t for t, v in sorted(self.tasks.items(), key=lambda kv: kv[1]["order"])
-                        if v["status"] == "verified" and v["review"] != "PASS"]:
-                verdict = self.review_task(tid)
-                if verdict is None:
+            pending = [t for t, v in sorted(self.tasks.items(), key=lambda kv: kv[1]["order"])
+                       if v["status"] == "verified" and v["review"] not in ("PASS", "ACCEPTED", "SKIPPED")]
+            mode = self.cfg.get("review_mode", "batch")      # batch: one call per review round; each: one per task; off
+            if mode == "off":
+                for t in pending:
+                    self.tasks[t]["review"] = "SKIPPED"
+                self.event("review_skipped", None, "review is switched off (AISTACK_REVIEW_MODE=off)")
+            elif mode == "each":
+                for tid in pending:
+                    verdict = self.review_task(tid)
+                    if verdict is None:
+                        return self.finish("cancelled")
+                    if verdict != "PASS":
+                        failed.append(tid)
+            elif pending:
+                verdicts = self.review_batch(pending)
+                if verdicts is None:
                     return self.finish("cancelled")
-                if verdict != "PASS":
-                    failed.append(tid)
+                failed = [t for t in pending if verdicts.get(t) != "PASS"]
             if not failed:
                 break
             self.save(phase="review_decision")
             msg = self.wait_for_user("review did not pass for " + ", ".join(failed) +
                                      ". Per task: rework (re-run it with the findings), or accept as is.",
                                      ["rework", "accept"], None, tasks=failed,
-                                     reports={t: os.path.join(self.rev_dir, f"{t}.md") for t in failed})
+                                     reports={t: self.report_path(t) for t in failed})
             if msg.get("action") == "abort":
                 return self.finish("cancelled")
             targets = msg.get("tasks") or failed
@@ -380,7 +486,7 @@ class Run:
                     break
                 continue
             for t in targets:
-                rep = open(os.path.join(self.rev_dir, f"{t}.md")).read() if os.path.exists(os.path.join(self.rev_dir, f"{t}.md")) else ""
+                rep = open(self.report_path(t)).read() if os.path.exists(self.report_path(t)) else ""
                 self.extra_notes.setdefault(t, []).append(f"The reviewer found problems. Fix them.\n{tail(rep, 2000)}\nUser note: {msg.get('text','')}")
                 self.set_passes(t, False)
                 self.tasks[t].update(status="pending", attempts=0, review=None)
@@ -391,16 +497,18 @@ class Run:
         summary = {t: {"status": v["status"], "review": v["review"], "attempts": v["attempts"]} for t, v in self.tasks.items()}
         if outcome == "done":
             self.save(state="done", phase="finished", current_task=None, waiting_for=None)
-            self.event("run_complete", None, "all tasks verified and reviewed", summary=summary)
+            self.event("run_complete", None, "all tasks verified and reviewed; billed calls: "
+                       f"{self.billed['work']} work + {self.billed['review']} review", summary=summary, billed_calls=dict(self.billed))
         else:
             self.save(state="cancelled", current_task=None, waiting_for=None)
-            self.event("run_cancelled", None, "run stopped", summary=summary)
+            self.event("run_cancelled", None, f"run stopped; billed calls so far: {self.billed['work']} work + {self.billed['review']} review",
+                       summary=summary, billed_calls=dict(self.billed))
         return 0
 
 
 def main():
-    project, run_id = sys.argv[1], sys.argv[2]
-    run = Run(project, run_id)
+    state_dir, run_id = sys.argv[1], sys.argv[2]
+    run = Run(state_dir, run_id)
 
     def on_term(signum, frame):
         run.cancelled = True

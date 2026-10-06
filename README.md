@@ -145,18 +145,52 @@ Defined in `flake.nix`:
 #### aistack (planner-led coding stack)
 
 `aistack make a new mcp server` (or `aistack`, then type it in pi) opens a live pi session on the local LM Studio
-model. It drafts `.aistack/prd.json` and `.aistack/verify.json` with you, and only after you confirm the plan runs it:
+model. It drafts a plan (`prd.json` and `verify.json`) with you, and only after you confirm the plan runs it. Nothing
+aistack-related is written into the repository (no `.aistack/`, no `.ralph-tui/`): plan files, runs, questions,
+reviews, progress notes and Ralph's own state live in `~/.aistack/<project>-<hash>/` (`AISTACK_HOME` overrides the
+base). Planning only reads the project. In the main checkout of a git repo the git worktree and draft PR are created
+at the moment you confirm the plan (`ralph_run` does it), and the agents work there; in an existing worktree or a
+non-git directory they work in place. A later run reuses the worktree while it exists. The tiers:
 
-- tier 1: pi + LM Studio plans, follows the run and reports back; asks you whenever a tier needs a decision
-- tier 2: OpenCode Big Pickle builds each task (Claude Sonnet instead when the host has no OpenCode Zen key)
-- tier 3: Claude Code Sonnet takes over a task tier 2 cannot get to pass, and reviews the result read-only for
-  security, accuracy and completeness
+- tier 0: planning. Lumo on MacMiniM1 drafts the task breakdown (`lumo_consult`); if MacMiniM1 is unreachable at
+  launch (probed with a 4 s timeout), or Lumo fails mid-session, the local `qwen/qwen3.5-9b` plans instead. pi + LM
+  Studio stays the coordinator either way (it talks to you and calls the `ralph_*` tools, which Lumo cannot do)
+- tier 1: a free OpenCode Zen model builds each task, chosen for the repository: public repos use Big Pickle, private
+  repos (and anything `gh repo view` cannot confirm as public) only a zero-retention free model (`space-bunny-free`,
+  then `longcat-2.5-preview-free`), because Big Pickle's terms say collected data may be used to improve the model.
+  `zen_models.py` decides from the models.dev catalog (what is free), `opencode models` (what the account is offered) and
+  `zen-policy.json` (which free models are zero-retention, copied from https://opencode.ai/docs/zen/ with the date it
+  was checked; aistack warns when that is over 60 days old). If Big Pickle stops being free, is retired, or is no longer
+  offered, launch says so (`⚠ tier 1: big-pickle is not a free Zen option anymore: <reason>`) and uses the next free
+  model. With no free model, or no Zen key, Claude Code Sonnet builds instead and aistack asks first (it is billed).
+  No GitHub Copilot fallback: Copilot has been usage-billed since 2026-06-01, so it is not a free option
+- tier 2: Claude Code Sonnet (the `sonnet` alias, always the latest Sonnet) takes over a task tier 1 cannot get to
+  pass, and reviews the result read-only for security, accuracy and completeness. **Billed**, so it is used sparingly:
+  one review call covers the whole run (not one per task), each Claude call has a spending cap and medium effort, and
+  the events and the final summary count the billed calls
 
-The run is `.config/aistack/ralph_driver.py` (detached, state in `<project>/.aistack/runs/`), driving
+`AISTACK_TIER0=local` forces the local planner; the banner shows which tier 0 was chosen.
+
+Knobs (environment): `AISTACK_REPO_PRIVATE=yes|no` overrides the visibility check, `AISTACK_ASSUME_YES=1` skips the
+"continue with Claude as tier 1?" question, `AISTACK_REVIEW_MODE=batch|each|off` (default `batch`: one review call per
+round; `each` is one per task; `off` skips it), `AISTACK_CLAUDE_BUDGET_WORK` (default 3) and
+`AISTACK_CLAUDE_BUDGET_REVIEW` (default 1.5) cap the USD one Claude call may spend, `AISTACK_CLAUDE_EFFORT` (default
+`medium`), `AISTACK_BILLED_AGENTS` (comma list; default the agents whose name starts with `claude`).
+
+Migrating from the old layout: earlier versions kept `.aistack/` and `.ralph-tui/` inside the project, and in this
+dotfiles repo stow even linked them into `$HOME` (`~/.aistack -> nix-darwin/.aistack`). `.stow-local-ignore` now
+ignores both, but the existing links and directories have to be removed by hand once (they only hold old plans and
+run logs): `rm ~/.aistack ~/.ralph-tui && rm -rf ~/nix-darwin/.aistack ~/nix-darwin/.ralph-tui`. aistack refuses to
+start while `~/.aistack` resolves inside a git repository.
+
+The run is `.config/aistack/ralph_driver.py` (detached, state in `~/.aistack/<project>/runs/`), driving
 [Ralph TUI](https://ralph-tui.com) one task at a time. A task counts as done only when its `verify.json` commands
 exit 0, because Ralph's own completion marker can be a false positive. pi reaches the run through the MCP tools in
-`.config/aistack/ralph_mcp.py`. In the main checkout of a git repo it offers a `gpr` worktree first. Nothing is
-committed; use `gpc`/`gpa` afterwards. Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_driver.py`.
+`.config/aistack/ralph_mcp.py`. Ralph itself runs from `~/.aistack/<project>/ralph` (it keeps its session files in
+its working directory) and the agent wrappers (`claude-work.sh`, `claude-review.sh`, `opencode-auto.sh`) `cd` into the
+work directory first; the reviewer may write only to `~/.aistack/<project>/reviews`. Under herdr `gpr` leaves the
+pane where it is, so the worktree path is computed from the branch name (`.worktrees/<branch>`). Nothing is
+committed; use `gpc`/`gpa` in the work directory afterwards. Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_driver.py`.
 
 #### Lumo tier 0 (cloud planner, `macos_desktop` only)
 
@@ -179,7 +213,7 @@ Proton Lumo as a tool-less planning model, hosted on MacMiniM1 (`nix-modules/mac
 `lumoplan` opens a tool-less pi session on it (`pi --no-tools ... --provider lumo-planner`). That mode can only
 read the Mini's `home-infrastructure` checkout, which is all the proxy serves.
 
-Inside `aistack`, tier 1 (pi + LM Studio) can consult Lumo through the `lumo_consult` tool in
+Inside `aistack`, tier 0 consults Lumo through the `lumo_consult` tool in
 `.config/aistack/ralph_mcp.py`: for larger requests the planner sends the request plus a few project files to
 Lumo and gets a draft task breakdown back, which it adapts into `prd.json`/`verify.json` itself (still validated
 and confirmed by you). Because the proxy cannot see aistack projects, the files are sent inline, only ones the
