@@ -333,6 +333,9 @@ def lumo_readable(project, rel):
 def tool_lumo_consult(a):
     import urllib.request
     project = project_of(a)
+    if os.environ.get("AISTACK_TIER0") == "local":
+        # the launcher found macminim1 unreachable: do not wait for a timeout, plan locally
+        return {"ok": False, "problem": "Lumo (tier 0) was unreachable when aistack started; plan without it"}
     request = (a.get("request") or "").strip()
     if not request:
         return {"ok": False, "problem": "request is empty"}
@@ -353,7 +356,7 @@ def tool_lumo_consult(a):
         headers["Authorization"] = f"Bearer {key}"
     body = json.dumps({"model": "lumo-planner", "messages": [{"role": "user", "content": prompt}]}).encode()
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, body, headers), timeout=240) as r:
+        with urllib.request.urlopen(urllib.request.Request(url, body, headers), timeout=180) as r:
             plan = json.load(r)["choices"][0]["message"]["content"]
     except Exception as e:
         return {"ok": False, "problem": f"Lumo is not available ({type(e).__name__}: {e}); plan without it",

@@ -1013,6 +1013,21 @@ function lumoplan_func() {
   pi --no-tools --no-extensions --no-skills --provider lumo-planner --model lumo-planner "$@"
 }
 
+# Tier 0 probe: prints "lumo" when the Lumo planner proxy on MacMiniM1 answers /v1/models with its key within
+# 4 s, otherwise "local". AISTACK_TIER0=local forces local; AISTACK_LUMO_URL / AISTACK_LUMO_KEY override the
+# endpoint and key (the key otherwise comes from Doppler, as in pi's lumo-planner provider).
+function _aistack_tier0() {
+  [[ "${AISTACK_TIER0:-auto}" == "local" ]] && { echo local; return 0; }
+  local url="${AISTACK_LUMO_URL:-http://macminim1.rollet.family:8765/v1}" key="${AISTACK_LUMO_KEY:-}" code
+  local -a auth
+  if [[ -z "$key" ]] && command -v doppler >/dev/null; then
+    key=$(doppler secrets get LUMO_PLANNER_API_KEY --project FullHavocJosh --config root_macmini --plain 2>/dev/null)
+  fi
+  [[ -n "$key" ]] && auth=(-H "Authorization: Bearer $key")
+  code=$(curl -s -m 4 -o /dev/null -w '%{http_code}' "${auth[@]}" "${url%/}/models" 2>/dev/null)
+  [[ "$code" == "200" ]] && echo lumo || echo local
+}
+
 # aistack -- planner-led coding stack.
 #
 #   aistack [task words...]      e.g.  aistack make a new mcp server
@@ -1021,9 +1036,11 @@ function lumoplan_func() {
 # Opens a live pi session (local LM Studio model, reasoning on) whose job is to turn what you describe into a
 # plan (.aistack/prd.json + .aistack/verify.json), get your confirmation, and then run it through Ralph TUI:
 #
-#   tier 1  pi + LM Studio                 plans, follows the run, talks to you
-#   tier 2  OpenCode Big Pickle            worker: builds each task      (Claude Sonnet when no Zen key)
-#   tier 3  Claude Code Sonnet             fallback worker for a task tier 2 cannot get to pass, and a
+#   tier 0  Lumo on MacMiniM1              drafts the plan (lumo_consult); falls back to the local model
+#           (pi + LM Studio, local)        when MacMiniM1 is unreachable. pi stays the coordinator either way:
+#                                          it talks to you and calls the ralph_* tools, which Lumo cannot do
+#   tier 1  OpenCode Big Pickle (free)     worker: builds each task      (Claude Sonnet when no Zen key)
+#   tier 2  Claude Code Sonnet (latest)    fallback worker for a task tier 1 cannot get to pass, and a
 #                                          read-only reviewer (security / accuracy / completeness) at the end
 #
 # The run itself is ~/.config/aistack/ralph_driver.py (detached, state under <project>/.aistack/runs/):
@@ -1032,8 +1049,9 @@ function lumoplan_func() {
 # a failed review pauses for your decision. pi reaches it through the ralph_* MCP tools (ralph_mcp.py).
 #
 # In the main checkout of a git repo it first offers a gpr worktree + draft PR, because the agents edit files
-# without asking. Everything it writes (.aistack/, .ralph-tui/) is added to .git/info/exclude. Nothing is
-# committed: use gpc/gpa when you are happy with the result.
+# without asking, and then works in that worktree (under herdr, gpr leaves the calling pane where it is, so the
+# worktree path is computed from the branch name instead of asking git where the shell is). Everything it
+# writes (.aistack/, .ralph-tui/) is added to .git/info/exclude. Nothing is committed: use gpc/gpa when you are happy with the result.
 #
 # AISTACK_DIR overrides ~/.config/aistack; AISTACK_PI_EXTRA adds pi flags (tests use "-p").
 function aistack_func() {
@@ -1045,7 +1063,7 @@ function aistack_func() {
   local f reply
 
   # ---- preflight ---------------------------------------------------------------------------------------------
-  for f in ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md opencode-auto.sh claude-review.sh; do
+  for f in ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh; do
     if [[ ! -e "$adir/$f" ]]; then
       echo "✗ $adir/$f is missing -- run darwin-rebuild so the aistack files are stowed." >&2
       return 1
@@ -1074,7 +1092,7 @@ function aistack_func() {
     fi
   fi
   if ! _validate_claude_code 2>/dev/null; then
-    echo "✗ Claude Code is not logged in (tier 3: fallback worker and reviewer). Run: claude auth login" >&2
+    echo "✗ Claude Code is not logged in (tier 2: fallback worker and reviewer). Run: claude auth login" >&2
     return 1
   fi
 
@@ -1086,7 +1104,10 @@ function aistack_func() {
   if [[ -n "$zen_model" ]]; then
     worker="opencode-pickle"; worker_label="OpenCode ${zen_model}"; fallback_attempts=1
   else
-    echo "ℹ OpenCode Zen is not available on this host: Claude Sonnet is the worker and there is no cheaper tier before it."
+    echo "ℹ OpenCode Zen is not available on this host: tier 1 (Big Pickle) is skipped and Claude Sonnet is the worker."
+  fi
+  if [[ -n "$zen_model" && "$zen_model" != "big-pickle" ]]; then
+    echo "ℹ Big Pickle is not the free Zen model available right now; tier 1 uses $zen_model instead."
   fi
   local reviewer="claude-review"
 
@@ -1103,8 +1124,16 @@ function aistack_func() {
         local slug
         slug=$(echo "${task:-session}" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9\n' '-' | sed 's/--*/-/g; s/^-//; s/-$//' | cut -c1-28)
         [[ -z "$slug" ]] && slug="session"
-        gpr feat "aistack-${slug}-$(date +%H%M)" || return 1
-        repo_root=$(git rev-parse --show-toplevel)
+        local branch="aistack-${slug}-$(date +%H%M)"
+        gpr feat "$branch" || return 1
+        # gpr cd's into the worktree except under herdr, where it deliberately leaves this pane alone; the
+        # worktree is always .worktrees/<branch> under the main checkout, so do not ask git where the shell is
+        if [[ -d "$repo_root/.worktrees/$branch" ]]; then
+          repo_root="$repo_root/.worktrees/$branch"
+          cd "$repo_root" || return 1
+        else
+          repo_root=$(git rev-parse --show-toplevel)
+        fi
       else
         echo "⚠ Continuing in the main checkout. Claude Code's repo hook blocks edits here, so tier 3 will not be able to work."
       fi
@@ -1112,6 +1141,15 @@ function aistack_func() {
     project="$repo_root"
   else
     project="$PWD"
+  fi
+
+  # ---- tier 0: Lumo on MacMiniM1, or the local model when it is unreachable ------------------------------------
+  local tier0 tier0_label
+  tier0=$(_aistack_tier0)
+  if [[ "$tier0" == "lumo" ]]; then
+    tier0_label="Lumo on MacMiniM1, which drafts the plan"
+  else
+    tier0_label="the local model ($lms_model), because MacMiniM1's Lumo is unreachable"
   fi
 
   # ---- per-project files ---------------------------------------------------------------------------------------
@@ -1180,11 +1218,12 @@ TOML
     > "$pi_dir/models.json"
   jq -n --arg py "$(command -v python3)" --arg bridge "$adir/ralph_mcp.py" --arg root "$project" \
     --arg worker "$worker" --arg fallback "$fallback" --arg reviewer "$reviewer" --arg fa "$fallback_attempts" \
-    --arg ralph "$ralph_bin" \
+    --arg ralph "$ralph_bin" --arg tier0 "$tier0" \
     '{mcpServers: {ralph: {command: $py, args: [$bridge],
        env: {RALPH_MCP_ROOTS: $root, AISTACK_WORKER_AGENT: $worker, AISTACK_FALLBACK_AGENT: $fallback,
-             AISTACK_REVIEW_AGENT: $reviewer, AISTACK_FALLBACK_ATTEMPTS: $fa, RALPH_TUI_BIN: $ralph},
-       exposure: "direct", timeout: 60,
+             AISTACK_REVIEW_AGENT: $reviewer, AISTACK_FALLBACK_ATTEMPTS: $fa, RALPH_TUI_BIN: $ralph,
+             AISTACK_TIER0: $tier0},
+       exposure: "direct", timeout: 200,
        description: "Runs the confirmed plan through Ralph: worker agents, verification, retries, review. Poll ralph_status."}}}' \
     > "$pi_dir/mcp.json"
 
@@ -1192,12 +1231,20 @@ TOML
   prompt=$(<"$adir/planner-prompt.md")
   prompt=${prompt//@@PROJECT@@/$project}
   prompt=${prompt//@@WORKER@@/$worker_label}
-  prompt=${prompt//@@FALLBACK@@/$fallback_label}
-  prompt=${prompt//@@REVIEWER@@/Claude Sonnet}
+  prompt=${prompt//@@FALLBACK@@/$fallback_label (latest)}
+  prompt=${prompt//@@REVIEWER@@/Claude Sonnet (latest)}
+  prompt=${prompt//@@TIER0_LABEL@@/$tier0_label}
+  prompt=${prompt//@@TIER0@@/$(<"$adir/planner-tier0-$tier0.md")}
 
-  echo "── aistack: planner (pi on LM Studio, $lms_model) ──"
-  echo "Project:  $project"
-  echo "Worker:   $worker_label   Fallback/reviewer: Claude Sonnet"
+  echo "── aistack ──"
+  echo "Project: $project"
+  if [[ "$tier0" == "lumo" ]]; then
+    echo "Tier 0 (plan):       Lumo on MacMiniM1   [pi + $lms_model coordinates; local fallback if Lumo fails]"
+  else
+    echo "Tier 0 (plan):       local $lms_model   [MacMiniM1's Lumo is unreachable]"
+  fi
+  echo "Tier 1 (build):      $worker_label"
+  echo "Tier 2 (fallback, review): Claude Sonnet (latest)"
   echo "Describe what you want; pi will draft a plan for you to confirm before anything runs."
   echo "(The local model is slow: a reply can take a while with nothing visible. That is normal.)"
   echo ""

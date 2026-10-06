@@ -150,6 +150,10 @@ r = m.tool_lumo_consult({"project_dir": p, "request": "x"})
 check("unreachable Lumo degrades to ok=false", r["ok"] is False and "plan without it" in r["problem"], r)
 check("empty request rejected", m.tool_lumo_consult({"project_dir": p, "request": " "})["ok"] is False)
 check("tool is listed", "lumo_consult" in m.TOOLS)
+os.environ["AISTACK_TIER0"] = "local"
+r = m.tool_lumo_consult({"project_dir": p, "request": "x", "files": ["slug.py"]})
+check("tier 0 local mode never contacts Lumo", r["ok"] is False and "unreachable when aistack started" in r["problem"] and "files_sent" not in r, r)
+del os.environ["AISTACK_TIER0"]
 srv.shutdown()
 
 print("\nFAILED: %s" % FAILS if FAILS else "\nALL PASSED")

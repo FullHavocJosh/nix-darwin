@@ -147,15 +147,21 @@ Defined in `flake.nix`:
 `aistack make a new mcp server` (or `aistack`, then type it in pi) opens a live pi session on the local LM Studio
 model. It drafts `.aistack/prd.json` and `.aistack/verify.json` with you, and only after you confirm the plan runs it:
 
-- tier 1: pi + LM Studio plans, follows the run and reports back; asks you whenever a tier needs a decision
-- tier 2: OpenCode Big Pickle builds each task (Claude Sonnet instead when the host has no OpenCode Zen key)
-- tier 3: Claude Code Sonnet takes over a task tier 2 cannot get to pass, and reviews the result read-only for
-  security, accuracy and completeness
+- tier 0: planning. Lumo on MacMiniM1 drafts the task breakdown (`lumo_consult`); if MacMiniM1 is unreachable at
+  launch (probed with a 4 s timeout), or Lumo fails mid-session, the local `qwen/qwen3.5-9b` plans instead. pi + LM
+  Studio stays the coordinator either way (it talks to you and calls the `ralph_*` tools, which Lumo cannot do)
+- tier 1: OpenCode Big Pickle (free Zen model) builds each task (Claude Sonnet instead when the host has no OpenCode
+  Zen key; another free model with a notice if Big Pickle is not available)
+- tier 2: Claude Code Sonnet (the `sonnet` alias, always the latest Sonnet) takes over a task tier 1 cannot get to
+  pass, and reviews the result read-only for security, accuracy and completeness
+
+`AISTACK_TIER0=local` forces the local planner; the banner shows which tier 0 was chosen.
 
 The run is `.config/aistack/ralph_driver.py` (detached, state in `<project>/.aistack/runs/`), driving
 [Ralph TUI](https://ralph-tui.com) one task at a time. A task counts as done only when its `verify.json` commands
 exit 0, because Ralph's own completion marker can be a false positive. pi reaches the run through the MCP tools in
-`.config/aistack/ralph_mcp.py`. In the main checkout of a git repo it offers a `gpr` worktree first. Nothing is
+`.config/aistack/ralph_mcp.py`. In the main checkout of a git repo it offers a `gpr` worktree first and then works in it (under herdr `gpr` leaves
+the pane where it is, so the worktree path is computed from the branch name). Nothing is
 committed; use `gpc`/`gpa` afterwards. Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_driver.py`.
 
 #### Lumo tier 0 (cloud planner, `macos_desktop` only)
@@ -179,7 +185,7 @@ Proton Lumo as a tool-less planning model, hosted on MacMiniM1 (`nix-modules/mac
 `lumoplan` opens a tool-less pi session on it (`pi --no-tools ... --provider lumo-planner`). That mode can only
 read the Mini's `home-infrastructure` checkout, which is all the proxy serves.
 
-Inside `aistack`, tier 1 (pi + LM Studio) can consult Lumo through the `lumo_consult` tool in
+Inside `aistack`, tier 0 consults Lumo through the `lumo_consult` tool in
 `.config/aistack/ralph_mcp.py`: for larger requests the planner sends the request plus a few project files to
 Lumo and gets a draft task breakdown back, which it adapts into `prd.json`/`verify.json` itself (still validated
 and confirmed by you). Because the proxy cannot see aistack projects, the files are sent inline, only ones the
