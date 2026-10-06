@@ -145,7 +145,12 @@ Defined in `flake.nix`:
 #### aistack (planner-led coding stack)
 
 `aistack make a new mcp server` (or `aistack`, then type it in pi) opens a live pi session on the local LM Studio
-model. It drafts `.aistack/prd.json` and `.aistack/verify.json` with you, and only after you confirm the plan runs it:
+model. It drafts a plan (`prd.json` and `verify.json`) with you, and only after you confirm the plan runs it. Nothing
+aistack-related is written into the repository (no `.aistack/`, no `.ralph-tui/`): plan files, runs, questions,
+reviews, progress notes and Ralph's own state live in `~/.aistack/<project>-<hash>/` (`AISTACK_HOME` overrides the
+base). Planning only reads the project. In the main checkout of a git repo the git worktree and draft PR are created
+at the moment you confirm the plan (`ralph_run` does it), and the agents work there; in an existing worktree or a
+non-git directory they work in place. A later run reuses the worktree while it exists. The tiers:
 
 - tier 0: planning. Lumo on MacMiniM1 drafts the task breakdown (`lumo_consult`); if MacMiniM1 is unreachable at
   launch (probed with a 4 s timeout), or Lumo fails mid-session, the local `qwen/qwen3.5-9b` plans instead. pi + LM
@@ -157,12 +162,20 @@ model. It drafts `.aistack/prd.json` and `.aistack/verify.json` with you, and on
 
 `AISTACK_TIER0=local` forces the local planner; the banner shows which tier 0 was chosen.
 
-The run is `.config/aistack/ralph_driver.py` (detached, state in `<project>/.aistack/runs/`), driving
+Migrating from the old layout: earlier versions kept `.aistack/` and `.ralph-tui/` inside the project, and in this
+dotfiles repo stow even linked them into `$HOME` (`~/.aistack -> nix-darwin/.aistack`). `.stow-local-ignore` now
+ignores both, but the existing links and directories have to be removed by hand once (they only hold old plans and
+run logs): `rm ~/.aistack ~/.ralph-tui && rm -rf ~/nix-darwin/.aistack ~/nix-darwin/.ralph-tui`. aistack refuses to
+start while `~/.aistack` resolves inside a git repository.
+
+The run is `.config/aistack/ralph_driver.py` (detached, state in `~/.aistack/<project>/runs/`), driving
 [Ralph TUI](https://ralph-tui.com) one task at a time. A task counts as done only when its `verify.json` commands
 exit 0, because Ralph's own completion marker can be a false positive. pi reaches the run through the MCP tools in
-`.config/aistack/ralph_mcp.py`. In the main checkout of a git repo it offers a `gpr` worktree first and then works in it (under herdr `gpr` leaves
-the pane where it is, so the worktree path is computed from the branch name). Nothing is
-committed; use `gpc`/`gpa` afterwards. Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_driver.py`.
+`.config/aistack/ralph_mcp.py`. Ralph itself runs from `~/.aistack/<project>/ralph` (it keeps its session files in
+its working directory) and the agent wrappers (`claude-work.sh`, `claude-review.sh`, `opencode-auto.sh`) `cd` into the
+work directory first; the reviewer may write only to `~/.aistack/<project>/reviews`. Under herdr `gpr` leaves the
+pane where it is, so the worktree path is computed from the branch name (`.worktrees/<branch>`). Nothing is
+committed; use `gpc`/`gpa` in the work directory afterwards. Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_driver.py`.
 
 #### Lumo tier 0 (cloud planner, `macos_desktop` only)
 

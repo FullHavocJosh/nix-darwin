@@ -38,12 +38,12 @@
 2. Implement this single task so every acceptance criterion holds.
 3. Run the task's checks yourself (see the verification commands in the notes) and fix what fails.
 4. Do NOT create git commits and do NOT touch files unrelated to this task. Leave changes uncommitted.
-5. Append a short entry to `.aistack/progress.md`: what you did, files changed, gotchas.
+5. Append a short entry to `@@PROGRESS_FILE@@` (outside the repository): what you did, files changed, gotchas.
 
 ## If you are blocked
 Only when you need a decision you cannot safely make yourself (an ambiguous requirement, a security or design
 trade-off, a destructive or irreversible action, missing credentials or access), do NOT guess. Write the question to
-`.aistack/questions/{{taskId}}.md` (short and specific, with the options you propose and your recommendation), make
+`@@QUESTIONS_DIR@@/{{taskId}}.md` (short and specific, with the options you propose and your recommendation), make
 no further changes, and stop. In that case do not use the completion marker below.
 
 ## Completion marker

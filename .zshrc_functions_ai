@@ -1034,7 +1034,7 @@ function _aistack_tier0() {
 #   aistack                      then describe the work as pi's first message -- same result
 #
 # Opens a live pi session (local LM Studio model, reasoning on) whose job is to turn what you describe into a
-# plan (.aistack/prd.json + .aistack/verify.json), get your confirmation, and then run it through Ralph TUI:
+# plan (prd.json + verify.json in the plan dir), get your confirmation, and then run it through Ralph TUI:
 #
 #   tier 0  Lumo on MacMiniM1              drafts the plan (lumo_consult); falls back to the local model
 #           (pi + LM Studio, local)        when MacMiniM1 is unreachable. pi stays the coordinator either way:
@@ -1043,15 +1043,16 @@ function _aistack_tier0() {
 #   tier 2  Claude Code Sonnet (latest)    fallback worker for a task tier 1 cannot get to pass, and a
 #                                          read-only reviewer (security / accuracy / completeness) at the end
 #
-# The run itself is ~/.config/aistack/ralph_driver.py (detached, state under <project>/.aistack/runs/):
+# The run itself is ~/.config/aistack/ralph_driver.py (detached, state under ~/.aistack/<project>/runs/):
 # one task at a time through `ralph-tui run`, a task only counts as done when its verify commands exit 0
 # (Ralph's own completion marker has false positives), retry then escalate, agents can ask you questions, and
 # a failed review pauses for your decision. pi reaches it through the ralph_* MCP tools (ralph_mcp.py).
 #
-# In the main checkout of a git repo it first offers a gpr worktree + draft PR, because the agents edit files
-# without asking, and then works in that worktree (under herdr, gpr leaves the calling pane where it is, so the
-# worktree path is computed from the branch name instead of asking git where the shell is). Everything it
-# writes (.aistack/, .ralph-tui/) is added to .git/info/exclude. Nothing is committed: use gpc/gpa when you are happy with the result.
+# Nothing aistack-related is written into the repository (no .aistack/, no .ralph-tui/): plan files, runs, reviews and
+# Ralph's own state live in ~/.aistack/<project>-<hash> (AISTACK_HOME overrides ~/.aistack). Planning only reads the
+# project. In the main checkout of a git repo, a gpr worktree + draft PR is created at the moment you confirm the plan
+# (ralph_run does it), and the agents work there; elsewhere they work in the project itself. Nothing is committed:
+# use gpc/gpa in that directory when you are happy with the result.
 #
 # AISTACK_DIR overrides ~/.config/aistack; AISTACK_PI_EXTRA adds pi flags (tests use "-p").
 function aistack_func() {
@@ -1063,7 +1064,7 @@ function aistack_func() {
   local f reply
 
   # ---- preflight ---------------------------------------------------------------------------------------------
-  for f in ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh; do
+  for f in ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh; do
     if [[ ! -e "$adir/$f" ]]; then
       echo "✗ $adir/$f is missing -- run darwin-rebuild so the aistack files are stowed." >&2
       return 1
@@ -1111,37 +1112,29 @@ function aistack_func() {
   fi
   local reviewer="claude-review"
 
-  # ---- project directory (never edit a main checkout) ----------------------------------------------------------
-  local project repo_root
+  # ---- project and state ---------------------------------------------------------------------------------------
+  # Nothing aistack-related is ever written into the repository: plan files, runs, questions, reviews and Ralph's
+  # own state live in ~/.aistack/<project key> (AISTACK_HOME overrides ~/.aistack). Planning only reads the project.
+  # In a main checkout the agents' worktree + draft PR is created by ralph_run once you have confirmed the plan.
+  local project repo_root wt_mode="none"
   repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
   if [[ -n "$repo_root" ]]; then
-    if [[ "$(git rev-parse --path-format=absolute --git-dir)" == "$(git rev-parse --path-format=absolute --git-common-dir)" ]]; then
-      echo "⚠ $repo_root is the main checkout of its repo. The agents edit files without asking, so"
-      echo "  aistack should run in a worktree."
-      echo -n "Create one now with gpr (new branch + draft PR)? [Y/n] "
-      read -r reply
-      if [[ "${reply:l}" != "n" ]]; then
-        local slug
-        slug=$(echo "${task:-session}" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9\n' '-' | sed 's/--*/-/g; s/^-//; s/-$//' | cut -c1-28)
-        [[ -z "$slug" ]] && slug="session"
-        local branch="aistack-${slug}-$(date +%H%M)"
-        gpr feat "$branch" || return 1
-        # gpr cd's into the worktree except under herdr, where it deliberately leaves this pane alone; the
-        # worktree is always .worktrees/<branch> under the main checkout, so do not ask git where the shell is
-        if [[ -d "$repo_root/.worktrees/$branch" ]]; then
-          repo_root="$repo_root/.worktrees/$branch"
-          cd "$repo_root" || return 1
-        else
-          repo_root=$(git rev-parse --show-toplevel)
-        fi
-      else
-        echo "⚠ Continuing in the main checkout. Claude Code's repo hook blocks edits here, so tier 3 will not be able to work."
-      fi
-    fi
     project="$repo_root"
+    if [[ "$(git rev-parse --path-format=absolute --git-dir)" == "$(git rev-parse --path-format=absolute --git-common-dir)" ]]; then
+      wt_mode="create"
+    fi
   else
     project="$PWD"
   fi
+  local aihome="${AISTACK_HOME:-$HOME/.aistack}" aihome_real
+  mkdir -p "$aihome" 2>/dev/null
+  aihome_real=$(cd "$aihome" 2>/dev/null && pwd -P)
+  if [[ -z "$aihome_real" ]] || git -C "$aihome_real" rev-parse --show-toplevel >/dev/null 2>&1; then
+    echo "✗ $aihome resolves to ${aihome_real:-nowhere}${aihome_real:+, which is inside a git repository}; aistack keeps its files outside repositories." >&2
+    echo "  If it is a symlink that stow made into a dotfiles repo, remove just the link (rm $aihome) and run aistack again." >&2
+    return 1
+  fi
+  local state_dir="$aihome_real/${project:t}-$(echo -n "$project" | shasum | cut -c1-10)"
 
   # ---- tier 0: Lumo on MacMiniM1, or the local model when it is unreachable ------------------------------------
   local tier0 tier0_label
@@ -1153,15 +1146,7 @@ function aistack_func() {
   fi
 
   # ---- per-project files ---------------------------------------------------------------------------------------
-  mkdir -p "$project/.aistack" "$project/.ralph-tui"
-  if [[ -n "$repo_root" ]]; then
-    local excl
-    excl=$(git rev-parse --path-format=absolute --git-path info/exclude)
-    mkdir -p "$(dirname "$excl")"
-    for f in ".aistack/" ".ralph-tui/"; do
-      grep -qxF "$f" "$excl" 2>/dev/null || echo "$f" >> "$excl"
-    done
-  fi
+  mkdir -p "$state_dir/plan" "$state_dir/ralph/.ralph-tui"
   # Ralph always passes --dangerously-skip-permissions to claude; claude-review is wrapped to drop it, and
   # opencode needs --auto after `run` (see the wrappers' comments).
   {
@@ -1183,6 +1168,7 @@ retryDelayMs = 3000
 [[agents]]
 name = "claude-work"
 plugin = "claude"
+command = "$adir/claude-work.sh"
 timeout = 1500000
   [agents.options]
   model = "sonnet"
@@ -1208,7 +1194,7 @@ timeout = 1500000
   model = "$zen_model"
 TOML
     fi
-  } > "$project/.ralph-tui/config.toml"
+  } > "$state_dir/ralph/.ralph-tui/config.toml"
 
   # pi: isolated agent dir (models.json for LM Studio, mcp.json for the bridge), regenerated every run.
   local pi_dir="$cache_dir/aistack-pi/$(echo -n "$project" | shasum | cut -c1-10)"
@@ -1218,11 +1204,11 @@ TOML
     > "$pi_dir/models.json"
   jq -n --arg py "$(command -v python3)" --arg bridge "$adir/ralph_mcp.py" --arg root "$project" \
     --arg worker "$worker" --arg fallback "$fallback" --arg reviewer "$reviewer" --arg fa "$fallback_attempts" \
-    --arg ralph "$ralph_bin" --arg tier0 "$tier0" \
+    --arg ralph "$ralph_bin" --arg tier0 "$tier0" --arg state "$state_dir" --arg wtmode "$wt_mode" \
     '{mcpServers: {ralph: {command: $py, args: [$bridge],
        env: {RALPH_MCP_ROOTS: $root, AISTACK_WORKER_AGENT: $worker, AISTACK_FALLBACK_AGENT: $fallback,
              AISTACK_REVIEW_AGENT: $reviewer, AISTACK_FALLBACK_ATTEMPTS: $fa, RALPH_TUI_BIN: $ralph,
-             AISTACK_TIER0: $tier0},
+             AISTACK_TIER0: $tier0, AISTACK_STATE_DIR: $state, AISTACK_WORKTREE_MODE: $wtmode},
        exposure: "direct", timeout: 200,
        description: "Runs the confirmed plan through Ralph: worker agents, verification, retries, review. Poll ralph_status."}}}' \
     > "$pi_dir/mcp.json"
@@ -1230,6 +1216,8 @@ TOML
   local prompt
   prompt=$(<"$adir/planner-prompt.md")
   prompt=${prompt//@@PROJECT@@/$project}
+  prompt=${prompt//@@PLAN_DIR@@/$state_dir/plan}
+  prompt=${prompt//@@STATE_DIR@@/$state_dir}
   prompt=${prompt//@@WORKER@@/$worker_label}
   prompt=${prompt//@@FALLBACK@@/$fallback_label (latest)}
   prompt=${prompt//@@REVIEWER@@/Claude Sonnet (latest)}
@@ -1237,7 +1225,12 @@ TOML
   prompt=${prompt//@@TIER0@@/$(<"$adir/planner-tier0-$tier0.md")}
 
   echo "── aistack ──"
-  echo "Project: $project"
+  if [[ "$wt_mode" == "create" ]]; then
+    echo "Project: $project (read-only while planning; a git worktree + draft PR is created when you confirm the plan)"
+  else
+    echo "Project: $project (the agents work here)"
+  fi
+  echo "aistack files: $state_dir (nothing is written into the repository)"
   if [[ "$tier0" == "lumo" ]]; then
     echo "Tier 0 (plan):       Lumo on MacMiniM1   [pi + $lms_model coordinates; local fallback if Lumo fails]"
   else
@@ -1260,17 +1253,19 @@ TOML
   local rc=$?
 
   # ---- after the session ------------------------------------------------------------------------------------------
-  local latest st
-  latest=$(/bin/ls -1 "$project/.aistack/runs" 2>/dev/null | tail -1)
+  local latest st work_dir
+  work_dir=$(jq -r '.work_dir // empty' "$state_dir/project.json" 2>/dev/null)
+  [[ -z "$work_dir" ]] && work_dir="$project"
+  latest=$(/bin/ls -1 "$state_dir/runs" 2>/dev/null | tail -1)
   if [[ -n "$latest" ]]; then
-    st=$(jq -r '"\(.state) / \(.phase)"' "$project/.aistack/runs/$latest/state.json" 2>/dev/null)
+    st=$(jq -r '"\(.state) / \(.phase)"' "$state_dir/runs/$latest/state.json" 2>/dev/null)
     echo ""
     echo "Last run: $latest -- $st"
     case "$st" in
       running*|waiting_user*) echo "It keeps going without pi. Run aistack in $project again and ask pi to follow it." ;;
     esac
-    [[ -d "$project/.aistack/reviews" ]] && echo "Review reports: $project/.aistack/reviews/"
-    echo "Changes are uncommitted in $project -- use gpc/gpa when you are happy."
+    [[ -d "$state_dir/reviews" ]] && echo "Review reports: $state_dir/reviews/"
+    echo "Changes are uncommitted in $work_dir -- cd there and use gpc/gpa when you are happy."
   fi
   return $rc
 }

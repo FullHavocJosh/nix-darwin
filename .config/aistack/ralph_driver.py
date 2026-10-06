@@ -9,8 +9,10 @@ Why a driver instead of one `ralph-tui run` over the whole PRD:
     pauses, surfaces it, and resumes with the answer.
   * Escalation (worker -> fallback agent), a read-only review pass, and "wait for the user" all live here.
 
-Everything is file based under <project>/.aistack/runs/<run_id>/ so the MCP bridge (and a restarted chat
-session) can read state, and write control messages, without talking to this process.
+Everything is file based under <state>/runs/<run_id>/ so the MCP bridge (and a restarted chat session) can read
+state, and write control messages, without talking to this process. <state> is ~/.aistack/<project key> (never the
+repository): plan files, runs, questions, reviews, progress, Ralph's own .ralph-tui and its iteration logs all live
+there. Only the agents' code changes land in the work dir (the git worktree, or the project itself).
 """
 import json, os, re, shlex, signal, subprocess, sys, time
 
@@ -43,18 +45,27 @@ def tail(text, n=TAIL_CHARS):
 
 
 class Run:
-    def __init__(self, project, run_id):
-        self.project = os.path.realpath(project)
+    def __init__(self, state_dir, run_id):
+        self.state_dir = os.path.realpath(state_dir)
         self.id = run_id
-        self.dir = os.path.join(self.project, ".aistack", "runs", run_id)
+        self.dir = os.path.join(self.state_dir, "runs", run_id)
         self.cfg = read_json(os.path.join(self.dir, "config.json"), {})
+        # where the agents change code and where verify commands run: the git worktree, or the project itself
+        self.project = os.path.realpath(self.cfg["work_dir"])
         self.ralph = self.cfg.get("ralph_bin") or os.path.expanduser("~/.bun/bin/ralph-tui")
-        self.prd_path = os.path.join(self.project, self.cfg.get("prd", ".aistack/prd.json"))
-        self.verify_path = os.path.join(self.project, self.cfg.get("verify", ".aistack/verify.json"))
-        self.q_dir = os.path.join(self.project, ".aistack", "questions")
-        self.rev_dir = os.path.join(self.project, ".aistack", "reviews")
-        for d in (self.dir, os.path.join(self.dir, "tasks"), os.path.join(self.dir, "logs"), self.q_dir, self.rev_dir):
+        self.prd_path = self.cfg.get("prd") or os.path.join(self.state_dir, "plan", "prd.json")
+        self.verify_path = self.cfg.get("verify") or os.path.join(self.state_dir, "plan", "verify.json")
+        self.q_dir = os.path.join(self.state_dir, "questions")
+        self.rev_dir = os.path.join(self.state_dir, "reviews")
+        self.progress_path = os.path.join(self.state_dir, "progress.md")
+        # ralph-tui keeps session state, lock, config and reports in <cwd>/.ralph-tui, so it runs from a directory
+        # under the state dir; the agent wrappers cd to AISTACK_WORKDIR before starting the real agent
+        self.ralph_cwd = os.path.join(self.state_dir, "ralph")
+        for d in (self.dir, os.path.join(self.dir, "tasks"), os.path.join(self.dir, "logs"), self.q_dir, self.rev_dir,
+                  self.ralph_cwd, os.path.join(self.state_dir, "iterations")):
             os.makedirs(d, exist_ok=True)
+        self.work_template = self.render_template(self.cfg["work_template"])
+        self.review_template = self.render_template(self.cfg["review_template"])
         self.events_path = os.path.join(self.dir, "events.jsonl")
         self.control_path = os.path.join(self.dir, "control.jsonl")
         self.state_path = os.path.join(self.dir, "state.json")
@@ -68,6 +79,20 @@ class Run:
         self.state = {"state": "starting", "phase": "work", "current_task": None, "waiting_for": None}
         self.env = dict(os.environ)
         self.env["PATH"] = os.path.expanduser("~/.bun/bin") + os.pathsep + self.env.get("PATH", "")
+        self.env.update(AISTACK_WORKDIR=self.project, AISTACK_STATE_DIR=self.state_dir, AISTACK_REVIEWS_DIR=self.rev_dir)
+
+    def render_template(self, src):
+        """Per-run copy of a prompt template with the state-dir paths filled in (agents write questions, reports and
+        progress notes there, outside the repository)."""
+        text = open(src).read()
+        for token, value in {"@@QUESTIONS_DIR@@": self.q_dir, "@@PROGRESS_FILE@@": self.progress_path,
+                             "@@REVIEWS_DIR@@": self.rev_dir, "@@PRD_FILE@@": self.prd_path,
+                             "@@VERIFY_FILE@@": self.verify_path}.items():
+            text = text.replace(token, value)
+        out = os.path.join(self.dir, os.path.basename(src))
+        with open(out, "w") as f:
+            f.write(text)
+        return out
 
     # ---- state / events -------------------------------------------------
     def event(self, kind, task=None, message="", **extra):
@@ -156,10 +181,10 @@ class Run:
         log = os.path.join(self.dir, "logs", f"{label}.log")
         argv = [self.ralph, "run", "--headless", "--no-setup", "--agent", agent, "--prd", prd_file,
                 "--iterations", "1", "--prompt", template,
-                "--progress-file", os.path.join(self.project, ".aistack", "progress.md")]
+                "--progress-file", self.progress_path, "--output-dir", os.path.join(self.state_dir, "iterations")]
         timeout = int(self.cfg.get("attempt_timeout_s", 1500))
         with open(log, "w") as lf:
-            self.child = subprocess.Popen(argv, cwd=self.project, env=self.env, stdin=subprocess.DEVNULL,
+            self.child = subprocess.Popen(argv, cwd=self.ralph_cwd, env=self.env, stdin=subprocess.DEVNULL,
                                           stdout=lf, stderr=subprocess.STDOUT, start_new_session=True)
             try:
                 code = self.child.wait(timeout=timeout)
@@ -250,7 +275,7 @@ class Run:
             if os.path.exists(qf):
                 os.replace(qf, qf + ".stale")
             prd_file = self.single_prd(tid, story, self.compose_notes(tid, story))
-            code, summary, log = self.run_ralph(agent, prd_file, f"{tid}-{n}", self.cfg["work_template"])
+            code, summary, log = self.run_ralph(agent, prd_file, f"{tid}-{n}", self.work_template)
             if self.cancelled:
                 return "cancelled"
             self.event("agent_finished", tid, f"{agent} exited {code}", log=log, tail=tail(summary, 600))
@@ -285,23 +310,24 @@ class Run:
         rf = os.path.join(self.rev_dir, f"{tid}.md")
         if os.path.exists(rf):
             os.replace(rf, rf + ".prev")
+        report = rf
         brief = (f"Review the work done for task {tid} ({story.get('title','')}) in this repository. The task spec is in "
-                 f".aistack/prd.json and its checks are in .aistack/verify.json. Read the files the task created or "
+                 f"{self.prd_path} and its checks are in {self.verify_path}. Read the files the task created or "
                  f"changed. Do NOT modify source or test files. Check: (1) security: injection, unsafe file/shell/network "
                  f"use, secrets, unvalidated input, dangerous defaults; (2) accuracy: does the code do what the description "
                  f"and acceptance criteria say, including edge cases; (3) completeness: every acceptance criterion met, "
                  f"tests present and meaningful, nothing half-done. Run the verify commands if safe. Write the report to "
-                 f".aistack/reviews/{tid}.md. Its FIRST line must be exactly 'Verdict: PASS' or 'Verdict: FAIL', then findings "
+                 f"{report}. Its FIRST line must be exactly 'Verdict: PASS' or 'Verdict: FAIL', then findings "
                  f"with file and line references, most serious first.")
         rs = {"id": f"R-{tid}", "title": f"Review {tid}: {story.get('title','')}", "description": brief,
-              "acceptanceCriteria": [f".aistack/reviews/{tid}.md exists and its first line is 'Verdict: PASS' or 'Verdict: FAIL'"],
+              "acceptanceCriteria": [f"{report} exists and its first line is 'Verdict: PASS' or 'Verdict: FAIL'"],
               "priority": 1, "passes": False}
         path = os.path.join(self.dir, "tasks", f"review-{tid}.prd.json")
         write_json(path, {"name": "review", "description": "read-only review", "userStories": [rs]})
         for attempt in (1, 2):
             self.event("review_started", tid, f"reviewing {tid} with {self.cfg['reviewer_agent']}")
             code, summary, log = self.run_ralph(self.cfg["reviewer_agent"], path, f"review-{tid}-{attempt}",
-                                                self.cfg["review_template"])
+                                                self.review_template)
             if self.cancelled:
                 return None
             if os.path.exists(rf):
@@ -399,8 +425,8 @@ class Run:
 
 
 def main():
-    project, run_id = sys.argv[1], sys.argv[2]
-    run = Run(project, run_id)
+    state_dir, run_id = sys.argv[1], sys.argv[2]
+    run = Run(state_dir, run_id)
 
     def on_term(signum, frame):
         run.cancelled = True
