@@ -1,7 +1,12 @@
 """Scenario tests for ralph_driver.py + ralph_mcp.py against a fake ralph-tui (no AI, no network).
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_driver.py
 """
-import json, os, sys, tempfile, time, importlib, shutil
+import importlib
+import json
+import os
+import sys
+import tempfile
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)   # .config/aistack, where the bridge, driver and templates live
@@ -26,7 +31,7 @@ def make_project(scenario, tasks=("T1", "T2"), deps=True, mode="none", git=False
     st = os.path.realpath(tempfile.mkdtemp(prefix="aistack-state-")); STATES[p] = st
     os.makedirs(st + "/plan")
     if git:
-        os.system(f"cd {p} && git init -q && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m init")
+        os.system(f"cd {p} && git init -q && git -c user.name=test -c user.email=test@example.com commit -q --allow-empty -m init")
     stories = []
     for i, t in enumerate(tasks, 1):
         s = {"id": t, "title": f"task {t}", "description": f"do {t}", "acceptanceCriteria": [f"done_{t}.txt exists"],
@@ -197,6 +202,32 @@ p, m = make_project({}, tasks=("T1",))
 rid = start(m, p); s, evs = pump(m, p, rid, ("done", "failed", "lost"))
 check("review mode 'off' makes no review call", s["state"] == "done" and not any(k.startswith("R-") for k in counts_of(p)) and s["tasks"]["T1"]["review"] == "SKIPPED", s["tasks"])
 del os.environ["AISTACK_REVIEW_MODE"]; del os.environ["AISTACK_BILLED_AGENTS"]
+
+print("K: the draft PR gets a planned title and a body built from the plan")
+os.environ["AISTACK_WORKTREE_CMD"] = os.path.join(HERE, "fake-gpr.sh"); os.environ["AISTACK_TIERS"] = "tier 0 Lumo; tier 1 OpenCode x (free); tier 2 Claude Code Sonnet (billed)"
+p, m = make_project({}, tasks=("T1", "T2"), mode="create", git=True)
+prd = json.load(open(ST(p) + "/plan/prd.json")); prd.update(title="Add the greeting helper", description="Adds greet() and its tests. Needed by the CLI.")
+json.dump(prd, open(ST(p) + "/plan/prd.json", "w"))
+v = m.tool_validate({"project_dir": p}); r = m.tool_run({"project_dir": p, "plan_hash": v["plan_hash"]})
+rec = open(p + "/.git/fake-gpr-pr.txt").read(); title, body = rec.split("\n---BODY---\n", 1)
+check("PR title is the plan's title with the type prefix", title == "feat: Add the greeting helper", title)
+check("PR body has the summary, every task with its criteria and verify command", "## Summary\nAdds greet() and its tests." in body and "- **T1** task T1: done_T1.txt exists (verify: `test -f done_T1.txt`)" in body and "- **T2**" in body, body)
+check("PR body names the tiers", "tier 1 OpenCode x (free)" in body and "uncommitted in this worktree" in body, body[-300:])
+meta = json.load(open(ST(p) + "/project.json"))
+check("the PR url and number are recorded and returned", r["pr_url"] == "https://example.test/pull/9" and meta["pr_number"] == 9 and meta["pr_title"] == title, (r.get("pr_url"), meta))
+pump(m, p, r["run_id"], ("done", "failed", "lost"))
+prd = json.load(open(ST(p) + "/plan/prd.json")); prd["title"] = "x" * 120
+json.dump(prd, open(ST(p) + "/plan/prd.json", "w")); v = m.tool_validate({"project_dir": p})
+check("a title over 100 characters is rejected", v["ok"] is False and any("title" in x for x in v["problems"]), v)
+prd["title"] = "fine"; prd["type"] = "chore"; json.dump(prd, open(ST(p) + "/plan/prd.json", "w")); v = m.tool_validate({"project_dir": p})
+check("an invalid type is rejected", v["ok"] is False and any("'type'" in x for x in v["problems"]), v)
+p2, m2 = make_project({}, tasks=("T1",), mode="create", git=True)
+prd = json.load(open(ST(p2) + "/plan/prd.json")); prd.update(title="fix: Handle empty input in the parser, and also a very long tail that must be cut at seventy-two", type="fix")
+json.dump(prd, open(ST(p2) + "/plan/prd.json", "w")); v = m2.tool_validate({"project_dir": p2}); m2.tool_run({"project_dir": p2, "plan_hash": v["plan_hash"]})
+t2 = open(p2 + "/.git/fake-gpr-pr.txt").read().split("\n---BODY---\n")[0]
+check("an existing type prefix is not doubled, the type comes from the plan, long titles are cut to 72", t2.startswith("fix: Handle empty input") and not t2.startswith("fix: fix:") and len(t2) <= 72, t2)
+pump(m2, p2, json.load(open(ST(p2) + "/project.json")) and sorted(os.listdir(ST(p2) + "/runs"))[-1], ("done", "failed", "lost"))
+del os.environ["AISTACK_WORKTREE_CMD"], os.environ["AISTACK_TIERS"]
 
 print("H: lumo_consult (tier 0) sends only allowed files, with auth and the no-fetch header")
 import threading

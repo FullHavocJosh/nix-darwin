@@ -13,7 +13,14 @@ confirmed the plan; the agents then work there.
 Safety: only works inside RALPH_MCP_ROOTS (colon-separated); agent names come from the environment the
 launcher sets (AISTACK_WORKER_AGENT / AISTACK_FALLBACK_AGENT / AISTACK_REVIEW_AGENT), not from tool arguments.
 """
-import hashlib, json, os, re, signal, subprocess, sys, time
+import hashlib
+import json
+import os
+import re
+import signal
+import subprocess
+import sys
+import time
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 ROOTS = [os.path.realpath(p) for p in os.environ.get("RALPH_MCP_ROOTS", "").split(":") if p]
@@ -84,6 +91,10 @@ def validate(prd, verify):
         return ["Missing or invalid prd.json in the plan dir (must be a JSON object)"]
     if not prd.get("name"):
         problems.append("prd.json: 'name' is required")
+    if "title" in prd and not (isinstance(prd["title"], str) and prd["title"].strip() and len(prd["title"]) <= 100):
+        problems.append("prd.json: 'title' (the pull request title: imperative, no 'feat:' prefix) must be a non-empty string of at most 100 characters")
+    if prd.get("type") not in (None, "feat", "fix"):
+        problems.append("prd.json: 'type' must be 'feat' or 'fix' when present")
     stories = prd.get("userStories")
     if not isinstance(stories, list) or not stories:
         return problems + ["prd.json: 'userStories' must be a non-empty list"]
@@ -176,11 +187,36 @@ def run_state(project, rid):
     return st
 
 
+# gpr's AI interface: --auto never prompts, --title/--description become the PR title and body, the last stdout line is
+# JSON ({"ok","branch","worktree","pr_url","pr_number"}); AISTACK_BRANCH / _PR_TYPE / _PR_TITLE / _PR_BODY are set below
 DEFAULT_WORKTREE_CMD = ("source ~/.zshrc_functions_git 2>/dev/null; source ~/.zshrc_functions_ai 2>/dev/null; "
-                        "gpr_func feat \"$AISTACK_BRANCH\"")
+                        "gpr_func --auto \"$AISTACK_PR_TYPE\" \"$AISTACK_BRANCH\" --title \"$AISTACK_PR_TITLE\" "
+                        "--description \"$AISTACK_PR_BODY\"")
 
 
-def ensure_workdir(project, prd):
+def pr_title_and_body(prd, verify):
+    """The draft PR's title and description, from the plan: prd.json 'title' (falls back to 'name'), its description,
+    the tasks with acceptance criteria and verify commands, and which tiers do the work."""
+    ptype = prd.get("type") or "feat"
+    text = str(prd.get("title") or prd.get("name") or "aistack plan").strip()
+    text = re.sub(r"^(feat|fix)(\([^)]*\))?:\s*", "", text, flags=re.IGNORECASE)
+    title = f"{ptype}: {text}"
+    if len(title) > 72:
+        title = title[:71].rstrip() + "\u2026"
+    lines = ["## Summary", str(prd.get("description") or prd.get("name") or "").strip(), "", "## Plan"]
+    for st in prd.get("userStories", []):
+        crit = "; ".join(st.get("acceptanceCriteria", []))
+        v = verify.get(st["id"], []) if isinstance(verify, dict) else []
+        v = [v] if isinstance(v, str) else v
+        lines.append(f"- **{st['id']}** {st.get('title', '')}" + (f": {crit}" if crit else "")
+                     + (" (verify: " + ", ".join(f"`{c}`" for c in v) + ")" if v else ""))
+    lines += ["", "---", "Opened by aistack when the plan was confirmed. "
+              + (os.environ.get("AISTACK_TIERS", "") + ". " if os.environ.get("AISTACK_TIERS") else "")
+              + "Changes stay uncommitted in this worktree until committed with gpc/gpa."]
+    return ptype, title, "\n".join(lines)
+
+
+def ensure_workdir(project, prd, verify=None):
     """Where the agents work. In a main checkout (AISTACK_WORKTREE_MODE=create) the first confirmed plan creates a gpr
     worktree + draft PR, later runs reuse it while it exists. Elsewhere the project itself is the work dir."""
     meta_p = os.path.join(state_dir(project), "project.json")
@@ -191,18 +227,27 @@ def ensure_workdir(project, prd):
         return project, False, None
     slug = re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", str(prd.get("name", "plan")).lower())).strip("-")[:28] or "plan"
     branch = f"aistack-{slug}-{time.strftime('%H%M')}"
-    env = dict(os.environ, AISTACK_BRANCH=branch)
+    ptype, title, body = pr_title_and_body(prd, verify or {})
+    env = dict(os.environ, AISTACK_BRANCH=branch, AISTACK_PR_TYPE=ptype, AISTACK_PR_TITLE=title, AISTACK_PR_BODY=body)
     cmd = os.environ.get("AISTACK_WORKTREE_CMD")
     argv = ["/bin/sh", "-c", cmd] if cmd else ["zsh", "-c", DEFAULT_WORKTREE_CMD]
     try:
         r = subprocess.run(argv, cwd=project, env=env, capture_output=True, text=True, timeout=170, stdin=subprocess.DEVNULL)
     except (OSError, subprocess.TimeoutExpired) as e:
         return None, False, f"creating the worktree failed: {e}"
-    wd = os.path.join(project, ".worktrees", branch)
+    result = {}
+    for line in reversed((r.stdout or "").strip().splitlines()):
+        try:
+            result = json.loads(line)
+            break
+        except ValueError:
+            continue
+    wd = result.get("worktree") or os.path.join(project, ".worktrees", branch)
     if not os.path.isdir(wd):
         tail = (r.stdout + r.stderr)[-600:]
         return None, False, f"creating the worktree {wd} failed (exit {r.returncode}): {tail}"
-    meta.update(work_dir=wd, branch=branch, source_dir=project, created=time.strftime("%Y-%m-%dT%H:%M:%S"))
+    meta.update(work_dir=wd, branch=branch, source_dir=project, created=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                pr_url=result.get("pr_url"), pr_number=result.get("pr_number"), pr_title=title)
     os.makedirs(state_dir(project), exist_ok=True)
     json.dump(meta, open(meta_p, "w"), indent=2)
     return wd, True, None
@@ -219,7 +264,7 @@ def tool_run(a):
     rid0 = latest_run(project)
     if rid0 and run_state(project, rid0).get("state") in ("running", "waiting_user", "starting"):
         return {"started": False, "problem": f"run {rid0} is still active; use ralph_status / ralph_respond / ralph_cancel"}
-    workdir, created, err = ensure_workdir(project, prd)
+    workdir, created, err = ensure_workdir(project, prd, verify)
     if err:
         return {"started": False, "problem": err}
     rid = time.strftime("%Y%m%d-%H%M%S")
@@ -250,6 +295,7 @@ def tool_run(a):
                          stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
     json.dump({"state": "starting", "pid": p.pid, "run_id": rid}, open(os.path.join(d, "state.json"), "w"))
     return {"started": True, "run_id": rid, "work_dir": workdir, "worktree_created": created,
+            "pr_url": rj(os.path.join(state_dir(project), "project.json"), {}).get("pr_url"),
             "worker": cfg["worker_agent"], "fallback": cfg["fallback_agent"],
             "reviewer": cfg["reviewer_agent"], "next": "Call ralph_status with wait_s=40 repeatedly and relay each batch of new events to the user."}
 

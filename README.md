@@ -149,7 +149,7 @@ model. It drafts a plan (`prd.json` and `verify.json`) with you, and only after 
 aistack-related is written into the repository (no `.aistack/`, no `.ralph-tui/`): plan files, runs, questions,
 reviews, progress notes and Ralph's own state live in `~/.aistack/<project>-<hash>/` (`AISTACK_HOME` overrides the
 base). Planning only reads the project. In the main checkout of a git repo the git worktree and draft PR are created
-at the moment you confirm the plan (`ralph_run` does it), and the agents work there; in an existing worktree or a
+at the moment you confirm the plan (`ralph_run` does it, through `gpr --auto` with the plan's `title` and a body built from the plan), and the agents work there; in an existing worktree or a
 non-git directory they work in place. A later run reuses the worktree while it exists. The tiers:
 
 - tier 0: planning. Lumo on MacMiniM1 drafts the task breakdown (`lumo_consult`); if MacMiniM1 is unreachable at
@@ -311,6 +311,33 @@ Creates draft PR with auto-generated README if missing:
 ```bash
 gpr_func              # Interactive PR creation with AI-generated description
 ```
+
+#### Calling `gpr` / `gpa` / `gpc` from AI agents (aistack, aidev, Claude Code, opencode, pi)
+
+The caller writes the text; the helpers do the git and GitHub work and never prompt. No flags means the interactive
+behavior above, unchanged.
+
+```bash
+# new branch + worktree + draft PR, with your title and description (stdout is ONE line of JSON, the log is on stderr)
+gpr --auto feat <branch> --title "feat: Add a --shout flag" --description "## Summary\n..."   # or --body-file F
+#   -> {"ok":true,"branch":"...","worktree":"...","pr_url":"...","pr_number":123,"title":"..."}
+#   -> {"ok":false,"error":"..."}  with a non-zero exit, e.g. for a missing type/branch (it never asks)
+
+# stage everything, secrets scan + linters + AI review, commit with YOUR message, push
+gpa --auto -m "Add the --shout flag" -d "Upper-cases the greeting when --shout is given." --json
+gpa --auto -m "..." --no-review --json      # the caller already reviewed: secrets scan and linters still run
+#   -> {"ok":true,"exit_code":0,"commit":"<sha>","subject":"...","branch":"...","pushed":true,"output_tail":"..."}
+#   -> on findings: ok false, a non-zero exit and the findings in output_tail; fix them and run it again
+
+gpc -m "subject" -d "body"                  # commit what is staged with your message and push (no AI call)
+```
+
+`-m`/`-d` make the commit subject and body yours (`gpa` hands them to `gpc` through `AI_COMMIT_MESSAGE` /
+`AI_COMMIT_BODY`); without `-m` the local model still writes the message. `gpa -m ... --no-review` needs no AI provider
+at all. `gpr` still never enters the worktree; use the returned `worktree` path. aistack uses this: when you confirm a
+plan it opens the draft PR with the plan's `title` (as `feat: <title>`, at most 72 characters) and a body built from
+the plan (summary, each task with its acceptance criteria and verify command, the tiers).
+Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_git_auto.py`.
 
 #### `aidev` - Launch AI Development Assistant
 
