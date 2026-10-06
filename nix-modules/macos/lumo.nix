@@ -37,7 +37,9 @@ in
   # Only the optional headless re-auth in watchdog.sh uses it (the laptop gets it from packages-gui.nix).
   homebrew.casks = [ "ungoogled-chromium" ];
 
-  system.activationScripts.lumoTamerProvision.text = lib.mkAfter ''
+  # nix-darwin only assembles a fixed set of activationScripts names into the activate script; a custom
+  # name (the first version used lumoTamerProvision) is silently dropped, so this hooks postActivation.
+  system.activationScripts.postActivation.text = lib.mkAfter ''
     sudo -u havoc HOME=${home} bash -c '(nohup /bin/zsh ${lumoSrc}/provision-tamer.sh ${tamerRev} </dev/null >/dev/null 2>&1 &)'
     echo "[lumo-tamer-provisioner] check running in background -- tail ${home}/lumo-tamer.provision.log"
   '';
