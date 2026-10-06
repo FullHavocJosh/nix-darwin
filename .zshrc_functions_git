@@ -1770,14 +1770,18 @@ function _gpa_send_all_to_aidev() {
   done
 
   echo ""
-  echo "=== aidev: Fix All Issues ==="
+  echo "=== aistack: Fix All Issues ==="
   echo ""
-  (cd "$repo_root" && aidev "I have $issue_count code review issue(s) in my staged git changes that need to be fixed. Read $prompt_file for full details and help me fix them.")
+  # aidev's opencode path cannot take the issues (opencode v2 has no top-level --model), and the issues are
+  # review findings to evaluate and plan, so hand them to aistack's planner as its first message.
+  (cd "$repo_root" && aistack_func "The staged changes in this repository failed code review. Evaluate each finding below (some may be false positives), plan the fixes for the real ones, and fix them in the working tree.
+
+$(cat "$prompt_file")")
   rm -f "$prompt_file"
 
   echo ""
   echo "═══════════════════════════════════════════════════════════"
-  echo "aidev session complete."
+  echo "aistack session complete."
   echo "═══════════════════════════════════════════════════════════"
   echo ""
   echo "  [Enter] Re-review with gpa"
