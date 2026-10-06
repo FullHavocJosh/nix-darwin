@@ -170,7 +170,9 @@ Proton Lumo as a tool-less planning model, hosted on MacMiniM1 (`nix-modules/mac
   told to end replies with `NEED:` lines (a path, `ls`, `find`, `grep`, or keywords); the proxy answers them from
   `~/home-infrastructure` and loops until Lumo gives a final plan. No local model is involved. A name-based deny
   list (`.env`, keys, tfvars, kubeconfig, `*secret*`, ...) is enforced in code. It listens beyond loopback only
-  when Doppler holds `LUMO_PLANNER_API_KEY` (bearer token), and refuses to otherwise.
+  when Doppler holds `LUMO_PLANNER_API_KEY` (bearer token), and refuses to otherwise. The macOS application
+  firewall also has to allow its interpreter: `lumo.nix` adds Homebrew's `Python.app` to it on every activation.
+  tamer (node) is deliberately left blocked, because only the planner talks to it, on loopback.
 - `lumo-watchdog` (every 5 min): checks `tamer auth status`, the server, and every 30 min a real one-word Lumo
   request; alerts through ntfy on failure and on recovery; optionally re-authenticates by itself.
 
