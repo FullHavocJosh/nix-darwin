@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, lib, ... }:
 let
   wallpaper = "/Users/jrollet/.wallpapers/wallhaven-rr13w1.png";
 in
@@ -63,6 +63,29 @@ in
       echo "Terraform infrastructure directories (v3/v4) not found, skipping cleanup"
     fi
   '';
+  # Force the claude-tui statusline's monthly token/cost totals to resync on
+  # every switch (same as the /usage-sync command). Needs postActivation, not
+  # activationScripts.script above: that runs before packages-tui.nix's
+  # postActivation block applies claude-tui-usage-patch.py, so the patched
+  # monthly_tokens/monthly_cost modules would not exist yet. Runs as the login
+  # user (activation is root) so the cache lands in ~/.claude, not /var/root.
+  # Non-fatal: the recompute can take ~2 minutes and must never fail a switch.
+  system.activationScripts.postActivation.text = lib.mkAfter ''
+    echo "Resyncing claude-tui monthly token/cost totals..."
+    sudo --set-home -u jrollet /opt/homebrew/bin/python3 - <<'PYEOF' || echo "Warning: monthly usage resync failed, skipping"
+    import sys
+    sys.path.insert(0, "/opt/homebrew/opt/claude-tui/libexec")
+    from claude_tui_core.monthly_tokens import fetch_monthly_tokens, format_monthly_tokens
+    from claude_tui_core.monthly_cost import fetch_monthly_cost, format_monthly_cost
+
+    tokens = fetch_monthly_tokens(background=False, force=True)
+    cost = fetch_monthly_cost(background=False, force=True)
+
+    print(f"Monthly tokens resynced: {format_monthly_tokens(tokens) or '(unavailable)'}")
+    print(f"Monthly cost resynced:   {format_monthly_cost(cost) or '(unavailable -- not a work/gateway account)'}")
+    PYEOF
+  '';
+
   networking.hostName = "MacBookM3Pro";
   networking.computerName = "MacBookM3Pro";
 
