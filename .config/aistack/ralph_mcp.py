@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
 """MCP bridge (stdio, JSON-RPC 2.0) between a chat agent (pi) and the aistack run driver.
 
-Tools: ralph_validate_plan, ralph_run, ralph_status, ralph_respond, ralph_cancel, ralph_runs.
+Tools: ralph_validate_plan, ralph_run, ralph_status, ralph_respond, ralph_cancel, ralph_runs, lumo_consult (tier 0).
 Runs are detached processes (ralph_driver.py); tool calls return quickly, and ralph_status can wait up to
 45s for news so the chat agent can follow a run without a tight loop (MCP clients time out near 60s).
 
 Safety: only works inside RALPH_MCP_ROOTS (colon-separated); agent names come from the environment the
 launcher sets (AISTACK_WORKER_AGENT / AISTACK_FALLBACK_AGENT / AISTACK_REVIEW_AGENT), not from tool arguments.
 """
-import hashlib, json, os, re, signal, subprocess, sys, time
+import hashlib
+import json
+import os
+import re
+import signal
+import subprocess
+import sys
+import time
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 ROOTS = [os.path.realpath(p) for p in os.environ.get("RALPH_MCP_ROOTS", "").split(":") if p]
@@ -278,6 +285,89 @@ def tool_runs(a):
     return {"runs": out}
 
 
+# ---- tier 0: Lumo (Proton's cloud assistant) as a tool-less drafting consultant -------------------------
+# Lumo cannot call tools, and the planner proxy (nix-modules/macos/lumo.nix) serves the Mini's own checkout,
+# not this project, so everything Lumo needs is sent inline. Only files the caller lists are sent, and never
+# ones matching the deny list below (secrets, keys, env files, state).
+LUMO_DENY_DIRS = {".git", "node_modules", ".terraform", "secrets", ".ssh", ".gnupg", ".aistack", ".ralph-tui"}
+LUMO_DENY_GLOBS = [".env*", "*.tfvars", "*.tfstate*", "*.pem", "*.key", "*.p12", "*.pfx", "id_rsa*", "id_ed25519*",
+                   "*kubeconfig*", "*.age", "*.sops.*", "*secret*", "*credential*", "*.kdbx", ".doppler*", ".netrc",
+                   "*.token"]
+LUMO_FILE_MAX, LUMO_TOTAL_MAX, LUMO_FILES_MAX = 24_000, 60_000, 12
+LUMO_PROMPT = """Draft a build plan for the request below. It will be turned into tasks for coding agents and each task is
+checked by a command, so be concrete.
+
+Output, in this order:
+1. A one-paragraph summary and any assumptions.
+2. Numbered tasks T1, T2, ... Each has: a title; the files to create or change and the behavior; concrete, testable
+   acceptance criteria; dependsOn (task ids, if any); and ONE verify command that exits 0 only when the task is done.
+   Verify commands run without a shell: no ; & | < > backtick or $(), so a multi-step check becomes a task that creates a script.
+3. Open questions for the user.
+Keep tasks small enough for one agent session. Do not write the implementation.
+
+REQUEST:
+"""
+
+
+def lumo_key():
+    k = os.environ.get("AISTACK_LUMO_KEY")
+    if k:
+        return k
+    r = subprocess.run(["doppler", "secrets", "get", "LUMO_PLANNER_API_KEY", "--project", "FullHavocJosh",
+                        "--config", "root_macmini", "--plain"], capture_output=True, text=True, timeout=20)
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def lumo_readable(project, rel):
+    """(text, None) or (None, reason) for a file inside project that may be sent to Lumo."""
+    import fnmatch
+    p = os.path.realpath(os.path.join(project, rel))
+    if not (p == project or p.startswith(project + os.sep)):
+        return None, "outside the project"
+    parts = os.path.relpath(p, project).split(os.sep)
+    if any(x in LUMO_DENY_DIRS for x in parts) or any(fnmatch.fnmatch(x.lower(), g) for x in parts for g in LUMO_DENY_GLOBS):
+        return None, "denied by policy"
+    if not os.path.isfile(p):
+        return None, "not a file"
+    if os.path.getsize(p) > LUMO_FILE_MAX:
+        return None, f"larger than {LUMO_FILE_MAX} bytes"
+    try:
+        return open(p, encoding="utf-8").read(), None
+    except (UnicodeDecodeError, OSError):
+        return None, "unreadable or binary"
+
+
+def tool_lumo_consult(a):
+    import urllib.request
+    project = project_of(a)
+    request = (a.get("request") or "").strip()
+    if not request:
+        return {"ok": False, "problem": "request is empty"}
+    sent, skipped, blocks, total = [], {}, [], 0
+    for rel in (a.get("files") or [])[:LUMO_FILES_MAX]:
+        text, why = lumo_readable(project, rel)
+        if text is None:
+            skipped[rel] = why
+        elif total + len(text) > LUMO_TOTAL_MAX:
+            skipped[rel] = "total size limit reached"
+        else:
+            total += len(text); sent.append(rel); blocks.append(f"\n--- FILE: {rel} ---\n{text}")
+    prompt = LUMO_PROMPT + request + ("\n\nPROJECT FILES:" + "".join(blocks) if blocks else "")
+    url = os.environ.get("AISTACK_LUMO_URL", "http://macminim1.rollet.family:8765/v1").rstrip("/") + "/chat/completions"
+    key = lumo_key()
+    headers = {"Content-Type": "application/json", "X-Lumo-No-Fetch": "1"}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    body = json.dumps({"model": "lumo-planner", "messages": [{"role": "user", "content": prompt}]}).encode()
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, body, headers), timeout=240) as r:
+            plan = json.load(r)["choices"][0]["message"]["content"]
+    except Exception as e:
+        return {"ok": False, "problem": f"Lumo is not available ({type(e).__name__}: {e}); plan without it",
+                "files_sent": sent, "files_skipped": skipped}
+    return {"ok": True, "plan": plan, "files_sent": sent, "files_skipped": skipped}
+
+
 S = lambda props, req: {"type": "object", "properties": props, "required": req}
 STR = {"type": "string"}
 INT = {"type": "integer"}
@@ -300,6 +390,10 @@ TOOLS = {
     "ralph_cancel": (tool_cancel, "Stop the active run.", S({"project_dir": STR, "run_id": STR}, ["project_dir"])),
     "ralph_runs": (tool_runs, "List runs in this project (use after restarting the chat to find an unfinished run).",
                    S({"project_dir": STR}, ["project_dir"])),
+    "lumo_consult": (tool_lumo_consult, "Tier 0: ask Lumo (Proton's cloud assistant, no tools) to draft a task breakdown. "
+        "Sends the request and the project files you list (relative paths, at most 12, secrets/keys/env files are refused) to Lumo. "
+        "Returns a draft plan to adapt into prd.json/verify.json, or ok=false when Lumo is unreachable (then plan without it).",
+        S({"project_dir": STR, "request": STR, "files": {"type": "array", "items": STR}}, ["project_dir", "request"])),
 }
 
 
