@@ -1595,6 +1595,8 @@ ${batch_context}
 - The surrounding context is provided so you can see if a nearby comment, guard clause, or existing code ALREADY mitigates the concern — if so, do NOT flag it
 - If the code or a comment already acknowledges a known limitation, do NOT flag it as an issue
 - If a prior security analysis has already confirmed an item is a false positive, do NOT flag it
+- Report at most 10 issues, most severe first, and keep each \"recommendation\" under 40 words
+- Inside the JSON string values use single quotes only, never double quotes or raw newlines, so the JSON stays valid
 - Output ONLY a JSON array of issues in this exact format:
 [
   {
