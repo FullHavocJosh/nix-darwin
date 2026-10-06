@@ -96,7 +96,7 @@ fi
 
 if [[ $prev == ok || $now -ge $(( $(state_get last_alert 0) + ALERT_EVERY )) ]]; then
   case $result in
-    auth|probe) hint="Re-authenticate: sign in to https://lumo.proton.me in Chromium started with --remote-debugging-port=9222 --user-data-dir=<dir>, then on $(hostname -s) run: cd ~/lumo-tamer && tamer auth browser (docs: lumo-tamer docs/authentication.md)." ;;
+    auth|probe) hint="Lumo sign-in expired or was revoked. On your MacBook run: lumoreauth (opens Chromium, you sign in once, it hands the session to this Mini and restarts tamer). Interactive because of Proton CAPTCHA/2FA." ;;
     server)     hint="tamer server is not answering on $base. Check ~/Library/Logs/lumo-tamer.log and 'launchctl print system/org.nixos.lumo-tamer'." ;;
   esac
   notify "Lumo tamer: $result failing" "$hint" high
