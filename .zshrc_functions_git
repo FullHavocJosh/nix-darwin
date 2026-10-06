@@ -732,7 +732,7 @@ $(echo -e "$suspicious_lines")" | _run_ai_plain "sonnet" 2>&1)
           } > "$prompt_file"
           local repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
           local model=$(jq -r '.model // empty' ~/.config/opencode/opencode.json 2>/dev/null)
-          (cd "$repo_root" && opencode --model "$model" --prompt "I have staged git changes with potential secrets. Read $prompt_file for the full context and help me review whether these are real secrets or false positives.")
+          (cd "$repo_root" && opencode mini --model "$model" --prompt "I have staged git changes with potential secrets. Read $prompt_file for the full context and help me review whether these are real secrets or false positives.")
           rm -f "$prompt_file"
           return 1
           ;;
