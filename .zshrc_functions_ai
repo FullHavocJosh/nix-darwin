@@ -565,7 +565,10 @@ EOF
   aider_model="openai/${lms_model}"
 
   local raw_output
-  raw_output=$(timeout "${timeout_secs}s" aider \
+  # BROWSER=true: with --yes-always aider auto-accepts its "Open URL for more info?" offer when a call
+  # hits a token limit and would open aider.chat/docs/troubleshooting/token-limits.html in a browser.
+  # Python's webbrowser honors $BROWSER, so the page is "opened" with /usr/bin/true instead.
+  raw_output=$(BROWSER=true timeout "${timeout_secs}s" aider \
     --model "$aider_model" \
     --openai-api-base "${endpoint}/v1" \
     --openai-api-key "sk-local" \
