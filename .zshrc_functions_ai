@@ -1155,12 +1155,12 @@ TOML
     > "$pi_dir/models.json"
   jq -n --arg py "$(command -v python3)" --arg bridge "$adir/ralph_mcp.py" --arg root "$project" \
     --arg worker "$worker" --arg fallback "$fallback" --arg reviewer "$reviewer" --arg fa "$fallback_attempts" \
-    --arg ralph "$ralph_bin" --arg tier0 "$tier0" --arg state "$state_dir" --arg wtmode "$wt_mode" --arg reviewmode "${AISTACK_REVIEW_MODE:-batch}" \
+    --arg ralph "$ralph_bin" --arg tier0 "$tier0" --arg state "$state_dir" --arg wtmode "$wt_mode" --arg reviewmode "${AISTACK_REVIEW_MODE:-batch}" --arg tiers "tier 0 ${tier0_label}; tier 1 ${worker_label}; tier 2 Claude Code Sonnet (billed)" \
     '{mcpServers: {ralph: {command: $py, args: [$bridge],
        env: {RALPH_MCP_ROOTS: $root, AISTACK_WORKER_AGENT: $worker, AISTACK_FALLBACK_AGENT: $fallback,
              AISTACK_REVIEW_AGENT: $reviewer, AISTACK_FALLBACK_ATTEMPTS: $fa, RALPH_TUI_BIN: $ralph,
              AISTACK_TIER0: $tier0, AISTACK_STATE_DIR: $state, AISTACK_WORKTREE_MODE: $wtmode,
-             AISTACK_REVIEW_MODE: $reviewmode},
+             AISTACK_REVIEW_MODE: $reviewmode, AISTACK_TIERS: $tiers},
        exposure: "direct", timeout: 200,
        description: "Runs the confirmed plan through Ralph: worker agents, verification, retries, review. Poll ralph_status."}}}' \
     > "$pi_dir/mcp.json"

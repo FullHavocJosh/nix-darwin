@@ -746,7 +746,39 @@ $(echo -e "$suspicious_lines")" | _run_ai_plain "sonnet" 2>&1)
   return 0
 }
 
+# Commit the staged changes with a message the caller already wrote, then push. $1 = subject, $2 = optional body.
+# Shared by `gpc -m`, `gpa -m` (which ends in gpc) and anything else that supplies its own message, so no AI
+# provider is involved and nothing can prompt.
+function _gpc_commit_push() {
+  local subject="$1" body="$2"
+  echo ""
+  echo "═══════════════════════════════════════════════════════════"
+  echo "  $subject"
+  echo "═══════════════════════════════════════════════════════════"
+  echo ""
+  if [[ -n "$body" ]]; then
+    git commit -m "$subject" -m "$body"
+  else
+    git commit -m "$subject"
+  fi
+  if [ $? -ne 0 ]; then
+    echo "✗ Commit failed, skipping push"
+    return 1
+  fi
+  echo ""
+  echo "ℹ Pushing to $(git remote get-url origin 2>/dev/null || echo remote)..."
+  if git push; then
+    echo "✓ Successfully pushed"
+  else
+    echo "✗ Push failed"
+    return 1
+  fi
+}
+
 function gpc() {
+  # Usage: gpc [-m|--message "<subject>"] [-d|--description "<body>"]
+  # With -m the commit message is yours: no AI provider is called and nothing prompts (the same message can come in
+  # through AI_COMMIT_MESSAGE / AI_COMMIT_BODY, which is how `gpa -m` hands it down).
   # AI_LOCAL_DEFAULT (set system-wide on hosts with a local llama-server, see
   # llamacpp-local.nix) makes plain gpc behave like gpc-local: local-only, no
   # cloud fallback. Guarded on AI_LOCAL_ONLY being unset so gpc-local calling
@@ -756,11 +788,24 @@ function gpc() {
     gpc-local "$@"
     return $?
   fi
+  local AI_COMMIT_MESSAGE="${AI_COMMIT_MESSAGE:-}" AI_COMMIT_BODY="${AI_COMMIT_BODY:-}"
+  while (( $# )); do
+    case "$1" in
+      -m|--message) AI_COMMIT_MESSAGE="$2"; shift 2 ;;
+      -d|--description|--body) AI_COMMIT_BODY="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+
   # Validate git repository
   _check_git_repo || return 1
 
   # Check if there are staged changes
   if ! git diff --cached --quiet; then
+    if [[ -n "$AI_COMMIT_MESSAGE" ]]; then
+      _gpc_commit_push "$AI_COMMIT_MESSAGE" "$AI_COMMIT_BODY"
+      return $?
+    fi
     # Commit messages use Haiku when available for efficiency
     # Try llama.cpp first if available, fall back to selected provider
     local active_provider=$(_get_ai_provider)
@@ -2255,7 +2300,53 @@ function _prompt_ai_error_action() {
   esac
 }
 
+# gpa's interface for AI callers (aistack, aidev, Claude Code, opencode, pi). Everything else is _gpa_impl.
+#   gpa --auto -m "<commit subject>" [-d "<commit body>"] [--no-review] [--json]
+#   -m / -d     the commit message is yours: gpc does not generate one (AI_COMMIT_MESSAGE / AI_COMMIT_BODY)
+#   --no-review skip the AI code review (secrets scan and linters still run); for callers that already reviewed
+#   --json      stdout is ONE line of JSON, {"ok","exit_code","commit","subject","branch","pushed","output_tail"},
+#               and the human log goes to stderr. Without it the output is the human text, as always.
+# Exit code: 0 committed and pushed; non-zero with the findings printed (see _gpa_impl --auto).
 function gpa() {
+  local -a rest
+  local msg="" body="" json=0 noreview=""
+  while (( $# )); do
+    case "$1" in
+      -m|--message) msg="$2"; shift 2 ;;
+      -d|--description|--body) body="$2"; shift 2 ;;
+      --json) json=1; shift ;;
+      --no-review) noreview=1; shift ;;
+      *) rest+=("$1"); shift ;;
+    esac
+  done
+  local -x AI_COMMIT_MESSAGE="${msg:-${AI_COMMIT_MESSAGE:-}}" AI_COMMIT_BODY="${body:-${AI_COMMIT_BODY:-}}"
+  local -x GPA_NO_REVIEW="${noreview:-${GPA_NO_REVIEW:-}}"
+  if (( ! json )); then
+    _gpa_impl "${rest[@]}"
+    return $?
+  fi
+  local logf rc head_before ok=false pushed=false
+  logf=$(mktemp)
+  head_before=$(git rev-parse HEAD 2>/dev/null)
+  _gpa_impl "${rest[@]}" > "$logf" 2>&1
+  rc=$?
+  cat "$logf" >&2
+  [[ $rc -eq 0 ]] && ok=true
+  grep -q "Successfully pushed" "$logf" && pushed=true
+  local commit="" subject=""
+  if [[ "$(git rev-parse HEAD 2>/dev/null)" != "$head_before" ]]; then
+    commit=$(git rev-parse HEAD 2>/dev/null)
+    subject=$(git log -1 --format=%s 2>/dev/null)
+  fi
+  jq -nc --argjson ok "$ok" --argjson rc "$rc" --arg commit "$commit" --arg subject "$subject" \
+    --arg branch "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" --argjson pushed "$pushed" \
+    --arg tail "$(sed $'s/\x1b\\[[0-9;]*m//g' "$logf" | tail -40)" \
+    '{ok: $ok, exit_code: $rc, commit: (if $commit == "" then null else $commit end), subject: $subject, branch: $branch, pushed: $pushed, output_tail: $tail}'
+  rm -f "$logf"
+  return $rc
+}
+
+function _gpa_impl() {
   # Git Partial Add with AI code review
   # Usage: gpa [--tier=haiku|sonnet|opus] [--auto]
   #
@@ -2311,8 +2402,11 @@ function gpa() {
   # Validate git repository
   _check_git_repo || return 1
 
-  # Ensure an AI provider is configured for this session
-  _ensure_ai_provider || return 1
+  # Ensure an AI provider is configured for this session. Not needed when the caller supplies the commit message and
+  # skips the review (gpa -m ... --no-review): nothing below would call a provider.
+  if [[ -z "${GPA_NO_REVIEW:-}" || -z "${AI_COMMIT_MESSAGE:-}" ]]; then
+    _ensure_ai_provider || return 1
+  fi
 
   # Use the aiselect'd provider for code review
   # (removed llama.cpp override — Qwen doesn't work inside opencode sessions)
@@ -2553,6 +2647,15 @@ function gpa() {
   if ! _run_linters "$auto_mode"; then
     echo "✗ Linting check aborted."
     return 1
+  fi
+
+  # --no-review (GPA_NO_REVIEW): the caller already reviewed its own change; secrets and lint passed, so commit
+  if [[ -n "${GPA_NO_REVIEW:-}" ]]; then
+    echo ""
+    echo "ℹ AI code review skipped (--no-review): secrets scan and linters passed"
+    echo ""
+    gpc
+    return $?
   fi
   
   echo ""
@@ -3324,9 +3427,59 @@ function update-repos() {
 # repo), not by checking out a branch in place -- the main repo checkout
 # always stays on main so concurrent work-in-progress branches don't collide
 # in a single working directory.
+# gpr's interface for AI callers (aistack, aidev, Claude Code, opencode, pi):
+#   gpr --auto <feat|fix> <branch> --title "<PR title>" --description "<PR body, markdown>"
+#   --auto        never prompts (a missing type or branch is an error) and implies --json
+#   --title       the draft PR's title and the first commit's subject (default "<type>: <branch>")
+#   --description the PR body (or --body-file <path>); default is the short template
+#   --json        stdout is ONE line of JSON, the human log goes to stderr:
+#                 {"ok":true,"branch","worktree","pr_url","pr_number","title"} or {"ok":false,"error"}
+# Without these flags gpr behaves exactly as before. The worktree is NOT entered (see _gpr_impl).
 function gpr_func() {
+  local title="" body="" auto=0 json=0
+  local -a pos
+  while (( $# )); do
+    case "$1" in
+      --auto) auto=1; json=1; shift ;;
+      --json) json=1; shift ;;
+      --title) title="$2"; shift 2 ;;
+      --description|--body) body="$2"; shift 2 ;;
+      --body-file) body="$(<"$2")" || return 2; shift 2 ;;
+      -*) echo "✗ gpr: unknown option $1 (usage: gpr [--auto] [--json] [--title T] [--description D] <feat|fix> <branch>)" >&2; return 2 ;;
+      *) pos+=("$1"); shift ;;
+    esac
+  done
+  local result_file
+  result_file=$(mktemp)
+  local -x GPR_TITLE="$title" GPR_BODY="$body" GPR_RESULT_FILE="$result_file" GPR_AUTO="${auto:#0}"
+  if (( ! json )); then
+    _gpr_impl "${pos[@]}"
+    local rc=$?
+    rm -f "$result_file"
+    return $rc
+  fi
+  local logf rc
+  logf=$(mktemp)
+  _gpr_impl "${pos[@]}" > "$logf" 2>&1
+  rc=$?
+  cat "$logf" >&2
+  if [[ -s "$result_file" ]]; then
+    jq -c --arg title "${title:-}" '. + {ok: true} + (if $title == "" then {} else {title: $title} end)' "$result_file"
+    rc=0
+  else
+    jq -nc --arg err "$(sed $'s/\x1b\\[[0-9;]*m//g' "$logf" | grep -E '^(✗|fatal|error)' | tail -1)" \
+      --arg tail "$(sed $'s/\x1b\\[[0-9;]*m//g' "$logf" | tail -5)" '{ok: false, error: (if $err == "" then "gpr failed" else $err end), output_tail: $tail}'
+    [[ $rc -eq 0 ]] && rc=1
+  fi
+  rm -f "$logf" "$result_file"
+  return $rc
+}
+
+function _gpr_impl() {
   # Usage: gpr [feat|fix] [branch-name]
   # Positional args skip the interactive prompts below (for scripted/AI callers).
+  # GPR_TITLE / GPR_BODY (set by gpr_func from --title / --description) replace the default PR title and body;
+  # GPR_AUTO makes a missing type or branch an error instead of a prompt; GPR_RESULT_FILE receives the result JSON.
   local arg_type="$1"
   local arg_branch_name="$2"
 
@@ -3371,6 +3524,10 @@ function gpr_func() {
   fi
 
   local type_choice="$arg_type"
+  if [ -z "$type_choice" ] && [ -n "${GPR_AUTO:-}" ]; then
+    echo "✗ --auto needs a type: feat or fix"
+    return 1
+  fi
   if [ -z "$type_choice" ]; then
     echo "Select type:"
     echo "  1) feat"
@@ -3387,6 +3544,10 @@ function gpr_func() {
       ;;
   esac
   local branch_name="$arg_branch_name"
+  if [ -z "$branch_name" ] && [ -n "${GPR_AUTO:-}" ]; then
+    echo "✗ --auto needs a branch name"
+    return 1
+  fi
   if [ -z "$branch_name" ]; then
     echo -n "Branch name: "
     read branch_name
@@ -3413,22 +3574,35 @@ function gpr_func() {
   # inside the worktree does so in a subshell instead, so this shell's own cwd
   # never changes; $worktree_dir is reported at the end for anything that
   # genuinely needs to work IN it afterward.
-  (
-    cd "$worktree_dir" || exit 1
-    git commit --allow-empty -m "$branch_name" &&
-      git push -u origin "$branch_name" &&
-      gh pr create --draft --title "$type_prefix: $branch_name" --body "$(
-        cat <<EOF
-## Description
+  local pr_title="${GPR_TITLE:-$type_prefix: $branch_name}"
+  local pr_body="${GPR_BODY:-}"
+  if [ -z "$pr_body" ]; then
+    pr_body="## Description
 $type_prefix: $branch_name
 
 ## Tickets
-$type_prefix: $branch_name
-EOF
-      )"
-  ) &&
-    echo "" &&
-    echo "✓ Worktree ready: $worktree_dir"
+$type_prefix: $branch_name"
+  fi
+  local pr_url pr_rc
+  pr_url=$(
+    cd "$worktree_dir" || exit 1
+    git commit --allow-empty -m "${GPR_TITLE:-$branch_name}" >&2 &&
+      git push -u origin "$branch_name" >&2 &&
+      gh pr create --draft --title "$pr_title" --body "$pr_body"
+  )
+  pr_rc=$?
+  [ -n "$pr_url" ] && echo "$pr_url"
+  if [ $pr_rc -ne 0 ]; then
+    echo "✗ Creating the branch or draft PR failed (worktree left at $worktree_dir)"
+    return $pr_rc
+  fi
+  echo ""
+  echo "✓ Worktree ready: $worktree_dir"
+  if [ -n "${GPR_RESULT_FILE:-}" ]; then
+    jq -nc --arg branch "$branch_name" --arg worktree "$worktree_dir" --arg url "$pr_url" \
+      '{branch: $branch, worktree: $worktree, pr_url: $url, pr_number: (($url | capture("/pull/(?<n>[0-9]+)") | .n | tonumber)? // null)}' \
+      > "$GPR_RESULT_FILE"
+  fi
 
   # aidev's own pane deliberately stays put (see above), but the sibling
   # nvim/tuicr/zsh panes over in the workspace's dev tab should still follow the
@@ -3436,6 +3610,7 @@ EOF
   # should be showing it even though aidev's cwd doesn't move. Push them there
   # when running in herdr.
   [ -n "$HERDR_ENV" ] && _herdr_sync_dev_panes "$worktree_dir"
+  return 0
 }
 
 # Pushes every pane in the workspace's dev tab (nvim/tuicr/zsh -- see
