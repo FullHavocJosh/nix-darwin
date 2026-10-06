@@ -602,7 +602,8 @@ EOF
 
   # Aider prints this and exits 0 when finish_reason is "length". What is left is a truncated answer (a
   # cut-off review/commit message) plus aider's error text, which must not be used as the model's reply.
-  if echo "$raw_output" | grep -q "has hit a token limit"; then
+  # (anchored at line start so a review that merely quotes the phrase does not trigger it)
+  if echo "$raw_output" | grep -Eq "^Model [^ ]+ has hit a token limit!"; then
     echo "Error: local model hit its token limit (alias $model_alias, max_tokens ${lms_max_tokens}) -- output was truncated and was discarded" >&2
     return 1
   fi
