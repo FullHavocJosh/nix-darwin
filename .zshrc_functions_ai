@@ -757,26 +757,39 @@ START YOUR RESPONSE NOW WITH [ OR []:"
         return 1
       fi
 
-      # Extract JSON more efficiently - single strategy that handles most cases
-      if [[ -n "$result" ]]; then
-        # Strategy: Extract from first [ to last ] (handles wrapped JSON)
-        local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
-
-        # Validate it's proper JSON
-        if echo "$extracted" | jq empty 2>/dev/null; then
-          echo "$extracted"
-          return 0
-        fi
-
-        # Soft failure: Could not parse response
-        # Exit code 2 = unparseable output (user should be warned)
-        echo "Error: Could not parse AI response as JSON" >&2
+      # Empty or whitespace-only output is NOT "no issues found" (jq empty
+      # accepts empty input). Soft failure: user must retry or ignore.
+      if [ -z "$result" ] || [[ -z "${result//[[:space:]]/}" ]]; then
+        echo "Error: OpenCode returned empty response" >&2
         echo "[]"
         return 2
       fi
 
-      echo "Error: OpenCode returned empty response" >&2
-      return 1
+      # Error response (first non-empty line starts with "Error:") is a hard
+      # failure: never run jq on it, never emit "[]" as if it were valid.
+      if echo "$result" | grep -m1 -v '^[[:space:]]*$' | grep -q '^Error:'; then
+        echo "Error: OpenCode returned an error response: $(echo "$result" | head -c 200)" >&2
+        return 1
+      fi
+
+      # Extract JSON: first [ to last ] (handles wrapped JSON)
+      local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
+
+      # Validate it's proper JSON (empty extraction must not reach jq)
+      if [[ -z "${extracted//[[:space:]]/}" ]]; then
+        echo "[]"
+        return 2
+      fi
+      if echo "$extracted" | jq empty 2>/dev/null; then
+        echo "$extracted"
+        return 0
+      fi
+
+      # Soft failure: Could not parse response
+      # Exit code 2 = unparseable output (user should be warned)
+      echo "Error: Could not parse AI response as JSON" >&2
+      echo "[]"
+      return 2
       ;;
 
     opencode)
@@ -808,8 +821,26 @@ If there are no issues to report, respond with exactly: []
         return 1
       fi
       
+      # Empty response is a soft failure, never "no issues found"
+      if [ -z "$result" ] || [[ -z "${result//[[:space:]]/}" ]]; then
+        echo "Error: OpenCode returned empty response" >&2
+        echo "[]"
+        return 2
+      fi
+
+      # Error response (first non-empty line starts with "Error:") is a hard
+      # failure: never run jq on it, never emit "[]" as if it were valid.
+      if echo "$result" | grep -m1 -v '^[[:space:]]*$' | grep -q '^Error:'; then
+        echo "Error: OpenCode returned an error response: $(echo "$result" | head -c 200)" >&2
+        return 1
+      fi
+
       # Extract JSON array from response
       local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
+      if [[ -z "${extracted//[[:space:]]/}" ]]; then
+        echo "[]"
+        return 2
+      fi
       if echo "$extracted" | jq empty 2>/dev/null; then
         echo "$extracted"
         return 0
@@ -849,8 +880,20 @@ If there are no issues to report, respond with exactly: []
       # provider branches) -- _run_aider_local already stripped Aider's own
       # chrome and any markdown fence, but the array-extraction regex stays
       # as a safety net in case the model wraps the array in stray prose.
+      if [[ -z "${aider_output//[[:space:]]/}" ]]; then
+        echo "Error: Aider returned empty response" >&2
+        echo "[]"
+        return 2
+      fi
+      # Error response (first non-empty line starts with "Error:") is a hard
+      # failure: never run jq on it, never emit "[]" as if it were valid.
+      if echo "$aider_output" | grep -m1 -v '^[[:space:]]*$' | grep -q '^Error:'; then
+        echo "Error: Aider returned an error response: $(echo "$aider_output" | head -c 200)" >&2
+        return 1
+      fi
+
       local json_extracted=$(echo "$aider_output" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
-      if echo "$json_extracted" | jq empty 2>/dev/null; then
+      if [[ -n "${json_extracted//[[:space:]]/}" ]] && echo "$json_extracted" | jq empty 2>/dev/null; then
         echo "$json_extracted"
         return 0
       fi
@@ -896,7 +939,23 @@ START YOUR RESPONSE NOW WITH [ OR []:"
         echo "Error: OpenCode command failed (exit code: $exit_code)" >&2
         return 1
       fi
+      if [ -z "$result" ] || [[ -z "${result//[[:space:]]/}" ]]; then
+        echo "Error: OpenCode returned empty response" >&2
+        echo "[]"
+        return 2
+      fi
+      # Error response (first non-empty line starts with "Error:") is a hard
+      # failure: never run jq on it, never emit "[]" as if it were valid.
+      if echo "$result" | grep -m1 -v '^[[:space:]]*$' | grep -q '^Error:'; then
+        echo "Error: OpenCode returned an error response: $(echo "$result" | head -c 200)" >&2
+        return 1
+      fi
+
       local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
+      if [[ -z "${extracted//[[:space:]]/}" ]]; then
+        echo "[]"
+        return 2
+      fi
       if echo "$extracted" | jq empty 2>/dev/null; then
         echo "$extracted"
         return 0
