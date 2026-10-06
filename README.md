@@ -170,12 +170,23 @@ Proton Lumo as a tool-less planning model, hosted on MacMiniM1 (`nix-modules/mac
   told to end replies with `NEED:` lines (a path, `ls`, `find`, `grep`, or keywords); the proxy answers them from
   `~/home-infrastructure` and loops until Lumo gives a final plan. No local model is involved. A name-based deny
   list (`.env`, keys, tfvars, kubeconfig, `*secret*`, ...) is enforced in code. It listens beyond loopback only
-  when Doppler holds `LUMO_PLANNER_API_KEY` (bearer token), and refuses to otherwise.
+  when Doppler holds `LUMO_PLANNER_API_KEY` (bearer token), and refuses to otherwise. The macOS application
+  firewall also has to allow its interpreter: `lumo.nix` adds Homebrew's `Python.app` to it on every activation.
+  tamer (node) is deliberately left blocked, because only the planner talks to it, on loopback.
 - `lumo-watchdog` (every 5 min): checks `tamer auth status`, the server, and every 30 min a real one-word Lumo
   request; alerts through ntfy on failure and on recovery; optionally re-authenticates by itself.
 
-`lumoplan` opens a tool-less pi session on it (`pi --no-tools ... --provider lumo-planner`). Handing the plan to
-the tier 1 planner is not wired up yet. Note the proxy serves the Mini's `home-infrastructure` checkout only.
+`lumoplan` opens a tool-less pi session on it (`pi --no-tools ... --provider lumo-planner`). That mode can only
+read the Mini's `home-infrastructure` checkout, which is all the proxy serves.
+
+Inside `aistack`, tier 1 (pi + LM Studio) can consult Lumo through the `lumo_consult` tool in
+`.config/aistack/ralph_mcp.py`: for larger requests the planner sends the request plus a few project files to
+Lumo and gets a draft task breakdown back, which it adapts into `prd.json`/`verify.json` itself (still validated
+and confirmed by you). Because the proxy cannot see aistack projects, the files are sent inline, only ones the
+planner lists, never secrets/keys/env files (same deny list as the proxy), at most 12 files and 60 KB, and the
+proxy is told not to fetch anything (`X-Lumo-No-Fetch: 1`). If Lumo is unreachable the tool returns ok=false and
+planning continues without it. The key comes from Doppler `LUMO_PLANNER_API_KEY`; `AISTACK_LUMO_URL` overrides
+the endpoint.
 
 Doppler `FullHavocJosh/root_macmini` (all optional, daemons fall back to local files):
 `LUMO_VAULT_KEY` (restores a _missing_ key file only), `LUMO_TAMER_API_KEY`, `LUMO_PLANNER_API_KEY`,

@@ -2,6 +2,7 @@
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_driver.py
 """
 import json, os, sys, tempfile, time, importlib, shutil
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)   # .config/aistack, where the bridge, driver and templates live
 os.environ["RALPH_TUI_BIN"] = os.path.join(HERE, "fake-ralph.py")
@@ -121,6 +122,35 @@ check("run refuses a stale plan_hash", r["started"] is False and "plan_hash" in 
 try:
     m.tool_validate({"project_dir": "/tmp"}); check("outside-root rejected", False)
 except ValueError: check("outside-root rejected", True)
+
+print("H: lumo_consult (tier 0) sends only allowed files, with auth and the no-fetch header")
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+seen = {}
+class FakeLumo(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_POST(self):
+        seen["headers"] = dict(self.headers); seen["body"] = self.rfile.read(int(self.headers["Content-Length"])).decode()
+        out = json.dumps({"choices": [{"message": {"role": "assistant", "content": "T1: add slugify"}}]}).encode()
+        self.send_response(200); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
+srv = HTTPServer(("127.0.0.1", 0), FakeLumo); threading.Thread(target=srv.serve_forever, daemon=True).start()
+os.environ["AISTACK_LUMO_URL"] = "http://127.0.0.1:%d/v1" % srv.server_port; os.environ["AISTACK_LUMO_KEY"] = "test-key"
+p, m = make_project({}, tasks=("T1",))
+open(p + "/slug.py", "w").write("def slugify(s): return s\n"); open(p + "/.env", "w").write("TOKEN=hunter2\n")
+os.makedirs(p + "/secrets"); open(p + "/secrets/a.txt", "w").write("hunter3\n"); open(p + "/big.txt", "w").write("x" * 30000)
+r = m.tool_lumo_consult({"project_dir": p, "request": "add a slugify helper", "files": ["slug.py", ".env", "secrets/a.txt", "../etc/passwd", "big.txt", "missing.py"]})
+check("plan returned", r["ok"] is True and r["plan"] == "T1: add slugify", r)
+check("allowed file sent, with its content", r["files_sent"] == ["slug.py"] and "def slugify" in seen["body"], r)
+check("secret, outside-project, oversize and missing files skipped", set(r["files_skipped"]) == {".env", "secrets/a.txt", "../etc/passwd", "big.txt", "missing.py"}, r["files_skipped"])
+check("denied content never left the machine", "hunter2" not in seen["body"] and "hunter3" not in seen["body"])
+check("bearer key and no-fetch header sent", seen["headers"].get("Authorization") == "Bearer test-key" and seen["headers"].get("X-Lumo-No-Fetch") == "1", seen["headers"])
+os.environ["AISTACK_LUMO_URL"] = "http://127.0.0.1:1/v1"
+r = m.tool_lumo_consult({"project_dir": p, "request": "x"})
+check("unreachable Lumo degrades to ok=false", r["ok"] is False and "plan without it" in r["problem"], r)
+check("empty request rejected", m.tool_lumo_consult({"project_dir": p, "request": " "})["ok"] is False)
+check("tool is listed", "lumo_consult" in m.TOOLS)
+srv.shutdown()
 
 print("\nFAILED: %s" % FAILS if FAILS else "\nALL PASSED")
 sys.exit(1 if FAILS else 0)

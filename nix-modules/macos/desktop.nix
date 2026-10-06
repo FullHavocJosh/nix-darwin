@@ -60,7 +60,10 @@ in
     "ollama-app"
   ];
 
-  system.activationScripts.ollamaModelProvision.text = lib.mkAfter ''
+  # postActivation, not a custom name: nix-darwin only assembles a fixed set of activationScripts names into
+  # the activate script, and the original `ollamaModelProvision` was silently dropped (no
+  # ~/.ollama/provision.log ever appeared on MacMiniM1).
+  system.activationScripts.postActivation.text = lib.mkAfter ''
     sudo -u havoc HOME=/Users/havoc bash -c '(nohup ${ollamaModelProvisioner} </dev/null >>"$HOME/.ollama/provision.log" 2>&1 &)'
     echo "[ollama-model-provisioner] Provisioning check running in background -- tail ~/.ollama/provision.log"
   '';

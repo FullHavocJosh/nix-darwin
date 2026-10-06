@@ -42,6 +42,20 @@ in
   system.activationScripts.postActivation.text = lib.mkAfter ''
     sudo -u havoc HOME=${home} bash -c '(nohup /bin/zsh ${lumoSrc}/provision-tamer.sh ${tamerRev} </dev/null >/dev/null 2>&1 &)'
     echo "[lumo-tamer-provisioner] check running in background -- tail ${home}/lumo-tamer.provision.log"
+
+    # The macOS application firewall (enabled on the Mini) drops inbound connections to binaries it has not been
+    # told to allow, and Homebrew's Python is not on its list, so the planner answered on loopback only. Allow
+    # exactly the interpreter the planner runs under. Redone on every activation: the Cellar path changes when
+    # Homebrew upgrades Python. tamer (node) is deliberately NOT allowed; only the planner talks to it, locally.
+    py_base=$(sudo -u havoc HOME=${home} /opt/homebrew/bin/python3 -c 'import sys; print(sys.base_prefix)' 2>/dev/null)
+    py_app=$(realpath "$py_base/Resources/Python.app/Contents/MacOS/Python" 2>/dev/null)
+    if [ -n "$py_app" ] && [ -x "$py_app" ]; then
+      /usr/libexec/ApplicationFirewall/socketfilterfw --add "$py_app" >/dev/null
+      /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$py_app" >/dev/null
+      echo "[lumo-planner] application firewall: incoming connections allowed for $py_app"
+    else
+      echo "[lumo-planner] WARNING: Homebrew Python.app not found, firewall rule not added" >&2
+    fi
   '';
 
   launchd.daemons.lumo-tamer.serviceConfig = daemon "run-tamer.sh" "lumo-tamer.log" // {

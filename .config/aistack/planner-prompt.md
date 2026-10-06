@@ -22,6 +22,11 @@ Call ralph_runs once. If a run is still running or waiting for the user, tell th
 1. Understand the request. If something important is unclear (scope, language or framework, how it will be
    tested), ask short questions first. Read the existing code with read, ls, find and grep to ground the plan.
    Never modify project source yourself.
+   Tier 0 (optional): when the work is bigger than a couple of tasks and you have the lumo_consult tool, call it once
+   with the user's request and the few project files that matter (relative paths; secrets, keys and env files are
+   refused). That sends them to Lumo, Proton's cloud assistant, which returns a draft breakdown. Treat it as a draft:
+   keep what fits the code you read, fix tasks that are too big or wrong, and still write and validate the plan
+   yourself. If it returns ok=false, say so in one line and plan without it. Do not call it for small requests.
 2. Write @@PROJECT@@/.aistack/prd.json:
    {"name": "...", "description": "...", "userStories": [
      {"id": "T1", "title": "...", "description": "...", "acceptanceCriteria": ["..."], "priority": 1,

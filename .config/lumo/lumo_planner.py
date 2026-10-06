@@ -428,9 +428,15 @@ def flatten(content):
     return content or ""
 
 
-def upstream_messages(client_messages):
-    """Client history -> Lumo history. Tool messages and tool_calls are dropped."""
-    system = SYSTEM_PROMPT
+SYSTEM_PROMPT_NOFETCH = """You are a planning assistant for a software project.
+Everything you need is in the message. You cannot read files and nobody can fetch more context,
+so do not ask for files: state assumptions and open questions in your answer instead."""
+
+
+def upstream_messages(client_messages, fetch=True):
+    """Client history -> Lumo history. Tool messages and tool_calls are dropped.
+    fetch=False (header X-Lumo-No-Fetch: 1) swaps the NEED instructions for a self-contained prompt."""
+    system = SYSTEM_PROMPT if fetch else SYSTEM_PROMPT_NOFETCH
     out = []
     for m in client_messages:
         role, text = m.get("role"), flatten(m.get("content"))
@@ -481,9 +487,11 @@ def make_handler(sb, max_rounds):
                 return self._json(404, {"error": "not found"})
             try:
                 req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
-                messages = upstream_messages(req.get("messages", []))
+                no_fetch = self.headers.get("X-Lumo-No-Fetch") == "1"
+                messages = upstream_messages(req.get("messages", []), fetch=not no_fetch)
             except (ValueError, TypeError) as e:
                 return self._json(400, {"error": f"bad request: {e}"})
+            rounds = 1 if no_fetch else max_rounds
             stream = bool(req.get("stream"))
             cid = f"chatcmpl-{uuid.uuid4().hex[:12]}"
             created = int(time.time())
@@ -502,7 +510,7 @@ def make_handler(sb, max_rounds):
                 try:
                     self.wfile.write(chunk({"role": "assistant"}).encode())
                     # SSE comments keep the connection alive and are invisible to clients
-                    text, _ = run_loop(sb, messages, max_rounds, cache,
+                    text, _ = run_loop(sb, messages, rounds, cache,
                                        lambda m: self._sse_comment(m))
                     self.wfile.write(chunk({"content": text}).encode())
                     self.wfile.write(chunk({}, "stop").encode())
@@ -516,7 +524,7 @@ def make_handler(sb, max_rounds):
                     self.wfile.write(b"data: [DONE]\n\n")
             else:
                 try:
-                    text, _ = run_loop(sb, messages, max_rounds, cache)
+                    text, _ = run_loop(sb, messages, rounds, cache)
                 except Exception as e:
                     return self._json(502, {"error": f"upstream failure: {e}"})
                 self._json(200, {
