@@ -1,0 +1,11 @@
+# Lint config for the aistack scripts (stdlib-only helpers that run as short-lived processes and MCP/driver daemons).
+# gpa's linter step runs `ruff check` on every staged .py file and fails the commit on any finding, so rules that
+# do not fit these scripts are switched off here, each with its reason, instead of being bypassed per commit.
+[lint]
+ignore = [
+  "SIM115",  # open() without a context manager: one-shot reads/writes of small files in processes that exit soon
+  "BLE001",  # blind except: the MCP bridge and run driver must turn any failure into a tool error / run_failed event
+  "PLW1510", # subprocess.run without check=: every call inspects returncode itself or has a timeout and handles it
+  "S110",    # try/except/pass: best-effort cleanup and optional-file reads, where failing quietly is intended
+  "UP031",   # printf-style formatting: used for short messages and test labels
+]

@@ -162,6 +162,7 @@ function _is_helm_template() {
 # Returns 0 if all linters pass or user wants to continue, 1 if user wants to abort
 function _run_linters() {
   local auto_mode="${1:-false}"
+  local recheck="${2:-false}"   # true on the pass after auto-fix: issues that remain are final, never fix again (no recursion)
   local files=()
   while IFS= read -r file; do
     files+=("$file")
@@ -258,8 +259,10 @@ function _run_linters() {
         ;;
       *.py)
         if $has_ruff; then
-          local ruff_output=$(ruff check "$file" 2>&1)
-          local ruff_exit=$?
+          # declare first: `local x=$(cmd)` makes $? the exit status of `local` (always 0), which hid every ruff failure
+          local ruff_output ruff_exit
+          ruff_output=$(ruff check "$file" 2>&1)
+          ruff_exit=$?
           # ruff returns non-zero exit code when issues are found
           # Don't check output text as "All checks passed!" is also output
           if [ $ruff_exit -ne 0 ]; then
@@ -309,7 +312,10 @@ function _run_linters() {
     echo -e "$lint_report"
     echo ""
     local lint_choice
-    if $auto_mode; then
+    if $auto_mode && $recheck; then
+      echo "✗ Linting issues remain after auto-fix. Fix them (or the linter's rules) and run again."
+      return 1
+    elif $auto_mode; then
       echo "ℹ Auto mode: auto-fixing formatting issues"
       lint_choice="f"
     else
@@ -368,7 +374,7 @@ function _run_linters() {
         echo ""
         
         # Recursively call _run_linters to check again
-        _run_linters "$auto_mode"
+        _run_linters "$auto_mode" true
         return $?
         ;;
       f | F)
@@ -432,7 +438,7 @@ function _run_linters() {
         echo "ℹ Re-running linting checks to verify fixes..."
         echo "═══════════════════════════════════════════════════════════"
         echo ""
-        _run_linters "$auto_mode"
+        _run_linters "$auto_mode" true
         return $?
         ;;
       i | I)

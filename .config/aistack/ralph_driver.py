@@ -14,7 +14,14 @@ state, and write control messages, without talking to this process. <state> is ~
 repository): plan files, runs, questions, reviews, progress, Ralph's own .ralph-tui and its iteration logs all live
 there. Only the agents' code changes land in the work dir (the git worktree, or the project itself).
 """
-import json, os, re, shlex, signal, subprocess, sys, time
+import json
+import os
+import re
+import shlex
+import signal
+import subprocess
+import sys
+import time
 
 TAIL_CHARS = 2500
 POLL = 2.0
@@ -336,7 +343,7 @@ class Run:
             if self.cfg["reviewer_agent"] in self.billed_agents:
                 self.billed["review"] += 1
             self.event("review_started", tid, f"reviewing {tid} with {self.cfg['reviewer_agent']}", billed=self.cfg["reviewer_agent"] in self.billed_agents)
-            code, summary, log = self.run_ralph(self.cfg["reviewer_agent"], path, f"review-{tid}-{attempt}",
+            _code, summary, _log = self.run_ralph(self.cfg["reviewer_agent"], path, f"review-{tid}-{attempt}",
                                                 self.review_template)
             if self.cancelled:
                 return None
@@ -384,7 +391,7 @@ class Run:
                 self.billed["review"] += 1
             self.event("review_started", None, f"reviewing {', '.join(tids)} in one pass with {agent}"
                        + (" [billed]" if agent in self.billed_agents else ""), billed=agent in self.billed_agents)
-            code, summary, log = self.run_ralph(agent, path, f"review-batch-{self.batch_n}-{attempt}", self.review_template)
+            _code, summary, _log = self.run_ralph(agent, path, f"review-batch-{self.batch_n}-{attempt}", self.review_template)
             if self.cancelled:
                 return None
             if os.path.exists(rf):

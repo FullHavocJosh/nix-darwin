@@ -381,7 +381,7 @@ def tool_status(a):
     since = int(a.get("since", 0))
     deadline = time.time() + min(max(float(a.get("wait_s", 0)), 0), 45)
     first = rj(os.path.join(runs_dir(project), rid, "state.json"), {})
-    base_state = (first.get("state"), first.get("last_seq"))
+    (first.get("state"), first.get("last_seq"))
     while True:
         st = run_state(project, rid)
         evs = []
@@ -539,32 +539,32 @@ S = lambda props, req: {"type": "object", "properties": props, "required": req}
 STR = {"type": "string"}
 INT = {"type": "integer"}
 TOOLS = {
-    "ralph_validate_plan": (tool_validate, "Check the plan files prd.json and verify.json in the plan dir (schema, dependencies, a verify command "
-        "per task). Returns ok plus a plan_hash and the plan_dir, or a list of problems to fix. Call it before showing the plan to the user.",
+    "ralph_validate_plan": (tool_validate, ("Check the plan files prd.json and verify.json in the plan dir (schema, dependencies, a verify command "
+        "per task). Returns ok plus a plan_hash and the plan_dir, or a list of problems to fix. Call it before showing the plan to the user."),
         S({"project_dir": STR}, ["project_dir"])),
-    "ralph_review_plan": (tool_review_plan, "Tier 2: Claude Code (read-only, billed, one call, up to ~3 minutes) reviews the validated plan against the "
+    "ralph_review_plan": (tool_review_plan, ("Tier 2: Claude Code (read-only, billed, one call, up to ~3 minutes) reviews the validated plan against the "
         "real code BEFORE building, to catch what the planner and Lumo missed. Returns Verdict PASS or FAIL and findings. Call it after "
-        "ralph_validate_plan and the user's first confirmation; ralph_run refuses a plan that has no review.",
+        "ralph_validate_plan and the user's first confirmation; ralph_run refuses a plan that has no review."),
         S({"project_dir": STR}, ["project_dir"])),
-    "ralph_run": (tool_run, "Start the confirmed plan in the background: a worker agent builds each task, the harness runs its "
+    "ralph_run": (tool_run, ("Start the confirmed plan in the background: a worker agent builds each task, the harness runs its "
         "verify commands, failures are retried then escalated, then a read-only reviewer checks security/accuracy/completeness. "
         "Needs the plan_hash from ralph_validate_plan, and only call it after the user has confirmed the plan. When aistack was started in a main "
-        "checkout this first creates the git worktree and draft PR (about 15 s) where the agents will work; the result says where (work_dir).",
+        "checkout this first creates the git worktree and draft PR (about 15 s) where the agents will work; the result says where (work_dir)."),
         S({"project_dir": STR, "plan_hash": STR, "skip_plan_review": {"type": "boolean"}}, ["project_dir", "plan_hash"])),
-    "ralph_status": (tool_status, "Progress of a run: state, per-task status, and new events since `since`. Pass wait_s (up to 45) to "
-        "wait for news. Relay new events to the user every time. state 'waiting_user' means the run is paused for the user.",
+    "ralph_status": (tool_status, ("Progress of a run: state, per-task status, and new events since `since`. Pass wait_s (up to 45) to "
+        "wait for news. Relay new events to the user every time. state 'waiting_user' means the run is paused for the user."),
         S({"project_dir": STR, "run_id": STR, "since": INT, "wait_s": INT}, ["project_dir"])),
-    "ralph_respond": (tool_respond, "Answer a paused run. actions: 'answer' (reply to an agent's question, text=the user's answer), "
+    "ralph_respond": (tool_respond, ("Answer a paused run. actions: 'answer' (reply to an agent's question, text=the user's answer), "
         "'retry' (blocked task, text=guidance), 'skip' (blocked task), 'rework' (failed review, text=extra instructions, optional "
-        "tasks=[ids]), 'accept' (accept failed-review tasks as they are), 'abort'. Use only what the user decided.",
+        "tasks=[ids]), 'accept' (accept failed-review tasks as they are), 'abort'. Use only what the user decided."),
         S({"project_dir": STR, "run_id": STR, "action": STR, "task_id": STR, "text": STR,
            "tasks": {"type": "array", "items": STR}}, ["project_dir", "action"])),
     "ralph_cancel": (tool_cancel, "Stop the active run.", S({"project_dir": STR, "run_id": STR}, ["project_dir"])),
     "ralph_runs": (tool_runs, "List runs in this project (use after restarting the chat to find an unfinished run).",
                    S({"project_dir": STR}, ["project_dir"])),
-    "lumo_consult": (tool_lumo_consult, "Tier 0: ask Lumo (Proton's cloud assistant, no tools) to draft a task breakdown. "
+    "lumo_consult": (tool_lumo_consult, ("Tier 0: ask Lumo (Proton's cloud assistant, no tools) to draft a task breakdown. "
         "Sends the request and the project files you list (relative paths, at most 12, secrets/keys/env files are refused) to Lumo. "
-        "Returns a draft plan to adapt into prd.json/verify.json, or ok=false when Lumo is unreachable (then plan without it).",
+        "Returns a draft plan to adapt into prd.json/verify.json, or ok=false when Lumo is unreachable (then plan without it)."),
         S({"project_dir": STR, "request": STR, "files": {"type": "array", "items": STR}}, ["project_dir", "request"])),
 }
 
