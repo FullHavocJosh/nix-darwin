@@ -12,7 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)   # .config/aistack, where the bridge, driver and templates live
 os.environ["RALPH_TUI_BIN"] = os.path.join(HERE, "fake-ralph.py")
 os.environ["AISTACK_WORKER_AGENT"] = "worker"; os.environ["AISTACK_FALLBACK_AGENT"] = "fallback"
-os.environ["AISTACK_REVIEW_AGENT"] = "reviewer"
+os.environ["AISTACK_REVIEW_AGENT"] = "reviewer"; os.environ["AISTACK_PLAN_REVIEW"] = "off"   # the gate is tested in section I
 os.environ["AISTACK_WORK_TEMPLATE"] = os.path.join(ROOT, "task-template.hbs")
 os.environ["AISTACK_REVIEW_TEMPLATE"] = os.path.join(ROOT, "review-template.hbs")
 os.environ["AISTACK_DRIVER"] = os.path.join(ROOT, "ralph_driver.py")
@@ -42,7 +42,9 @@ def make_project(scenario, tasks=("T1", "T2"), deps=True, mode="none", git=False
     json.dump({t: [f"test -f done_{t}.txt"] for t in tasks}, open(st + "/plan/verify.json", "w"))
     json.dump(scenario, open(st + "/fake-scenario.json", "w"))
     os.environ.update(RALPH_MCP_ROOTS=p, AISTACK_STATE_DIR=st, AISTACK_WORKTREE_MODE=mode)
-    import ralph_mcp; importlib.reload(ralph_mcp)
+    import ralph_mcp
+
+    importlib.reload(ralph_mcp)
     return p, ralph_mcp
 
 def start(m, p):
@@ -172,7 +174,7 @@ p, m = make_project({}, tasks=("T1", "T2", "T3"))
 rid = start(m, p); s, evs = pump(m, p, rid, ("done", "failed", "lost"))
 check("three tasks reviewed with ONE review call", s["state"] == "done" and counts_of(p).get("R-batch") == 1 and not any(k.startswith("R-T") for k in counts_of(p)), counts_of(p))
 check("all three tasks got their verdict from the batch report", all(t["review"] == "PASS" for t in s["tasks"].values()), s["tasks"])
-done = [json.loads(l) for l in open(ST(p) + "/runs/%s/events.jsonl" % rid) if "run_complete" in l][0]
+done = next(json.loads(l) for l in open(ST(p) + "/runs/%s/events.jsonl" % rid) if "run_complete" in l)
 check("run summary counts the billed calls (0 work, 1 review)", done["billed_calls"] == {"work": 0, "review": 1}, done.get("billed_calls"))
 check("review_started is marked billed", any(e["type"] == "review_started" and e.get("billed") for e in evs), [e["type"] for e in evs])
 
@@ -181,7 +183,7 @@ rid = start(m, p); s, evs = pump(m, p, rid, ("done", "failed", "lost"))
 started = [e for e in evs if e["type"] == "task_started"]
 check("only the fallback attempt is marked billed", [e["billed"] for e in started] == [False, False, True], [(e["agent"], e["billed"]) for e in started])
 check("the escalation to the billed agent says so", any(e["type"] == "escalating" and "(billed)" in e["message"] for e in evs))
-done = [json.loads(l) for l in open(ST(p) + "/runs/%s/events.jsonl" % rid) if "run_complete" in l][0]
+done = next(json.loads(l) for l in open(ST(p) + "/runs/%s/events.jsonl" % rid) if "run_complete" in l)
 check("summary: 1 billed work call + 1 billed review", done["billed_calls"] == {"work": 1, "review": 1}, done.get("billed_calls"))
 
 p, m = make_project({"review": {"T1": ["PASS"], "T2": ["FAIL", "PASS"]}}, tasks=("T1", "T2"))
@@ -226,7 +228,7 @@ prd = json.load(open(ST(p2) + "/plan/prd.json")); prd.update(title="fix: Handle 
 json.dump(prd, open(ST(p2) + "/plan/prd.json", "w")); v = m2.tool_validate({"project_dir": p2}); m2.tool_run({"project_dir": p2, "plan_hash": v["plan_hash"]})
 t2 = open(p2 + "/.git/fake-gpr-pr.txt").read().split("\n---BODY---\n")[0]
 check("an existing type prefix is not doubled, the type comes from the plan, long titles are cut to 72", t2.startswith("fix: Handle empty input") and not t2.startswith("fix: fix:") and len(t2) <= 72, t2)
-pump(m2, p2, json.load(open(ST(p2) + "/project.json")) and sorted(os.listdir(ST(p2) + "/runs"))[-1], ("done", "failed", "lost"))
+pump(m2, p2, json.load(open(ST(p2) + "/project.json")) and max(os.listdir(ST(p2) + "/runs")), ("done", "failed", "lost"))
 del os.environ["AISTACK_WORKTREE_CMD"], os.environ["AISTACK_TIERS"]
 
 print("H: lumo_consult (tier 0) sends only allowed files, with auth and the no-fetch header")
@@ -261,6 +263,32 @@ r = m.tool_lumo_consult({"project_dir": p, "request": "x", "files": ["slug.py"]}
 check("tier 0 local mode never contacts Lumo", r["ok"] is False and "unreachable when aistack started" in r["problem"] and "files_sent" not in r, r)
 del os.environ["AISTACK_TIER0"]
 srv.shutdown()
+check("Lumo is told to check online for the latest docs", "check online for the latest best practices/documentation" in seen["body"], seen["body"][:200])
+
+print("I: tier 2 plan review gates ralph_run")
+del os.environ["AISTACK_PLAN_REVIEW"]
+p, m = make_project({}, tasks=("T1",))
+v = m.tool_validate({"project_dir": p})
+r = m.tool_run({"project_dir": p, "plan_hash": v["plan_hash"]})
+check("run refused without a plan review", r["started"] is False and "ralph_review_plan" in r["problem"], r)
+check("review tool is listed", "ralph_review_plan" in m.TOOLS)
+os.environ["AISTACK_PLAN_REVIEW_CMD"] = "echo 'no verdict here'"
+r = m.tool_review_plan({"project_dir": p})
+check("review without a verdict is not ok", r["ok"] is False, r)
+os.environ["AISTACK_PLAN_REVIEW_CMD"] = "printf 'Verdict: FAIL\\nT1: verify passes on empty state\\n'; test -n \"$AISTACK_PLAN_REVIEW_PROMPT\" && echo prompt-ok >&2"
+r = m.tool_review_plan({"project_dir": p})
+check("review returns verdict and findings", r["ok"] and r["verdict"] == "FAIL" and "T1" in r["findings"] and os.path.isfile(r["report"]), r)
+r = m.tool_run({"project_dir": p, "plan_hash": v["plan_hash"]})
+check("run starts once the exact plan is reviewed", r["started"] is True, r)
+pump(m, p, r["run_id"], ("done", "failed", "lost", "waiting_user"), timeout=30)
+prd = json.load(open(ST(p) + "/plan/prd.json")); prd["description"] = "changed"; [x.update(passes=False) for x in prd["userStories"]]; json.dump(prd, open(ST(p) + "/plan/prd.json", "w"))
+v = m.tool_validate({"project_dir": p}); r = m.tool_run({"project_dir": p, "plan_hash": v["plan_hash"]})
+check("an edited plan needs a new review", r["started"] is False and "ralph_review_plan" in r["problem"], r)
+r = m.tool_run({"project_dir": p, "plan_hash": v["plan_hash"], "skip_plan_review": True})
+check("skip_plan_review overrides the gate", r["started"] is True, r)
+pump(m, p, r["run_id"], ("done", "failed", "lost", "waiting_user"), timeout=30)
+del os.environ["AISTACK_PLAN_REVIEW_CMD"]
+os.environ["AISTACK_PLAN_REVIEW"] = "off"
 
 print("\nFAILED: %s" % FAILS if FAILS else "\nALL PASSED")
 sys.exit(1 if FAILS else 0)

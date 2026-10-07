@@ -5,7 +5,10 @@ last entry repeats). Actions: ok (creates done_<id>.txt), fail (does nothing), q
 quote (does nothing but prints the completion marker, like Big Pickle did).
 Like the real thing it starts in the state dir (ralph's cwd, recorded in fake-cwd.txt) and then, like the agent
 wrappers, moves to $AISTACK_WORKDIR to do the work. Questions and reviews go to the state dir, never the repo."""
-import json, os, sys
+import json
+import os
+import sys
+
 args = sys.argv[1:]
 prd = args[args.index("--prd") + 1]
 agent = args[args.index("--agent") + 1]

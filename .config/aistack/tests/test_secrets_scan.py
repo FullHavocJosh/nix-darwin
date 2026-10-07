@@ -2,7 +2,13 @@
 when the AI analysis fails. No network, no AI provider (the analysis is stubbed).
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_secrets_scan.py
 """
-import os, random, string, subprocess, sys, tempfile
+import os
+import random
+import string
+import subprocess
+import sys
+import tempfile
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 FUNCS = os.path.join(ROOT, ".zshrc_functions_git")

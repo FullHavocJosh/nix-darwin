@@ -1,10 +1,18 @@
 """Tests for zen_models.py (tier 1 free-model choice). No network, no opencode.
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_zen_models.py
 """
-import contextlib, io, json, os, sys, tempfile, time
+import contextlib
+import io
+import json
+import os
+import sys
+import tempfile
+import time
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 import zen_models as z
+
 FAILS = []
 
 def check(name, cond, extra=""):

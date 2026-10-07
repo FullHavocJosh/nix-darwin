@@ -164,10 +164,15 @@ non-git directory they work in place. A later run reuses the worktree while it e
   offered, launch says so (`⚠ tier 1: big-pickle is not a free Zen option anymore: <reason>`) and uses the next free
   model. With no free model, or no Zen key, Claude Code Sonnet builds instead and aistack asks first (it is billed).
   No GitHub Copilot fallback: Copilot has been usage-billed since 2026-06-01, so it is not a free option
-- tier 2: Claude Code Sonnet (the `sonnet` alias, always the latest Sonnet) takes over a task tier 1 cannot get to
-  pass, and reviews the result read-only for security, accuracy and completeness. **Billed**, so it is used sparingly:
-  one review call covers the whole run (not one per task), each Claude call has a spending cap and medium effort, and
-  the events and the final summary count the billed calls
+- tier 2: Claude Code Sonnet (the `sonnet` alias, always the latest Sonnet) reviews the plan read-only before anything
+  is built (`ralph_review_plan`, to catch what tier 0 missed), takes over a task tier 1 cannot get to pass, and
+  reviews the result read-only for security, accuracy and completeness. **Billed**, so it is used sparingly:
+  one plan review plus one review call for the whole run (not one per task), each Claude call has a spending cap and
+  medium effort, and the events and the final summary count the billed calls
+
+The flow is plan (tier 0), confirm, review (tier 2), confirm, build (tier 1), review (tier 2). `ralph_run` refuses a plan
+that Claude has not reviewed in its exact current form; `AISTACK_PLAN_REVIEW=off` disables the gate. Lumo's prompt tells it
+to always check online for the latest best practices and documentation.
 
 `AISTACK_TIER0=local` forces the local planner; the banner shows which tier 0 was chosen.
 

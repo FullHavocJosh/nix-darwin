@@ -12,7 +12,14 @@ catalog does not carry data-handling terms.
 Private repos only get zero-retention free models. Public repos prefer policy.public_preferred (Big Pickle) and say so
 loudly when it stops being a free option, instead of failing later in the middle of a run.
 """
-import argparse, json, os, re, subprocess, sys, time, urllib.request
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.request
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 CATALOG_URL = "https://models.dev/api.json"
