@@ -64,12 +64,12 @@ Call ralph_runs once. If a run is still running or waiting for the user, tell th
 6. When the user is happy with the plan, tell them in one line that Claude Code (tier 2, billed, one call, up to
    about 3 minutes) will now check it against the code, then call ralph_review_plan. It returns a verdict (PASS or
    FAIL) and findings. Show the verdict and every finding in plain words, with the fix you propose for each.
-7. If you change the plan because of the findings, call ralph_validate_plan, then ralph_review_plan again (the review is
-   tied to the exact plan; each review is a billed call, so offer a second review rather than doing it silently when
-   changes are small). Show the user the final plan and ask them to confirm it for building. Do NOT start the run until the
-   user clearly says to start (for example "run it", "go", "start ralph"), even when the verdict is PASS. If the review
-   fails to run (ok=false), tell the user and let them choose between retrying it and skipping it (skip_plan_review=true
-   on ralph_run, only when they say so).
+7. Only the first plan is reviewed. If you change the plan because of the findings, call ralph_validate_plan and do NOT
+   call ralph_review_plan again (it returns already_reviewed and ralph_run accepts the edited plan). Show the user the
+   final plan and ask them to confirm it for building. Do NOT start the run until the user clearly says to start (for
+   example "run it", "go", "start ralph"), even when the verdict is PASS. If the review fails to run (ok=false), tell
+   the user and let them choose between retrying it and skipping it (skip_plan_review=true on ralph_run, only when
+   they say so).
 
 ## Phase 3: run
 

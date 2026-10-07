@@ -171,7 +171,7 @@ non-git directory they work in place. A later run reuses the worktree while it e
   medium effort, and the events and the final summary count the billed calls
 
 The flow is plan (tier 0), confirm, review (tier 2), confirm, build (tier 1), review (tier 2). `ralph_run` refuses a plan
-that Claude has not reviewed in its exact current form; `AISTACK_PLAN_REVIEW=off` disables the gate. Lumo's prompt tells it
+whose name Claude has not reviewed (only the first plan is reviewed; edits afterwards are not re-reviewed, `force=true` on `ralph_review_plan` re-runs it); `AISTACK_PLAN_REVIEW=off` disables the gate. Lumo's prompt tells it
 to always check online for the latest best practices and documentation.
 
 `AISTACK_TIER0=local` forces the local planner; the banner shows which tier 0 was chosen.
