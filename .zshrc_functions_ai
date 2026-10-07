@@ -1163,7 +1163,9 @@ TOML
              AISTACK_TIER0: $tier0, AISTACK_STATE_DIR: $state, AISTACK_WORKTREE_MODE: $wtmode,
              AISTACK_REVIEW_MODE: $reviewmode, AISTACK_TIERS: $tiers},
        exposure: "direct", timeout: 200,
-       description: "Runs the confirmed plan through Ralph: worker agents, verification, retries, review. Poll ralph_status."}}}' \
+       description: "Runs the confirmed plan through Ralph: worker agents, verification, retries, review. Poll ralph_status."},
+      github: {command: "npx", args: ["-y", "@edjl/github-mcp"], exposure: "direct", timeout: 60,
+       description: "Read-only GitHub lookups through the logged-in gh (PRs, files, branches, issues)."}}}' \
     > "$pi_dir/mcp.json"
 
   local prompt
@@ -1196,7 +1198,11 @@ TOML
   echo "(The local model is slow: a reply can take a while with nothing visible. That is normal.)"
   echo ""
 
-  local tools="read,grep,find,ls,write,edit,mcp__ralph__ralph_validate_plan,mcp__ralph__ralph_review_plan,mcp__ralph__ralph_run,mcp__ralph__ralph_status,mcp__ralph__ralph_respond,mcp__ralph__ralph_cancel,mcp__ralph__ralph_runs"
+  # pi gets exactly two MCP servers: ralph (this bridge, which also carries lumo_consult) and github. Every other server
+  # belongs to OpenCode and Claude Code only. github is allowlisted read-only: pr_create, pr_approve and pr_suggest_change
+  # stay invisible to the local model (agents may not create, approve or review PRs; see the gpr/gpa workflow hook).
+  local github_tools="mcp__github__github_repos_list,mcp__github__github_file_get,mcp__github__github_branch_list,mcp__github__github_pr_list,mcp__github__github_pr_details,mcp__github__github_pr_changes,mcp__github__github_pr_comments_get,mcp__github__github_issues_list"
+  local tools="read,grep,find,ls,write,edit,mcp__ralph__ralph_validate_plan,mcp__ralph__ralph_review_plan,mcp__ralph__ralph_run,mcp__ralph__ralph_status,mcp__ralph__ralph_respond,mcp__ralph__ralph_cancel,mcp__ralph__ralph_runs,$github_tools"
   # lumo_consult only when tier 0 is Lumo; pi's --tools is an allowlist, so a tool missing here is invisible to the model
   # (it was left out once, and the planner then reported "Lumo is unavailable" without ever calling it)
   [[ "$tier0" == "lumo" ]] && tools="$tools,mcp__ralph__lumo_consult"
