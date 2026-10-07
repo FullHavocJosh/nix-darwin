@@ -1024,7 +1024,7 @@ function aistack_func() {
     fi
     if ! _validate_llamacpp; then
       echo "✗ The planner needs the local model -- aborting."
-      echo "  It must be on this machine's disk and LM Link's preferred device must be this machine (see ~/.lmstudio/provision.log)."
+      echo "  It must be on this machine's disk and LM Link must be disabled (run: lms link disable; see ~/.lmstudio/provision.log)."
       return 1
     fi
   fi
@@ -1374,15 +1374,15 @@ function _validate_llamacpp() {
   response=$(curl -s --max-time 3 "${endpoint}/v1/models" 2>/dev/null)
   echo "$response" | grep -q "\"${lms_model}\"" || return 1
   # LM Link also lists other devices' models in /v1/models, and a request for a
-  # model key can be served by a linked device. Require (1) a copy on this
-  # machine's own disk and (2) that LM Link's preferred device is this machine,
-  # because LM Link loads a model on the preferred device even when a local copy
-  # exists. This keeps prompts on the host (matters most for the work laptop).
-  # Fails closed: if lms or jq cannot be found the check cannot run, so the
-  # model is rejected rather than trusted. To use a linked device's model on
-  # purpose (e.g. the 27B held by MacBookM2Pro, from another host), set
-  # LOCAL_LLM_ALLOW_LINK=1 for that call and point the preferred device at the
-  # peer with `lms link set-preferred-device <id>`:
+  # model key can be served by a linked device even when this machine has a
+  # copy and is the preferred device (seen 2026-10-07: aistack's qwen3.5-9b ran
+  # on MacBookM3Pro, server log id "1b896c...:qwen/qwen3.5-9b"). So the preferred
+  # device is not a safe control: LM Link must be disabled on this host
+  # (forceDisabled in lm-link-config.json; `lms link disable`, re-applied by the
+  # model provisioner on every rebuild), and the model must be on this
+  # machine's own disk. Fails closed: if lms or jq cannot be found the check
+  # cannot run, so the model is rejected rather than trusted. To use a linked
+  # device's model on purpose, set LOCAL_LLM_ALLOW_LINK=1 for that call:
   #   LOCAL_LLM_MODEL=qwen/qwen3.8-27b LOCAL_LLM_ALLOW_LINK=1 gpa
   if [[ -z "${LOCAL_LLM_ALLOW_LINK:-}" ]]; then
     local lms_bin link_cfg="$HOME/.lmstudio/.internal/lm-link-config.json"
@@ -1391,7 +1391,7 @@ function _validate_llamacpp() {
     "$lms_bin" ls --json 2>/dev/null | jq -e --arg m "$lms_model" \
       'any(.[]; .modelKey == $m and .deviceIdentifier == null)' >/dev/null || return 1
     if [[ -f "$link_cfg" ]]; then
-      jq -e '.json | (.deviceIdentifier != null) and ((.preferredDeviceIdentifier // .deviceIdentifier) == .deviceIdentifier)' "$link_cfg" >/dev/null || return 1
+      jq -e '.json.forceDisabled == true' "$link_cfg" >/dev/null || return 1
     fi
   fi
   return 0
@@ -2051,7 +2051,7 @@ function aiselect() {
         echo "${RED}✗${NC} LM Studio is not usable at ${LLAMA_CPP_HOST:-http://localhost:1234} for ${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
         echo ""
         echo "Start it: lms server start"
-        echo "The model must be on this machine's disk and LM Link's preferred device must be this machine"
+        echo "The model must be on this machine's disk and LM Link must be disabled (lms link disable)"
         echo "(a rebuild's provisioner handles both; see ~/.lmstudio/provision.log). Then re-run aiselect."
         return 1
       fi

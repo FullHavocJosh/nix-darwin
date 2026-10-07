@@ -86,20 +86,16 @@ let
       exit 1
     fi
 
-    # Serve models from this machine. LM Link resolves a model key through the
-    # preferred device, so if that points at a peer, a request that passes the
-    # local-copy check in _validate_llamacpp is still loaded and run on the peer
-    # (seen on MacMiniM1, 2026-10-05: the 9B ran on MacBookM2Pro). Reset it to
-    # this device on every rebuild; pick a peer by hand with
-    # `lms link set-preferred-device <id>` when you want one.
+    # Serve models from this machine only. LM Link can route a request to a peer
+    # even when this device is the preferred one (seen 2026-10-07: aistack's 9B ran
+    # on MacBookM3Pro, and killing LM Studio there crashed the session), so the
+    # preferred device is no control. Disable LM Link on every rebuild; the only
+    # remote model use is Lumo, over direct HTTP. Re-enable by hand with
+    # `lms link enable` if wanted (the next rebuild disables it again).
     LINK_CFG="$HOME/.lmstudio/.internal/lm-link-config.json"
-    if [ -f "$LINK_CFG" ]; then
-      SELF_ID=$("$JQ" -r '.json.deviceIdentifier // empty' "$LINK_CFG")
-      PREF_ID=$("$JQ" -r '.json.preferredDeviceIdentifier // empty' "$LINK_CFG")
-      if [ -n "$SELF_ID" ] && [ "$SELF_ID" != "$PREF_ID" ]; then
-        log "LM Link preferred device is not this machine -- setting it to $SELF_ID"
-        "$LMS" link set-preferred-device "$SELF_ID" >> "$LOG" 2>&1 || log "WARNING: could not set the preferred device"
-      fi
+    if [ -f "$LINK_CFG" ] && ! "$JQ" -e '.json.forceDisabled == true' "$LINK_CFG" >/dev/null; then
+      log "LM Link is enabled -- disabling it so no request is served by a peer"
+      "$LMS" link disable >> "$LOG" 2>&1 || log "WARNING: could not disable LM Link"
     fi
 
     RAM_MB=$(( $(/usr/sbin/sysctl -n hw.memsize) / 1048576 ))
@@ -178,7 +174,7 @@ in
 
   # Runs LM Studio headless, the same way `lms server start` does: that command
   # wakes "LM Studio --run-as-service" (observed on MacMiniM1, 2026-10-05) with
-  # no window, serving :1234 and keeping the LM Link connector up. Without this
+  # no window, serving :1234 (LM Link stays disabled, see the provisioner). Without this
   # the server only exists while the GUI app is open, and the app is not a login
   # item. Modeled on the ollama daemon in desktop.nix (a LaunchDaemon with
   # UserName, so it starts at boot rather than at login).
