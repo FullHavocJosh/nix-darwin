@@ -63,27 +63,25 @@ in
       echo "Terraform infrastructure directories (v3/v4) not found, skipping cleanup"
     fi
   '';
-  # Force the claude-tui statusline's monthly token/cost totals to resync on
-  # every switch (same as the /usage-sync command). Needs postActivation, not
-  # activationScripts.script above: that runs before packages-tui.nix's
-  # postActivation block applies claude-tui-usage-patch.py, so the patched
-  # monthly_tokens/monthly_cost modules would not exist yet. Runs as the login
-  # user (activation is root) so the cache lands in ~/.claude, not /var/root.
-  # Non-fatal: the recompute can take ~2 minutes and must never fail a switch.
+  # The claude-tui statusline on this profile shows only the context line. The monthly-cost budget bar is a local
+  # estimate from session transcripts and did not match the usage page, so no budget is configured: with none,
+  # format_monthly_cost() returns nothing and the compact line is just the context bar. The budget lives in
+  # ~/.claude/claudeui.json (monthly_cost.budget), which nothing in this repo writes; drop it on every switch so a
+  # hand-added one cannot bring the bar back. Only that one key is deleted (jq del keeps every other setting, and the
+  # file is replaced atomically via mv); a file without the key is left untouched. Runs as the login user (activation
+  # is root), non-fatal.
   system.activationScripts.postActivation.text = lib.mkAfter ''
-    echo "Resyncing claude-tui monthly token/cost totals..."
-    sudo --set-home -u jrollet /opt/homebrew/bin/python3 - <<'PYEOF' || echo "Warning: monthly usage resync failed, skipping"
-    import sys
-    sys.path.insert(0, "/opt/homebrew/opt/claude-tui/libexec")
-    from claude_tui_core.monthly_tokens import fetch_monthly_tokens, format_monthly_tokens
-    from claude_tui_core.monthly_cost import fetch_monthly_cost, format_monthly_cost
-
-    tokens = fetch_monthly_tokens(background=False, force=True)
-    cost = fetch_monthly_cost(background=False, force=True)
-
-    print(f"Monthly tokens resynced: {format_monthly_tokens(tokens) or '(unavailable)'}")
-    print(f"Monthly cost resynced:   {format_monthly_cost(cost) or '(unavailable -- not a work/gateway account)'}")
-    PYEOF
+    cfg=/Users/jrollet/.claude/claudeui.json
+    jq_bin=${pkgs.jq}/bin/jq
+    if [ ! -f "$cfg" ]; then
+      echo "Statusline: $cfg does not exist, nothing to remove."
+    elif ! sudo -u jrollet "$jq_bin" -e 'has("monthly_cost")' "$cfg" >/dev/null 2>&1; then
+      echo "Statusline: $cfg has no monthly_cost (or is not valid JSON), leaving it as it is."
+    elif sudo -u jrollet sh -c '"$1" "del(.monthly_cost)" "$2" > "$2.new" && mv "$2.new" "$2"' _ "$jq_bin" "$cfg"; then
+      echo "Statusline: removed monthly_cost from $cfg (work statusline shows the context line only)."
+    else
+      echo "Warning: jq failed while removing monthly_cost from $cfg; the budget bar may still show." >&2
+    fi
   '';
 
   networking.hostName = "MacBookM3Pro";
@@ -95,6 +93,12 @@ in
   # Does NOT affect aiselect or aidev/opencode. Override for one shell session
   # with `unset AI_LOCAL_DEFAULT`.
   environment.variables.AI_LOCAL_DEFAULT = "1";
+
+  # Model and effort for aistack's Claude Code calls (claude-work.sh, claude-review.sh and the ralph agents in
+  # aistack_func). Chosen per profile because work and personal use different Anthropic plans with different token
+  # costs. Per-session override: export AISTACK_CLAUDE_MODEL / AISTACK_CLAUDE_EFFORT.
+  environment.variables.AISTACK_CLAUDE_MODEL = "claude-opus-5-5";
+  environment.variables.AISTACK_CLAUDE_EFFORT = "high";
 
   system.defaults = {
     dock.persistent-apps = [ ];
