@@ -973,8 +973,11 @@ function _aistack_repo_private() {
 #           (pi + LM Studio, local)        when MacMiniM1 is unreachable. pi stays the coordinator either way:
 #                                          it talks to you and calls the ralph_* tools, which Lumo cannot do
 #   tier 1  OpenCode Big Pickle (free)     worker: builds each task      (Claude Sonnet when no Zen key)
-#   tier 2  Claude Code Sonnet (latest)    fallback worker for a task tier 1 cannot get to pass, and a
-#                                          read-only reviewer (security / accuracy / completeness) at the end
+#   tier 2  Claude Code Sonnet (latest)    read-only reviewer of the plan before anything is built (ralph_review_plan,
+#                                          catches what tier 0 missed), fallback worker for a task tier 1 cannot get to
+#                                          pass, and a read-only reviewer (security / accuracy / completeness) at the end
+#
+# Flow: plan (tier 0) -> confirm -> review (tier 2) -> confirm -> build (tier 1) -> review (tier 2)
 #
 # The run itself is ~/.config/aistack/ralph_driver.py (detached, state under ~/.aistack/<project>/runs/):
 # one task at a time through `ralph-tui run`, a task only counts as done when its verify commands exit 0
@@ -1191,12 +1194,12 @@ TOML
     echo "Tier 0 (plan):       local $lms_model   [MacMiniM1's Lumo is unreachable]"
   fi
   echo "Tier 1 (build):      $worker_label${t1_note:+   [$t1_note]}"
-  echo "Tier 2 (fallback, review): Claude Code Sonnet (latest, BILLED: used sparingly, one review for the whole run)"
+  echo "Tier 2 (plan review, fallback, final review): Claude Code Sonnet (latest, BILLED: one plan review before the build, one review for the whole run)"
   echo "Describe what you want; pi will draft a plan for you to confirm before anything runs."
   echo "(The local model is slow: a reply can take a while with nothing visible. That is normal.)"
   echo ""
 
-  local tools="read,grep,find,ls,write,edit,mcp__ralph__ralph_validate_plan,mcp__ralph__ralph_run,mcp__ralph__ralph_status,mcp__ralph__ralph_respond,mcp__ralph__ralph_cancel,mcp__ralph__ralph_runs"
+  local tools="read,grep,find,ls,write,edit,mcp__ralph__ralph_validate_plan,mcp__ralph__ralph_review_plan,mcp__ralph__ralph_run,mcp__ralph__ralph_status,mcp__ralph__ralph_respond,mcp__ralph__ralph_cancel,mcp__ralph__ralph_runs"
   # lumo_consult only when tier 0 is Lumo; pi's --tools is an allowlist, so a tool missing here is invisible to the model
   # (it was left out once, and the planner then reported "Lumo is unavailable" without ever calling it)
   [[ "$tier0" == "lumo" ]] && tools="$tools,mcp__ralph__lumo_consult"
@@ -1204,7 +1207,7 @@ TOML
   extra=(${=AISTACK_PI_EXTRA})
   (
     cd "$project" || exit 1
-    PI_CODING_AGENT_DIR="$pi_dir" pi --provider lmstudio --model "$lms_model" --name "aistack: plan ${tier0}, build ${zen_model:-claude}, review claude" --no-skills \
+    PI_CODING_AGENT_DIR="$pi_dir" pi --provider lmstudio --model "$lms_model" --name "aistack: plan ${tier0}, review claude, build ${zen_model:-claude}, review claude" --no-skills \
       --append-system-prompt "$prompt" --tools "$tools" "${extra[@]}" ${task:+"$task"}
   )
   local rc=$?

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """MCP bridge (stdio, JSON-RPC 2.0) between a chat agent (pi) and the aistack run driver.
 
-Tools: ralph_validate_plan, ralph_run, ralph_status, ralph_respond, ralph_cancel, ralph_runs, lumo_consult (tier 0).
+Tools: ralph_validate_plan, ralph_review_plan (tier 2 plan review), ralph_run, ralph_status, ralph_respond, ralph_cancel, ralph_runs, lumo_consult (tier 0).
 Runs are detached processes (ralph_driver.py); tool calls return quickly, and ralph_status can wait up to
 45s for news so the chat agent can follow a run without a tight loop (MCP clients time out near 60s).
 
@@ -253,6 +253,64 @@ def ensure_workdir(project, prd, verify=None):
     return wd, True, None
 
 
+PLAN_REVIEW_PROMPT = """You are the tier 2 reviewer in aistack. A weaker planner (a small local model, with a cloud assistant's draft)
+wrote the build plan below. It has NOT been built yet. Catch what they missed, before anything is implemented.
+Read the project in the current directory (read-only; Read, Grep, Glob, git status/diff/log) to check the plan against the real code.
+Judge: (1) accuracy: do the named files, functions and behaviors exist and match the code; (2) completeness: requirements or edge cases
+not covered, missing tasks, wrong dependsOn order; (3) task size: each task should fit one agent session; (4) verify commands: each must
+exit 0 only when its task is really done, and must not pass on unrelated or empty state; (5) security and risky defaults.
+Do NOT modify any file. Do NOT review code quality of code that does not exist yet.
+Reply in this form: FIRST line exactly 'Verdict: PASS' or 'Verdict: FAIL' (FAIL when the plan must change before building),
+then findings, most serious first, each naming the task id and the concrete fix. Be concise.
+
+USER REQUEST / PLAN DESCRIPTION: %s
+
+prd.json:
+%s
+
+verify.json:
+%s
+"""
+
+
+def plan_review_path(project):
+    return os.path.join(state_dir(project), "plan-review.json")
+
+
+def tool_review_plan(a):
+    """Tier 2 reviews the confirmed-by-validation plan BEFORE the user is asked to confirm it for building."""
+    project = project_of(a)
+    prd, verify, h = load_plan(project)
+    problems = validate(prd, verify)
+    if problems:
+        return {"ok": False, "problems": problems, "problem": "fix the plan and call ralph_validate_plan first"}
+    prompt = PLAN_REVIEW_PROMPT % (str(prd.get("description") or prd.get("name") or ""),
+                                   json.dumps(prd, indent=1), json.dumps(verify, indent=1))
+    cmd = os.environ.get("AISTACK_PLAN_REVIEW_CMD")
+    argv = ["/bin/sh", "-c", cmd] if cmd else [os.path.join(HERE, "claude-review.sh"), "-p", prompt]
+    env = dict(os.environ, AISTACK_WORKDIR=project, AISTACK_PLAN_REVIEW_PROMPT=prompt)
+    env.pop("AISTACK_REVIEWS_DIR", None)    # stdout only: the reviewer is not allowed to write anything
+    try:
+        r = subprocess.run(argv, cwd=project, env=env, capture_output=True, text=True, timeout=int(os.environ.get("AISTACK_PLAN_REVIEW_TIMEOUT_S", "170")),
+                           stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return {"ok": False, "problem": f"the plan review (Claude Code) did not finish: {type(e).__name__}: {e}"}
+    text = (r.stdout or "").strip()
+    first = text.splitlines()[0].strip() if text else ""
+    m = re.match(r"(?i)^\**\s*verdict:\s*(pass|fail)", first)
+    if r.returncode != 0 or not m:
+        return {"ok": False, "problem": f"the plan review produced no valid verdict (exit {r.returncode})", "tail": (text or r.stderr or "")[-600:]}
+    verdict = m.group(1).upper()
+    os.makedirs(os.path.join(state_dir(project), "reviews"), exist_ok=True)
+    report = os.path.join(state_dir(project), "reviews", "plan-review.md")
+    with open(report, "w") as f:
+        f.write(text + "\n")
+    json.dump({"plan_hash": h, "verdict": verdict, "report": report, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}, open(plan_review_path(project), "w"))
+    return {"ok": True, "verdict": verdict, "plan_hash": h, "report": report, "findings": text[:6000], "billed_calls": 1,
+            "next": "Show the findings to the user. If you change the plan, call ralph_validate_plan again and ralph_review_plan again "
+                    "(the review is tied to the exact plan). Only after the user confirms the reviewed plan, call ralph_run with the plan_hash."}
+
+
 def tool_run(a):
     project = project_of(a)
     prd, verify, h = load_plan(project)
@@ -261,6 +319,12 @@ def tool_run(a):
         return {"started": False, "problems": problems}
     if a.get("plan_hash") != h:
         return {"started": False, "problem": "plan_hash does not match the current plan. Call ralph_validate_plan, show the user the result, get their confirmation, then pass the plan_hash it returns."}
+    if os.environ.get("AISTACK_PLAN_REVIEW", "on") != "off" and not a.get("skip_plan_review"):
+        rev = rj(plan_review_path(project), {})
+        if rev.get("plan_hash") != h:
+            return {"started": False, "problem": "Claude Code has not reviewed this exact plan yet. Call ralph_review_plan, show the user "
+                    "the findings, and get their confirmation of the reviewed plan. Pass skip_plan_review=true only if the user explicitly "
+                    "said to skip the review (it is billed)."}
     rid0 = latest_run(project)
     if rid0 and run_state(project, rid0).get("state") in ("running", "waiting_user", "starting"):
         return {"started": False, "problem": f"run {rid0} is still active; use ralph_status / ralph_respond / ralph_cancel"}
@@ -403,6 +467,7 @@ Output, in this order:
    Verify commands run without a shell: no ; & | < > backtick or $(), so a multi-step check becomes a task that creates a script.
 3. Open questions for the user.
 Keep tasks small enough for one agent session. Do not write the implementation.
+Always check online for the latest best practices/documentation before answering.
 
 REQUEST:
 """
@@ -477,11 +542,15 @@ TOOLS = {
     "ralph_validate_plan": (tool_validate, "Check the plan files prd.json and verify.json in the plan dir (schema, dependencies, a verify command "
         "per task). Returns ok plus a plan_hash and the plan_dir, or a list of problems to fix. Call it before showing the plan to the user.",
         S({"project_dir": STR}, ["project_dir"])),
+    "ralph_review_plan": (tool_review_plan, "Tier 2: Claude Code (read-only, billed, one call, up to ~3 minutes) reviews the validated plan against the "
+        "real code BEFORE building, to catch what the planner and Lumo missed. Returns Verdict PASS or FAIL and findings. Call it after "
+        "ralph_validate_plan and the user's first confirmation; ralph_run refuses a plan that has no review.",
+        S({"project_dir": STR}, ["project_dir"])),
     "ralph_run": (tool_run, "Start the confirmed plan in the background: a worker agent builds each task, the harness runs its "
         "verify commands, failures are retried then escalated, then a read-only reviewer checks security/accuracy/completeness. "
         "Needs the plan_hash from ralph_validate_plan, and only call it after the user has confirmed the plan. When aistack was started in a main "
         "checkout this first creates the git worktree and draft PR (about 15 s) where the agents will work; the result says where (work_dir).",
-        S({"project_dir": STR, "plan_hash": STR}, ["project_dir", "plan_hash"])),
+        S({"project_dir": STR, "plan_hash": STR, "skip_plan_review": {"type": "boolean"}}, ["project_dir", "plan_hash"])),
     "ralph_status": (tool_status, "Progress of a run: state, per-task status, and new events since `since`. Pass wait_s (up to 45) to "
         "wait for news. Relay new events to the user every time. state 'waiting_user' means the run is paused for the user.",
         S({"project_dir": STR, "run_id": STR, "since": INT, "wait_s": INT}, ["project_dir"])),

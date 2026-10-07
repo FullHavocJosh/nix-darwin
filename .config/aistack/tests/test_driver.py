@@ -12,7 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)   # .config/aistack, where the bridge, driver and templates live
 os.environ["RALPH_TUI_BIN"] = os.path.join(HERE, "fake-ralph.py")
 os.environ["AISTACK_WORKER_AGENT"] = "worker"; os.environ["AISTACK_FALLBACK_AGENT"] = "fallback"
-os.environ["AISTACK_REVIEW_AGENT"] = "reviewer"
+os.environ["AISTACK_REVIEW_AGENT"] = "reviewer"; os.environ["AISTACK_PLAN_REVIEW"] = "off"   # the gate is tested in section I
 os.environ["AISTACK_WORK_TEMPLATE"] = os.path.join(ROOT, "task-template.hbs")
 os.environ["AISTACK_REVIEW_TEMPLATE"] = os.path.join(ROOT, "review-template.hbs")
 os.environ["AISTACK_DRIVER"] = os.path.join(ROOT, "ralph_driver.py")
@@ -261,6 +261,32 @@ r = m.tool_lumo_consult({"project_dir": p, "request": "x", "files": ["slug.py"]}
 check("tier 0 local mode never contacts Lumo", r["ok"] is False and "unreachable when aistack started" in r["problem"] and "files_sent" not in r, r)
 del os.environ["AISTACK_TIER0"]
 srv.shutdown()
+check("Lumo is told to check online for the latest docs", "check online for the latest best practices/documentation" in seen["body"], seen["body"][:200])
+
+print("I: tier 2 plan review gates ralph_run")
+del os.environ["AISTACK_PLAN_REVIEW"]
+p, m = make_project({}, tasks=("T1",))
+v = m.tool_validate({"project_dir": p})
+r = m.tool_run({"project_dir": p, "plan_hash": v["plan_hash"]})
+check("run refused without a plan review", r["started"] is False and "ralph_review_plan" in r["problem"], r)
+check("review tool is listed", "ralph_review_plan" in m.TOOLS)
+os.environ["AISTACK_PLAN_REVIEW_CMD"] = "echo 'no verdict here'"
+r = m.tool_review_plan({"project_dir": p})
+check("review without a verdict is not ok", r["ok"] is False, r)
+os.environ["AISTACK_PLAN_REVIEW_CMD"] = "printf 'Verdict: FAIL\\nT1: verify passes on empty state\\n'; test -n \"$AISTACK_PLAN_REVIEW_PROMPT\" && echo prompt-ok >&2"
+r = m.tool_review_plan({"project_dir": p})
+check("review returns verdict and findings", r["ok"] and r["verdict"] == "FAIL" and "T1" in r["findings"] and os.path.isfile(r["report"]), r)
+r = m.tool_run({"project_dir": p, "plan_hash": v["plan_hash"]})
+check("run starts once the exact plan is reviewed", r["started"] is True, r)
+pump(m, p, r["run_id"], ("done", "failed", "lost", "waiting_user"), timeout=30)
+prd = json.load(open(ST(p) + "/plan/prd.json")); prd["description"] = "changed"; [x.update(passes=False) for x in prd["userStories"]]; json.dump(prd, open(ST(p) + "/plan/prd.json", "w"))
+v = m.tool_validate({"project_dir": p}); r = m.tool_run({"project_dir": p, "plan_hash": v["plan_hash"]})
+check("an edited plan needs a new review", r["started"] is False and "ralph_review_plan" in r["problem"], r)
+r = m.tool_run({"project_dir": p, "plan_hash": v["plan_hash"], "skip_plan_review": True})
+check("skip_plan_review overrides the gate", r["started"] is True, r)
+pump(m, p, r["run_id"], ("done", "failed", "lost", "waiting_user"), timeout=30)
+del os.environ["AISTACK_PLAN_REVIEW_CMD"]
+os.environ["AISTACK_PLAN_REVIEW"] = "off"
 
 print("\nFAILED: %s" % FAILS if FAILS else "\nALL PASSED")
 sys.exit(1 if FAILS else 0)
