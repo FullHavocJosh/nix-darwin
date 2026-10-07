@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Planning loop: Lumo thinks, a local LM Studio model fetches files.
+"""Planning loop: Lumo thinks, a local llama.cpp model fetches files.
 
 Lumo (via lumo-tamer, tools disabled) is told to end replies with `NEED:` lines
 when it wants more context. Each NEED is resolved from a project root:
@@ -28,8 +28,8 @@ LUMO_MODEL = os.environ.get("LUMO_MODEL", "lumo")
 LUMO_API_KEY = os.environ.get("LUMO_API_KEY", "")
 # Bearer token clients of this proxy must send. Required when listening beyond loopback.
 PLANNER_API_KEY = os.environ.get("PLANNER_API_KEY", "")
-LOCAL_BASE_URL = os.environ.get("LOCAL_BASE_URL", "http://localhost:1234/v1")
-LOCAL_MODEL = os.environ.get("LOCAL_MODEL", "qwen3-coder-30b-a3b-instruct")
+LOCAL_BASE_URL = os.environ.get("LOCAL_BASE_URL", "http://127.0.0.1:8080/v1")
+LOCAL_MODEL = os.environ.get("LOCAL_MODEL", "qwen/qwen3.5-9b")
 
 SERVED_MODEL = "lumo-planner"
 # keyword (default, no model needed) or llm (local model with read-only tools)
@@ -372,8 +372,8 @@ def llm_resolve(sb, request):
     for _ in range(MAX_RESOLVER_STEPS):
         msg = post_chat(LOCAL_BASE_URL, {
             "model": LOCAL_MODEL, "messages": messages, "tools": TOOLS, "temperature": 0,
-            # Qwen3.5 on LM Studio ignores /no_think and enable_thinking; only this works
-            "reasoning_effort": "none",
+            # Qwen3.5 on llama-server ignores /no_think and reasoning_effort; chat_template_kwargs.enable_thinking works
+            "chat_template_kwargs": {"enable_thinking": False},
         })
         calls = msg.get("tool_calls")
         if not calls:

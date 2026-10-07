@@ -67,7 +67,7 @@ ansible-linux/inventory/staging
 !/.claude/settings.json
 
 # Ignore pi folders (auth.json, sessions, skills, catalog cache) but keep
-# agent/models.json tracked so the local LM Studio provider syncs across machines
+# agent/models.json tracked so the local llama.cpp provider syncs across machines
 /.pi/*
 !/.pi/agent/
 /.pi/agent/*

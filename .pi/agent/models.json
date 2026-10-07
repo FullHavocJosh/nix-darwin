@@ -1,9 +1,9 @@
 {
   "providers": {
-    "lmstudio": {
-      "baseUrl": "http://localhost:1234/v1",
+    "llamacpp": {
+      "baseUrl": "http://127.0.0.1:8080/v1",
       "api": "openai-completions",
-      "apiKey": "lm-studio",
+      "apiKey": "sk-local",
       "models": [{ "id": "qwen/qwen3.5-9b" }]
     },
     "lumo": {
