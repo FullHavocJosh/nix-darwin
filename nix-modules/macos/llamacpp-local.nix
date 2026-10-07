@@ -26,8 +26,9 @@ let
   bindHost = "127.0.0.1";
   port = 8080;
 
-  # Context window. One slot (--parallel 1) gets all of it.
-  ctxSize = 131072;
+  # Context window and KV cache types come from the device profile (RAM class), resolved by the launcher at start:
+  # one slot (--parallel 1) gets the whole window. Same file the shell helpers source.
+  profileFile = pkgs.writeText "llama-profile.sh" (builtins.readFile ../../.config/llama/profile.sh);
 
   modelDownloader = pkgs.writeShellScript "llama-model-downloader-local" ''
     #!/usr/bin/env bash
@@ -76,6 +77,10 @@ let
     #!/usr/bin/env bash
     set -euo pipefail
 
+    . ${profileFile}
+    llama_profile
+    echo "[llama-server-local-launcher] profile: $LLAMA_CLASS ($LLAMA_RAM_GB GB) ctx=$LLAMA_CTX_SIZE kv=$LLAMA_KV_K/$LLAMA_KV_V" >&2
+
     MODEL_FILE="$HOME/models/${model.file}"
     if [ ! -f "$MODEL_FILE" ]; then
       echo "[llama-server-local-launcher] ERROR: $MODEL_FILE not found; the downloader runs on darwin-rebuild (tail ~/models/download.log)" >&2
@@ -89,7 +94,8 @@ let
     # --parallel 1: llama-server defaults to 4 slots and divides --ctx-size across
     # them; one aider/pi conversation needs the whole window in one slot.
     #
-    # --cache-type-k q8_0 / --cache-type-v q4_0: smaller KV cache at large context.
+    # --ctx-size / --cache-type-k / --cache-type-v: the device profile (.config/llama/profile.sh) by RAM. q4_0
+    # values were removed: prompt processing fell to ~28 tok/s at 12K depth, vs 160-205 with q8_0 or f16.
     #
     # --jinja: the model's own chat template, needed for tool calls (pi, opencode).
     # Thinking stays on by default (pi/aistack want it; the server splits it into
@@ -103,13 +109,13 @@ let
       --alias "${modelAlias}" \
       --host "${bindHost}" \
       --port "${toString port}" \
-      --ctx-size "${toString ctxSize}" \
+      --ctx-size "$LLAMA_CTX_SIZE" \
       --parallel 1 \
       --jinja \
       --n-gpu-layers 99 \
       --flash-attn on \
-      --cache-type-k q8_0 \
-      --cache-type-v q4_0
+      --cache-type-k "$LLAMA_KV_K" \
+      --cache-type-v "$LLAMA_KV_V"
   '';
 in
 {
