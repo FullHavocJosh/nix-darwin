@@ -285,7 +285,7 @@ def tool_review_plan(a):
     if problems:
         return {"ok": False, "problems": problems, "problem": "fix the plan and call ralph_validate_plan first"}
     prev = rj(plan_review_path(project), {})
-    if prev.get("name") == prd["name"] and not a.get("force"):
+    if prev.get("verdict") and not a.get("force"):
         return {"ok": True, "already_reviewed": True, "verdict": prev.get("verdict"), "plan_hash": h, "report": prev.get("report"), "billed_calls": 0,
                 "next": "Only the first plan is reviewed; later edits are not re-reviewed. Do not call ralph_review_plan again. "
                         "Show the user the plan and, once they confirm, call ralph_run with the plan_hash."}
@@ -326,7 +326,7 @@ def tool_run(a):
         return {"started": False, "problem": "plan_hash does not match the current plan. Call ralph_validate_plan, show the user the result, get their confirmation, then pass the plan_hash it returns."}
     if os.environ.get("AISTACK_PLAN_REVIEW", "on") != "off" and not a.get("skip_plan_review"):
         rev = rj(plan_review_path(project), {})
-        if rev.get("name") != prd["name"]:
+        if not rev.get("verdict"):
             return {"started": False, "problem": "Claude Code has not reviewed this plan yet. Call ralph_review_plan, show the user "
                     "the findings, and get their confirmation of the reviewed plan. Pass skip_plan_review=true only if the user explicitly "
                     "said to skip the review (it is billed)."}
@@ -363,6 +363,11 @@ def tool_run(a):
     p = subprocess.Popen([sys.executable, driver, state_dir(project), rid], cwd=workdir, stdin=subprocess.DEVNULL,
                          stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
     json.dump({"state": "starting", "pid": p.pid, "run_id": rid}, open(os.path.join(d, "state.json"), "w"))
+    # the review covers one run: a later plan in this project is a new plan and gets its own review
+    try:
+        os.remove(plan_review_path(project))
+    except OSError:
+        pass
     return {"started": True, "run_id": rid, "work_dir": workdir, "worktree_created": created,
             "pr_url": rj(os.path.join(state_dir(project), "project.json"), {}).get("pr_url"),
             "worker": cfg["worker_agent"], "fallback": cfg["fallback_agent"],
