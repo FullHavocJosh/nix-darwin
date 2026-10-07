@@ -409,7 +409,7 @@
         HOSTNAME_LOCAL=$(scutil --get LocalHostName 2>/dev/null)
         case "$HOSTNAME_LOCAL" in
           MacBookM2Pro*|MacMiniM1*)
-            MCP_EXCLUDE_SERVERS="atlassian terraform-cloud terraform-hcp aws-terraform-mcp aws-pricing-mcp-server context-guardian-perfectserve"
+            MCP_EXCLUDE_SERVERS="atlassian terraform-cloud terraform-hcp aws-terraform-mcp aws-pricing-mcp-server mcp-context-guardian-perfectserve"
             ;;
           MacBookM3Pro*)
             MCP_EXCLUDE_SERVERS="hetzner opnsense truenas awx doppler"
@@ -428,15 +428,15 @@
           fi
         fi
 
-        # mcp-verbosity-guardian is a uv-managed Python project, not part of
-        # the $HOME/mcp-* npm auto-build loop above -- sync its deps here so
-        # the first real MCP handshake (Claude Code or opencode) isn't also
-        # the first dependency resolve.
-        if command -v uv &>/dev/null && [ -f "$HOME/mcp-verbosity-guardian/pyproject.toml" ]; then
-          echo "Syncing mcp-verbosity-guardian dependencies..."
-          uv sync --project "$HOME/mcp-verbosity-guardian" && \
-            echo "mcp-verbosity-guardian dependencies up to date." || \
-            echo "Failed to sync mcp-verbosity-guardian dependencies"
+        # mcp-stack-fullhavoc is a uv-managed Python project, not part of the
+        # $HOME/mcp-* npm auto-build loop above -- sync its deps here so the
+        # first real MCP handshake (Claude Code or opencode) isn't also the
+        # first dependency resolve.
+        if command -v uv &>/dev/null && [ -f "$HOME/mcp-stack-fullhavoc/pyproject.toml" ]; then
+          echo "Syncing mcp-stack-fullhavoc dependencies..."
+          uv sync --project "$HOME/mcp-stack-fullhavoc" && \
+            echo "mcp-stack-fullhavoc dependencies up to date." || \
+            echo "Failed to sync mcp-stack-fullhavoc dependencies"
         fi
 
         MCP_CONFIG="$HOME/nix-darwin/.config/mcp/claude-desktop-mcp.json"
