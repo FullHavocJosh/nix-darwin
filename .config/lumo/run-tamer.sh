@@ -31,6 +31,7 @@ auth:
 server:
   port: $LUMO_TAMER_PORT
   apiKey: "$api_key"
+  enableWebSearch: true
 EOF
 
 exec tamer server
