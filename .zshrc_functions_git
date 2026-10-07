@@ -1899,16 +1899,20 @@ function _gpa_review_files() {
   echo ""
 
   local tier=$(_gpa_determine_tier "$batch" "$batch_lines" "1")
-  local tier_icon="" tier_label=""
+  # llama.cpp runs every tier on the local model (_run_ai_direct maps any tier to it), so label it as local.
+  [[ "$_active_provider" == "llama-cpp" || "$_active_provider" == "llama.cpp" ]] && tier="local"
+  local tier_icon="" tier_label="" tier_model_arg="$tier"
   case "$tier" in
     opus)   tier_icon="🔴"; tier_label="Opus" ;;
     sonnet) tier_icon="🔵"; tier_label="Sonnet" ;;
     haiku)  tier_icon="🟢"; tier_label="Haiku" ;;
-    *)      tier_icon="🔵"; tier_label="Sonnet" ;;
+    local)  tier_icon="⚪"; tier_label="$(_llamacpp_model_short)"; tier_model_arg="sonnet" ;;
+    free)   tier_icon="⚪"; tier_label="Free model"; tier_model_arg="sonnet" ;;
+    *)      tier_icon="⚪"; tier_label="$tier"; tier_model_arg="sonnet" ;;
   esac
 
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "$tier_icon $tier_label — Reviewing ${#target_files[@]} file(s)... [$_active_provider]"
+  echo "$tier_icon $tier_label — Reviewing ${#target_files[@]} file(s)... [$(_provider_display_name "$_active_provider") | $(_get_opencode_model "$tier_model_arg")]"
 
   local batch_issues
   batch_issues=$(_gpa_review_batch_with_timeout "$batch" "1" "1" "auto")
@@ -2840,6 +2844,11 @@ function _gpa_impl() {
       local batch_files_json=$(echo "$batch" | jq -c '.')
       local batch_diff_lines=$(echo "$batch_files_json" | jq -r '.[]' | xargs git diff --cached -- | wc -l)
       batch_tier=$(_gpa_determine_tier "$batch_files_json" "$batch_diff_lines" "$batch_count")
+    fi
+    # llama.cpp runs every tier on the local model (_run_ai_direct maps any tier to it), so a haiku/sonnet/opus
+    # tier chosen by hybrid size routing or --tier would otherwise be labelled as a cloud model that is not used.
+    if [[ "$_active_provider" == "llama-cpp" || "$_active_provider" == "llama.cpp" ]] && [[ "$batch_using_selected_model" != "true" ]]; then
+      batch_tier="local"
     fi
     
     # Display tier icon and label with provider and model info
