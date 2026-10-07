@@ -4,7 +4,11 @@
       "baseUrl": "http://localhost:1234/v1",
       "api": "openai-completions",
       "apiKey": "lm-studio",
-      "models": [{ "id": "qwen/qwen3.5-9b" }]
+      "models": [
+        { "id": "qwen-local-macbookm2pro" },
+        { "id": "qwen-local-macbookm3pro" },
+        { "id": "qwen-local-macminim1" }
+      ]
     },
     "lumo": {
       "baseUrl": "http://macminim1.rollet.family:3003/v1",

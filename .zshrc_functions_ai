@@ -463,7 +463,8 @@ function _run_aider_local() {
   # drops the value; only extra_body.reasoning_effort=none worked. Only aider
   # (one-shot commit/review/judge calls) disables reasoning; aistack tier 1
   # (pi, a live session) keeps it.
-  local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
+  local llm_api_id
+  llm_api_id=$(_local_llm_api_id)
   local lms_max_tokens
   case "$model_alias" in
     local-coder-commit) lms_max_tokens=512 ;;   # one 72-char line; measured ~15-40 tokens
@@ -478,7 +479,7 @@ function _run_aider_local() {
     return 1
   }
   cat > "$tmp_settings" <<EOF
-- name: openai/${lms_model}
+- name: openai/${llm_api_id}
   edit_format: ask
   extra_params:
     max_tokens: ${lms_max_tokens}
@@ -486,7 +487,7 @@ function _run_aider_local() {
       reasoning_effort: none
 EOF
   settings_file="$tmp_settings"
-  aider_model="openai/${lms_model}"
+  aider_model="openai/${llm_api_id}"
 
   local raw_output
   # BROWSER=true: with --yes-always aider auto-accepts its "Open URL for more info?" offer when a call
@@ -1024,7 +1025,7 @@ function aistack_func() {
     fi
     if ! _validate_llamacpp; then
       echo "✗ The planner needs the local model -- aborting."
-      echo "  It must be on this machine's disk and LM Link must be disabled (run: lms link disable; see ~/.lmstudio/provision.log)."
+      echo "  It must be on this machine's disk and loadable here as $(_local_llm_id) (preferred LM Link device must be this machine; see ~/.lmstudio/provision.log)."
       return 1
     fi
   fi
@@ -1154,7 +1155,7 @@ TOML
   # pi: isolated agent dir (models.json for LM Studio, mcp.json for the bridge), regenerated every run.
   local pi_dir="$cache_dir/aistack-pi/$(echo -n "$project" | shasum | cut -c1-10)"
   mkdir -p "$pi_dir"
-  jq -n --arg url "${endpoint}/v1" --arg id "$lms_model" \
+  jq -n --arg url "${endpoint}/v1" --arg id "$(_local_llm_api_id)" \
     '{providers: {lmstudio: {baseUrl: $url, api: "openai-completions", apiKey: "sk-local", models: [{id: $id, reasoning: true}]}}}' \
     > "$pi_dir/models.json"
   jq -n --arg py "$(command -v python3)" --arg bridge "$adir/ralph_mcp.py" --arg root "$project" \
@@ -1207,7 +1208,7 @@ TOML
   extra=(${=AISTACK_PI_EXTRA})
   (
     cd "$project" || exit 1
-    PI_CODING_AGENT_DIR="$pi_dir" pi --provider lmstudio --model "$lms_model" --name "aistack: plan ${tier0}, review claude, build ${zen_model:-claude}, review claude" --no-skills \
+    PI_CODING_AGENT_DIR="$pi_dir" pi --provider lmstudio --model "$(_local_llm_api_id)" --name "aistack: plan ${tier0}, review claude, build ${zen_model:-claude}, review claude" --no-skills \
       --append-system-prompt "$prompt" --tools "$tools" "${extra[@]}" ${task:+"$task"}
   )
   local rc=$?
@@ -1364,6 +1365,45 @@ function _llamacpp_model_short() {
 }
 
 
+# Id of this machine's own instance of the local model. LM Link lists every
+# peer's loaded ids next to ours, so the id carries the hostname: a peer cannot
+# hold it, and a request for it can only be served here (or fail with
+# model_not_found when it is not loaded -- there is no JIT load for a custom id).
+# models.json lists every host's id (pi cannot interpolate env vars in model ids).
+function _local_llm_id() {
+  echo "qwen-local-${(L)$(hostname -s)}"
+}
+
+# The id callers send to the API: this machine's own instance, or the shared
+# model key when LOCAL_LLM_ALLOW_LINK=1 opts in to a linked device.
+function _local_llm_api_id() {
+  if [[ -n "${LOCAL_LLM_ALLOW_LINK:-}" ]]; then
+    echo "${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
+  else
+    _local_llm_id
+  fi
+}
+
+# Load LOCAL_LLM_MODEL as _local_llm_id when it is not loaded (kept 24 h), then
+# require that the instance is on this device (deviceIdentifier null). If `lms
+# load` placed it on a peer (preferred device is not this machine), unload it and
+# fail.
+function _local_llm_ensure() {
+  local id lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}" lms_bin
+  id=$(_local_llm_id)
+  lms_bin=$(command -v lms 2>/dev/null || echo "$HOME/.lmstudio/bin/lms")
+  [[ -x "$lms_bin" ]] && command -v jq &>/dev/null || return 1
+  if ! "$lms_bin" ps --json 2>/dev/null | jq -e --arg i "$id" 'any(.[]; .identifier == $i)' >/dev/null; then
+    "$lms_bin" load "$lms_model" --identifier "$id" --ttl 86400 -y >/dev/null 2>&1 || return 1
+  fi
+  if ! "$lms_bin" ps --json 2>/dev/null | jq -e --arg i "$id" \
+      'any(.[]; .identifier == $i and .deviceIdentifier == null)' >/dev/null; then
+    "$lms_bin" unload "$id" >/dev/null 2>&1
+    return 1
+  fi
+  return 0
+}
+
 function _validate_llamacpp() {
   local endpoint="${LLAMA_CPP_HOST:-http://localhost:1234}"
   local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
@@ -1374,25 +1414,24 @@ function _validate_llamacpp() {
   response=$(curl -s --max-time 3 "${endpoint}/v1/models" 2>/dev/null)
   echo "$response" | grep -q "\"${lms_model}\"" || return 1
   # LM Link also lists other devices' models in /v1/models, and a request for a
-  # model key can be served by a linked device even when this machine has a
-  # copy and is the preferred device (seen 2026-10-07: aistack's qwen3.5-9b ran
-  # on MacBookM3Pro, server log id "1b896c...:qwen/qwen3.5-9b"). So the preferred
-  # device is not a safe control: LM Link must be disabled on this host
-  # (forceDisabled in lm-link-config.json; `lms link disable`, re-applied by the
-  # model provisioner on every rebuild), and the model must be on this
-  # machine's own disk. Fails closed: if lms or jq cannot be found the check
-  # cannot run, so the model is rejected rather than trusted. To use a linked
-  # device's model on purpose, set LOCAL_LLM_ALLOW_LINK=1 for that call:
+  # shared model key can be served by a linked device even when this machine has
+  # a copy and is the preferred device (seen 2026-10-07: aistack's qwen3.5-9b ran
+  # on MacBookM3Pro, server log id "1b896c...:qwen/qwen3.5-9b"). So require (1) a
+  # copy on this machine's own disk and (2) a loaded instance with an id no peer
+  # has (_local_llm_id), checked to be on this device (_local_llm_ensure). Callers
+  # request that id, never the shared key. Fails closed: if lms or jq cannot be
+  # found the check cannot run, so the model is rejected rather than trusted. To
+  # use a linked device's model on purpose, set LOCAL_LLM_ALLOW_LINK=1 for that
+  # call (callers then use the shared key) and point the preferred device at the
+  # peer with `lms link set-preferred-device <id>`:
   #   LOCAL_LLM_MODEL=qwen/qwen3.8-27b LOCAL_LLM_ALLOW_LINK=1 gpa
   if [[ -z "${LOCAL_LLM_ALLOW_LINK:-}" ]]; then
-    local lms_bin link_cfg="$HOME/.lmstudio/.internal/lm-link-config.json"
+    local lms_bin
     lms_bin=$(command -v lms 2>/dev/null || echo "$HOME/.lmstudio/bin/lms")
     [[ -x "$lms_bin" ]] && command -v jq &>/dev/null || return 1
     "$lms_bin" ls --json 2>/dev/null | jq -e --arg m "$lms_model" \
       'any(.[]; .modelKey == $m and .deviceIdentifier == null)' >/dev/null || return 1
-    if [[ -f "$link_cfg" ]]; then
-      jq -e '.json.forceDisabled == true' "$link_cfg" >/dev/null || return 1
-    fi
+    _local_llm_ensure || return 1
   fi
   return 0
 }
@@ -2051,7 +2090,7 @@ function aiselect() {
         echo "${RED}✗${NC} LM Studio is not usable at ${LLAMA_CPP_HOST:-http://localhost:1234} for ${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
         echo ""
         echo "Start it: lms server start"
-        echo "The model must be on this machine's disk and LM Link must be disabled (lms link disable)"
+        echo "The model must be on this machine's disk and loadable here as $(_local_llm_id) (LM Link preferred device must be this machine)"
         echo "(a rebuild's provisioner handles both; see ~/.lmstudio/provision.log). Then re-run aiselect."
         return 1
       fi
@@ -2166,11 +2205,14 @@ function ai_security_audit() {
   echo "═══════════════════════════════════════════════════════════"
 }
 
-# pi: local LM Studio qwen/qwen3.5-9b only. Strip AWS creds so Bedrock models
+# pi: local LM Studio only, through this host's own qwen-local-<hostname> instance. Strip AWS creds so Bedrock models
 # are not auto-detected, strip infra secrets the model could read via env,
 # skip AGENTS.md/CLAUDE.md (they reference MCP servers pi does not have),
 # and skip startup network calls. Models are defined in ~/.pi/agent/models.json.
 function pi() {
+  # Load this machine's own instance so the lmstudio models in models.json work;
+  # a no-op when it is already loaded.
+  _local_llm_ensure >/dev/null 2>&1
   env -u AWS_PROFILE -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
     -u AWS_BEARER_TOKEN_BEDROCK -u TRUENAS_API_KEY -u OPNSENSE_API_SECRET \
     command pi -nc --offline "$@"
