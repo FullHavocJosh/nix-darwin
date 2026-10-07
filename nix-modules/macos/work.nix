@@ -96,6 +96,12 @@ in
   # with `unset AI_LOCAL_DEFAULT`.
   environment.variables.AI_LOCAL_DEFAULT = "1";
 
+  # Model and effort for aistack's Claude Code calls (claude-work.sh, claude-review.sh and the ralph agents in
+  # aistack_func). Chosen per profile because work and personal use different Anthropic plans with different token
+  # costs. Per-session override: export AISTACK_CLAUDE_MODEL / AISTACK_CLAUDE_EFFORT.
+  environment.variables.AISTACK_CLAUDE_MODEL = "claude-opus-5-5";
+  environment.variables.AISTACK_CLAUDE_EFFORT = "high";
+
   system.defaults = {
     dock.persistent-apps = [ ];
   };
