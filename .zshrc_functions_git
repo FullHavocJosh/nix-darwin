@@ -2170,7 +2170,7 @@ function _gpa_review_batch_with_timeout() {
   local total_batches="$3"
   local tier_override="${4:-auto}"  # Optional tier override
 
-  # Local model (qwen3.5-9b via aider on LM Studio): a review batch can take several minutes, mostly generation
+  # Local model (qwen3.5-9b via aider on llama.cpp): a review batch can take several minutes, mostly generation
   # at 10-22 tok/s (see _local_llm_timeout in .zshrc_functions_ai for the numbers), so the local limit is
   # AI_LOCAL_REVIEW_TIMEOUT (default 900s). It must not be lower than the aider call's own limit or this outer
   # watchdog kills a review that is still working. Cloud APIs: ~5-15s, 90s limit.

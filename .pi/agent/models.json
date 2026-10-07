@@ -1,14 +1,10 @@
 {
   "providers": {
-    "lmstudio": {
-      "baseUrl": "http://localhost:1234/v1",
+    "llamacpp": {
+      "baseUrl": "http://127.0.0.1:8080/v1",
       "api": "openai-completions",
-      "apiKey": "lm-studio",
-      "models": [
-        { "id": "qwen-local-macbookm2pro" },
-        { "id": "qwen-local-macbookm3pro" },
-        { "id": "qwen-local-macminim1" }
-      ]
+      "apiKey": "sk-local",
+      "models": [{ "id": "qwen/qwen3.5-9b" }]
     },
     "lumo": {
       "baseUrl": "http://macminim1.rollet.family:3003/v1",

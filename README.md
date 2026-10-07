@@ -10,7 +10,7 @@ A comprehensive, declarative development environment configuration for **macOS**
 - **Multiple Profile Support** - Personal and work configurations with profile-specific packages
 - **Complete Dev Environment** - Shell (zsh), editor (Neovim), terminal (herdr), window management, and more
 - **Security-First Approach** - Smart gitignore patterns, secrets detection, environment variable management
-- **Local LLM Integration** - LM Studio (Qwen3.5-9B) served on localhost, kept running by a launchd daemon
+- **Local LLM Integration** - llama.cpp (Qwen3.5-9B) served on 127.0.0.1 only, kept running by a launchd daemon
 - **MCP Server Ecosystem** - Auto-registered Claude Code MCP servers for GitHub, Terraform, AWS, Slack, and more
 
 ## 📋 Quick Start
@@ -120,14 +120,14 @@ Defined in `flake.nix`:
 - Full personal development environment, laptop-specific packages (`packages-laptop-only.nix`)
 - Gaming and entertainment apps (Steam, Battle.net, Whisky, Plex)
 - Personal productivity tools (Obsidian, Proton Drive/Mail/VPN, Element)
-- Local LLM via LM Studio (`lmstudio.nix`)
+- Local LLM via llama.cpp (`llamacpp-local.nix`)
 - Custom wallpaper (set via activation script)
 - User: `/Users/havoc`
 
 #### `macos_desktop`
 
 - Personal development environment (no laptop-only packages, no GUI app bundle)
-- Local LLM via LM Studio (`lmstudio.nix`) plus Ollama for the AzerothCore bot chat (`desktop.nix`)
+- Local LLM via llama.cpp (`llamacpp-local.nix`) plus Ollama for the AzerothCore bot chat (`desktop.nix`)
 - User: `/Users/havoc`
 
 #### `macos_work`
@@ -140,11 +140,11 @@ Defined in `flake.nix`:
 
 #### Shared (all macOS profiles, via `packages-tui.nix`)
 
-- **LM Studio** launchd daemon (`lmstudio.nix`) — runs LM Studio headless (`--run-as-service`) on `localhost:1234`; `qwen/qwen3.5-9b` is used for gpc/gpa/gpr and aistack tier 1, and the provisioner downloads whichever models in its list fit the host's RAM
+- **llama-server** launchd daemon (`llamacpp-local.nix`, every host) — serves `qwen/qwen3.5-9b` (Qwen3.5-9B Q4_K_M GGUF, 128K context) on `127.0.0.1:8080` only; the bind address is hard-coded and `_validate_llamacpp` rejects any other `LLAMA_CPP_HOST`. Used for gpc/gpa/gpr, aistack tier 1 and opencode. The GGUF is downloaded to `~/models` (sha256-verified) on `darwin-rebuild switch`. No LM Studio, no LM Link: no device calls another device's model.
 
 #### aistack (planner-led coding stack)
 
-`aistack make a new mcp server` (or `aistack`, then type it in pi) opens a live pi session on the local LM Studio
+`aistack make a new mcp server` (or `aistack`, then type it in pi) opens a live pi session on the local llama.cpp
 model. It drafts a plan (`prd.json` and `verify.json`) with you, and only after you confirm the plan runs it. Nothing
 aistack-related is written into the repository (no `.aistack/`, no `.ralph-tui/`): plan files, runs, questions,
 reviews, progress notes and Ralph's own state live in `~/.aistack/<project>-<hash>/` (`AISTACK_HOME` overrides the
@@ -283,7 +283,7 @@ aiselect --show       # Show current provider
 - **GitHub Copilot** - Requires `gh auth login`
 - **OpenCode** - Requires `OPENCODE_API_KEY` in `~/.zshrc_envvars`
 - **OpenRouter** - Requires `OPENROUTER_API_KEY` in `~/.zshrc_envvars`
-- **LM Studio** - Local inference via the managed LM Studio daemon (no API key required)
+- **llama.cpp** - Local inference via the managed llama-server daemon on 127.0.0.1:8080 (no API key required)
 
 ### Key Git Functions
 
@@ -360,7 +360,7 @@ All automatically installed via nix-darwin/package managers:
 - `prettier` - Multi-language formatter
 - `ruff` - Python linter
 - `opencode` - AI code assistant
-- LM Studio (cask) - Local LLM inference
+- `llama-cpp` - Local LLM inference (llama-server)
 - `gh` - GitHub CLI
 - `herdr` - Terminal workspace manager
 - `neovim` - Text editor

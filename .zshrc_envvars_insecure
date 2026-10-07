@@ -28,13 +28,13 @@
 export AWS_REGION="us-east-1"
 export AWS_PROFILE="services"
 
-# Local LLM endpoint (host:port, no path): this host's own LM Studio server.
+# Local LLM endpoint (host:port, no path): this host's own llama-server (loopback only).
 # Every host runs its own -- never connect to another device's server. The
 # variable keeps its old LLAMA_CPP_HOST name because opencode.json and the
-# gpc/gpa/aistack functions read it. lmstudio.nix sets it via
+# gpc/gpa/aistack functions read it. llamacpp-local.nix sets it via
 # environment.variables (nix-darwin writes it into /etc/zshenv, sourced before
 # this file); the ${VAR:-default} form here is required, not cosmetic: this
 # file is sourced by .zshrc AFTER /etc/zshenv, so a plain unconditional export
 # would silently clobber that value on every new shell.
-export LLAMA_CPP_HOST="${LLAMA_CPP_HOST:-http://localhost:1234}"
+export LLAMA_CPP_HOST="${LLAMA_CPP_HOST:-http://127.0.0.1:8080}"
 

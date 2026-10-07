@@ -156,7 +156,6 @@ in
       "element"
       "font-merriweather"
       "font-open-sans"
-      "lm-studio"
       "music-assistant/tap/music-assistant"
       "obsidian"
       "plex"
