@@ -284,6 +284,11 @@ def tool_review_plan(a):
     problems = validate(prd, verify)
     if problems:
         return {"ok": False, "problems": problems, "problem": "fix the plan and call ralph_validate_plan first"}
+    prev = rj(plan_review_path(project), {})
+    if prev.get("name") == prd["name"] and not a.get("force"):
+        return {"ok": True, "already_reviewed": True, "verdict": prev.get("verdict"), "plan_hash": h, "report": prev.get("report"), "billed_calls": 0,
+                "next": "Only the first plan is reviewed; later edits are not re-reviewed. Do not call ralph_review_plan again. "
+                        "Show the user the plan and, once they confirm, call ralph_run with the plan_hash."}
     prompt = PLAN_REVIEW_PROMPT % (str(prd.get("description") or prd.get("name") or ""),
                                    json.dumps(prd, indent=1), json.dumps(verify, indent=1))
     cmd = os.environ.get("AISTACK_PLAN_REVIEW_CMD")
@@ -305,10 +310,10 @@ def tool_review_plan(a):
     report = os.path.join(state_dir(project), "reviews", "plan-review.md")
     with open(report, "w") as f:
         f.write(text + "\n")
-    json.dump({"plan_hash": h, "verdict": verdict, "report": report, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}, open(plan_review_path(project), "w"))
+    json.dump({"plan_hash": h, "name": prd["name"], "verdict": verdict, "report": report, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}, open(plan_review_path(project), "w"))
     return {"ok": True, "verdict": verdict, "plan_hash": h, "report": report, "findings": text[:6000], "billed_calls": 1,
-            "next": "Show the findings to the user. If you change the plan, call ralph_validate_plan again and ralph_review_plan again "
-                    "(the review is tied to the exact plan). Only after the user confirms the reviewed plan, call ralph_run with the plan_hash."}
+            "next": "Show the findings to the user. If you change the plan, call ralph_validate_plan again, not ralph_review_plan "
+                    "(only the first plan is reviewed; edits made after this review are not re-reviewed). Only after the user confirms the reviewed plan, call ralph_run with the plan_hash."}
 
 
 def tool_run(a):
@@ -321,8 +326,8 @@ def tool_run(a):
         return {"started": False, "problem": "plan_hash does not match the current plan. Call ralph_validate_plan, show the user the result, get their confirmation, then pass the plan_hash it returns."}
     if os.environ.get("AISTACK_PLAN_REVIEW", "on") != "off" and not a.get("skip_plan_review"):
         rev = rj(plan_review_path(project), {})
-        if rev.get("plan_hash") != h:
-            return {"started": False, "problem": "Claude Code has not reviewed this exact plan yet. Call ralph_review_plan, show the user "
+        if rev.get("name") != prd["name"]:
+            return {"started": False, "problem": "Claude Code has not reviewed this plan yet. Call ralph_review_plan, show the user "
                     "the findings, and get their confirmation of the reviewed plan. Pass skip_plan_review=true only if the user explicitly "
                     "said to skip the review (it is billed)."}
     rid0 = latest_run(project)
@@ -544,8 +549,9 @@ TOOLS = {
         S({"project_dir": STR}, ["project_dir"])),
     "ralph_review_plan": (tool_review_plan, ("Tier 2: Claude Code (read-only, billed, one call, up to ~3 minutes) reviews the validated plan against the "
         "real code BEFORE building, to catch what the planner and Lumo missed. Returns Verdict PASS or FAIL and findings. Call it after "
-        "ralph_validate_plan and the user's first confirmation; ralph_run refuses a plan that has no review."),
-        S({"project_dir": STR}, ["project_dir"])),
+        "ralph_validate_plan and the user's first confirmation; ralph_run refuses a plan that has no review. Only the first plan is reviewed: once a review exists for the plan, "
+        "later calls return already_reviewed without a billed call unless force=true."),
+        S({"project_dir": STR, "force": {"type": "boolean"}}, ["project_dir"])),
     "ralph_run": (tool_run, ("Start the confirmed plan in the background: a worker agent builds each task, the harness runs its "
         "verify commands, failures are retried then escalated, then a read-only reviewer checks security/accuracy/completeness. "
         "Needs the plan_hash from ralph_validate_plan, and only call it after the user has confirmed the plan. When aistack was started in a main "
