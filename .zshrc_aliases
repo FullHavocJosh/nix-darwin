@@ -41,7 +41,7 @@ rdpnobaralaptop() {
 # worktree create` already opened).
 _herdr_populate_panes() {
   local ws_id="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6" cmd_review="$7"
-  local label_nvim="nvim${tab_suffix}" label_aidev="aidev${tab_suffix}" label_zsh="zsh${tab_suffix}" label_review="tuicr${tab_suffix}"
+  local label_nvim="nvim${tab_suffix}" label_aidev="ai${tab_suffix}" label_zsh="zsh${tab_suffix}" label_review="tuicr${tab_suffix}"
 
   # aidev is tab 1 -- it's the workspace's initial tab/pane, no move needed.
   herdr tab rename "${ws_id}:t1" "$label_aidev" >/dev/null
@@ -103,7 +103,7 @@ _herdr_space() {
     return
   fi
 
-  local label_nvim="nvim${tab_suffix}" label_aidev="aidev${tab_suffix}" label_zsh="zsh${tab_suffix}" label_review="tuicr${tab_suffix}"
+  local label_nvim="nvim${tab_suffix}" label_aidev="ai${tab_suffix}" label_zsh="zsh${tab_suffix}" label_review="tuicr${tab_suffix}"
   if ! herdr session list --json 2>/dev/null | jq -e --arg n "$name" '.sessions[] | select(.name==$n and .running==true)' >/dev/null 2>&1; then
     nohup herdr server --session "$name" >/dev/null 2>&1 &
     disown
@@ -169,7 +169,7 @@ _herdr_ai_edit_workspace() {
   herdr workspace create --session "$name" --cwd "$dir" --label "$name" >/dev/null
 
   # aidev is tab 1 -- it's the workspace's initial tab/pane, no move needed.
-  herdr tab rename w1:t1 "aidev" --session "$name" >/dev/null
+  herdr tab rename w1:t1 "ai" --session "$name" >/dev/null
   [ -n "$cmd_aidev" ] && herdr pane run w1:p1 "$cmd_aidev" --session "$name" >/dev/null
 
   # nvim is tab 2, and stays the focused/landing tab.
@@ -220,7 +220,7 @@ _herdr_worktree() {
   ws_id=$(echo "$worktree_json" | jq -r '.result.workspace.workspace_id')
   wt_dir=$(echo "$worktree_json" | jq -r '.result.workspace.worktree.checkout_path')
 
-  _herdr_populate_panes "$ws_id" "$wt_dir" "nvim" "claude --resume" "git status" "" "_tuicr_current_pr"
+  _herdr_populate_panes "$ws_id" "$wt_dir" "nvim" "" "git status" "" "_tuicr_current_pr"
   herdr workspace focus "$ws_id" >/dev/null
 }
 
@@ -433,7 +433,7 @@ _tuicr_current_pr() {
 # fresh otherwise.
 _herdr_devlayout() {
   local name="$1" dir="$2"
-  _herdr_space "$name" "$dir" "nvim" "claude --resume" "git status" "" "_tuicr_current_pr"
+  _herdr_space "$name" "$dir" "nvim" "" "git status" "" "_tuicr_current_pr"
 }
 
 # Like _herdr_space, but never resumes an existing same-label workspace/session --
@@ -452,7 +452,7 @@ _herdr_space_new() {
     return
   fi
 
-  local label_nvim="nvim${tab_suffix}" label_aidev="aidev${tab_suffix}" label_zsh="zsh${tab_suffix}" label_review="tuicr${tab_suffix}"
+  local label_nvim="nvim${tab_suffix}" label_aidev="ai${tab_suffix}" label_zsh="zsh${tab_suffix}" label_review="tuicr${tab_suffix}"
   local session_name="${name}-$$"
   nohup herdr server --session "$session_name" >/dev/null 2>&1 &
   disown
@@ -499,7 +499,7 @@ _herdr_space_new() {
 # _herdr_devlayout, but routed through _herdr_space_new so it always starts fresh.
 _herdr_devlayout_new() {
   local name="$1" dir="$2"
-  _herdr_space_new "$name" "$dir" "nvim" "claude --resume" "git status" "" "_tuicr_current_pr"
+  _herdr_space_new "$name" "$dir" "nvim" "" "git status" "" "_tuicr_current_pr"
 }
 
 # Same split layout (no tuicr pane, since _herdr_space is called without
@@ -515,7 +515,7 @@ _herdr_remote_space() {
   local ssh="ssh -t -i ~/.ssh/id_ed25519 $host"
   _herdr_space "$name" "$HOME" \
     "$ssh \"zsh -ic 'cd $remote_dir && nvim'\"" \
-    "$ssh \"zsh -ic 'cd $remote_dir && claude --resume; exec zsh -l'\"" \
+    "$ssh \"zsh -ic 'cd $remote_dir; exec zsh -l'\"" \
     "$ssh \"zsh -ic 'cd $remote_dir && git status; exec zsh -l'\"" \
     "-macmini"
 }
