@@ -1454,6 +1454,50 @@ NEW_STATUSLINE_WIRING_TOK = '''        cost_per_turn=calculate_cost_per_turn(cos
 
 
 
+# 9. Model pricing (models.py): claude-tui substring-matches the model ID against MODEL_PRICING in dict order, so
+# "claude-opus-5-5" matched the "claude-opus-5" entry (Opus 5: $5/$25, cache read $0.50) instead of Opus 5.5 ($4/$20,
+# cache read $0.20 = 0.05x), and "claude-sonnet-5-5"/"claude-sonnet-5" matched $3/$15 although Sonnet 5.x is $2/$10
+# (the intro rate became the standard rate). monthly_cost.py prices every transcript through this table, so the work
+# account's budget bar over-reported (cache reads dominate Claude Code traffic and were priced 2.5x too high on Opus 5.5).
+# Rates: platform.claude.com/docs/en/about-claude/pricing (per MTok: input, 5m cache write, cache read, output).
+# New entries go first so they win the substring match; Haiku 5.5 is left out because its rate depends on prompt length.
+PRICING_MARKER = '"claude-opus-5-5"'
+OLD_PRICING_HEAD = "MODEL_PRICING = {\n"
+NEW_PRICING_HEAD = """MODEL_PRICING = {
+    "claude-fable-5-1": {   # nix-darwin: 0.025x cache reads
+        "input": 10.0,
+        "cache_read": 0.25,
+        "cache_write": 12.5,
+        "output": 50.0,
+    },
+    "claude-opus-5-5": {   # nix-darwin: 0.05x cache reads
+        "input": 4.0,
+        "cache_read": 0.20,
+        "cache_write": 5.0,
+        "output": 20.0,
+    },
+    "claude-sonnet-5-5": {   # nix-darwin
+        "input": 2.0,
+        "cache_read": 0.20,
+        "cache_write": 2.5,
+        "output": 10.0,
+    },
+"""
+SONNET5_MARKER = "# nix-darwin: Sonnet 5 standard rate"
+OLD_SONNET5 = '''    "claude-sonnet-5": {
+        "input": 3.0,
+        "cache_read": 0.30,
+        "cache_write": 3.75,
+        "output": 15.0,
+    },'''
+NEW_SONNET5 = '''    "claude-sonnet-5": {   # nix-darwin: Sonnet 5 standard rate
+        "input": 2.0,
+        "cache_read": 0.20,
+        "cache_write": 2.5,
+        "output": 10.0,
+    },'''
+
+
 def _apply_patch(target, marker, replacements, label):
     """Apply one or more (old, new) replacements to target as a single unit,
     gated by one marker check so a multi-part patch can't apply half of
@@ -1669,6 +1713,19 @@ def main() -> int:
         os.path.expanduser("~/.claude/commands/usage-sync.md"),
         USAGE_SYNC_COMMAND_SOURCE,
         "usage-sync command",
+    )
+
+    _apply_patch(
+        f"{libexec}/claude_tui_core/models.py",
+        PRICING_MARKER,
+        [(OLD_PRICING_HEAD, NEW_PRICING_HEAD)],
+        "model pricing (Opus 5.5, Sonnet 5.5, Fable 5.1)",
+    )
+    _apply_patch(
+        f"{libexec}/claude_tui_core/models.py",
+        SONNET5_MARKER,
+        [(OLD_SONNET5, NEW_SONNET5)],
+        "model pricing (Sonnet 5 standard rate)",
     )
 
     return 0
