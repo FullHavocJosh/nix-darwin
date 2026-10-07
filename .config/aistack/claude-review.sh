@@ -12,7 +12,7 @@ done
 # Claude is billed: cap what the review can spend and how hard it thinks (AISTACK_CLAUDE_BUDGET_REVIEW in USD,
 # AISTACK_CLAUDE_EFFORT). One review call covers the whole run; read-only git commands let it read the diff instead of
 # crawling files.
-limits=(--max-budget-usd "${AISTACK_CLAUDE_BUDGET_REVIEW:-1.5}" --effort "${AISTACK_CLAUDE_EFFORT:-medium}")
+limits=(--model "${AISTACK_CLAUDE_MODEL:-sonnet}" --max-budget-usd "${AISTACK_CLAUDE_BUDGET_REVIEW:-1.5}" --effort "${AISTACK_CLAUDE_EFFORT:-medium}")
 tools=("Read" "Grep" "Glob" "Bash(python3 -m unittest:*)" "Bash(ls:*)" "Bash(cat:*)" "Bash(git diff:*)" "Bash(git status:*)" "Bash(git log:*)")
 if [ -n "$AISTACK_REVIEWS_DIR" ]; then
   exec claude "${args[@]}" "${limits[@]}" --add-dir "$AISTACK_REVIEWS_DIR" --allowedTools "${tools[@]}" "Edit(/$AISTACK_REVIEWS_DIR/**)"

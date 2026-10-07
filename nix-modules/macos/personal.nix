@@ -5,6 +5,12 @@ in
 {
   system.primaryUser = "havoc";
 
+  # Model and effort for aistack's Claude Code calls (claude-work.sh, claude-review.sh and the ralph agents in
+  # aistack_func). Chosen per profile because work and personal use different Anthropic plans with different token
+  # costs (work.nix sets Opus at high effort). Per-session override: export AISTACK_CLAUDE_MODEL / AISTACK_CLAUDE_EFFORT.
+  environment.variables.AISTACK_CLAUDE_MODEL = "claude-sonnet-5-5";
+  environment.variables.AISTACK_CLAUDE_EFFORT = "medium";
+
   system.activationScripts.script.text = ''
     #!/usr/bin/env bash
     echo "Stowing dotfiles as user $(whoami)..."
