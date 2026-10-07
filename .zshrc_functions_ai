@@ -444,7 +444,7 @@ function _run_aider_local() {
   local model_alias="$1"
   local timeout_secs="$2"
   local prompt="$3"
-  local endpoint="${LLAMA_CPP_HOST:-http://127.0.0.1:8080}"
+  local endpoint; endpoint=$(_llamacpp_endpoint)
   local settings_file aider_model tmp_settings
 
   if ! command -v aider &>/dev/null; then
@@ -993,7 +993,7 @@ function aistack_func() {
   local task="$*"
   local adir="${AISTACK_DIR:-$HOME/.config/aistack}"
   local cache_dir="$HOME/.cache/nix-darwin-ai"
-  local endpoint="${LLAMA_CPP_HOST:-http://127.0.0.1:8080}"
+  local endpoint; endpoint=$(_llamacpp_endpoint)
   local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
   local f reply
 
@@ -1353,16 +1353,21 @@ function _llamacpp_model_short() {
 }
 
 
+# The one local-AI endpoint: llama-server on this machine's loopback, port set in
+# llamacpp-local.nix. A constant, not read from LLAMA_CPP_HOST: that variable is
+# inherited by every shell, herdr pane and tool from whatever process started them,
+# so it stays stale (it kept http://localhost:1234 after the LM Studio switch) in
+# any session that predates a rebuild -- including the pane that ran
+# darwin-rebuild, which the herdr refresh in config.nix skips. LLAMA_CPP_HOST is
+# still exported for opencode.json ({env:LLAMA_CPP_HOST}); the functions here
+# never use it, so no environment value can point them at another device.
+function _llamacpp_endpoint() {
+  echo "http://127.0.0.1:8080"
+}
+
 function _validate_llamacpp() {
-  local endpoint="${LLAMA_CPP_HOST:-http://127.0.0.1:8080}"
+  local endpoint; endpoint=$(_llamacpp_endpoint)
   local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
-  # Local AI only ever talks to llama-server on this machine's loopback. Reject
-  # any other host (a stray LLAMA_CPP_HOST pointing at another device, a LAN
-  # address, a hostname) before sending a prompt anywhere.
-  case "$endpoint" in
-    http://127.0.0.1:*|http://localhost:*|http://\[::1\]:*) ;;
-    *) return 1 ;;
-  esac
   # llama-server answers /v1/models with its --alias; it only lists the model
   # once it is loaded and ready.
   curl -s --max-time 3 "${endpoint}/v1/models" 2>/dev/null | grep -q "\"${lms_model}\""
@@ -1688,7 +1693,7 @@ function aiselect() {
     echo "  • gpa (code review)         → $opencode_model → Direct API"
     echo ""
     if [[ "$current_provider" == "llama-cpp" ]]; then
-      local endpoint="${LLAMA_CPP_HOST:-http://127.0.0.1:8080}"
+      local endpoint; endpoint=$(_llamacpp_endpoint)
       local cloud_provider=$(_get_cloud_fallback_provider)
       local cloud_model=$(_get_cloud_model "sonnet")
       echo ""
@@ -2019,7 +2024,7 @@ function aiselect() {
         echo "═══════════════════════════════════════════════════════════"
         return 0
       else
-        echo "${RED}✗${NC} llama-server is not usable at ${LLAMA_CPP_HOST:-http://127.0.0.1:8080} for ${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
+        echo "${RED}✗${NC} llama-server is not usable at $(_llamacpp_endpoint) for ${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
         echo ""
         echo "Start it: sudo launchctl kickstart -k system/org.nixos.llama-server-local"
         echo "The model file is ~/models/Qwen3.5-9B-Q4_K_M.gguf and the server must listen on 127.0.0.1 only"
