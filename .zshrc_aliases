@@ -515,7 +515,7 @@ _herdr_remote_space() {
   local ssh="ssh -t -i ~/.ssh/id_ed25519 $host"
   _herdr_space "$name" "$HOME" \
     "$ssh \"zsh -ic 'cd $remote_dir && nvim'\"" \
-    "$ssh \"zsh -ic 'cd $remote_dir && claude --resume; exec zsh -l'\"" \
+    "$ssh \"zsh -ic 'cd $remote_dir; exec zsh -l'\"" \
     "$ssh \"zsh -ic 'cd $remote_dir && git status; exec zsh -l'\"" \
     "-macmini"
 }
