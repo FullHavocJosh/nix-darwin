@@ -2,14 +2,13 @@
 set -e
 
 MCP_CONFIG_DIR="$HOME/.config/mcp"
-CONTEXT_GUARDIAN_DIR="$HOME/mcp-context-guardian-fullhavoc"
-SERVER_JS="$CONTEXT_GUARDIAN_DIR/dist/index.js"
+STACK_DIR="$HOME/mcp-stack-fullhavoc"
 
 echo "Installing MCP configurations..."
 
-if [ ! -f "$SERVER_JS" ]; then
-	echo "Error: Context Guardian MCP server not built!"
-	echo "Run: cd $CONTEXT_GUARDIAN_DIR && npm install && npm run build"
+if [ ! -f "$STACK_DIR/pyproject.toml" ]; then
+	echo "Error: mcp-stack-fullhavoc not found at $STACK_DIR"
+	echo "Run: git clone git@github.com:FullHavocJosh/mcp-stack-fullhavoc.git $STACK_DIR && cd $STACK_DIR && uv sync"
 	exit 1
 fi
 
@@ -28,7 +27,7 @@ else
 fi
 
 if command -v claude &>/dev/null; then
-	claude mcp add context-guardian node "$SERVER_JS" 2>/dev/null &&
+	claude mcp add --scope user mcp-stack-fullhavoc -- uv run --project "$STACK_DIR" mcp-stack-fullhavoc 2>/dev/null &&
 		echo "✓ Claude Code MCP server registered" ||
 		echo "⚠ Claude Code MCP already registered or failed"
 else
