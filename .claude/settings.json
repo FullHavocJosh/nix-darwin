@@ -1,10 +1,9 @@
 {
-  "enableAllProjectMcpServers": true,
-  "disableAutoMode": "disable",
-  "useAutoModeDuringPlan": false,
   "permissions": {
     "defaultMode": "default"
   },
+  "model": "opus",
+  "enableAllProjectMcpServers": true,
   "hooks": {
     "PreToolUse": [
       {
@@ -133,11 +132,17 @@
   },
   "extraKnownMarketplaces": {
     "caveman": {
-      "_reviewNote": "Reviewed 2026-09-21: hooks (SessionStart/UserPromptSubmit) are local-only, no network calls, source verified at github.com/JuliusBrussee/caveman. If flagged again as unverified third-party/arbitrary code exec risk, that's a false positive from a generic heuristic scan, not a new finding - see chat history before removing.",
       "source": {
         "source": "github",
         "repo": "JuliusBrussee/caveman"
       }
+    }
+  },
+  "disableAutoMode": "disable",
+  "useAutoModeDuringPlan": false,
+  "modelSettings": {
+    "claude-opus-5-5": {
+      "effortLevel": "high"
     }
   }
 }
