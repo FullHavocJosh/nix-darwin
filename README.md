@@ -197,10 +197,28 @@ work directory first; the reviewer may write only to `~/.aistack/<project>/revie
 pane where it is, so the worktree path is computed from the branch name (`.worktrees/<branch>`). Nothing is
 committed; use `gpc`/`gpa` in the work directory afterwards. Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_driver.py`.
 
-#### Lumo tier 0 (cloud planner, `macos_desktop` only)
+#### Lumo tier 0 (cloud planner, on every personal Mac)
 
-Proton Lumo as a tool-less planning model, hosted on MacMiniM1 (`nix-modules/macos/lumo.nix`, scripts in
-`.config/lumo/`). Three LaunchDaemons run as `havoc`, so nothing needs a login session:
+Proton Lumo as a tool-less planning model (`nix-modules/macos/lumo.nix`, scripts in `.config/lumo/`). Each host runs
+its own copy, with its own keys and its own Proton sign-in; `local.lumo.lan` in `flake.nix` decides who may reach it:
+
+|                                      | `macos_desktop` (MacMiniM1, `lan = true`)                                        | `macos_laptop` (`lan = false`, the default)   |
+| ------------------------------------ | -------------------------------------------------------------------------------- | --------------------------------------------- |
+| tamer :3003, planner :8765           | every device on the network, behind API keys                                     | `127.0.0.1` only                              |
+| application firewall                 | Python and node are allowed in                                                   | not touched                                   |
+| planner key (`LUMO_PLANNER_API_KEY`) | static, in Doppler `root_macmini`; other services use it, so nothing replaces it | none: only this machine can reach the planner |
+| tamer and vault keys                 | Doppler `root_macmini`                                                           | generated and kept on the host                |
+| sign-in                              | `lumoreauth` from the MacBook (the Mini is headless)                             | `lumoauth` on the laptop itself               |
+| planner cannot read its key          | exits, launchd retries (it no longer falls back to loopback)                     | no key needed                                 |
+
+lumo-tamer has no setting for its listen address, so on a loopback host the provisioner patches the one `listen()`
+call to read `LUMO_TAMER_HOST`, and `run-tamer.sh` refuses to start a build without that patch. `darwin-reload switch laptop|desktop` (`.zshrc_aliases`) runs `sudo darwin-rebuild switch` for that host (the
+desktop's over ssh when called from the MacBook) and then starts the browser sign-in if that host's Proton session is
+not valid: `lumoauth` for the laptop, `lumoreauth` for the Mini. A valid session is left alone. Plain
+`darwin-rebuild switch` only prints the sign-in state.
+`aistack` and `aidev` use this machine's own Lumo when it answers and fall back to the Mini's.
+
+What follows describes the daemons. Three LaunchDaemons run as `havoc`, so nothing needs a login session:
 
 - `lumo-tamer`: [lumo-tamer](https://github.com/ZeroTricks/lumo-tamer), an **unofficial** OpenAI-compatible server
   for Lumo (port 3003, API key). Pinned to one reviewed commit and built by an activation-time provisioner.
@@ -227,7 +245,7 @@ proxy is told not to fetch anything (`X-Lumo-No-Fetch: 1`). If Lumo is unreachab
 planning continues without it. The key comes from Doppler `LUMO_PLANNER_API_KEY`; `AISTACK_LUMO_URL` overrides
 the endpoint.
 
-Doppler `FullHavocJosh/root_macmini` (all optional, daemons fall back to local files):
+Doppler `FullHavocJosh/root_macmini`, read on the desktop only (optional except `LUMO_PLANNER_API_KEY`, which the planner needs to serve the network):
 `LUMO_VAULT_KEY` (restores a _missing_ key file only), `LUMO_TAMER_API_KEY`, `LUMO_PLANNER_API_KEY`,
 `LUMO_NTFY_URL` (full topic URL), `LUMO_NTFY_TOKEN` (ntfy access token).
 
@@ -344,12 +362,52 @@ plan it opens the draft PR with the plan's `title` (as `feat: <title>`, at most 
 the plan (summary, each task with its acceptance criteria and verify command, the tiers).
 Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_git_auto.py`.
 
-#### `aidev` - Launch AI Development Assistant
+#### gpa review guardrails (which AI findings may block a commit)
+
+The local review model is small: it used to block commits with invented text, findings on untouched code, style
+opinions marked Critical, and a different set on every run. `.config/aistack/gpa_review_guard.py` now decides, without
+a model, what may block. A finding blocks only when all of this holds:
+
+1. **Evidence**: it quotes an added line of the staged diff of the file it names. Otherwise it is dropped.
+2. **Category**: it is Critical and one of `secret-exposure`, `injection`, `destructive-command`, `broken-syntax`,
+   `auth-bypass`. Everything else, including every Warning, is advisory: printed, never blocking.
+3. **Not already reviewed**: after a fix, only lines that are new since the last round can raise a blocking finding.
+   Findings that blocked last round are carried until their line is gone (state in `<git dir>/gpa_review_state.json`,
+   reset by a commit).
+4. **Confirmed**: the model looks at the finding once more, alone with the code around its line, and may reject it.
+   No verdict keeps it blocking.
+
+Dropped and advisory findings are always printed. Review, judge and secrets calls run at temperature 0 with a fixed
+seed. The secrets scan and the linters still block as before; `shellcheck` (errors only) now checks sh/bash scripts
+and `zsh -n` checks zsh ones. `--no-review` stays off limits for agents.
+
+A person can let one confirmed finding through, on the record:
+`gpa --waive <fingerprint> --reason "<why>" -m "<subject>"` adds a `Review-waived:` line to the commit message.
+It is refused together with `--auto`. Tests: `python3 .config/aistack/tests/test_review_guard.py`.
+
+#### `aidev` - planner stack that spends as little on Claude Code as possible
 
 ```bash
-aidev                 # Start OpenCode with selected provider
-aidev --model <model> # Override model selection
+aidev add a --json flag to the report command   # or `aidev`, then describe the work in pi
+aidev --direct                                  # the plain session of the selected provider (what aidev used to be)
+aidev -p "prompt"                               # one headless call to the selected provider (any flag means --direct)
 ```
+
+`aidev` is `aistack` with one difference: Claude Code writes the plan instead of reviewing one. Same run driver,
+verify gates, worktree + draft PR and state directory (`~/.aistack/<project>-<hash>/`). Who does what:
+
+- research and coordination: the local `qwen/qwen3.5-9b` in pi talks to you, finds the code, and follows the run (free).
+  When MacMiniM1 is reachable, Lumo adds a draft that includes what it found online (free)
+- plan: Claude Code, ONE billed call (`ralph_plan`). The local model passes a brief, the files that matter (whole, or a
+  line range such as `lib/a.py:40-120`; the bridge inlines them and refuses secrets) and Lumo's draft. Claude returns
+  the finished `prd.json` and `verify.json`. `claude-plan.sh` gives that call only Read, Grep and Glob, no MCP servers
+  and no skills, and caps it with `AISTACK_CLAUDE_BUDGET_PLAN` (USD, default 1.5)
+- build: the free OpenCode Zen model, as in aistack
+- review: Claude Code, one billed call for the whole run; it builds a task only when that task keeps failing
+
+A normal run therefore has two billed calls. A second `ralph_plan` returns the existing plan without a call unless
+the user asks for a new one. `aidev -p` and `aidev --direct` skip all of this; the gpa/gpc fix helpers use them.
+Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_plan.py`.
 
 ### Required Packages
 

@@ -28,6 +28,21 @@ if [[ $head != $TAMER_REV ]]; then
   rm -rf dist
 fi
 
+# Loopback-only hosts: lumo-tamer listens on every interface and has no setting for the address, so make the one
+# listen() call read LUMO_TAMER_HOST (run-tamer.sh sets it to 127.0.0.1 and refuses to start an unpatched build).
+# The LAN host is left exactly as upstream ships it.
+SERVER_TS=src/api/server.ts
+if [[ $LUMO_LAN != 1 ]] && ! grep -q LUMO_TAMER_HOST $SERVER_TS; then
+  /usr/bin/perl -0pi -e 's/this\.expressApp\.listen\(this\.serverConfig\.port, \(\) => \{/this.expressApp.listen(this.serverConfig.port, process.env.LUMO_TAMER_HOST ?? "::", () => {/' $SERVER_TS
+  if grep -q LUMO_TAMER_HOST $SERVER_TS; then
+    log "patched $SERVER_TS to bind to LUMO_TAMER_HOST; rebuilding"
+    rm -rf dist
+  else
+    log "ERROR: could not patch $SERVER_TS (listen call not found); tamer will not start on this host"
+    exit 1
+  fi
+fi
+
 if [[ ! -d dist || ! -d node_modules ]]; then
   log "building (npm ci && npm run build:all)"
   { npm ci --no-audit --no-fund && npm run build:all && npm link; } >>"$LOG" 2>&1 \
