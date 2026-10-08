@@ -658,7 +658,8 @@ function _lumo_signin_state() {
   local check='export PATH=/opt/homebrew/bin:$PATH; [ -d ~/lumo-tamer/dist ] && [ -f ~/lumo-tamer/config.yaml ] || { echo building; exit 0; }; cd ~/lumo-tamer && tamer auth status 2>&1'
   local out
   if [[ -n "$1" ]]; then
-    out=$(ssh -o BatchMode=yes -o ConnectTimeout=8 "$1" "$check" 2>&1)
+    # -n: this runs from a prompt hook, so ssh must not read (and swallow) what is typed ahead at the terminal
+    out=$(ssh -n -o BatchMode=yes -o ConnectTimeout=8 "$1" "$check" 2>&1)
     [[ $? -eq 255 ]] && { echo unreachable; return 0; }
   else
     out=$(/bin/sh -c "$check" 2>&1)
@@ -726,4 +727,9 @@ if [[ -o interactive ]]; then
   autoload -Uz add-zsh-hook
   add-zsh-hook preexec _lumo_switch_preexec
   add-zsh-hook precmd _lumo_switch_precmd
+  # preexec runs before a command line starts. The usual line sources this file and then switches, so in a shell
+  # that did not have the hook yet (or after a change to it) preexec never saw that line and the first switch was
+  # skipped. $history[$HISTCMD] is the line running right now: arm the check from it as preexec would have.
+  zmodload -F zsh/parameter p:history 2>/dev/null
+  _lumo_switch_preexec "${history[$HISTCMD]:-}"
 fi
