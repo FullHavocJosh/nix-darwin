@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """MCP bridge (stdio, JSON-RPC 2.0) between a chat agent (pi) and the aistack run driver.
 
-Tools: ralph_validate_plan, ralph_review_plan (tier 2 plan review), ralph_plan (aidev: Claude writes the plan), ralph_update_task, repo_tree / repo_read / repo_grep (aidev: budgeted research), ralph_run, ralph_status, ralph_respond, ralph_cancel, ralph_runs, lumo_consult (tier 0).
+Tools: ralph_validate_plan, ralph_plan (Claude writes the plan), ralph_update_task, repo_tree / repo_read / repo_grep (aidev: budgeted research), ralph_run, ralph_status, ralph_respond, ralph_cancel, ralph_runs, lumo_consult (tier 0).
 Runs are detached processes (ralph_driver.py); tool calls return quickly, and ralph_status can wait up to
 45s for news so the chat agent can follow a run without a tight loop (MCP clients time out near 60s).
 
@@ -307,67 +307,8 @@ def ensure_workdir(project, prd, verify=None):
     return wd, True, None
 
 
-PLAN_REVIEW_PROMPT = """You are the tier 2 reviewer in aistack. A weaker planner (a small local model, with a cloud assistant's draft)
-wrote the build plan below. It has NOT been built yet. Catch what they missed, before anything is implemented.
-Read the project in the current directory (read-only; Read, Grep, Glob, git status/diff/log) to check the plan against the real code.
-Judge: (1) accuracy: do the named files, functions and behaviors exist and match the code; (2) completeness: requirements or edge cases
-not covered, missing tasks, wrong dependsOn order; (3) task size: each task should fit one agent session; (4) verify commands: each must
-exit 0 only when its task is really done, and must not pass on unrelated or empty state; (5) security and risky defaults.
-Do NOT modify any file. Do NOT review code quality of code that does not exist yet.
-Reply in this form: FIRST line exactly 'Verdict: PASS' or 'Verdict: FAIL' (FAIL when the plan must change before building),
-then findings, most serious first, each naming the task id and the concrete fix. Be concise.
-
-USER REQUEST / PLAN DESCRIPTION: %s
-
-prd.json:
-%s
-
-verify.json:
-%s
-"""
-
-
 def plan_review_path(project):
     return os.path.join(state_dir(project), "plan-review.json")
-
-
-def tool_review_plan(a):
-    """Tier 2 reviews the confirmed-by-validation plan BEFORE the user is asked to confirm it for building."""
-    project = project_of(a)
-    prd, verify, h = load_plan(project)
-    problems = validate(prd, verify)
-    if problems:
-        return {"ok": False, "problems": problems, "problem": "fix the plan and call ralph_validate_plan first"}
-    prev = rj(plan_review_path(project), {})
-    if prev.get("verdict") and not a.get("force"):
-        return {"ok": True, "already_reviewed": True, "verdict": prev.get("verdict"), "plan_hash": h, "report": prev.get("report"), "billed_calls": 0,
-                "next": "Only the first plan is reviewed; later edits are not re-reviewed. Do not call ralph_review_plan again. "
-                        "Show the user the plan and, once they confirm, call ralph_run with the plan_hash."}
-    prompt = PLAN_REVIEW_PROMPT % (str(prd.get("description") or prd.get("name") or ""),
-                                   json.dumps(prd, indent=1), json.dumps(verify, indent=1))
-    cmd = os.environ.get("AISTACK_PLAN_REVIEW_CMD")
-    argv = ["/bin/sh", "-c", cmd] if cmd else [os.path.join(HERE, "claude-review.sh"), "-p", prompt]
-    env = dict(os.environ, AISTACK_WORKDIR=project, AISTACK_PLAN_REVIEW_PROMPT=prompt)
-    env.pop("AISTACK_REVIEWS_DIR", None)    # stdout only: the reviewer is not allowed to write anything
-    try:
-        r = subprocess.run(argv, cwd=project, env=env, capture_output=True, text=True, timeout=int(os.environ.get("AISTACK_PLAN_REVIEW_TIMEOUT_S", "170")),
-                           stdin=subprocess.DEVNULL)
-    except (OSError, subprocess.TimeoutExpired) as e:
-        return {"ok": False, "problem": f"the plan review (Claude Code) did not finish: {type(e).__name__}: {e}"}
-    text = (r.stdout or "").strip()
-    first = text.splitlines()[0].strip() if text else ""
-    m = re.match(r"(?i)^\**\s*verdict:\s*(pass|fail)", first)
-    if r.returncode != 0 or not m:
-        return {"ok": False, "problem": f"the plan review produced no valid verdict (exit {r.returncode})", "tail": (text or r.stderr or "")[-600:]}
-    verdict = m.group(1).upper()
-    os.makedirs(os.path.join(state_dir(project), "reviews"), exist_ok=True)
-    report = os.path.join(state_dir(project), "reviews", "plan-review.md")
-    with open(report, "w") as f:
-        f.write(text + "\n")
-    json.dump({"plan_hash": h, "name": prd["name"], "verdict": verdict, "report": report, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}, open(plan_review_path(project), "w"))
-    return {"ok": True, "verdict": verdict, "plan_hash": h, "report": report, "findings": text[:6000], "billed_calls": 1,
-            "next": "Show the findings to the user. If you change the plan, call ralph_validate_plan again, not ralph_review_plan "
-                    "(only the first plan is reviewed; edits made after this review are not re-reviewed). Only after the user confirms the reviewed plan, call ralph_run with the plan_hash."}
 
 
 # ---- aidev: Claude Code writes the plan (one billed call) instead of reviewing one -------------------------------
@@ -728,9 +669,9 @@ def tool_run(a):
     if os.environ.get("AISTACK_PLAN_REVIEW", "on") != "off" and not a.get("skip_plan_review"):
         rev = rj(plan_review_path(project), {})
         if not rev.get("verdict"):
-            return {"started": False, "problem": "Claude Code has not reviewed this plan yet. Call ralph_review_plan, show the user "
-                    "the findings, and get their confirmation of the reviewed plan. Pass skip_plan_review=true only if the user explicitly "
-                    "said to skip the review (it is billed)."}
+            return {"started": False, "problem": "This plan was not written by Claude Code (or it already ran once). Call ralph_plan "
+                    "first; it writes and records the plan. Pass skip_plan_review=true only if the user explicitly said to run a "
+                    "plan Claude did not write."}
     rid0 = latest_run(project)
     if rid0 and run_state(project, rid0).get("state") in ("running", "waiting_user", "starting"):
         return {"started": False, "problem": f"run {rid0} is still active; use ralph_status / ralph_respond / ralph_cancel"}
@@ -935,29 +876,44 @@ def tamer_mini_key():
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
+def tamer_public_key():
+    """The key of the public endpoint: AISTACK_LUMO_PUBLIC_KEY, else Doppler (root_hetzner-cluster), else ''."""
+    k = os.environ.get("AISTACK_LUMO_PUBLIC_KEY")
+    if k:
+        return k
+    try:
+        r = subprocess.run(["doppler", "secrets", "get", "LUMO_PUBLIC_API_KEY", "--project", "FullHavocJosh",
+                            "--config", "root_hetzner-cluster", "--plain"], capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
 def tamer_endpoints():
-    """[(base url, key)] of the tamers that answer right now, in priority order: this machine's own, MacMiniM1's on
-    the home network, then the public endpoint (only when AISTACK_LUMO_PUBLIC_KEY is set). AISTACK_TAMER_URL with
-    AISTACK_TAMER_KEY pins one."""
+    """Yields (base url, key) of each tamer that answers, in this order, and looks at the next one only when asked
+    for it (so a working local tamer costs no Doppler lookup and no request to the others):
+      1. this machine's own tamer (127.0.0.1)
+      2. MacMiniM1's tamer on the home network
+      3. the public endpoint https://lumo.rollet.family/v1 (for when this machine is away from home)
+    AISTACK_TAMER_URL with AISTACK_TAMER_KEY pins one; AISTACK_LUMO_URL / AISTACK_LUMO_KEY are the older names for
+    the same pin (they used to point at the planner proxy)."""
     import urllib.request
-    # AISTACK_LUMO_URL / AISTACK_LUMO_KEY are the older names for the same pin (they used to point at the planner proxy)
     pinned = os.environ.get("AISTACK_TAMER_URL") or os.environ.get("AISTACK_LUMO_URL")
     if pinned:
-        return [(pinned.rstrip("/"), os.environ.get("AISTACK_TAMER_KEY") or os.environ.get("AISTACK_LUMO_KEY", ""))]
-    candidates = [(TAMER_LOCAL_URL, tamer_local_key), (TAMER_MINI_URL, tamer_mini_key)]
-    if os.environ.get("AISTACK_LUMO_PUBLIC_KEY"):
-        candidates.append((TAMER_PUBLIC_URL, lambda: os.environ["AISTACK_LUMO_PUBLIC_KEY"]))
-    out = []
-    for base, get_key in candidates:
+        yield pinned.rstrip("/"), os.environ.get("AISTACK_TAMER_KEY") or os.environ.get("AISTACK_LUMO_KEY", "")
+        return
+    for base, get_key in ((TAMER_LOCAL_URL, tamer_local_key), (TAMER_MINI_URL, tamer_mini_key), (TAMER_PUBLIC_URL, tamer_public_key)):
         try:
             key = get_key()
+            if base == TAMER_PUBLIC_URL and not key:
+                continue        # the public endpoint refuses everything without its key
             req = urllib.request.Request(base + "/models", headers={"Authorization": f"Bearer {key}"} if key else {})
             with urllib.request.urlopen(req, timeout=4) as r:
-                if r.status == 200:
-                    out.append((base, key))
+                ok = r.status == 200
         except Exception:
-            pass        # not listening, not signed in, wrong key, off the network: try the next one
-    return out
+            ok = False          # not listening, not signed in, wrong key, off the network: try the next one
+        if ok:
+            yield base, key
 
 
 def lumo_readable(project, rel):
@@ -1041,11 +997,6 @@ TOOLS = {
     "ralph_validate_plan": (tool_validate, ("Check the plan files prd.json and verify.json in the plan dir (schema, dependencies, a verify command "
         "per task). Returns ok plus a plan_hash and the plan_dir, or a list of problems to fix. Call it before showing the plan to the user."),
         S({"project_dir": STR}, ["project_dir"])),
-    "ralph_review_plan": (tool_review_plan, ("Tier 2: Claude Code (read-only, billed, one call, up to ~3 minutes) reviews the validated plan against the "
-        "real code BEFORE building, to catch what the planner and Lumo missed. Returns Verdict PASS or FAIL and findings. Call it after "
-        "ralph_validate_plan and the user's first confirmation; ralph_run refuses a plan that has no review. Only the first plan is reviewed: once a review exists for the plan, "
-        "later calls return already_reviewed without a billed call unless force=true."),
-        S({"project_dir": STR, "force": {"type": "boolean"}}, ["project_dir"])),
     "ralph_plan": (tool_plan, ("Claude Code (billed, ONE call, up to ~5 minutes) writes the final plan: prd.json and verify.json in the "
         "plan dir, already validated. Do the research first and pass it in: request (what the user wants, with their answers to your "
         "questions), brief (what you found: how the relevant code works, constraints, how it is tested; at most 16000 characters), "
