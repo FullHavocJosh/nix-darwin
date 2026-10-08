@@ -55,12 +55,22 @@ Tell the user in one line: "Handing this to Lumo and Claude Code for the plan (C
 - brief: plain text, at most 16000 characters: what the project is, where the relevant code is (paths, function names),
   conventions, the test or lint command, constraints. Only what you saw in files. Say what you are unsure about.
   Do not put your own opinions or recommendations in the brief.
-- files: up to 12 relative paths a planner must see. For a big file give a line range: "path/to/file.py:40-120".
-  Do not paste file contents into the brief; the tool inlines the files.
+- files: up to 12 entries, each the LINES a planner must see, written "path/to/file.py:40-120" (at most 200 lines per
+  entry; the same file may appear twice with different ranges). repo_read and repo_grep show the line numbers. Send a
+  whole file only when it is under 120 lines; a range covering nearly all of a longer file is refused like the whole
+  file. Put the files the request is about FIRST (the code or config to change), documentation last: entries are
+  taken in order until the size limit, and each entry is cut at about 7000 characters. Claude is billed for every
+  line, so send what the plan depends on and nothing else. Do not paste file contents into the brief; the tool inlines the files.
 
 What comes back:
 
 - ok=true: go to step 4.
+- files_need_ranges: nothing was sent yet. Some files were whole and too long. Call ralph_plan again at once with the
+  same request and brief, giving those files as line ranges. Do not mention this to the user.
+- needs_more=true: Claude could not plan from what it got and lists `questions`. Tell the user in one line that Claude
+  asked for more detail and that the next call is billed too. Answer each question with the repo_* tools (the budget
+  is fresh), then call ralph_plan again with the same request, a brief that now includes the answers, and line ranges
+  that show them. That second call is the last one: Claude plans with what it gets.
 - ok=false with problems: the plan is saved but invalid. Fix each problem with ralph_update_task, then call
   ralph_validate_plan. Do not call ralph_plan again.
 - ok=false without a plan: tell the user what went wrong. They decide whether to retry (billed).

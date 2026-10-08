@@ -45,7 +45,7 @@ GOOD = {"prd": {"name": "add-thing", "title": "Add a thing", "description": "Add
 
 print("ralph_plan: a valid plan")
 reply(GOOD)
-r = plan(files=["lib/small.py", "lib/big.py:10-12", "lib/big.py", ".env", "../outside.py"], draft="T1: do it")
+r = plan(files=["lib/small.py", "lib/big.py:10-12", ".env", "../outside.py"], draft="T1: do it")
 check("ok with a plan_hash", r.get("ok") is True and r.get("plan_hash"), str(r)[:300])
 check("one billed call reported", r.get("billed_calls") == 1 and calls() == 1)
 check("the plan text has the task and the note, and nothing is returned as data next to it",
@@ -57,7 +57,8 @@ check("a single verify command becomes a list", verify["T1"] == ["python3 -m uni
 check("the saved plan validates", mcp.tool_validate({"project_dir": PROJECT}).get("plan_hash") == r.get("plan_hash"))
 check("ralph_run's review gate is satisfied", json.load(open(STATE + "/plan-review.json")).get("verdict") == "PLANNED")
 pt0 = r.get("present", "")
-check("skipped files are named in the plan text with the reason", all(x in pt0 for x in ("lib/big.py (larger than", ".env (denied by policy)", "../outside.py (outside the project)")), pt0[-500:])
+check("skipped files are named in the plan text with the reason", all(x in pt0 for x in (".env (denied by policy)", "../outside.py (outside the project)")), pt0[-500:])
+check("Claude is told to plan in one turn and how to ask for more", "Plan in ONE turn" in open(SEEN).read() and '"need"' in open(SEEN).read())
 seen = open(SEEN).read()
 check("prompt has request, brief and draft", all(x in seen for x in ("add a thing", "small() lives in lib/small.py", "T1: do it")))
 check("prompt has the file and the numbered range", "def small():" in seen and "10: line10 = 10" in seen and "12: line12 = 12" in seen)
@@ -160,6 +161,64 @@ check("removing a task also removes its verify entry and references to it", r.ge
 check("nothing outside the plan dir was written", sorted(os.listdir(PROJECT)) == [".env", "lib"] and sorted(os.listdir(PROJECT + "/lib")) == ["big.py", "small.py"])
 reset()
 check("without a plan it refuses", upd(task_id="T1", title="x").get("ok") is False)
+
+print("ralph_plan: long files must come as line ranges")
+reset(); reply(GOOD); n = calls(); mcp._RANGES_ASKED.clear()
+r = plan(files=["lib/small.py", "lib/big.py"])
+check("a long whole file is refused before anything is billed, with its line count", r.get("ok") is False and r.get("billed_calls") == 0
+      and r.get("files_need_ranges") == {"lib/big.py": 4000} and calls() == n, str(r)[:300])
+r = plan(files=["lib/small.py", "lib/big.py:100-110"])
+check("with a range it goes through", r.get("ok") is True and calls() == n + 1 and "100: line100 = 100" in open(SEEN).read())
+reset(); r = plan(files=["lib/big.py"])
+seen = open(SEEN).read()
+check("still whole after being asked: only its first 120 lines are sent, and the plan text says so", r.get("ok") is True and "120: line120 = 120" in seen
+      and "121: line121" not in seen and "Sent only in part" in r.get("present", ""), r.get("present", "")[-300:])
+mcp._RANGES_ASKED.clear(); reset(); n = calls()
+r = plan(files=["lib/big.py:1-3900"])
+check("a range covering nearly the whole long file is refused like the whole file", r.get("files_need_ranges") == {"lib/big.py:1-3900": 4000} and calls() == n, str(r)[:200])
+reset(); r = plan(files=["lib/big.py:1-900"])
+seen = open(SEEN).read()
+check("a range over 200 lines is cut to 200", "200: line200 = 200" in seen and "201: line201" not in seen and "lib/big.py:1-200" in r.get("present", ""))
+open(PROJECT + "/lib/wide.py", "w").write("".join("x = '" + "y" * 150 + "'\n" for _ in range(110)))     # 110 lines, about 17,000 characters
+reset(); r = plan(files=["lib/wide.py", "lib/small.py"]); seen = open(SEEN).read()
+check("one entry is cut at the per-file limit, so the next one still fits", "[cut here: this entry was over the per-file limit]" in seen and "def small():" in seen
+      and "Sent only in part" in r.get("present", ""), r.get("present", "")[-300:])
+reset(); r = plan(files=["lib/wide.py", "lib/wide.py:1-50", "lib/wide.py:40-90", "lib/wide.py:60-110"])
+check("the total sent to Claude is capped at 24,000 characters", mcp.PLAN_FILES_TOTAL_MAX == 24000 and "total size limit reached" in r.get("present", ""), r.get("present", "")[-300:])
+os.remove(PROJECT + "/lib/wide.py")
+
+print("ralph_plan: Claude may ask for more once, then must plan")
+os.environ["AISTACK_TIER0"] = "lumo"
+lumo_calls = []
+def lumo_two(a):
+    lumo_calls.append(a)
+    if a.get("raw_prompt"):
+        return {"ok": True, "plan": "REVISED DRAFT: " + "now names lib/small.py and the test command. " * 12, "lumo": "x"}
+    return {"ok": True, "plan": "FIRST DRAFT: vague", "lumo": "x"}
+real_lumo2, mcp.tool_lumo_consult = mcp.tool_lumo_consult, lumo_two
+reset(); n = calls()
+reply({"need": {"from_local_model": ["How is lib/small.py tested?", "Where is small() called?"], "for_lumo": "Name the real files; the draft is too vague."}})
+mcp.RESEARCH_CALLS = mcp.RESEARCH_BUDGET
+r = plan()
+check("Claude's request for more comes back as questions, billed once, with no plan recorded", r.get("needs_more") is True and r.get("billed_calls") == 1
+      and r.get("questions") == ["How is lib/small.py tested?", "Where is small() called?"] and not os.path.exists(STATE + "/plan-review.json")
+      and not os.path.exists(STATE + "/plan/prd.json"), str(r)[:300])
+check("Lumo is sent Claude's feedback with its own draft, and revises it", len(lumo_calls) == 2 and "too vague" in lumo_calls[1]["raw_prompt"]
+      and "FIRST DRAFT" in lumo_calls[1]["raw_prompt"] and "revised" in r.get("lumo", ""), str(r.get("lumo")))
+check("the questions get a fresh research budget", mcp.RESEARCH_CALLS == 0)
+reply(GOOD)
+r = plan(brief="small() is tested by tests/test_small.py with python3 -m unittest")
+seen = open(SEEN).read()
+check("the second call is the final attempt: no way to ask again, and it carries Lumo's revised draft", r.get("ok") is True and calls() == n + 2
+      and "final attempt" in seen and '"need"' not in seen and "REVISED DRAFT" in seen and len(lumo_calls) == 2, str(r)[:200])
+check("the plan text says two calls were billed", "2 billed calls for this plan" in r.get("present", ""), r.get("present", "")[-300:])
+check("the pending request for more is cleared once the plan exists", not os.path.exists(STATE + "/plan/need.json"))
+reset(); reply({"need": {"from_local_model": ["again?"], "for_lumo": ""}})
+open(STATE + "/plan/need.json", "w").write(json.dumps({"questions": ["x"], "for_lumo": "", "draft": ""}))
+r = plan()
+check("asking again on the final attempt is not accepted as an answer", r.get("ok") is False and not r.get("needs_more") and "no plan" in r.get("problem", ""), str(r)[:200])
+os.remove(STATE + "/plan/need.json")
+mcp.tool_lumo_consult = real_lumo2; os.environ.pop("AISTACK_TIER0")
 
 print("Lumo loop: runs here, through tamer, against this project")
 seen_by_lumo, replies = [], ["I need two things.\nNEED: lib/small.py\nNEED: .env\nNEED: grep hunter2", "FINAL DRAFT: one task in lib/small.py"]

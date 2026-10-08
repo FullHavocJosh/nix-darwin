@@ -337,8 +337,9 @@ A plan that is vague or has weak verify commands costs failed attempts, so be ex
 
 Below: the user's request, a research brief written by a small local model (it can be wrong or incomplete), the project files it
 picked, and possibly a draft plan from another assistant (treat it as a draft, keep only what fits the code).
-Everything you need should be below. Use Read, Grep and Glob in the current directory ONLY to close a specific gap or to check a
-claim the plan depends on. Do not explore, and do not modify anything.
+Plan in ONE turn from what is below. The project files are excerpts with line numbers, chosen for this request. You may make at
+most 2 lookups (Read, Grep or Glob), each to check one specific claim the plan depends on. Do not explore, and do not modify anything.
+%s
 
 Reply with ONE JSON object and nothing else (no prose, no code fence):
 {"prd": {"name": "short-slug", "title": "...", "description": "...", "userStories": [
@@ -368,6 +369,64 @@ USER REQUEST:
 RESEARCH BRIEF:
 %s
 %s%s"""
+
+
+# Every Claude turn re-reads the whole prompt, and three real runs spent 4-5 turns on 7-10 lookups. So Claude is told
+# to plan in one turn, and given a cheaper way out than exploring: say what is missing. The local model then looks it
+# up and Lumo revises its draft (both free), and Claude gets exactly one more call.
+NEED_NOTE = """If that is not enough to write exact tasks, do not explore further and do not guess. Reply with this INSTEAD of a plan, and
+you will be called once more with the answers:
+{"need": {"from_local_model": ["a specific question, or a file and what to look for in it"], "for_lumo": "what its draft should cover or correct, or an empty string"}}
+Ask only for what would change the plan, at most 6 questions. If a file the plan depends on is not below, ask for it; do not plan
+around it."""
+FINAL_NOTE = """This is the final attempt: you asked for more before, and the answers are in the brief and the files below. Write the plan
+now. Put anything still unknown in notes. Do not ask again."""
+REVISE_PROMPT = """A planner reviewed your draft build plan and asks for this before it can use it:
+
+%s
+
+Rewrite the draft accordingly, in at most 1200 words, as short numbered items. Keep what was right, keep file paths, commands,
+versions and sources, and do not add praise or explanations of well-known things.
+
+YOUR DRAFT:
+%s"""
+# Files go to Claude as excerpts. A whole file is accepted only when it is short; a longer one is refused once, before
+# anything is billed, so the local model picks the lines that matter (repo_read and repo_grep show line numbers).
+FILE_WHOLE_MAX_LINES = int(os.environ.get("AISTACK_PLAN_WHOLE_FILE_LINES", "120"))
+RANGE_MAX_LINES = int(os.environ.get("AISTACK_PLAN_RANGE_LINES", "200"))
+PLAN_FILES_TOTAL_MAX = int(os.environ.get("AISTACK_PLAN_FILES_CHARS", "24000"))
+# One entry may not use up the whole allowance: on the first measured run two long documents came first and the one
+# workflow file the plan was about no longer fitted.
+PLAN_FILE_ENTRY_MAX = int(os.environ.get("AISTACK_PLAN_ENTRY_CHARS", "7000"))
+_RANGES_ASKED = set()
+
+
+def file_line_count(project, rel):
+    """Lines in a project file that may be sent, or None (missing, denied, binary)."""
+    text, why = lumo_readable(project, rel)
+    if text is None and why and why.startswith("larger than"):
+        try:
+            text = open(os.path.realpath(os.path.join(project, rel)), encoding="utf-8").read()
+        except (UnicodeDecodeError, OSError):
+            return None
+    return None if text is None else len(text.splitlines())
+
+
+def need_path(project):
+    return os.path.join(plan_dir(project), "need.json")
+
+
+def extract_need(text):
+    """Claude's 'I need more' reply: the first JSON object with a 'need' object, or None."""
+    dec = json.JSONDecoder()
+    for m in re.finditer(r"\{", text):
+        try:
+            obj, _ = dec.raw_decode(text, m.start())
+        except ValueError:
+            continue
+        if isinstance(obj, dict) and isinstance(obj.get("need"), dict):
+            return obj["need"]
+    return None
 
 
 def plan_file(project, spec):
@@ -409,6 +468,7 @@ def extract_plan(text):
 
 
 def tool_plan(a):
+    global RESEARCH_CALLS
     project = project_of(a)
     request = (a.get("request") or "").strip()
     if not request:
@@ -419,12 +479,36 @@ def tool_plan(a):
         return {"ok": True, "already_planned": True, "plan_hash": h, "planned_request": prev.get("request"), "billed_calls": 0,
                 "next": "Claude already wrote a plan that has not been run yet (planned_request). If it is for the same work, call "
                         "ralph_validate_plan and show it to the user. Pass replan=true only when the user wants a new plan (billed)."}
+    # Long files must come as line ranges. Refused once, before Lumo or Claude is asked, with the line counts.
+    specs = [str(f) for f in (a.get("files") or [])][:LUMO_FILES_MAX]
+    too_long = {}
+    for spec in specs:
+        m = re.search(r":(\d+)-(\d+)$", spec)
+        n = file_line_count(project, spec[:m.start()] if m else spec)
+        # a "range" that is nearly the whole of a long file is the whole file (README.md:1-197 was sent that way)
+        whole = not m or (n and int(m.group(2)) - int(m.group(1)) + 1 >= 0.8 * n)
+        if n and n > FILE_WHOLE_MAX_LINES and whole:
+            too_long[spec] = n
+    if too_long and project not in _RANGES_ASKED:
+        _RANGES_ASKED.add(project)
+        return {"ok": False, "billed_calls": 0, "files_need_ranges": too_long,
+                "problem": f"Nothing was sent yet. These files are longer than {FILE_WHOLE_MAX_LINES} lines (line counts given) and must be "
+                           "sent as the lines that matter, not whole. A range that covers nearly the whole file counts as whole.",
+                "next": f"Call ralph_plan again with the same request and brief, giving each of these files as path:START-END "
+                        f"(at most {RANGE_MAX_LINES} lines per range; the same file may appear twice with different ranges). Use the line "
+                        "numbers you saw in repo_read and repo_grep. Do not tell the user about this step."}
     brief, draft = (a.get("brief") or "").strip(), (a.get("draft") or "").strip()
     brief_cut = len(brief) > PLAN_BRIEF_MAX
     brief = brief[:PLAN_BRIEF_MAX]
+    # A second call after Claude asked for more: it is the final attempt, and Lumo's revised draft is reused.
+    prior_need = rj(need_path(project), {}) or {}
+    final_attempt = bool(prior_need)
+    if prior_need.get("draft"):
+        draft = prior_need["draft"]
     # Lumo (free, can look things up online) is asked here, not by the chat agent: the small local model skipped that
     # step when it was its job. Only when the launcher found a Lumo (AISTACK_TIER0=lumo) and no draft was passed in.
-    lumo_state = "draft passed in" if draft else "not available"
+    lumo_state = ("draft revised by Lumo after Claude asked for changes" if prior_need.get("draft")
+                  else "draft passed in" if draft else "not available")
     if not draft and os.environ.get("AISTACK_TIER0") == "lumo":
         lr = tool_lumo_consult({"project_dir": project, "request": request + ("\n\nWhat a local model found in the code:\n" + brief[:6000] if brief else ""),
                                 "files": [re.sub(r":\d+-\d+$", "", str(f)) for f in (a.get("files") or [])],
@@ -449,16 +533,25 @@ def tool_plan(a):
         cut = draft.rfind("\n\n", 0, PLAN_DRAFT_MAX)
         draft = draft[:cut if cut > PLAN_DRAFT_MAX // 2 else PLAN_DRAFT_MAX] + "\n\n[the draft was longer and is cut here]"
         truncated.append("draft")
-    sent, skipped, blocks, total = [], {}, [], 0
-    for spec in (a.get("files") or [])[:LUMO_FILES_MAX]:
-        _, text, why = plan_file(project, str(spec))
+    sent, skipped, blocks, total, trimmed = [], {}, [], 0, []
+    for spec in specs:
+        m = re.search(r":(\d+)-(\d+)$", spec)
+        if m and int(m.group(2)) - int(m.group(1)) + 1 > RANGE_MAX_LINES:
+            lo = int(m.group(1))
+            spec = f"{spec[:m.start()]}:{lo}-{lo + RANGE_MAX_LINES - 1}"; trimmed.append(spec)
+        elif spec in too_long:                  # still (nearly) whole after being asked for a range: its head only
+            spec = f"{spec[:m.start()] if m else spec}:1-{FILE_WHOLE_MAX_LINES}"; trimmed.append(spec)
+        _, text, why = plan_file(project, spec)
+        if text and len(text) > PLAN_FILE_ENTRY_MAX:
+            text = text[:text.rfind("\n", 0, PLAN_FILE_ENTRY_MAX) + 1] + "[cut here: this entry was over the per-file limit]\n"
+            trimmed.append(spec)
         if text is None:
             skipped[spec] = why
-        elif total + len(text) > LUMO_TOTAL_MAX:
+        elif total + len(text) > PLAN_FILES_TOTAL_MAX:
             skipped[spec] = "total size limit reached"
         else:
             total += len(text); sent.append(spec); blocks.append(f"\n--- FILE: {spec} ---\n{text}")
-    prompt = PLAN_PROMPT % (request, brief or "(none)",
+    prompt = PLAN_PROMPT % (FINAL_NOTE if final_attempt else NEED_NOTE, request, brief or "(none)",
                             "\nPROJECT FILES:" + "".join(blocks) if blocks else "",
                             "\nDRAFT PLAN FROM ANOTHER ASSISTANT:\n" + draft if draft else "")
     cmd = os.environ.get("AISTACK_PLAN_CMD")
@@ -472,6 +565,25 @@ def tool_plan(a):
     text = (r.stdout or "").strip()
     plan = extract_plan(text) if r.returncode == 0 else None
     os.makedirs(plan_dir(project), exist_ok=True)
+    need = extract_need(text) if (r.returncode == 0 and not plan and not final_attempt) else None
+    questions = [str(q) for q in (need or {}).get("from_local_model") or [] if str(q).strip()][:6]
+    feedback = str((need or {}).get("for_lumo") or "").strip()
+    if need and (questions or feedback):
+        revised = ""
+        if feedback and draft and os.environ.get("AISTACK_TIER0") == "lumo":
+            rr = tool_lumo_consult({"project_dir": project, "request": "revise", "raw_prompt": REVISE_PROMPT % (feedback, draft)})
+            if rr.get("ok") and len(str(rr.get("plan") or "").strip()) >= 400:
+                revised = str(rr["plan"]).strip()[:PLAN_DRAFT_MAX]
+        with open(need_path(project), "w") as f:
+            json.dump({"questions": questions, "for_lumo": feedback, "draft": revised or draft, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}, f, indent=1)
+        RESEARCH_CALLS = 0      # the questions get their own research budget
+        return {"ok": False, "needs_more": True, "billed_calls": 1, "questions": questions,
+                "lumo": ("Lumo revised its draft as Claude asked" if revised else "Claude's note for Lumo could not be applied" if feedback else "no change asked of Lumo"),
+                "problem": "Claude needs more before it can write the plan.",
+                "next": "Tell the user in one line that Claude asked for more detail and that the next call is billed too. Then answer "
+                        "each question with repo_tree / repo_read / repo_grep (you have a fresh budget), and call ralph_plan again with "
+                        "the same request, a brief that now includes the answers, and files as line ranges that show them. That call is "
+                        "the last: Claude will plan with what it gets. Ask the user only if a question is about what they want."}
     if not plan:
         raw = os.path.join(plan_dir(project), "claude-plan.raw.txt")
         with open(raw, "w") as f:
@@ -498,7 +610,13 @@ def tool_plan(a):
         f"Lumo: {lumo_state}.",
         "Not sent to Claude: " + ", ".join(f"{k} ({v})" for k, v in skipped.items()) + "." if skipped else "",
         "Cut to the size limit: " + ", ".join(truncated) + "." if truncated else "",
-        "Claude Code: 1 billed call for this plan; it reviews the result once more at the end.") if x]
+        "Sent only in part (a range was needed or too long): " + ", ".join(trimmed) + "." if trimmed else "",
+        "Claude asked for more detail once before planning (2 billed calls for this plan)." if final_attempt else "",
+        "" if final_attempt else "Claude Code: 1 billed call for this plan; it reviews the result once more at the end.") if x]
+    try:
+        os.remove(need_path(project))
+    except OSError:
+        pass
     plan_meta(project, {"notes": notes, "lines": lines})
     # Only the finished text goes back, with nothing next to it to summarize from: handed the tasks and notes as
     # data as well, the local model wrote its own version of the plan.
@@ -517,7 +635,6 @@ def tool_plan(a):
     out["next"] = ("Your whole reply is: one code block (three backticks) containing the text of 'present' copied character for "
                    "character, then the single line: Change something, or start? Nothing else. No heading, no summary, no "
                    "markdown inside the block. Later: a change is ralph_update_task; 'start' is ralph_run with this plan_hash.")
-    global RESEARCH_CALLS
     RESEARCH_CALLS = 0      # the plan exists: a later question from the user gets a fresh, equally small budget
     return out
 
@@ -1000,7 +1117,8 @@ TOOLS = {
     "ralph_plan": (tool_plan, ("Claude Code (billed, ONE call, up to ~5 minutes) writes the final plan: prd.json and verify.json in the "
         "plan dir, already validated. Do the research first and pass it in: request (what the user wants, with their answers to your "
         "questions), brief (what you found: how the relevant code works, constraints, how it is tested; at most 16000 characters), "
-        "files (relative paths that matter, at most 12; add a line range for a big file, e.g. 'lib/a.py:40-120'; secrets are refused), "
+        "files (at most 12 entries; the lines that matter as 'path:START-END', e.g. 'lib/a.py:40-120', at most 200 lines per range; a "
+        "whole file only when it is under 120 lines; secrets are refused), "
         "Lumo is consulted automatically when it is reachable (the result says so in 'lumo'); do not pass draft. Returns the tasks, "
         "a plan_hash and notes for the user. A second call returns already_planned without a billed call unless replan=true."),
         S({"project_dir": STR, "request": STR, "brief": STR, "files": {"type": "array", "items": STR}, "draft": STR,
