@@ -651,13 +651,15 @@ function darwin-reload() {
   _lumo_signin_if_invalid "$host" "$remote"
 }
 
-# Lumo sign-in state of this machine ($1 empty) or of the ssh target in $1: prints valid, invalid, or building
-# (lumo-tamer is not built or has not written its config yet, which is the case right after a first switch).
+# Lumo sign-in state of this machine ($1 empty) or of the ssh target in $1: prints valid, invalid, building
+# (lumo-tamer is not built or has not written its config yet, which is the case right after a first switch), or
+# unreachable (the ssh connection itself failed, which says nothing about the sign-in).
 function _lumo_signin_state() {
   local check='export PATH=/opt/homebrew/bin:$PATH; [ -d ~/lumo-tamer/dist ] && [ -f ~/lumo-tamer/config.yaml ] || { echo building; exit 0; }; cd ~/lumo-tamer && tamer auth status 2>&1'
   local out
   if [[ -n "$1" ]]; then
     out=$(ssh -o BatchMode=yes -o ConnectTimeout=8 "$1" "$check" 2>&1)
+    [[ $? -eq 255 ]] && { echo unreachable; return 0; }
   else
     out=$(/bin/sh -c "$check" 2>&1)
   fi
@@ -680,7 +682,8 @@ function _lumo_signin_if_invalid() {
     sleep 10
   done
   case "$state" in
-    valid) echo "Lumo: Proton sign-in is valid, nothing to do."; return 0 ;;
+    valid) echo "Lumo: Proton sign-in${remote:+ on MacMiniM1} is valid, nothing to do."; return 0 ;;
+    unreachable) echo "Lumo: could not reach $remote over ssh, so its sign-in was not checked."; return 0 ;;
     building)
       echo "Lumo: lumo-tamer is not ready yet (tail ~/lumo-tamer.provision.log). Sign in afterwards with: ${${host:#desktop}:+lumoauth}${${host:#laptop}:+lumoreauth}"
       return 0 ;;
@@ -695,3 +698,32 @@ function _lumo_signin_if_invalid() {
     echo "Lumo: the Proton sign-in on this machine is not valid, and it has no screen. On the MacBook run: lumoreauth"
   fi
 }
+
+# The switch is usually typed as plain `sudo darwin-rebuild switch --flake ~/nix-darwin#macos_<host>` (often behind
+# `gp && source ~/.zshrc* &&`), not through darwin-reload, so an interactive shell watches for it: preexec remembers
+# the command line, precmd runs the same sign-in check once the line has finished with exit 0.
+#   macos_laptop   this machine's sign-in (lumoauth when it is not valid), then the Mini's as well, because the Mini is
+#                  headless and can only be signed in from here (lumoreauth when it is not valid)
+#   macos_desktop  typed on the Mini itself: its sign-in; when it is not valid this prints what to run on the MacBook
+# A darwin-reload command line does not contain "darwin-rebuild", so the check never runs twice.
+function _lumo_switch_preexec() {
+  _LUMO_SWITCH_CMD=""
+  [[ "$1" == *darwin-rebuild*switch*macos_(laptop|desktop)* ]] && _LUMO_SWITCH_CMD="$1"
+}
+function _lumo_switch_precmd() {
+  local rc=$? cmd="$_LUMO_SWITCH_CMD"
+  _LUMO_SWITCH_CMD=""
+  [[ -n "$cmd" && $rc -eq 0 ]] || return $rc
+  if [[ "$cmd" == *macos_desktop* ]]; then
+    _lumo_signin_if_invalid desktop ""
+  else
+    _lumo_signin_if_invalid laptop ""
+    _lumo_signin_if_invalid desktop "${LUMO_MINI_USER:-havoc}@${LUMO_MINI_HOST:-macminim1.rollet.family}"
+  fi
+  return $rc
+}
+if [[ -o interactive ]]; then
+  autoload -Uz add-zsh-hook
+  add-zsh-hook preexec _lumo_switch_preexec
+  add-zsh-hook precmd _lumo_switch_precmd
+fi
