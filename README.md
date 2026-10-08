@@ -202,13 +202,15 @@ committed; use `gpc`/`gpa` in the work directory afterwards. Tests: `PYTHONDONTW
 Proton Lumo as a tool-less planning model (`nix-modules/macos/lumo.nix`, scripts in `.config/lumo/`). Each host runs
 its own copy, with its own keys and its own Proton sign-in; `local.lumo.lan` in `flake.nix` decides who may reach it:
 
-|                             | `macos_desktop` (MacMiniM1, `lan = true`)                    | `macos_laptop` (`lan = false`, the default)         |
-| --------------------------- | ------------------------------------------------------------ | --------------------------------------------------- |
-| tamer :3003, planner :8765  | every device on the network, behind API keys                 | `127.0.0.1` only                                    |
-| application firewall        | Python and node are allowed in                               | not touched                                         |
-| keys                        | Doppler `FullHavocJosh/root_macmini`                         | generated and kept on the host, Doppler is not read |
-| sign-in                     | `lumoreauth` from the MacBook (the Mini is headless)         | `lumoauth` on the laptop itself                     |
-| planner cannot read its key | exits, launchd retries (it no longer falls back to loopback) | no key needed                                       |
+|                                      | `macos_desktop` (MacMiniM1, `lan = true`)                    | `macos_laptop` (`lan = false`, the default)                                           |
+| ------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| tamer :3003, planner :8765           | every device on the network, behind API keys                 | `127.0.0.1` only                                                                      |
+| application firewall                 | Python and node are allowed in                               | not touched                                                                           |
+| planner key (`LUMO_PLANNER_API_KEY`) | its own, in Doppler `root_macmini`                           | its own, in Doppler `root_macbook` (copy in `~/.lumo-planner-key` for offline starts) |
+| tamer and vault keys                 | Doppler `root_macmini`                                       | generated and kept on the host                                                        |
+| sign-in                              | `lumoreauth` from the MacBook (the Mini is headless)         | `lumoauth` on the laptop itself                                                       |
+| planner cannot read its key          | exits, launchd retries (it no longer falls back to loopback) | uses the copy in the key file                                                         |
+| new planner key                      | on every `lumoreauth`, or `lumoreauth --key-only`            | on every `lumoauth`, or `lumoauth --key-only`                                         |
 
 lumo-tamer has no setting for its listen address, so on a loopback host the provisioner patches the one `listen()`
 call to read `LUMO_TAMER_HOST`, and `run-tamer.sh` refuses to start a build without that patch. After the first
