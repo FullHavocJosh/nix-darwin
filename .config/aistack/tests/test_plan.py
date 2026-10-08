@@ -86,9 +86,50 @@ reset(); reply(GOOD)
 r = plan(brief="b" * 20000)
 check("an oversized brief is cut and reported", r.get("truncated") == ["brief"] and len(open(SEEN).read()) < 20000, str(r.get("truncated")))
 
+print("ralph_plan: Lumo is consulted by the bridge, not by the chat agent")
+asked = []
+def fake_lumo(a):
+    asked.append(a); return {"ok": True, "plan": "LUMO DRAFT: use kubeconform", "lumo": "http://127.0.0.1:8765/v1"}
+real_lumo, mcp.tool_lumo_consult = mcp.tool_lumo_consult, fake_lumo
+reset(); reply(GOOD); r = plan(files=["lib/big.py:10-12"])
+check("without AISTACK_TIER0=lumo it is not asked", not asked and r.get("lumo") == "not available", str(r.get("lumo")))
+os.environ["AISTACK_TIER0"] = "lumo"
+reset(); r = plan(files=["lib/big.py:10-12"])
+check("with a Lumo it is asked once, with the request, the brief and the files without ranges",
+      len(asked) == 1 and "add a thing" in asked[0]["request"] and "small() lives" in asked[0]["request"] and asked[0]["files"] == ["lib/big.py"], str(asked)[:300])
+pt = r.get("present", "")
+check("the result carries the finished text for the user", all(x in pt for x in ("PLAN: Add a thing", "T1  Write it", "done when: thing() returns 2",
+      "verify: python3 -m unittest tests.test_thing", "NOTES FROM CLAUDE:", "assumed python3", "Lumo: consulted", "say 'start'")), pt[:400])
+check("its draft reaches Claude and the result says so", "LUMO DRAFT: use kubeconform" in open(SEEN).read() and r.get("lumo", "").startswith("consulted"), str(r.get("lumo")))
+mcp.tool_lumo_consult = lambda a: {"ok": False, "problem": "connection refused"}
+reset(); r = plan()
+check("a Lumo failure does not stop the plan", r.get("ok") is True and r.get("lumo", "").startswith("failed"), str(r.get("lumo")))
+mcp.tool_lumo_consult = real_lumo; os.environ.pop("AISTACK_TIER0")
+
+print("ralph_update_task: the only way to change the plan")
+reset(); reply(GOOD); h0 = plan().get("plan_hash")
+def upd(**kw): return mcp.tool_update_task(dict({"project_dir": PROJECT}, **kw))
+r = upd(task_id="T1", title="Write it well", verify=["python3 -m unittest tests.test_thing", "ruff check lib"])
+prd, verify = json.load(open(STATE + "/plan/prd.json")), json.load(open(STATE + "/plan/verify.json"))
+check("a field and the verify commands change, the rest stays", r.get("ok") is True and prd["userStories"][0]["title"] == "Write it well"
+      and prd["userStories"][0]["description"] == "Create lib/thing.py" and len(verify["T1"]) == 2 and r.get("plan_hash") != h0, str(r)[:300])
+r = upd(task_id="T2", title="Test it", description="Add tests/test_thing.py", acceptanceCriteria=["tests pass"], dependsOn=["T1"], verify=["python3 -m unittest"])
+check("an unknown id adds a valid task after the others", r.get("ok") is True and [t["id"] for t in r.get("tasks", [])] == ["T1", "T2"]
+      and json.load(open(STATE + "/plan/prd.json"))["userStories"][1]["priority"] == 2, str(r)[:300])
+r = upd(task_id="T2", verify=["make test && echo ok"])
+check("an invalid change is reported", r.get("ok") is False and any("no shell syntax" in p for p in r.get("problems", [])), str(r)[:200])
+upd(task_id="T2", verify=["python3 -m unittest"])
+r = upd(task_id="T1", remove=True)
+prd = json.load(open(STATE + "/plan/prd.json"))
+check("removing a task also removes its verify entry and references to it", r.get("ok") is True and [t["id"] for t in prd["userStories"]] == ["T2"]
+      and prd["userStories"][0]["dependsOn"] == [] and "T1" not in json.load(open(STATE + "/plan/verify.json")), str(r)[:300])
+check("nothing outside the plan dir was written", sorted(os.listdir(PROJECT)) == [".env", "lib"] and sorted(os.listdir(PROJECT + "/lib")) == ["big.py", "small.py"])
+reset()
+check("without a plan it refuses", upd(task_id="T1", title="x").get("ok") is False)
+
 print("bridge: tool list")
 names = [t["name"] for t in mcp.handle({"method": "tools/list"})["tools"]]
-check("ralph_plan is listed and ralph_review_plan is still there", "ralph_plan" in names and "ralph_review_plan" in names)
+check("ralph_plan and ralph_update_task are listed and ralph_review_plan is still there", {"ralph_plan", "ralph_update_task", "ralph_review_plan"} <= set(names))
 
 print("aidev dispatcher")
 def aidev(args):
