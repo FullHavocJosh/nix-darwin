@@ -12,6 +12,9 @@ let
   tamerRev = "0ef587b7f3d5d5165914602f0cc79bdfe7ee4e30"; # 2026-09-23
 
   logs = "${home}/Library/Logs";
+  # each device has its own planner key, in its own Doppler config (.config/lumo/lumo-common.sh)
+  dopplerConfig = if cfg.lan then "root_macmini" else "root_macbook";
+  asHavoc = "sudo -u havoc HOME=${home} PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin";
   daemon = script: log: {
     ProgramArguments = [
       "/bin/zsh"
@@ -41,6 +44,16 @@ in
     '';
   };
 
+  options.local.lumo.rotateKeyOnSwitch = lib.mkOption {
+    type = lib.types.bool;
+    default = true;
+    description = ''
+      Replace this device's planner key (LUMO_PLANNER_API_KEY in its Doppler config) on every activation, in the
+      background, the same way a sign-in does. The Proton sign-in itself cannot be refreshed here: it needs a browser,
+      so the activation only reports whether it is still valid.
+    '';
+  };
+
   config = {
     # Tier 0 of aistack / the researcher in aidev: Lumo (Proton) as a cloud, tool-less assistant, on every personal
     # Mac. Three LaunchDaemons running as havoc (no login needed):
@@ -57,8 +70,25 @@ in
     # name (the first version used lumoTamerProvision) is silently dropped, so this hooks postActivation.
     system.activationScripts.postActivation.text = lib.mkAfter (
       ''
-        sudo -u havoc HOME=${home} LUMO_LAN=${if cfg.lan then "1" else "0"} bash -c '(nohup /bin/zsh ${lumoSrc}/provision-tamer.sh ${tamerRev} </dev/null >/dev/null 2>&1 &)'
-        echo "[lumo-tamer-provisioner] check running in background -- tail ${home}/lumo-tamer.provision.log"
+            sudo -u havoc HOME=${home} LUMO_LAN=${if cfg.lan then "1" else "0"} bash -c '(nohup /bin/zsh ${lumoSrc}/provision-tamer.sh ${tamerRev} </dev/null >/dev/null 2>&1 &)'
+            echo "[lumo-tamer-provisioner] check running in background -- tail ${home}/lumo-tamer.provision.log"
+
+        # Sign-in state, so an expired one is noticed at the next switch and not only through the watchdog's alert.
+        if [ -d ${home}/lumo-tamer/dist ]; then
+          if ${asHavoc} /usr/bin/perl -e 'alarm shift; exec @ARGV' 20 /bin/sh -c 'cd ${home}/lumo-tamer && tamer auth status 2>&1' | grep -q "Authentication is configured and valid"; then
+            echo "[lumo] Proton sign-in: valid"
+          else
+            echo "[lumo] Proton sign-in: NEEDS ATTENTION -- ${
+              if cfg.lan then "run lumoreauth on the MacBook" else "run lumoauth on this machine"
+            }"
+          fi
+        fi
+      ''
+      + lib.optionalString cfg.rotateKeyOnSwitch ''
+        # New planner key for this device on every switch (reauth.sh --key-only: write to Doppler, restart the planner,
+        # check it answers). In the background: it waits for the planner to come back, which must not hold up the switch.
+        ${asHavoc} LUMO_LOCAL_DOPPLER_CONFIG=${dopplerConfig} bash -c '(nohup /bin/zsh ${lumoSrc}/reauth.sh --local --key-only </dev/null >>${logs}/lumo-key-rotate.log 2>&1 &)'
+        echo "[lumo] replacing this device's planner key (Doppler ${dopplerConfig}) in the background -- tail ${logs}/lumo-key-rotate.log"
       ''
       + lib.optionalString (!cfg.lan) ''
         echo "[lumo] loopback only on this host: tamer and the planner bind 127.0.0.1, no firewall rule is added"

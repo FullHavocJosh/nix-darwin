@@ -8,6 +8,8 @@
 #                        to the Mini. Changes nothing on the Mini.
 #   lumoreauth --key-only / lumoauth --key-only
 #                        no sign-in: only replace that device's planner key (see below) and restart its planner.
+#                        Every nix-darwin activation runs `--local --key-only` for the device being switched
+#                        (nix-modules/macos/lumo.nix, log: ~/Library/Logs/lumo-key-rotate.log).
 #   lumoauth             (this script with --local) sign in and give the session to THIS machine's own tamer, the
 #                        loopback-only one a laptop runs. No ssh, nothing on the Mini changes. Each machine gets its
 #                        own sign-in this way: sign in again for the Mini with lumoreauth, never share one session.
@@ -57,7 +59,7 @@ rotate_planner_key() {
   (( LOCAL )) && config=$LOCAL_DOPPLER_CONFIG where="this machine" url="http://127.0.0.1:$PLANNER_PORT/v1/models"
   command -v doppler >/dev/null || { print -u2 "planner key NOT replaced: doppler is not installed here"; return 1; }
   new=$(openssl rand -hex 24) || return 1
-  print "Replacing the planner key of $where (Doppler $DOPPLER_PROJECT/$config)..."
+  print "$(date '+%Y-%m-%d %H:%M:%S') Replacing the planner key of $where (Doppler $DOPPLER_PROJECT/$config)..."
   if ! print -rn -- "$new" | doppler secrets set LUMO_PLANNER_API_KEY --project "$DOPPLER_PROJECT" --config "$config" >/dev/null 2>&1; then
     print -u2 "planner key NOT replaced: Doppler refused the write to $DOPPLER_PROJECT/$config. The old key is still in use."
     return 1
