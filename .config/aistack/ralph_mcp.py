@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """MCP bridge (stdio, JSON-RPC 2.0) between a chat agent (pi) and the aistack run driver.
 
-Tools: ralph_validate_plan, ralph_review_plan (tier 2 plan review), ralph_plan (aidev: Claude writes the plan), ralph_run, ralph_status, ralph_respond, ralph_cancel, ralph_runs, lumo_consult (tier 0).
+Tools: ralph_validate_plan, ralph_review_plan (tier 2 plan review), ralph_plan (aidev: Claude writes the plan), ralph_update_task, ralph_run, ralph_status, ralph_respond, ralph_cancel, ralph_runs, lumo_consult (tier 0).
 Runs are detached processes (ralph_driver.py); tool calls return quickly, and ralph_status can wait up to
 45s for news so the chat agent can follow a run without a tight loop (MCP clients time out near 60s).
 
@@ -156,6 +156,22 @@ def validate(prd, verify):
     return problems
 
 
+def present_plan(prd, verify, notes=(), lines=()):
+    """The plan as text for the user. The chat agent prints this as it is: when a small model summarized the plan
+    itself it left out the acceptance criteria and verify commands and added options of its own."""
+    out = [f"PLAN: {prd.get('title') or prd.get('name')}", str(prd.get("description") or "").strip(), ""]
+    for s in sorted(prd.get("userStories", []), key=lambda s: s.get("priority", 0)):
+        out.append(f"{s['id']}  {s.get('title', '')}" + (f"   (after {', '.join(s['dependsOn'])})" if s.get("dependsOn") else ""))
+        out.append(f"    does:   {str(s.get('description', '')).strip()}")
+        out += [f"    done when: {c}" for c in s.get("acceptanceCriteria", [])]
+        out += [f"    verify: {c}" for c in verify.get(s["id"], [])]
+    if notes:
+        out += ["", "NOTES FROM CLAUDE:"] + [f"  - {n}" for n in notes]
+    out += [""] + [x for x in lines if x]
+    out.append("Next: say what to change, or say 'start' to build this plan.")
+    return "\n".join(out)
+
+
 def tool_validate(a):
     project = project_of(a)
     prd, verify, h = load_plan(project)
@@ -165,6 +181,7 @@ def tool_validate(a):
     tasks = [{"id": s["id"], "title": s["title"], "priority": s["priority"], "dependsOn": s.get("dependsOn", []),
               "verify": verify[s["id"]]} for s in prd["userStories"]]
     return {"ok": True, "plan_hash": h, "name": prd["name"], "tasks": tasks, "plan_dir": plan_dir(project),
+            "present": present_plan(prd, verify),
             "next": "Show this plan to the user. Only after they confirm it, call ralph_run with this plan_hash."}
 
 
@@ -347,6 +364,10 @@ Rules:
   unrelated or empty state (tests, a linter, a build, a check script). Commands run without a shell: no ; & | < > backtick or $().
   When a check needs several steps, make the task create a script file and run that. Name test files in the task description.
 - notes: only what the user must know or decide. Use [] when there is nothing.
+- A broad request (evaluate, review, audit, "what can I improve") is still a request for a plan: choose the improvements
+  that matter most, at most 6, each one a concrete task that can be built and verified like any other. Put further findings,
+  and anything that is advice and not a change, in notes (one line each, most important first). Do not plan a task on a
+  claim from the brief or the draft that you have not checked in the code.
 
 USER REQUEST:
 %s
@@ -406,6 +427,17 @@ def tool_plan(a):
                 "next": "Claude already wrote a plan that has not been run yet (planned_request). If it is for the same work, call "
                         "ralph_validate_plan and show it to the user. Pass replan=true only when the user wants a new plan (billed)."}
     brief, draft = (a.get("brief") or "").strip(), (a.get("draft") or "").strip()
+    # Lumo (free, can look things up online) is asked here, not by the chat agent: the small local model skipped that
+    # step when it was its job. Only when the launcher found a Lumo (AISTACK_TIER0=lumo) and no draft was passed in.
+    lumo_state = "draft passed in" if draft else "not available"
+    if not draft and os.environ.get("AISTACK_TIER0") == "lumo":
+        lr = tool_lumo_consult({"project_dir": project, "request": request + ("\n\nWhat a local model found in the code:\n" + brief[:6000] if brief else ""),
+                                "files": [re.sub(r":\d+-\d+$", "", str(f)) for f in (a.get("files") or [])],
+                                "timeout_s": int(os.environ.get("AISTACK_LUMO_TIMEOUT_S", "100"))})
+        if lr.get("ok"):
+            draft, lumo_state = str(lr.get("plan") or "").strip(), "consulted (" + str(lr.get("lumo", "")) + ")"
+        else:
+            lumo_state = "failed: " + str(lr.get("problem", ""))[:160]
     truncated = [n for n, t, cap in (("brief", brief, PLAN_BRIEF_MAX), ("draft", draft, PLAN_DRAFT_MAX)) if len(t) > cap]
     brief, draft = brief[:PLAN_BRIEF_MAX], draft[:PLAN_DRAFT_MAX]
     sent, skipped, blocks, total = [], {}, [], 0
@@ -454,15 +486,60 @@ def tool_plan(a):
     problems = validate(prd, verify)
     notes = [str(n) for n in plan.get("notes") or []][:12] if isinstance(plan.get("notes"), list) else []
     out = {"ok": not problems, "plan_hash": h, "plan_dir": plan_dir(project), "notes": notes, "files_sent": sent,
-           "files_skipped": skipped, "truncated": truncated, "billed_calls": 1}
+           "files_skipped": skipped, "truncated": truncated, "billed_calls": 1, "lumo": lumo_state}
     if problems:
         out.update(problems=problems, next="Claude's plan is saved but has the problems listed. Fix them yourself in prd.json / "
                    "verify.json in the plan dir, then call ralph_validate_plan. Do not call ralph_plan again (it is billed).")
         return out
     out.update(name=prd["name"], tasks=[{"id": s["id"], "title": s["title"], "priority": s["priority"],
                                         "dependsOn": s.get("dependsOn", []), "verify": verify[s["id"]]} for s in prd["userStories"]],
-               next="Show the user the plan and the notes. If they want changes, edit the plan files yourself and call "
-                    "ralph_validate_plan. Only after they confirm, call ralph_run with the current plan_hash.")
+               present=present_plan(prd, verify, notes, [
+                   f"Lumo: {lumo_state}.",
+                   "Not sent to Claude: " + ", ".join(f"{k} ({v})" for k, v in skipped.items()) + "." if skipped else "",
+                   "Cut to the size limit: " + ", ".join(truncated) + "." if truncated else "",
+                   "Claude Code: 1 billed call for this plan; it reviews the result once more at the end."]),
+               next="Print the text in 'present' to the user exactly as it is and add nothing. If they want a change, use "
+                    "ralph_update_task. Only after they say to start, call ralph_run with the current plan_hash.")
+    return out
+
+
+def tool_update_task(a):
+    """Change, add or remove ONE task in the saved plan, with its verify commands. In aidev the chat agent has no
+    write or edit tool, so this is how it applies a small change the user asked for or fixes a validation problem;
+    it can only ever touch prd.json and verify.json in the plan dir."""
+    project = project_of(a)
+    prd, verify, _ = load_plan(project)
+    if not isinstance(prd, dict) or not isinstance(prd.get("userStories"), list):
+        return {"ok": False, "problem": "there is no plan yet: call ralph_plan first"}
+    verify = verify if isinstance(verify, dict) else {}
+    tid = str(a.get("task_id") or "").strip()
+    if not tid:
+        return {"ok": False, "problem": "task_id is required"}
+    stories = prd["userStories"]
+    cur = next((s for s in stories if isinstance(s, dict) and s.get("id") == tid), None)
+    if a.get("remove"):
+        if not cur:
+            return {"ok": False, "problem": f"{tid} is not a task id"}
+        stories.remove(cur)
+        verify.pop(tid, None)
+        for s in stories:
+            if isinstance(s, dict) and tid in (s.get("dependsOn") or []):
+                s["dependsOn"] = [d for d in s["dependsOn"] if d != tid]
+    else:
+        if not cur:
+            cur = {"id": tid, "passes": False, "dependsOn": [], "priority": max([s.get("priority", 0) for s in stories if isinstance(s, dict)] + [0]) + 1}
+            stories.append(cur)
+        for k in ("title", "description", "acceptanceCriteria", "priority", "dependsOn"):
+            if a.get(k) is not None:
+                cur[k] = a[k]
+        cur["passes"] = False
+        if a.get("verify") is not None:
+            verify[tid] = [a["verify"]] if isinstance(a["verify"], str) else a["verify"]
+    for name, obj in (("prd.json", prd), ("verify.json", verify)):
+        with open(os.path.join(plan_dir(project), name), "w") as f:
+            json.dump(obj, f, indent=1)
+    out = tool_validate({"project_dir": project})
+    out["changed"] = ("removed " if a.get("remove") else "updated ") + tid
     return out
 
 
@@ -710,7 +787,7 @@ def tool_lumo_consult(a):
         if key:
             headers["Authorization"] = f"Bearer {key}"
         try:
-            with urllib.request.urlopen(urllib.request.Request(base + "/chat/completions", body, headers), timeout=180) as r:
+            with urllib.request.urlopen(urllib.request.Request(base + "/chat/completions", body, headers), timeout=int(a.get("timeout_s") or 180)) as r:
                 plan = json.load(r)["choices"][0]["message"]["content"]
         except Exception as e:
             errors.append(f"{base}: {type(e).__name__}: {e}")
@@ -736,10 +813,16 @@ TOOLS = {
         "plan dir, already validated. Do the research first and pass it in: request (what the user wants, with their answers to your "
         "questions), brief (what you found: how the relevant code works, constraints, how it is tested; at most 16000 characters), "
         "files (relative paths that matter, at most 12; add a line range for a big file, e.g. 'lib/a.py:40-120'; secrets are refused), "
-        "and draft (Lumo's draft, if you have one). Returns the tasks, a plan_hash and notes for the user. A second call returns "
-        "already_planned without a billed call unless replan=true."),
+        "Lumo is consulted automatically when it is reachable (the result says so in 'lumo'); do not pass draft. Returns the tasks, "
+        "a plan_hash and notes for the user. A second call returns already_planned without a billed call unless replan=true."),
         S({"project_dir": STR, "request": STR, "brief": STR, "files": {"type": "array", "items": STR}, "draft": STR,
            "replan": {"type": "boolean"}}, ["project_dir", "request", "brief"])),
+    "ralph_update_task": (tool_update_task, ("Change ONE task of the saved plan (free, no model): pass task_id and only the fields "
+        "that change (title, description, acceptanceCriteria, priority, dependsOn, verify = list of commands). An unknown task_id adds "
+        "a task; remove=true deletes one. Returns the validation result and the new plan_hash. This is the only way to edit the plan."),
+        S({"project_dir": STR, "task_id": STR, "title": STR, "description": STR, "acceptanceCriteria": {"type": "array", "items": STR},
+           "priority": INT, "dependsOn": {"type": "array", "items": STR}, "verify": {"type": "array", "items": STR},
+           "remove": {"type": "boolean"}}, ["project_dir", "task_id"])),
     "ralph_run": (tool_run, ("Start the confirmed plan in the background: a worker agent builds each task, the harness runs its "
         "verify commands, failures are retried then escalated, then a read-only reviewer checks security/accuracy/completeness. "
         "Needs the plan_hash from ralph_validate_plan, and only call it after the user has confirmed the plan. When aistack was started in a main "

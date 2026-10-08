@@ -1025,7 +1025,8 @@ function aistack_func() {
   need_files=(ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh zen_models.py zen-policy.json)
   if [[ "$mode" == "dev" ]]; then
     # ralph_plan waits for one Claude call (AISTACK_PLAN_TIMEOUT_S, 280 s), so pi must wait longer than that
-    stack_name="aidev"; variant="-claude"; mcp_timeout=320
+    # ... and before that it asks Lumo (AISTACK_LUMO_TIMEOUT_S, 100 s)
+    stack_name="aidev"; variant="-claude"; mcp_timeout=420
     need_files+=(claude-plan.sh planner-prompt-claude.md planner-tier0-lumo-claude.md planner-tier0-local-claude.md)
   fi
 
@@ -1096,8 +1097,8 @@ function aistack_func() {
     tier0_label="the local model ($lms_model), because MacMiniM1's Lumo is unreachable"
   fi
   if [[ "$mode" == "dev" ]]; then
-    [[ "$tier0" == "lumo" ]] && tier0_label="Lumo on MacMiniM1 adds a draft with online research" \
-      || tier0_label="Lumo on MacMiniM1 is unreachable, so there is no draft from it"
+    [[ "$tier0" == "lumo" ]] && tier0_label="Lumo adds a draft with online research (this machine's Lumo, else MacMiniM1's)" \
+      || tier0_label="no Lumo is reachable, so there is no draft from it"
   fi
 
   # ---- tier 1: a free Zen model chosen for this repository; Claude (billed) only when there is none ---------------
@@ -1249,8 +1250,17 @@ TOML
   [[ "$tier0" == "lumo" ]] && tools="$tools,mcp__ralph__lumo_consult"
   local session_name="aistack: plan ${tier0}, review claude, build ${zen_model:-claude}, review claude"
   if [[ "$mode" == "dev" ]]; then
-    # the local model hands its research to ralph_plan; it has no ralph_review_plan, because Claude wrote the plan
-    tools=${tools/mcp__ralph__ralph_review_plan/mcp__ralph__ralph_plan}
+    # The local model hands its research to ralph_plan; it has no ralph_review_plan, because Claude wrote the plan.
+    # It also has no write, no edit and no lumo_consult: on its first real run it answered the request itself, never
+    # called Lumo, and only the prompt kept its write tool out of the repository. ralph_plan asks Lumo itself, and
+    # ralph_update_task is the one way to change the plan (it can only touch the plan files).
+    tools=${tools/mcp__ralph__ralph_review_plan/mcp__ralph__ralph_plan,mcp__ralph__ralph_update_task}
+    tools=${tools/,write,edit,/,}
+    tools=${tools/,mcp__ralph__lumo_consult/}
+    # A small model weighs the last thing it read most, so the request itself carries the rules.
+    [[ -n "$task" ]] && task="REQUEST FROM THE USER: $task
+
+(Rules for you, the coordinator: do NOT answer this request yourself, however broad it is. Find the relevant code with at most 12 tool calls, then call ralph_plan with the request, your brief and the files that matter. Lumo and Claude Code do the thinking; you report what they return.)"
     session_name="aidev: research local, plan claude, build ${zen_model:-claude}, review claude"
   fi
   local -a extra
