@@ -51,3 +51,10 @@ if [[ ! -d dist || ! -d node_modules ]]; then
 else
   log "already at $TAMER_REV and built"
 fi
+
+# tsc writes the entry point without the executable bit and `npm link` does not always set it (npm 11 left it at 644
+# after a rebuild), which makes the daemon fail with "permission denied: tamer". Set it after every run.
+ENTRY=dist/src/tamer.js
+if [[ -f $ENTRY && ! -x $ENTRY ]]; then
+  chmod +x $ENTRY && log "made $ENTRY executable"
+fi
