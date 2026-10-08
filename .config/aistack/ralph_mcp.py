@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """MCP bridge (stdio, JSON-RPC 2.0) between a chat agent (pi) and the aistack run driver.
 
-Tools: ralph_validate_plan, ralph_review_plan (tier 2 plan review), ralph_run, ralph_status, ralph_respond, ralph_cancel, ralph_runs, lumo_consult (tier 0).
+Tools: ralph_validate_plan, ralph_review_plan (tier 2 plan review), ralph_plan (aidev: Claude writes the plan), ralph_run, ralph_status, ralph_respond, ralph_cancel, ralph_runs, lumo_consult (tier 0).
 Runs are detached processes (ralph_driver.py); tool calls return quickly, and ralph_status can wait up to
 45s for news so the chat agent can follow a run without a tight loop (MCP clients time out near 60s).
 
@@ -316,6 +316,156 @@ def tool_review_plan(a):
                     "(only the first plan is reviewed; edits made after this review are not re-reviewed). Only after the user confirms the reviewed plan, call ralph_run with the plan_hash."}
 
 
+# ---- aidev: Claude Code writes the plan (one billed call) instead of reviewing one -------------------------------
+# The chat agent (the local model) does the research for free and passes it in: a brief, the files that matter
+# (inlined here, so the local model does not have to copy code through its own output), and Lumo's draft if any.
+# Claude returns the finished prd.json + verify.json; nothing has to apply review findings afterwards.
+PLAN_BRIEF_MAX, PLAN_DRAFT_MAX = 16_000, 12_000
+PLAN_PROMPT = """You write the build plan for a coding run. Cheaper agents build it: a free coding model implements one task per
+session, a harness counts a task as done only when that task's verify commands exit 0, and you review the whole result once at the end.
+A plan that is vague or has weak verify commands costs failed attempts, so be exact.
+
+Below: the user's request, a research brief written by a small local model (it can be wrong or incomplete), the project files it
+picked, and possibly a draft plan from another assistant (treat it as a draft, keep only what fits the code).
+Everything you need should be below. Use Read, Grep and Glob in the current directory ONLY to close a specific gap or to check a
+claim the plan depends on. Do not explore, and do not modify anything.
+
+Reply with ONE JSON object and nothing else (no prose, no code fence):
+{"prd": {"name": "short-slug", "title": "...", "description": "...", "userStories": [
+   {"id": "T1", "title": "...", "description": "...", "acceptanceCriteria": ["..."], "priority": 1, "passes": false, "dependsOn": []}]},
+ "verify": {"T1": ["command"]},
+ "notes": ["assumption or open question for the user"]}
+
+Rules:
+- prd.title is the pull request title: imperative, at most 72 characters, no "feat:" prefix. prd.description is the pull request
+  summary: two to four sentences on what changes and why.
+- Each task fits one agent session. Its description names the files to create or change and the exact behavior, with enough detail
+  that a weaker model does not have to guess (function names, signatures, where it is called from, edge cases).
+- acceptanceCriteria are concrete and testable. priority 1 runs first; use dependsOn when a task needs another finished.
+  passes is always false. Ids use letters, digits, - or _.
+- verify maps EVERY task id to at least one command that exits 0 only when that task is really done and does not pass on
+  unrelated or empty state (tests, a linter, a build, a check script). Commands run without a shell: no ; & | < > backtick or $().
+  When a check needs several steps, make the task create a script file and run that. Name test files in the task description.
+- notes: only what the user must know or decide. Use [] when there is nothing.
+
+USER REQUEST:
+%s
+
+RESEARCH BRIEF:
+%s
+%s%s"""
+
+
+def plan_file(project, spec):
+    """(rel, text, None) or (rel, None, reason) for one `files` entry: a relative path, optionally with a line range
+    ('lib/a.py:40-120'). Uses the same deny list as Lumo; a range may come from a file too big to send whole."""
+    m = re.match(r"^(.*?):(\d+)-(\d+)$", spec)
+    rel = m.group(1) if m else spec
+    text, why = lumo_readable(project, rel)
+    if text is None and m and why and why.startswith("larger than"):
+        # lumo_readable checks path and deny list before size, so only the size limit stands in the way here
+        try:
+            text = open(os.path.realpath(os.path.join(project, rel)), encoding="utf-8").read()
+        except (UnicodeDecodeError, OSError):
+            return rel, None, "unreadable or binary"
+    if text is None:
+        return rel, None, why
+    if m:
+        lo, hi = max(int(m.group(2)), 1), int(m.group(3))
+        lines = text.splitlines()[lo - 1:hi]
+        if not lines:
+            return rel, None, "line range is empty"
+        text = "\n".join(f"{lo + i}: {ln}" for i, ln in enumerate(lines)) + "\n"
+        if len(text) > LUMO_FILE_MAX:
+            return rel, None, f"range larger than {LUMO_FILE_MAX} bytes"
+    return rel, text, None
+
+
+def extract_plan(text):
+    """The first JSON object in Claude's reply that has a 'prd' object, or None."""
+    dec = json.JSONDecoder()
+    for m in re.finditer(r"\{", text):
+        try:
+            obj, _ = dec.raw_decode(text, m.start())
+        except ValueError:
+            continue
+        if isinstance(obj, dict) and isinstance(obj.get("prd"), dict):
+            return obj
+    return None
+
+
+def tool_plan(a):
+    project = project_of(a)
+    request = (a.get("request") or "").strip()
+    if not request:
+        return {"ok": False, "problem": "request is empty"}
+    prev = rj(plan_review_path(project), {})
+    if prev.get("source") == "claude-plan" and not a.get("replan"):
+        _, _, h = load_plan(project)
+        return {"ok": True, "already_planned": True, "plan_hash": h, "planned_request": prev.get("request"), "billed_calls": 0,
+                "next": "Claude already wrote a plan that has not been run yet (planned_request). If it is for the same work, call "
+                        "ralph_validate_plan and show it to the user. Pass replan=true only when the user wants a new plan (billed)."}
+    brief, draft = (a.get("brief") or "").strip(), (a.get("draft") or "").strip()
+    truncated = [n for n, t, cap in (("brief", brief, PLAN_BRIEF_MAX), ("draft", draft, PLAN_DRAFT_MAX)) if len(t) > cap]
+    brief, draft = brief[:PLAN_BRIEF_MAX], draft[:PLAN_DRAFT_MAX]
+    sent, skipped, blocks, total = [], {}, [], 0
+    for spec in (a.get("files") or [])[:LUMO_FILES_MAX]:
+        _, text, why = plan_file(project, str(spec))
+        if text is None:
+            skipped[spec] = why
+        elif total + len(text) > LUMO_TOTAL_MAX:
+            skipped[spec] = "total size limit reached"
+        else:
+            total += len(text); sent.append(spec); blocks.append(f"\n--- FILE: {spec} ---\n{text}")
+    prompt = PLAN_PROMPT % (request, brief or "(none)",
+                            "\nPROJECT FILES:" + "".join(blocks) if blocks else "",
+                            "\nDRAFT PLAN FROM ANOTHER ASSISTANT:\n" + draft if draft else "")
+    cmd = os.environ.get("AISTACK_PLAN_CMD")
+    argv = ["/bin/sh", "-c", cmd] if cmd else [os.path.join(HERE, "claude-plan.sh"), "-p", prompt]
+    env = dict(os.environ, AISTACK_WORKDIR=project, AISTACK_PLAN_PROMPT=prompt)
+    try:
+        r = subprocess.run(argv, cwd=project, env=env, capture_output=True, text=True,
+                           timeout=int(os.environ.get("AISTACK_PLAN_TIMEOUT_S", "280")), stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return {"ok": False, "problem": f"the planning call (Claude Code) did not finish: {type(e).__name__}: {e}"}
+    text = (r.stdout or "").strip()
+    plan = extract_plan(text) if r.returncode == 0 else None
+    os.makedirs(plan_dir(project), exist_ok=True)
+    if not plan:
+        raw = os.path.join(plan_dir(project), "claude-plan.raw.txt")
+        with open(raw, "w") as f:
+            f.write(text + "\n" + (r.stderr or ""))
+        return {"ok": False, "problem": f"Claude returned no plan (exit {r.returncode}); its output is in {raw}",
+                "tail": (text or r.stderr or "")[-600:], "billed_calls": 1,
+                "next": "Tell the user. Do not call ralph_plan again unless they ask (each call is billed)."}
+    prd = plan["prd"]
+    verify = plan.get("verify") if isinstance(plan.get("verify"), dict) else {}
+    for s in prd.get("userStories") or []:
+        if isinstance(s, dict):
+            s["passes"] = False
+    verify = {k: [v] if isinstance(v, str) else v for k, v in verify.items()}
+    for name, obj in (("prd.json", prd), ("verify.json", verify)):
+        with open(os.path.join(plan_dir(project), name), "w") as f:
+            json.dump(obj, f, indent=1)
+    _, _, h = load_plan(project)
+    # ralph_run wants a Claude verdict on the plan before building; a plan Claude wrote itself has one by construction
+    json.dump({"plan_hash": h, "name": prd.get("name"), "verdict": "PLANNED", "source": "claude-plan", "request": request[:500],
+               "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}, open(plan_review_path(project), "w"))
+    problems = validate(prd, verify)
+    notes = [str(n) for n in plan.get("notes") or []][:12] if isinstance(plan.get("notes"), list) else []
+    out = {"ok": not problems, "plan_hash": h, "plan_dir": plan_dir(project), "notes": notes, "files_sent": sent,
+           "files_skipped": skipped, "truncated": truncated, "billed_calls": 1}
+    if problems:
+        out.update(problems=problems, next="Claude's plan is saved but has the problems listed. Fix them yourself in prd.json / "
+                   "verify.json in the plan dir, then call ralph_validate_plan. Do not call ralph_plan again (it is billed).")
+        return out
+    out.update(name=prd["name"], tasks=[{"id": s["id"], "title": s["title"], "priority": s["priority"],
+                                        "dependsOn": s.get("dependsOn", []), "verify": verify[s["id"]]} for s in prd["userStories"]],
+               next="Show the user the plan and the notes. If they want changes, edit the plan files yourself and call "
+                    "ralph_validate_plan. Only after they confirm, call ralph_run with the current plan_hash.")
+    return out
+
+
 def tool_run(a):
     project = project_of(a)
     prd, verify, h = load_plan(project)
@@ -557,6 +707,14 @@ TOOLS = {
         "ralph_validate_plan and the user's first confirmation; ralph_run refuses a plan that has no review. Only the first plan is reviewed: once a review exists for the plan, "
         "later calls return already_reviewed without a billed call unless force=true."),
         S({"project_dir": STR, "force": {"type": "boolean"}}, ["project_dir"])),
+    "ralph_plan": (tool_plan, ("Claude Code (billed, ONE call, up to ~5 minutes) writes the final plan: prd.json and verify.json in the "
+        "plan dir, already validated. Do the research first and pass it in: request (what the user wants, with their answers to your "
+        "questions), brief (what you found: how the relevant code works, constraints, how it is tested; at most 16000 characters), "
+        "files (relative paths that matter, at most 12; add a line range for a big file, e.g. 'lib/a.py:40-120'; secrets are refused), "
+        "and draft (Lumo's draft, if you have one). Returns the tasks, a plan_hash and notes for the user. A second call returns "
+        "already_planned without a billed call unless replan=true."),
+        S({"project_dir": STR, "request": STR, "brief": STR, "files": {"type": "array", "items": STR}, "draft": STR,
+           "replan": {"type": "boolean"}}, ["project_dir", "request", "brief"])),
     "ralph_run": (tool_run, ("Start the confirmed plan in the background: a worker agent builds each task, the harness runs its "
         "verify commands, failures are retried then escalated, then a read-only reviewer checks security/accuracy/completeness. "
         "Needs the plan_hash from ralph_validate_plan, and only call it after the user has confirmed the plan. When aistack was started in a main "

@@ -125,7 +125,7 @@ EOF
   fi
 
   local session_name="lint-fix-$$"
-  local cmd_aidev="echo '=== aidev Linting Assistant ==='; echo; aidev \"\$(cat '$prompt_file')\""
+  local cmd_aidev="echo '=== aidev Linting Assistant ==='; echo; aidev --direct \"\$(cat '$prompt_file')\""
 
   _herdr_ai_edit_workspace "$session_name" "$repo_root" "nvim '$first_file'" "$cmd_aidev"
 
@@ -1227,7 +1227,7 @@ function _gpa_create_edit_workspace() {
   local rec_file="/tmp/gpa_recommendation_$$.txt"
   echo "$recommendation" > "$rec_file"
 
-  local cmd_aidev="echo '=== Code Review Fix Assistant ==='; echo; echo 'Recommendation:'; cat '$rec_file'; echo; echo 'Starting aidev...'; echo; aidev \"Help me implement this fix: \$(cat '$rec_file'). The file to fix is: $file_path\""
+  local cmd_aidev="echo '=== Code Review Fix Assistant ==='; echo; echo 'Recommendation:'; cat '$rec_file'; echo; echo 'Starting aidev...'; echo; aidev --direct \"Help me implement this fix: \$(cat '$rec_file'). The file to fix is: $file_path\""
 
   _herdr_ai_edit_workspace "$session_name" "$file_dir" "nvim '$file_path'" "$cmd_aidev"
 

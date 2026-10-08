@@ -1001,9 +1001,19 @@ function aistack_func() {
   local endpoint="${LLAMA_CPP_HOST:-http://127.0.0.1:8080}"
   local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
   local f reply
+  # aidev runs this same stack with one difference (_AISTACK_MODE=dev): Claude Code writes the plan (ralph_plan) from the
+  # local model's research instead of reviewing a plan the local model wrote. Everything else below is shared.
+  local mode="${_AISTACK_MODE:-stack}" stack_name="aistack" variant="" mcp_timeout=200
+  local -a need_files
+  need_files=(ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh zen_models.py zen-policy.json)
+  if [[ "$mode" == "dev" ]]; then
+    # ralph_plan waits for one Claude call (AISTACK_PLAN_TIMEOUT_S, 280 s), so pi must wait longer than that
+    stack_name="aidev"; variant="-claude"; mcp_timeout=320
+    need_files+=(claude-plan.sh planner-prompt-claude.md planner-tier0-lumo-claude.md planner-tier0-local-claude.md)
+  fi
 
   # ---- preflight ---------------------------------------------------------------------------------------------
-  for f in ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh zen_models.py zen-policy.json; do
+  for f in $need_files; do
     if [[ ! -e "$adir/$f" ]]; then
       echo "✗ $adir/$f is missing -- run darwin-rebuild so the aistack files are stowed." >&2
       return 1
@@ -1067,6 +1077,10 @@ function aistack_func() {
     tier0_label="Lumo on MacMiniM1, which drafts the plan"
   else
     tier0_label="the local model ($lms_model), because MacMiniM1's Lumo is unreachable"
+  fi
+  if [[ "$mode" == "dev" ]]; then
+    [[ "$tier0" == "lumo" ]] && tier0_label="Lumo on MacMiniM1 adds a draft with online research" \
+      || tier0_label="Lumo on MacMiniM1 is unreachable, so there is no draft from it"
   fi
 
   # ---- tier 1: a free Zen model chosen for this repository; Claude (billed) only when there is none ---------------
@@ -1154,22 +1168,24 @@ TOML
   jq -n --arg url "${endpoint}/v1" --arg id "$lms_model" \
     '{providers: {llamacpp: {baseUrl: $url, api: "openai-completions", apiKey: "sk-local", models: [{id: $id, reasoning: true}]}}}' \
     > "$pi_dir/models.json"
+  local tiers_text="tier 0 ${tier0_label}; tier 1 ${worker_label}; tier 2 $claude_label (billed)"
+  [[ "$mode" == "dev" ]] && tiers_text="research local $lms_model; plan $claude_label (billed); build ${worker_label}; review $claude_label (billed)"
   jq -n --arg py "$(command -v python3)" --arg bridge "$adir/ralph_mcp.py" --arg root "$project" \
     --arg worker "$worker" --arg fallback "$fallback" --arg reviewer "$reviewer" --arg fa "$fallback_attempts" \
-    --arg ralph "$ralph_bin" --arg tier0 "$tier0" --arg state "$state_dir" --arg wtmode "$wt_mode" --arg reviewmode "${AISTACK_REVIEW_MODE:-batch}" --arg tiers "tier 0 ${tier0_label}; tier 1 ${worker_label}; tier 2 $claude_label (billed)" \
+    --arg ralph "$ralph_bin" --arg tier0 "$tier0" --arg state "$state_dir" --arg wtmode "$wt_mode" --arg reviewmode "${AISTACK_REVIEW_MODE:-batch}" --arg tiers "$tiers_text" --arg to "$mcp_timeout" \
     '{mcpServers: {ralph: {command: $py, args: [$bridge],
        env: {RALPH_MCP_ROOTS: $root, AISTACK_WORKER_AGENT: $worker, AISTACK_FALLBACK_AGENT: $fallback,
              AISTACK_REVIEW_AGENT: $reviewer, AISTACK_FALLBACK_ATTEMPTS: $fa, RALPH_TUI_BIN: $ralph,
              AISTACK_TIER0: $tier0, AISTACK_STATE_DIR: $state, AISTACK_WORKTREE_MODE: $wtmode,
              AISTACK_REVIEW_MODE: $reviewmode, AISTACK_TIERS: $tiers},
-       exposure: "direct", timeout: 200,
+       exposure: "direct", timeout: ($to|tonumber),
        description: "Runs the confirmed plan through Ralph: worker agents, verification, retries, review. Poll ralph_status."},
       github: {command: "npx", args: ["-y", "@edjl/github-mcp"], exposure: "direct", timeout: 60,
        description: "Read-only GitHub lookups through the logged-in gh (PRs, files, branches, issues)."}}}' \
     > "$pi_dir/mcp.json"
 
   local prompt
-  prompt=$(<"$adir/planner-prompt.md")
+  prompt=$(<"$adir/planner-prompt$variant.md")
   prompt=${prompt//@@PROJECT@@/$project}
   prompt=${prompt//@@PLAN_DIR@@/$state_dir/plan}
   prompt=${prompt//@@STATE_DIR@@/$state_dir}
@@ -1178,15 +1194,22 @@ TOML
   prompt=${prompt//@@REVIEWER@@/$claude_label (billed)}
   prompt=${prompt//@@TIER0_LABEL@@/$tier0_label}
   prompt=${prompt//@@LOCAL_MODEL@@/$lms_model}
-  prompt=${prompt//@@TIER0@@/$(<"$adir/planner-tier0-$tier0.md")}
+  prompt=${prompt//@@TIER0@@/$(<"$adir/planner-tier0-$tier0$variant.md")}
 
-  echo "── aistack ──"
+  echo "── $stack_name ──"
   if [[ "$wt_mode" == "create" ]]; then
     echo "Project: $project (read-only while planning; a git worktree + draft PR is created when you confirm the plan)"
   else
     echo "Project: $project (the agents work here)"
   fi
   echo "aistack files: $state_dir (nothing is written into the repository)"
+  if [[ "$mode" == "dev" ]]; then
+    echo "Research:  local $lms_model in pi (free)   [$tier0_label]"
+    echo "Plan:      $claude_label (BILLED: one call, from the local model's research)"
+    echo "Build:     $worker_label${t1_note:+   [$t1_note]}"
+    echo "Review:    $claude_label (BILLED: one review for the whole run; builds a task only if it keeps failing)"
+    echo "Describe what you want; pi researches it, Claude writes the plan, and you confirm before anything runs."
+  else
   if [[ "$tier0" == "lumo" ]]; then
     echo "Tier 0 (plan):       Lumo on MacMiniM1   [pi + $lms_model coordinates; local fallback if Lumo fails]"
   else
@@ -1195,6 +1218,7 @@ TOML
   echo "Tier 1 (build):      $worker_label${t1_note:+   [$t1_note]}"
   echo "Tier 2 (plan review, fallback, final review): $claude_label (BILLED: one plan review before the build, one review for the whole run)"
   echo "Describe what you want; pi will draft a plan for you to confirm before anything runs."
+  fi
   echo "(The local model is slow: a reply can take a while with nothing visible. That is normal.)"
   echo ""
 
@@ -1206,11 +1230,17 @@ TOML
   # lumo_consult only when tier 0 is Lumo; pi's --tools is an allowlist, so a tool missing here is invisible to the model
   # (it was left out once, and the planner then reported "Lumo is unavailable" without ever calling it)
   [[ "$tier0" == "lumo" ]] && tools="$tools,mcp__ralph__lumo_consult"
+  local session_name="aistack: plan ${tier0}, review claude, build ${zen_model:-claude}, review claude"
+  if [[ "$mode" == "dev" ]]; then
+    # the local model hands its research to ralph_plan; it has no ralph_review_plan, because Claude wrote the plan
+    tools=${tools/mcp__ralph__ralph_review_plan/mcp__ralph__ralph_plan}
+    session_name="aidev: research local, plan claude, build ${zen_model:-claude}, review claude"
+  fi
   local -a extra
   extra=(${=AISTACK_PI_EXTRA})
   (
     cd "$project" || exit 1
-    PI_CODING_AGENT_DIR="$pi_dir" pi --provider llamacpp --model "$lms_model" --name "aistack: plan ${tier0}, review claude, build ${zen_model:-claude}, review claude" --no-skills \
+    PI_CODING_AGENT_DIR="$pi_dir" pi --provider llamacpp --model "$lms_model" --name "$session_name" --no-skills \
       --append-system-prompt "$prompt" --tools "$tools" "${extra[@]}" ${task:+"$task"}
   )
   local rc=$?
@@ -1225,7 +1255,7 @@ TOML
     echo ""
     echo "Last run: $latest -- $st"
     case "$st" in
-      running*|waiting_user*) echo "It keeps going without pi. Run aistack in $project again and ask pi to follow it." ;;
+      running*|waiting_user*) echo "It keeps going without pi. Run $stack_name in $project again and ask pi to follow it." ;;
     esac
     [[ -d "$state_dir/reviews" ]] && echo "Review reports: $state_dir/reviews/"
     echo "Changes are uncommitted in $work_dir -- cd there and use gpc/gpa when you are happy."
@@ -1248,7 +1278,37 @@ function _aidev_opencode() {
   fi
 }
 
+# aidev -- the default way to get work done: the planner stack with Claude Code used as little as possible.
+#
+#   aidev [task words...]        e.g.  aidev add a --json flag to the report command
+#   aidev                        then describe the work as pi's first message
+#   aidev --direct [args...]     the plain interactive session of the selected provider (what aidev used to be)
+#   aidev -p "prompt"            one headless call to the selected provider (any flag means --direct)
+#
+# Who does what:  the local model in pi talks to you, finds the code and follows the run (free);  Lumo adds a draft
+# with online research when MacMiniM1 is reachable (free);  Claude Code writes the plan in ONE call from that research
+# (ralph_plan + claude-plan.sh);  OpenCode's free model builds;  Claude Code reviews once at the end.
+# It is aistack_func with _AISTACK_MODE=dev: same run driver, verify gates, worktree + draft PR and state directory.
 function aidev() {
+  local a direct=false
+  local -a rest
+  for a in "$@"; do
+    case "$a" in
+      --direct) direct=true ;;
+      -*) direct=true; rest+=("$a") ;;
+      *) rest+=("$a") ;;
+    esac
+  done
+  if $direct; then
+    _aidev_direct "${rest[@]}"
+    return
+  fi
+  _AISTACK_MODE=dev aistack_func "${rest[@]}"
+}
+
+# The direct session: claude, or opencode with the selected provider's model. Used by `aidev --direct`, `aidev -p`,
+# and the gpa/gpc fix helpers, which need a model that edits a file now rather than a planned run.
+function _aidev_direct() {
   local GREEN='\033[0;32m'
   local NC='\033[0m'
 
@@ -1704,7 +1764,7 @@ function aiselect() {
     echo "═══════════════════════════════════════════════════════════"
     echo "Active Provider: $(_provider_display_name "$current_provider")"
     echo ""
-    echo "Interactive Sessions (aidev):"
+    echo "Interactive Sessions (aidev --direct):"
     echo "  Mode: Full Claude Code agent with tools"
     if [[ "$current_provider" == "claude-code" ]]; then
       echo "  → claude (direct, uses Claude.ai subscription)"
@@ -1721,10 +1781,12 @@ function aiselect() {
     echo ""
     echo "Command → Model → Mode:"
     if [[ "$current_provider" == "claude-code" ]]; then
-      echo "  • aidev                     → claude (direct) → Full Agent"
+      echo "  • aidev                     → planner stack: local research, Claude plan + review, OpenCode build"
+      echo "  • aidev --direct            → claude (direct) → Full Agent"
       echo "  • gpa                       → $opencode_model → Headless review (never Anthropic directly)"
     else
-      echo "  • aidev                     → $opencode_model → Full Agent (claude)"
+      echo "  • aidev                     → planner stack: local research, Claude plan + review, OpenCode build"
+      echo "  • aidev --direct            → $opencode_model → Full Agent (claude)"
       echo "  • gpa                       → $opencode_model → Headless review"
     fi
     echo "  • gpc (commit messages)     → $opencode_haiku_model → Direct API"

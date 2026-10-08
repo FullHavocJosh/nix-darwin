@@ -344,12 +344,29 @@ plan it opens the draft PR with the plan's `title` (as `feat: <title>`, at most 
 the plan (summary, each task with its acceptance criteria and verify command, the tiers).
 Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_git_auto.py`.
 
-#### `aidev` - Launch AI Development Assistant
+#### `aidev` - planner stack that spends as little on Claude Code as possible
 
 ```bash
-aidev                 # Start OpenCode with selected provider
-aidev --model <model> # Override model selection
+aidev add a --json flag to the report command   # or `aidev`, then describe the work in pi
+aidev --direct                                  # the plain session of the selected provider (what aidev used to be)
+aidev -p "prompt"                               # one headless call to the selected provider (any flag means --direct)
 ```
+
+`aidev` is `aistack` with one difference: Claude Code writes the plan instead of reviewing one. Same run driver,
+verify gates, worktree + draft PR and state directory (`~/.aistack/<project>-<hash>/`). Who does what:
+
+- research and coordination: the local `qwen/qwen3.5-9b` in pi talks to you, finds the code, and follows the run (free).
+  When MacMiniM1 is reachable, Lumo adds a draft that includes what it found online (free)
+- plan: Claude Code, ONE billed call (`ralph_plan`). The local model passes a brief, the files that matter (whole, or a
+  line range such as `lib/a.py:40-120`; the bridge inlines them and refuses secrets) and Lumo's draft. Claude returns
+  the finished `prd.json` and `verify.json`. `claude-plan.sh` gives that call only Read, Grep and Glob, no MCP servers
+  and no skills, and caps it with `AISTACK_CLAUDE_BUDGET_PLAN` (USD, default 1.5)
+- build: the free OpenCode Zen model, as in aistack
+- review: Claude Code, one billed call for the whole run; it builds a task only when that task keeps failing
+
+A normal run therefore has two billed calls. A second `ralph_plan` returns the existing plan without a call unless
+the user asks for a new one. `aidev -p` and `aidev --direct` skip all of this; the gpa/gpc fix helpers use them.
+Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_plan.py`.
 
 ### Required Packages
 
