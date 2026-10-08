@@ -231,7 +231,7 @@ check("an existing type prefix is not doubled, the type comes from the plan, lon
 pump(m2, p2, json.load(open(ST(p2) + "/project.json")) and max(os.listdir(ST(p2) + "/runs")), ("done", "failed", "lost"))
 del os.environ["AISTACK_WORKTREE_CMD"], os.environ["AISTACK_TIERS"]
 
-print("H: lumo_consult (tier 0) sends only allowed files, with auth and the no-fetch header")
+print("H: lumo_consult (tier 0) sends only allowed files, with auth, to the pinned tamer (never the real Lumo)")
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -252,7 +252,7 @@ check("plan returned", r["ok"] is True and r["plan"] == "T1: add slugify", r)
 check("allowed file sent, with its content", r["files_sent"] == ["slug.py"] and "def slugify" in seen["body"], r)
 check("secret, outside-project, oversize and missing files skipped", set(r["files_skipped"]) == {".env", "secrets/a.txt", "../etc/passwd", "big.txt", "missing.py"}, r["files_skipped"])
 check("denied content never left the machine", "hunter2" not in seen["body"] and "hunter3" not in seen["body"])
-check("bearer key and no-fetch header sent", seen["headers"].get("Authorization") == "Bearer test-key" and seen["headers"].get("X-Lumo-No-Fetch") == "1", seen["headers"])
+check("bearer key sent, and Lumo is told it may ask for more (NEED)", seen["headers"].get("Authorization") == "Bearer test-key" and "NEED" in seen["body"], seen["headers"])
 os.environ["AISTACK_LUMO_URL"] = "http://127.0.0.1:1/v1"
 r = m.tool_lumo_consult({"project_dir": p, "request": "x"})
 check("unreachable Lumo degrades to ok=false", r["ok"] is False and "plan without it" in r["problem"], r)

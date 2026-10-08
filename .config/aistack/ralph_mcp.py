@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -26,6 +27,19 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 ROOTS = [os.path.realpath(p) for p in os.environ.get("RALPH_MCP_ROOTS", "").split(":") if p]
 PROTOCOL = "2024-11-05"
 SHELLISH = re.compile(r"[;&|<>`]|\$\(")
+
+
+def needs_shell(cmd):
+    """True when a verify command only works in a shell. The driver runs verify commands with shlex.split and no
+    shell, so an operator inside quotes is plain text (python3 -c "import sys; sys.exit(0)" is fine) while an unquoted
+    ; & | < > ( ), a backtick or $( would be passed to the program as an argument and never do what was meant."""
+    try:
+        lex = shlex.shlex(cmd, posix=True, punctuation_chars=True)
+        lex.whitespace_split = True
+        tokens = list(lex)
+    except ValueError:      # unbalanced quotes
+        return True
+    return any(t and (set(t) <= set("();<>|&") or t.startswith(("$(", "`"))) for t in tokens)
 
 
 def project_of(a):
@@ -148,8 +162,10 @@ def validate(prd, verify):
             problems.append(f"verify.json: task {tid} needs at least one verify command (an exit-0-on-success shell-free command)")
             continue
         for c in cmds:
-            if SHELLISH.search(c):
-                problems.append(f"verify.json: {tid}: no shell syntax (; & | < > ` $()) in '{c}'. Put complex checks in a script file and run that, e.g. 'python3 checks/check_{tid}.py'")
+            if needs_shell(c):
+                problems.append(f"verify.json: {tid}: no shell syntax (; & | < > ` $()) in '{c}'. Verify commands run without a shell. "
+                                "Use one plain command (operators inside quotes are fine), or have a task create a check script and run that. "
+                                "Never point a verify command at a file that no task creates.")
     for tid in verify:
         if tid not in deps:
             problems.append(f"verify.json: {tid} is not a task id")
@@ -172,6 +188,24 @@ def present_plan(prd, verify, notes=(), lines=()):
     return "\n".join(out)
 
 
+def plan_meta(project, write=None):
+    """Claude's notes and the status lines (Lumo, skipped files, billed calls) of the saved plan. They are kept next to
+    the plan so they are shown again after every change, and also when the plan first came back invalid."""
+    path = os.path.join(plan_dir(project), "plan-meta.json")
+    if write is not None:
+        with open(path, "w") as f:
+            json.dump(write, f, indent=1)
+        return write
+    return rj(path, {}) or {}
+
+
+def save_plan_text(project, text):
+    path = os.path.join(plan_dir(project), "PLAN.txt")
+    with open(path, "w") as f:
+        f.write(text + "\n")
+    return path
+
+
 def tool_validate(a):
     project = project_of(a)
     prd, verify, h = load_plan(project)
@@ -180,8 +214,11 @@ def tool_validate(a):
         return {"ok": False, "problems": problems, "plan_dir": plan_dir(project)}
     tasks = [{"id": s["id"], "title": s["title"], "priority": s["priority"], "dependsOn": s.get("dependsOn", []),
               "verify": verify[s["id"]]} for s in prd["userStories"]]
+    meta = plan_meta(project)
+    text = present_plan(prd, verify, meta.get("notes") or (), meta.get("lines") or ())
+    save_plan_text(project, text)
     return {"ok": True, "plan_hash": h, "name": prd["name"], "tasks": tasks, "plan_dir": plan_dir(project),
-            "present": present_plan(prd, verify),
+            "present": text,
             "next": "Show this plan to the user. Only after they confirm it, call ralph_run with this plan_hash."}
 
 
@@ -450,12 +487,14 @@ def tool_plan(a):
     if not draft and os.environ.get("AISTACK_TIER0") == "lumo":
         lr = tool_lumo_consult({"project_dir": project, "request": request + ("\n\nWhat a local model found in the code:\n" + brief[:6000] if brief else ""),
                                 "files": [re.sub(r":\d+-\d+$", "", str(f)) for f in (a.get("files") or [])],
-                                "timeout_s": int(os.environ.get("AISTACK_LUMO_TIMEOUT_S", "100"))})
+})
         if lr.get("ok"):
             draft, lumo_state = str(lr.get("plan") or "").strip(), "consulted (" + str(lr.get("lumo", "")) + ")"
+            if lr.get("lumo_asked_for"):
+                lumo_state += f", it asked for {len(lr['lumo_asked_for'])} more thing(s) from the project and got them"
             if len(draft) > DRAFT_CONDENSE_AT:
                 cr = tool_lumo_consult({"project_dir": project, "request": "condense", "raw_prompt": CONDENSE_PROMPT + draft[:PLAN_DRAFT_MAX],
-                                        "timeout_s": int(os.environ.get("AISTACK_LUMO_TIMEOUT_S", "100"))})
+        })
                 short = str(cr.get("plan") or "").strip() if cr.get("ok") else ""
                 if 400 <= len(short) < len(draft):
                     lumo_state += f", its draft shortened by Lumo from {len(draft)} to {len(short)} characters"
@@ -514,26 +553,29 @@ def tool_plan(a):
                "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}, open(plan_review_path(project), "w"))
     problems = validate(prd, verify)
     notes = [str(n) for n in plan.get("notes") or []][:12] if isinstance(plan.get("notes"), list) else []
-    out = {"ok": not problems, "plan_hash": h, "plan_dir": plan_dir(project), "notes": notes, "files_sent": sent,
-           "files_skipped": skipped, "truncated": truncated, "billed_calls": 1, "lumo": lumo_state}
-    if problems:
-        out.update(problems=problems, next="Claude's plan is saved but has the problems listed. Fix them yourself in prd.json / "
-                   "verify.json in the plan dir, then call ralph_validate_plan. Do not call ralph_plan again (it is billed).")
-        return out
+    lines = [x for x in (
+        f"Lumo: {lumo_state}.",
+        "Not sent to Claude: " + ", ".join(f"{k} ({v})" for k, v in skipped.items()) + "." if skipped else "",
+        "Cut to the size limit: " + ", ".join(truncated) + "." if truncated else "",
+        "Claude Code: 1 billed call for this plan; it reviews the result once more at the end.") if x]
+    plan_meta(project, {"notes": notes, "lines": lines})
     # Only the finished text goes back, with nothing next to it to summarize from: handed the tasks and notes as
     # data as well, the local model wrote its own version of the plan.
-    out = {"ok": True, "plan_hash": h, "billed_calls": 1, "lumo": lumo_state}
-    out.update(present=present_plan(prd, verify, notes, [
-                   f"Lumo: {lumo_state}.",
-                   "Not sent to Claude: " + ", ".join(f"{k} ({v})" for k, v in skipped.items()) + "." if skipped else "",
-                   "Cut to the size limit: " + ", ".join(truncated) + "." if truncated else "",
-                   "Claude Code: 1 billed call for this plan; it reviews the result once more at the end."]),
-               next="Your whole reply is: one code block (three backticks) containing the text of 'present' copied character for "
-                    "character, then the single line: Change something, or start? Nothing else. No heading, no summary, no "
-                    "markdown inside the block. Later: a change is ralph_update_task; 'start' is ralph_run with this plan_hash.")
-    with open(os.path.join(plan_dir(project), "PLAN.txt"), "w") as f:
-        f.write(out["present"] + "\n")
-    out["plan_file"] = os.path.join(plan_dir(project), "PLAN.txt")
+    out = {"ok": not problems, "plan_hash": h, "billed_calls": 1, "lumo": lumo_state}
+    try:
+        out["present"] = present_plan(prd, verify, notes, lines)
+        out["plan_file"] = save_plan_text(project, out["present"])
+    except Exception:       # a plan too malformed to print: the problems below say what is wrong
+        out["present"] = ""
+    if problems:
+        out.update(problems=problems, next="Claude's plan is saved but not valid yet. Fix each problem with ralph_update_task (for a "
+                   "verify command: one plain command without unquoted ; & | < > and never a file that no task creates). When "
+                   "ralph_update_task returns ok=true, reply with its 'present' in a code block as usual. Do NOT call ralph_plan "
+                   "again: it is billed and the plan already exists.")
+        return out
+    out["next"] = ("Your whole reply is: one code block (three backticks) containing the text of 'present' copied character for "
+                   "character, then the single line: Change something, or start? Nothing else. No heading, no summary, no "
+                   "markdown inside the block. Later: a change is ralph_update_task; 'start' is ralph_run with this plan_hash.")
     global RESEARCH_CALLS
     RESEARCH_CALLS = 0      # the plan exists: a later question from the user gets a fresh, equally small budget
     return out
@@ -842,35 +884,80 @@ REQUEST:
 """
 
 
-def lumo_key():
-    k = os.environ.get("AISTACK_LUMO_KEY")
+# ---- Lumo is reached through lumo-tamer only; the loop that lets it ask for more runs HERE ---------------------
+# tamer is the bridge to Proton and knows nothing about files. What Lumo may see, and how its requests for more are
+# answered, is decided by this machine's tooling against the project aidev/aistack was started in:
+#   Lumo ends a reply with NEED: lines  ->  exact paths, ls, find and grep are answered directly from the project
+#   (secrets refused), anything vaguer goes to the local model (llama-server) with read-only tools  ->  the answers
+#   go back to Lumo  ->  repeat until it stops asking or the round limit is reached.
+# The loop itself is .config/lumo/lumo_planner.py used as a library (it used to run as a daemon tied to one
+# repository, which is why Lumo could not ask for anything in other projects).
+TAMER_LOCAL_URL = "http://127.0.0.1:3003/v1"
+TAMER_MINI_URL = os.environ.get("AISTACK_TAMER_MINI_URL", "http://macminim1.rollet.family:3003/v1").rstrip("/")
+TAMER_PUBLIC_URL = os.environ.get("AISTACK_LUMO_PUBLIC_URL", "https://lumo.rollet.family/v1").rstrip("/")
+LUMO_ROUNDS = int(os.environ.get("AISTACK_LUMO_ROUNDS", "4"))
+LUMO_LOOP_S = int(os.environ.get("AISTACK_LUMO_LOOP_S", "480"))
+_PLANNER_LIB = None
+
+
+def planner_lib():
+    """lumo_planner.py as a module (stdlib only; nothing runs at import)."""
+    global _PLANNER_LIB
+    if _PLANNER_LIB is None:
+        import importlib.util
+        for path in (os.environ.get("AISTACK_LUMO_PLANNER_LIB"), os.path.join(HERE, "..", "lumo", "lumo_planner.py"),
+                     os.path.expanduser("~/.config/lumo/lumo_planner.py")):
+            if path and os.path.isfile(path):
+                spec = importlib.util.spec_from_file_location("lumo_planner", path)
+                _PLANNER_LIB = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(_PLANNER_LIB)
+                break
+        else:
+            raise RuntimeError("lumo_planner.py not found (expected in ~/.config/lumo)")
+    return _PLANNER_LIB
+
+
+def tamer_local_key():
+    """The API key this machine's own tamer serves with (run-tamer.sh writes it to config.yaml), or ''."""
+    try:
+        m = re.search(r'^\s*apiKey:\s*"(.*)"\s*$', open(os.path.expanduser("~/lumo-tamer/config.yaml")).read(), re.MULTILINE)
+        return m.group(1) if m else ""
+    except OSError:
+        return ""
+
+
+def tamer_mini_key():
+    k = os.environ.get("AISTACK_TAMER_MINI_KEY")
     if k:
         return k
-    r = subprocess.run(["doppler", "secrets", "get", "LUMO_PLANNER_API_KEY", "--project", "FullHavocJosh",
+    r = subprocess.run(["doppler", "secrets", "get", "LUMO_TAMER_API_KEY", "--project", "FullHavocJosh",
                         "--config", "root_macmini", "--plain"], capture_output=True, text=True, timeout=20)
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
-# this machine's own planner proxy, and the always-on LAN host's (AISTACK_LUMO_MINI_URL moves the latter)
-LUMO_LOCAL_URL = "http://127.0.0.1:8765/v1"
-LUMO_MINI_URL = os.environ.get("AISTACK_LUMO_MINI_URL", "http://macminim1.rollet.family:8765/v1").rstrip("/")
-
-
-def lumo_endpoints():
-    """[(base url, needs key)] to try in order. AISTACK_LUMO_URL pins one. Otherwise this machine's own planner proxy
-    comes first when it answers (loopback only, no key: nix-modules/macos/lumo.nix), then the one on MacMiniM1."""
+def tamer_endpoints():
+    """[(base url, key)] of the tamers that answer right now, in priority order: this machine's own, MacMiniM1's on
+    the home network, then the public endpoint (only when AISTACK_LUMO_PUBLIC_KEY is set). AISTACK_TAMER_URL with
+    AISTACK_TAMER_KEY pins one."""
     import urllib.request
-    pinned = os.environ.get("AISTACK_LUMO_URL")
+    # AISTACK_LUMO_URL / AISTACK_LUMO_KEY are the older names for the same pin (they used to point at the planner proxy)
+    pinned = os.environ.get("AISTACK_TAMER_URL") or os.environ.get("AISTACK_LUMO_URL")
     if pinned:
-        return [(pinned.rstrip("/"), True)]
+        return [(pinned.rstrip("/"), os.environ.get("AISTACK_TAMER_KEY") or os.environ.get("AISTACK_LUMO_KEY", ""))]
+    candidates = [(TAMER_LOCAL_URL, tamer_local_key), (TAMER_MINI_URL, tamer_mini_key)]
+    if os.environ.get("AISTACK_LUMO_PUBLIC_KEY"):
+        candidates.append((TAMER_PUBLIC_URL, lambda: os.environ["AISTACK_LUMO_PUBLIC_KEY"]))
     out = []
-    try:
-        with urllib.request.urlopen(LUMO_LOCAL_URL + "/models", timeout=2) as r:
-            if r.status == 200:
-                out.append((LUMO_LOCAL_URL, False))
-    except Exception:
-        pass
-    return out + [(LUMO_MINI_URL, True)]
+    for base, get_key in candidates:
+        try:
+            key = get_key()
+            req = urllib.request.Request(base + "/models", headers={"Authorization": f"Bearer {key}"} if key else {})
+            with urllib.request.urlopen(req, timeout=4) as r:
+                if r.status == 200:
+                    out.append((base, key))
+        except Exception:
+            pass        # not listening, not signed in, wrong key, off the network: try the next one
+    return out
 
 
 def lumo_readable(project, rel):
@@ -892,8 +979,17 @@ def lumo_readable(project, rel):
         return None, "unreadable or binary"
 
 
+def loop_guard(started, asked):
+    """Progress callback for the Lumo loop: remembers what Lumo asked for and stops a loop that runs too long."""
+    def progress(msg):
+        if msg.startswith("fetching: "):
+            asked.append(msg[10:])
+        if time.time() - started > LUMO_LOOP_S:
+            raise TimeoutError(f"the Lumo loop took longer than {LUMO_LOOP_S} s")
+    return progress
+
+
 def tool_lumo_consult(a):
-    import urllib.request
     project = project_of(a)
     if os.environ.get("AISTACK_TIER0") == "local":
         # the launcher found macminim1 unreachable: do not wait for a timeout, plan locally
@@ -911,23 +1007,30 @@ def tool_lumo_consult(a):
         else:
             total += len(text); sent.append(rel); blocks.append(f"\n--- FILE: {rel} ---\n{text}")
     prompt = LUMO_PROMPT + request + ("\n\nPROJECT FILES:" + "".join(blocks) if blocks else "")
-    if a.get("raw_prompt"):     # ralph_plan's follow-up (shorten your own draft): the text as it is, no files
-        prompt = str(a["raw_prompt"])
-    body = json.dumps({"model": "lumo-planner", "messages": [{"role": "user", "content": prompt}]}).encode()
+    try:
+        lp = planner_lib()
+    except Exception as e:
+        return {"ok": False, "problem": f"Lumo is not available ({e}); plan without it", "files_sent": sent, "files_skipped": skipped}
     errors = []
-    for base, needs_key in lumo_endpoints():
-        headers = {"Content-Type": "application/json", "X-Lumo-No-Fetch": "1"}
-        key = lumo_key() if needs_key else ""
-        if key:
-            headers["Authorization"] = f"Bearer {key}"
+    for base, key in tamer_endpoints():
+        lp.LUMO_BASE_URL, lp.LUMO_API_KEY = base, key
+        lp.LUMO_MODEL = os.environ.get("AISTACK_LUMO_MODEL", "lumo")
+        lp.RESOLVER = os.environ.get("AISTACK_LUMO_RESOLVER", "llm")     # vague requests go to the local model
         try:
-            with urllib.request.urlopen(urllib.request.Request(base + "/chat/completions", body, headers), timeout=int(a.get("timeout_s") or 180)) as r:
-                plan = json.load(r)["choices"][0]["message"]["content"]
+            if a.get("raw_prompt"):     # ralph_plan's follow-up (shorten your own draft): one request, nothing to fetch
+                reply = lp.post_chat(base, {"model": lp.LUMO_MODEL, "messages": [{"role": "user", "content": str(a["raw_prompt"])}]}, key)
+                return {"ok": True, "plan": reply.get("content") or "", "lumo": base}
+            asked = []
+            messages = lp.upstream_messages([{"role": "user", "content": prompt}], fetch=True)
+            plan, complete = lp.run_loop(lp.Sandbox(project), messages, LUMO_ROUNDS, on_progress=loop_guard(time.time(), asked))
         except Exception as e:
             errors.append(f"{base}: {type(e).__name__}: {e}")
+            if "timed out" in str(e).lower() or isinstance(e, TimeoutError):
+                break       # every endpoint reaches the same Lumo: when it is slow, a second wait only doubles the delay
             continue
-        return {"ok": True, "plan": plan, "files_sent": sent, "files_skipped": skipped, "lumo": base}
-    return {"ok": False, "problem": f"Lumo is not available ({'; '.join(errors)}); plan without it",
+        return {"ok": True, "plan": plan, "files_sent": sent, "files_skipped": skipped, "lumo": base,
+                "lumo_asked_for": asked, "lumo_finished": complete}
+    return {"ok": False, "problem": f"Lumo is not available ({'; '.join(errors) or 'no tamer answered'}); plan without it",
             "files_sent": sent, "files_skipped": skipped}
 
 
@@ -983,7 +1086,8 @@ TOOLS = {
     "ralph_runs": (tool_runs, "List runs in this project (use after restarting the chat to find an unfinished run).",
                    S({"project_dir": STR}, ["project_dir"])),
     "lumo_consult": (tool_lumo_consult, ("Tier 0: ask Lumo (Proton's cloud assistant, no tools) to draft a task breakdown. "
-        "Sends the request and the project files you list (relative paths, at most 12, secrets/keys/env files are refused) to Lumo. "
+        "Sends the request and the project files you list (relative paths, at most 12, secrets/keys/env files are refused) to Lumo, "
+        "which can then ask for more from this project (answered on this machine, secrets refused). "
         "Returns a draft plan to adapt into prd.json/verify.json, or ok=false when Lumo is unreachable (then plan without it)."),
         S({"project_dir": STR, "request": STR, "files": {"type": "array", "items": STR}}, ["project_dir", "request"])),
 }
