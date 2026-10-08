@@ -175,7 +175,7 @@ class Tamer(http.server.BaseHTTPRequestHandler):
         self._send({"choices": [{"message": {"role": "assistant", "content": replies[min(len(seen_by_lumo) - 1, len(replies) - 1)]}}]})
 srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Tamer); threading.Thread(target=srv.serve_forever, daemon=True).start()
 os.environ.update(AISTACK_TAMER_URL=f"http://127.0.0.1:{srv.server_port}/v1", AISTACK_TAMER_KEY="tamer-key", AISTACK_LUMO_RESOLVER="keyword")
-check("a pinned tamer is the only endpoint", mcp.tamer_endpoints() == [(os.environ["AISTACK_TAMER_URL"], "tamer-key")])
+check("a pinned tamer is the only endpoint", list(mcp.tamer_endpoints()) == [(os.environ["AISTACK_TAMER_URL"], "tamer-key")])
 r = mcp.tool_lumo_consult({"project_dir": PROJECT, "request": "add a thing", "files": ["lib/small.py"]})
 check("Lumo is asked twice and its last answer is the draft", r.get("ok") and len(seen_by_lumo) == 2 and r["plan"].startswith("FINAL DRAFT") and r.get("lumo_finished") is True, str(r)[:300])
 check("the tamer key is sent", seen_by_lumo[0]["auth"] == "Bearer tamer-key")
@@ -190,6 +190,29 @@ os.environ["AISTACK_TAMER_URL"] = "http://127.0.0.1:9/v1"
 r = mcp.tool_lumo_consult({"project_dir": PROJECT, "request": "add a thing"})
 check("a tamer that cannot be reached is reported, not raised", r.get("ok") is False and "Lumo is not available" in r.get("problem", ""), str(r)[:200])
 for k in ("AISTACK_TAMER_URL", "AISTACK_TAMER_KEY", "AISTACK_LUMO_RESOLVER"): os.environ.pop(k)
+
+print("Lumo order: this machine, then MacMiniM1, then the public endpoint")
+port = srv.server_port
+dead, live = "http://127.0.0.1:9/v1", f"http://127.0.0.1:{port}/v1"
+looked = []
+def key_of(name):
+    def get():
+        looked.append(name); return name + "-key"
+    return get
+def order(local, mini, public):
+    looked.clear()
+    mcp.TAMER_LOCAL_URL, mcp.TAMER_MINI_URL, mcp.TAMER_PUBLIC_URL = local, mini, public
+    mcp.tamer_local_key, mcp.tamer_mini_key, mcp.tamer_public_key = key_of("local"), key_of("mini"), key_of("public")
+    return mcp.tamer_endpoints()
+first = next(order(live, live.replace("127.0.0.1", "localhost"), live + "/"))
+check("a working local tamer is used and the others are not even looked up", first == (live, "local-key") and looked == ["local"], str(looked))
+first = next(order(dead, live, live + "/"))
+check("local down: MacMiniM1 is next, the public endpoint is not looked up", first == (live, "mini-key") and looked == ["local", "mini"], str(looked))
+first = next(order(dead, dead, live))
+check("local and MacMiniM1 down: the public endpoint is used", first == (live, "public-key") and looked == ["local", "mini", "public"], str(looked))
+check("nothing answers: no endpoint", list(order(dead, dead, dead)) == [])
+mcp.tamer_public_key = lambda: ""
+check("no public key: the public endpoint is skipped, not called without one", list(mcp.tamer_endpoints()) == [])
 srv.shutdown()
 
 print("research tools: budget and guard")
@@ -218,18 +241,17 @@ reset()
 
 print("bridge: tool list")
 names = [t["name"] for t in mcp.handle({"method": "tools/list"})["tools"]]
-check("the aidev tools are listed and ralph_review_plan is still there", {"ralph_plan", "ralph_update_task", "ralph_review_plan", "repo_tree", "repo_read", "repo_grep"} <= set(names))
+check("the aidev tools are listed and the old review tool is gone", {"ralph_plan", "ralph_update_task", "repo_tree", "repo_read", "repo_grep"} <= set(names) and "ralph_review_plan" not in names)
 
 print("aidev dispatcher")
 def aidev(args):
     cmd = (f"source {ROOT}/.zshrc_functions_ai 2>/dev/null; "
-           'aistack_func() { print -r -- "stack mode=${_AISTACK_MODE:-unset} args=$*"; }; '
-           '_aidev_direct() { print -r -- "direct args=$*"; }; ' + args + '; print -r -- "after=${_AISTACK_MODE:-unset}"')
+           '_aidev_stack() { print -r -- "stack args=$*"; }; '
+           '_aidev_direct() { print -r -- "direct args=$*"; }; ' + args + '; print -r -- "aistack is: $(whence -w aistack 2>/dev/null)"')
     return subprocess.run(["zsh", "-c", cmd], capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL).stdout.strip().splitlines()
 out = aidev("aidev add a flag")
-check("task words go to the stack in dev mode", out[:1] == ["stack mode=dev args=add a flag"], str(out))
-check("the mode does not leak into the shell", out[-1:] == ["after=unset"], str(out))
-check("no arguments also starts the stack", aidev("aidev")[:1] == ["stack mode=dev args="])
+check("task words go to the one stack", out[:1] == ["stack args=add a flag"], str(out))
+check("no arguments also starts the stack", aidev("aidev")[:1] == ["stack args="])
 check("--direct goes to the direct session without the flag", aidev("aidev --direct fix it")[:1] == ["direct args=fix it"])
 check("-p goes to the direct session with the flag", aidev("aidev -p 'fix it'")[:1] == ["direct args=-p fix it"])
 check("any other flag goes to the direct session", aidev("aidev --model x")[:1] == ["direct args=--model x"])

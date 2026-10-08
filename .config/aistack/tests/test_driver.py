@@ -265,43 +265,29 @@ del os.environ["AISTACK_TIER0"]
 srv.shutdown()
 check("Lumo is told to check online for the latest docs", "check online for the latest best practices/documentation" in seen["body"], seen["body"][:200])
 
-print("I: tier 2 plan review gates ralph_run")
+print("I: only a plan Claude wrote (ralph_plan) may run")
 del os.environ["AISTACK_PLAN_REVIEW"]
 p, m = make_project({}, tasks=("T1",))
 v = m.tool_validate({"project_dir": p})
 r = m.tool_run({"project_dir": p, "plan_hash": v["plan_hash"]})
-check("run refused without a plan review", r["started"] is False and "ralph_review_plan" in r["problem"], r)
-check("review tool is listed", "ralph_review_plan" in m.TOOLS)
-os.environ["AISTACK_PLAN_REVIEW_CMD"] = "echo 'no verdict here'"
-r = m.tool_review_plan({"project_dir": p})
-check("review without a verdict is not ok", r["ok"] is False, r)
-os.environ["AISTACK_PLAN_REVIEW_CMD"] = "printf 'Verdict: FAIL\\nT1: verify passes on empty state\\n'; test -n \"$AISTACK_PLAN_REVIEW_PROMPT\" && echo prompt-ok >&2"
-r = m.tool_review_plan({"project_dir": p})
-check("review returns verdict and findings", r["ok"] and r["verdict"] == "FAIL" and "T1" in r["findings"] and os.path.isfile(r["report"]), r)
-r = m.tool_review_plan({"project_dir": p})
-check("second review call is a no-op", r["ok"] and r.get("already_reviewed") and r["billed_calls"] == 0, r)
-r = m.tool_run({"project_dir": p, "plan_hash": v["plan_hash"]})
-check("run starts once the exact plan is reviewed", r["started"] is True, r)
+check("run refused for a plan Claude did not write", r["started"] is False and "ralph_plan" in r["problem"], r)
+check("the old review tool is gone", "ralph_review_plan" not in m.TOOLS and not hasattr(m, "tool_review_plan"))
+fake = ST(p) + "/fake-plan.py"
+open(fake, "w").write("import json\nprint(json.dumps({'prd': json.load(open(%r)), 'verify': json.load(open(%r)), 'notes': []}))\n" % (ST(p) + "/plan/prd.json", ST(p) + "/plan/verify.json"))
+os.environ["AISTACK_PLAN_CMD"] = f"{sys.executable} {fake}"
+r = m.tool_plan({"project_dir": p, "request": "do it", "brief": "nothing special"})
+check("ralph_plan writes and records the plan", r.get("ok") is True and r.get("billed_calls") == 1, r)
+r = m.tool_run({"project_dir": p, "plan_hash": r["plan_hash"]})
+check("run starts for the plan Claude wrote", r["started"] is True, r)
 pump(m, p, r["run_id"], ("done", "failed", "lost", "waiting_user"), timeout=30)
-prd = json.load(open(ST(p) + "/plan/prd.json")); prd["name"] = "renamed-plan"; prd["description"] = "changed"; [x.update(passes=False) for x in prd["userStories"]]; json.dump(prd, open(ST(p) + "/plan/prd.json", "w"))
-# a review is consumed by the run it gated: the next plan in the project needs its own
+prd = json.load(open(ST(p) + "/plan/prd.json")); prd["name"] = "renamed-plan"; [x.update(passes=False) for x in prd["userStories"]]; json.dump(prd, open(ST(p) + "/plan/prd.json", "w"))
+# a plan is consumed by the run it gated: the next one needs ralph_plan again
 v = m.tool_validate({"project_dir": p}); r = m.tool_run({"project_dir": p, "plan_hash": v["plan_hash"]})
-check("a review covers one run only", r["started"] is False and "ralph_review_plan" in r["problem"], r)
-r = m.tool_review_plan({"project_dir": p})
-check("the next plan is reviewed once", r["ok"] and r.get("billed_calls") == 1, r)
-prd = json.load(open(ST(p) + "/plan/prd.json")); prd["name"] = "renamed-again"; json.dump(prd, open(ST(p) + "/plan/prd.json", "w"))
-v = m.tool_validate({"project_dir": p})
-r = m.tool_review_plan({"project_dir": p})
-check("renaming a reviewed plan does not trigger another review", r["ok"] and r.get("already_reviewed") and r["billed_calls"] == 0, r)
-r = m.tool_run({"project_dir": p, "plan_hash": v["plan_hash"]})
-check("renamed reviewed plan runs", r["started"] is True, r)
-pump(m, p, r["run_id"], ("done", "failed", "lost", "waiting_user"), timeout=30)
-prd = json.load(open(ST(p) + "/plan/prd.json")); prd["name"] = "third-plan"; [x.update(passes=False) for x in prd["userStories"]]; json.dump(prd, open(ST(p) + "/plan/prd.json", "w"))
-v = m.tool_validate({"project_dir": p})
+check("a plan covers one run only", r["started"] is False and "ralph_plan" in r["problem"], r)
 r = m.tool_run({"project_dir": p, "plan_hash": v["plan_hash"], "skip_plan_review": True})
 check("skip_plan_review overrides the gate", r["started"] is True, r)
 pump(m, p, r["run_id"], ("done", "failed", "lost", "waiting_user"), timeout=30)
-del os.environ["AISTACK_PLAN_REVIEW_CMD"]
+del os.environ["AISTACK_PLAN_CMD"]
 os.environ["AISTACK_PLAN_REVIEW"] = "off"
 
 print("\nFAILED: %s" % FAILS if FAILS else "\nALL PASSED")

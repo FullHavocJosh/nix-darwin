@@ -950,7 +950,8 @@ function lumoplan_func() {
 
 # Tier 0 probe: prints "lumo" when a lumo-tamer answers /v1/models with its key, otherwise "local". Tried in order:
 # this machine's own tamer (127.0.0.1:3003, key from ~/lumo-tamer/config.yaml), MacMiniM1's on the home network (key
-# from Doppler), then the public endpoint when AISTACK_LUMO_PUBLIC_KEY is set. ralph_mcp.py uses the same order for
+# from Doppler), then the public endpoint https://lumo.rollet.family/v1 (key from Doppler root_hetzner-cluster, or
+# AISTACK_LUMO_PUBLIC_KEY). Each is tried only when the one before does not answer. ralph_mcp.py uses the same order for
 # the requests themselves. AISTACK_TIER0=local forces local; AISTACK_TAMER_URL / AISTACK_TAMER_KEY pin one endpoint.
 function _aistack_tier0() {
   [[ "${AISTACK_TIER0:-auto}" == "local" ]] && { echo local; return 0; }
@@ -972,8 +973,12 @@ function _aistack_tier0() {
     key=$(doppler secrets get LUMO_TAMER_API_KEY --project FullHavocJosh --config root_macmini --plain 2>/dev/null)
   fi
   _aistack_tamer_ok "${AISTACK_TAMER_MINI_URL:-http://macminim1.rollet.family:3003/v1}" "$key" && { echo lumo; return 0; }
-  if [[ -n "${AISTACK_LUMO_PUBLIC_KEY:-}" ]]; then
-    _aistack_tamer_ok "${AISTACK_LUMO_PUBLIC_URL:-https://lumo.rollet.family/v1}" "$AISTACK_LUMO_PUBLIC_KEY" && { echo lumo; return 0; }
+  key="${AISTACK_LUMO_PUBLIC_KEY:-}"
+  if [[ -z "$key" ]] && command -v doppler >/dev/null; then
+    key=$(doppler secrets get LUMO_PUBLIC_API_KEY --project FullHavocJosh --config root_hetzner-cluster --plain 2>/dev/null)
+  fi
+  if [[ -n "$key" ]]; then
+    _aistack_tamer_ok "${AISTACK_LUMO_PUBLIC_URL:-https://lumo.rollet.family/v1}" "$key" && { echo lumo; return 0; }
   fi
   echo local
 }
@@ -988,55 +993,39 @@ function _aistack_repo_private() {
   [[ "$v" == "false" ]] && echo no || echo yes
 }
 
-# aistack -- planner-led coding stack.
+# _aidev_stack -- the stack behind `aidev` (there is one stack; `aistack` is an alias for `aidev`).
 #
-#   aistack [task words...]      e.g.  aistack make a new mcp server
-#   aistack                      then describe the work as pi's first message -- same result
+# Opens a live pi session on the local llama-server model, which coordinates and never answers the request itself:
 #
-# Opens a live pi session (local llama-server model, reasoning on) whose job is to turn what you describe into a
-# plan (prd.json + verify.json in the plan dir), get your confirmation, and then run it through Ralph TUI:
+#   research   the local model looks at the project through budgeted, read-only tools           free
+#   draft      Lumo, through lumo-tamer, with online research; it can ask this machine for more   free
+#              files. Tried in order: this machine's tamer, MacMiniM1's, https://lumo.rollet.family
+#   plan       Claude Code writes prd.json + verify.json in ONE call (ralph_plan)                BILLED
+#   build      a free OpenCode Zen model, one task at a time (Claude only when there is none)     free
+#   review     Claude Code, once for the whole run; it builds a task only if it keeps failing     BILLED
 #
-#   tier 0  Lumo on MacMiniM1              drafts the plan (lumo_consult); falls back to the local model
-#           (pi + llama-server, local)        when MacMiniM1 is unreachable. pi stays the coordinator either way:
-#                                          it talks to you and calls the ralph_* tools, which Lumo cannot do
-#   tier 1  OpenCode Big Pickle (free)     worker: builds each task      (Claude Sonnet when no Zen key)
-#   tier 2  Claude Code Sonnet (latest)    read-only reviewer of the plan before anything is built (ralph_review_plan,
-#                                          catches what tier 0 missed), fallback worker for a task tier 1 cannot get to
-#                                          pass, and a read-only reviewer (security / accuracy / completeness) at the end
+# The run itself is ~/.config/aistack/ralph_driver.py (detached, state under ~/.aistack/<project>/runs/): one task at
+# a time through `ralph-tui run`, a task only counts as done when its verify commands exit 0, retry then escalate,
+# agents can ask you questions, and a failed review pauses for your decision. pi reaches it through ralph_mcp.py.
 #
-# Flow: plan (tier 0) -> confirm -> review (tier 2) -> confirm -> build (tier 1) -> review (tier 2)
+# Nothing is written into the repository while planning: plan files, runs, reviews and Ralph's own state live in
+# ~/.aistack/<project>-<hash> (AISTACK_HOME overrides). In the main checkout of a git repo a gpr worktree + draft PR is
+# created when you confirm the plan, and the agents work there. Nothing is committed: use gpc/gpa when you are happy.
 #
-# The run itself is ~/.config/aistack/ralph_driver.py (detached, state under ~/.aistack/<project>/runs/):
-# one task at a time through `ralph-tui run`, a task only counts as done when its verify commands exit 0
-# (Ralph's own completion marker has false positives), retry then escalate, agents can ask you questions, and
-# a failed review pauses for your decision. pi reaches it through the ralph_* MCP tools (ralph_mcp.py).
-#
-# Nothing aistack-related is written into the repository (no .aistack/, no .ralph-tui/): plan files, runs, reviews and
-# Ralph's own state live in ~/.aistack/<project>-<hash> (AISTACK_HOME overrides ~/.aistack). Planning only reads the
-# project. In the main checkout of a git repo, a gpr worktree + draft PR is created at the moment you confirm the plan
-# (ralph_run does it), and the agents work there; elsewhere they work in the project itself. Nothing is committed:
-# use gpc/gpa in that directory when you are happy with the result.
-#
+# The AISTACK_* names of the settings and ~/.config/aistack are kept from before the two commands were merged.
 # AISTACK_DIR overrides ~/.config/aistack; AISTACK_PI_EXTRA adds pi flags (tests use "-p").
-function aistack_func() {
+function _aidev_stack() {
   local task="$*"
   local adir="${AISTACK_DIR:-$HOME/.config/aistack}"
   local cache_dir="$HOME/.cache/nix-darwin-ai"
   local endpoint="${LLAMA_CPP_HOST:-http://127.0.0.1:8080}"
   local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
   local f reply
-  # aidev runs this same stack with one difference (_AISTACK_MODE=dev): Claude Code writes the plan (ralph_plan) from the
-  # local model's research instead of reviewing a plan the local model wrote. Everything else below is shared.
-  local mode="${_AISTACK_MODE:-stack}" stack_name="aistack" variant="" mcp_timeout=200
+  # pi waits for ralph_plan: Lumo drafts and may ask for files (AISTACK_LUMO_LOOP_S, 480 s), shortens a long draft
+  # (one request, up to 300 s), then one Claude call (AISTACK_PLAN_TIMEOUT_S, 280 s): 480 + 300 + 280 = 1060.
+  local stack_name="aidev" mcp_timeout=1200
   local -a need_files
-  need_files=(ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh zen_models.py zen-policy.json)
-  if [[ "$mode" == "dev" ]]; then
-    # ralph_plan waits for one Claude call (AISTACK_PLAN_TIMEOUT_S, 280 s), so pi must wait longer than that
-    # ... and before that Lumo drafts, asking this machine for what it needs (AISTACK_LUMO_LOOP_S, 480 s), and
-    # shortens a long draft (one request, up to 300 s): 480 + 300 + 280 = 1060.
-    stack_name="aidev"; variant="-claude"; mcp_timeout=1200
-    need_files+=(claude-plan.sh planner-prompt-claude.md planner-tier0-lumo-claude.md planner-tier0-local-claude.md)
-  fi
+  need_files=(ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh claude-plan.sh zen_models.py zen-policy.json)
 
   # ---- preflight ---------------------------------------------------------------------------------------------
   for f in $need_files; do
@@ -1100,13 +1089,9 @@ function aistack_func() {
   local tier0 tier0_label
   tier0=$(_aistack_tier0)
   if [[ "$tier0" == "lumo" ]]; then
-    tier0_label="Lumo on MacMiniM1, which drafts the plan"
+    tier0_label="Lumo drafts with online research and asks this machine for the files it needs (own tamer, then MacMiniM1's, then lumo.rollet.family)"
   else
-    tier0_label="the local model ($lms_model), because MacMiniM1's Lumo is unreachable"
-  fi
-  if [[ "$mode" == "dev" ]]; then
-    [[ "$tier0" == "lumo" ]] && tier0_label="Lumo drafts with online research and asks this machine for the files it needs (own tamer, else MacMiniM1's)" \
-      || tier0_label="no Lumo is reachable, so there is no draft from it"
+    tier0_label="no Lumo is reachable, so there is no draft from it"
   fi
 
   # ---- tier 1: a free Zen model chosen for this repository; Claude (billed) only when there is none ---------------
@@ -1194,8 +1179,7 @@ TOML
   jq -n --arg url "${endpoint}/v1" --arg id "$lms_model" \
     '{providers: {llamacpp: {baseUrl: $url, api: "openai-completions", apiKey: "sk-local", models: [{id: $id, reasoning: true}]}}}' \
     > "$pi_dir/models.json"
-  local tiers_text="tier 0 ${tier0_label}; tier 1 ${worker_label}; tier 2 $claude_label (billed)"
-  [[ "$mode" == "dev" ]] && tiers_text="research local $lms_model; plan $claude_label (billed); build ${worker_label}; review $claude_label (billed)"
+  local tiers_text="research local $lms_model; plan $claude_label (billed); build ${worker_label}; review $claude_label (billed)"
   jq -n --arg py "$(command -v python3)" --arg bridge "$adir/ralph_mcp.py" --arg root "$project" \
     --arg worker "$worker" --arg fallback "$fallback" --arg reviewer "$reviewer" --arg fa "$fallback_attempts" \
     --arg ralph "$ralph_bin" --arg tier0 "$tier0" --arg state "$state_dir" --arg wtmode "$wt_mode" --arg reviewmode "${AISTACK_REVIEW_MODE:-batch}" --arg tiers "$tiers_text" --arg to "$mcp_timeout" \
@@ -1211,7 +1195,7 @@ TOML
     > "$pi_dir/mcp.json"
 
   local prompt
-  prompt=$(<"$adir/planner-prompt$variant.md")
+  prompt=$(<"$adir/planner-prompt.md")
   prompt=${prompt//@@PROJECT@@/$project}
   prompt=${prompt//@@PLAN_DIR@@/$state_dir/plan}
   prompt=${prompt//@@STATE_DIR@@/$state_dir}
@@ -1220,7 +1204,7 @@ TOML
   prompt=${prompt//@@REVIEWER@@/$claude_label (billed)}
   prompt=${prompt//@@TIER0_LABEL@@/$tier0_label}
   prompt=${prompt//@@LOCAL_MODEL@@/$lms_model}
-  prompt=${prompt//@@TIER0@@/$(<"$adir/planner-tier0-$tier0$variant.md")}
+  prompt=${prompt//@@TIER0@@/$(<"$adir/planner-tier0-$tier0.md")}
 
   echo "── $stack_name ──"
   if [[ "$wt_mode" == "create" ]]; then
@@ -1228,52 +1212,31 @@ TOML
   else
     echo "Project: $project (the agents work here)"
   fi
-  echo "aistack files: $state_dir (nothing is written into the repository)"
-  if [[ "$mode" == "dev" ]]; then
-    echo "Research:  local $lms_model in pi (free)   [$tier0_label]"
-    echo "Plan:      $claude_label (BILLED: one call, from the local model's research)"
-    echo "Build:     $worker_label${t1_note:+   [$t1_note]}"
-    echo "Review:    $claude_label (BILLED: one review for the whole run; builds a task only if it keeps failing)"
-    echo "Describe what you want; pi researches it, Claude writes the plan, and you confirm before anything runs."
-  else
-  if [[ "$tier0" == "lumo" ]]; then
-    echo "Tier 0 (plan):       Lumo on MacMiniM1   [pi + $lms_model coordinates; local fallback if Lumo fails]"
-  else
-    echo "Tier 0 (plan):       local $lms_model   [MacMiniM1's Lumo is unreachable]"
-  fi
-  echo "Tier 1 (build):      $worker_label${t1_note:+   [$t1_note]}"
-  echo "Tier 2 (plan review, fallback, final review): $claude_label (BILLED: one plan review before the build, one review for the whole run)"
-  echo "Describe what you want; pi will draft a plan for you to confirm before anything runs."
-  fi
+  echo "aidev files: $state_dir (nothing is written into the repository)"
+  echo "Research:  local $lms_model in pi (free)   [$tier0_label]"
+  echo "Plan:      $claude_label (BILLED: one call, from the local model's research)"
+  echo "Build:     $worker_label${t1_note:+   [$t1_note]}"
+  echo "Review:    $claude_label (BILLED: one review for the whole run; builds a task only if it keeps failing)"
+  echo "Describe what you want; pi researches it, Claude writes the plan, and you confirm before anything runs."
   echo "(The local model is slow: a reply can take a while with nothing visible. That is normal.)"
   echo ""
 
-  # pi gets exactly two MCP servers: ralph (this bridge, which also carries lumo_consult) and github. Every other server
+  # pi gets exactly two MCP servers: ralph (this bridge) and github. Every other server
   # belongs to OpenCode and Claude Code only. github is allowlisted read-only: pr_create, pr_approve and pr_suggest_change
   # stay invisible to the local model (agents may not create, approve or review PRs; see the gpr/gpa workflow hook).
   local github_tools="mcp__github__github_repos_list,mcp__github__github_file_get,mcp__github__github_branch_list,mcp__github__github_pr_list,mcp__github__github_pr_details,mcp__github__github_pr_changes,mcp__github__github_pr_comments_get,mcp__github__github_issues_list"
-  local tools="read,grep,find,ls,write,edit,mcp__ralph__ralph_validate_plan,mcp__ralph__ralph_review_plan,mcp__ralph__ralph_run,mcp__ralph__ralph_status,mcp__ralph__ralph_respond,mcp__ralph__ralph_cancel,mcp__ralph__ralph_runs,$github_tools"
-  # lumo_consult only when tier 0 is Lumo; pi's --tools is an allowlist, so a tool missing here is invisible to the model
-  # (it was left out once, and the planner then reported "Lumo is unavailable" without ever calling it)
-  [[ "$tier0" == "lumo" ]] && tools="$tools,mcp__ralph__lumo_consult"
-  local session_name="aistack: plan ${tier0}, review claude, build ${zen_model:-claude}, review claude"
-  if [[ "$mode" == "dev" ]]; then
-    # The local model hands its research to ralph_plan; it has no ralph_review_plan, because Claude wrote the plan.
-    # It also has no write, no edit and no lumo_consult: on its first real run it answered the request itself, never
-    # called Lumo, and only the prompt kept its write tool out of the repository. ralph_plan asks Lumo itself, and
-    # ralph_update_task is the one way to change the plan (it can only touch the plan files).
-    tools=${tools/mcp__ralph__ralph_review_plan/mcp__ralph__ralph_plan,mcp__ralph__ralph_update_task}
-    tools=${tools/,write,edit,/,}
-    # pi's own read/grep/find/ls cannot be counted, and the model made 90 calls with them against a rule of 12. Its
-    # research now goes through the bridge's repo_* tools, which enforce the budget (AISTACK_RESEARCH_CALLS, 16).
-    tools=${tools/read,grep,find,ls,/mcp__ralph__repo_tree,mcp__ralph__repo_read,mcp__ralph__repo_grep,}
-    tools=${tools/,mcp__ralph__lumo_consult/}
-    # A small model weighs the last thing it read most, so the request itself carries the rules.
-    [[ -n "$task" ]] && task="REQUEST FROM THE USER: $task
+  # What the local model can call. It has no file tools of pi's own:
+  #   repo_tree / repo_read / repo_grep   its only view of the project; the bridge counts the calls and refuses past
+  #                                       AISTACK_RESEARCH_CALLS (16). With pi's read/ls it made 90 calls on one request.
+  #   ralph_plan                          hands the research to Lumo and Claude Code; it never plans or answers itself
+  #   ralph_update_task                   the one way to change a plan; it can only touch the plan files
+  # pi's --tools is an allowlist, so anything not named here does not exist for the model.
+  local tools="mcp__ralph__repo_tree,mcp__ralph__repo_read,mcp__ralph__repo_grep,mcp__ralph__ralph_validate_plan,mcp__ralph__ralph_plan,mcp__ralph__ralph_update_task,mcp__ralph__ralph_run,mcp__ralph__ralph_status,mcp__ralph__ralph_respond,mcp__ralph__ralph_cancel,mcp__ralph__ralph_runs,$github_tools"
+  local session_name="aidev: research local, plan claude, build ${zen_model:-claude}, review claude"
+  # A small model weighs the last thing it read most, so the request itself carries the rules.
+  [[ -n "$task" ]] && task="REQUEST FROM THE USER: $task
 
 (Rules for you, the coordinator: do NOT answer this request yourself, however broad it is. Look with repo_tree first, then a few repo_read or repo_grep calls (the tools stop you after 16), then call ralph_plan with the request, your brief and the files that matter. Lumo and Claude Code do the thinking; you report what they return.)"
-    session_name="aidev: research local, plan claude, build ${zen_model:-claude}, review claude"
-  fi
   local -a extra
   extra=(${=AISTACK_PI_EXTRA})
   (
@@ -1326,7 +1289,7 @@ function _aidev_opencode() {
 # Who does what:  the local model in pi talks to you, finds the code and follows the run (free);  Lumo adds a draft
 # with online research when MacMiniM1 is reachable (free);  Claude Code writes the plan in ONE call from that research
 # (ralph_plan + claude-plan.sh);  OpenCode's free model builds;  Claude Code reviews once at the end.
-# It is aistack_func with _AISTACK_MODE=dev: same run driver, verify gates, worktree + draft PR and state directory.
+# The stack itself is _aidev_stack above. `aistack` is an alias for this command.
 function aidev() {
   local a direct=false
   local -a rest
@@ -1341,7 +1304,7 @@ function aidev() {
     _aidev_direct "${rest[@]}"
     return
   fi
-  _AISTACK_MODE=dev aistack_func "${rest[@]}"
+  _aidev_stack "${rest[@]}"
 }
 
 # The direct session: claude, or opencode with the selected provider's model. Used by `aidev --direct`, `aidev -p`,
