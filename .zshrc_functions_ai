@@ -1025,10 +1025,9 @@ function aistack_func() {
   need_files=(ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh zen_models.py zen-policy.json)
   if [[ "$mode" == "dev" ]]; then
     # ralph_plan waits for one Claude call (AISTACK_PLAN_TIMEOUT_S, 280 s), so pi must wait longer than that
-    # ... and before that it asks Lumo, and asks it again to shorten a long draft. Each Lumo step can try two endpoints
-    # (this machine's, then MacMiniM1's) at AISTACK_LUMO_TIMEOUT_S (100 s) each; shortening a 12,000-character draft
-    # took 189 s when measured. 2 x 200 + 280 = 680.
-    stack_name="aidev"; variant="-claude"; mcp_timeout=720
+    # ... and before that it asks Lumo, and asks it again to shorten a long draft (AISTACK_LUMO_TIMEOUT_S, 240 s
+    # each): 2 x 240 + 280 = 760.
+    stack_name="aidev"; variant="-claude"; mcp_timeout=900
     need_files+=(claude-plan.sh planner-prompt-claude.md planner-tier0-lumo-claude.md planner-tier0-local-claude.md)
   fi
 

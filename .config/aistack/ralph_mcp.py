@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -26,6 +27,19 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 ROOTS = [os.path.realpath(p) for p in os.environ.get("RALPH_MCP_ROOTS", "").split(":") if p]
 PROTOCOL = "2024-11-05"
 SHELLISH = re.compile(r"[;&|<>`]|\$\(")
+
+
+def needs_shell(cmd):
+    """True when a verify command only works in a shell. The driver runs verify commands with shlex.split and no
+    shell, so an operator inside quotes is plain text (python3 -c "import sys; sys.exit(0)" is fine) while an unquoted
+    ; & | < > ( ), a backtick or $( would be passed to the program as an argument and never do what was meant."""
+    try:
+        lex = shlex.shlex(cmd, posix=True, punctuation_chars=True)
+        lex.whitespace_split = True
+        tokens = list(lex)
+    except ValueError:      # unbalanced quotes
+        return True
+    return any(t and (set(t) <= set("();<>|&") or t.startswith(("$(", "`"))) for t in tokens)
 
 
 def project_of(a):
@@ -148,8 +162,10 @@ def validate(prd, verify):
             problems.append(f"verify.json: task {tid} needs at least one verify command (an exit-0-on-success shell-free command)")
             continue
         for c in cmds:
-            if SHELLISH.search(c):
-                problems.append(f"verify.json: {tid}: no shell syntax (; & | < > ` $()) in '{c}'. Put complex checks in a script file and run that, e.g. 'python3 checks/check_{tid}.py'")
+            if needs_shell(c):
+                problems.append(f"verify.json: {tid}: no shell syntax (; & | < > ` $()) in '{c}'. Verify commands run without a shell. "
+                                "Use one plain command (operators inside quotes are fine), or have a task create a check script and run that. "
+                                "Never point a verify command at a file that no task creates.")
     for tid in verify:
         if tid not in deps:
             problems.append(f"verify.json: {tid} is not a task id")
@@ -172,6 +188,24 @@ def present_plan(prd, verify, notes=(), lines=()):
     return "\n".join(out)
 
 
+def plan_meta(project, write=None):
+    """Claude's notes and the status lines (Lumo, skipped files, billed calls) of the saved plan. They are kept next to
+    the plan so they are shown again after every change, and also when the plan first came back invalid."""
+    path = os.path.join(plan_dir(project), "plan-meta.json")
+    if write is not None:
+        with open(path, "w") as f:
+            json.dump(write, f, indent=1)
+        return write
+    return rj(path, {}) or {}
+
+
+def save_plan_text(project, text):
+    path = os.path.join(plan_dir(project), "PLAN.txt")
+    with open(path, "w") as f:
+        f.write(text + "\n")
+    return path
+
+
 def tool_validate(a):
     project = project_of(a)
     prd, verify, h = load_plan(project)
@@ -180,8 +214,11 @@ def tool_validate(a):
         return {"ok": False, "problems": problems, "plan_dir": plan_dir(project)}
     tasks = [{"id": s["id"], "title": s["title"], "priority": s["priority"], "dependsOn": s.get("dependsOn", []),
               "verify": verify[s["id"]]} for s in prd["userStories"]]
+    meta = plan_meta(project)
+    text = present_plan(prd, verify, meta.get("notes") or (), meta.get("lines") or ())
+    save_plan_text(project, text)
     return {"ok": True, "plan_hash": h, "name": prd["name"], "tasks": tasks, "plan_dir": plan_dir(project),
-            "present": present_plan(prd, verify),
+            "present": text,
             "next": "Show this plan to the user. Only after they confirm it, call ralph_run with this plan_hash."}
 
 
@@ -345,6 +382,9 @@ PLAN_BRIEF_MAX, PLAN_DRAFT_MAX = 16_000, 60_000
 # A long draft is not passed on as it is: Lumo gets it back in a fresh request and shortens it (free), so Claude is
 # not routinely billed for tens of thousands of characters. Only when that second request fails, or does not come back
 # shorter, does the long draft go through (up to PLAN_DRAFT_MAX).
+# One Lumo request for ralph_plan. A one-word request answers in a second, but a draft with project files and an
+# online search took over 100 s on both endpoints at once, and shortening a draft took 189 s.
+LUMO_PLAN_TIMEOUT_S = int(os.environ.get("AISTACK_LUMO_TIMEOUT_S", "240"))
 DRAFT_CONDENSE_AT = int(os.environ.get("AISTACK_LUMO_CONDENSE_AT", "12000"))
 CONDENSE_PROMPT = """Below is a draft build plan. Rewrite it in at most 1200 words for a senior engineer who will turn it into tasks.
 Keep: every concrete task, every file path, command, tool name and version number, each fact you found online together with
@@ -450,12 +490,12 @@ def tool_plan(a):
     if not draft and os.environ.get("AISTACK_TIER0") == "lumo":
         lr = tool_lumo_consult({"project_dir": project, "request": request + ("\n\nWhat a local model found in the code:\n" + brief[:6000] if brief else ""),
                                 "files": [re.sub(r":\d+-\d+$", "", str(f)) for f in (a.get("files") or [])],
-                                "timeout_s": int(os.environ.get("AISTACK_LUMO_TIMEOUT_S", "100"))})
+                                "timeout_s": LUMO_PLAN_TIMEOUT_S})
         if lr.get("ok"):
             draft, lumo_state = str(lr.get("plan") or "").strip(), "consulted (" + str(lr.get("lumo", "")) + ")"
             if len(draft) > DRAFT_CONDENSE_AT:
                 cr = tool_lumo_consult({"project_dir": project, "request": "condense", "raw_prompt": CONDENSE_PROMPT + draft[:PLAN_DRAFT_MAX],
-                                        "timeout_s": int(os.environ.get("AISTACK_LUMO_TIMEOUT_S", "100"))})
+                                        "timeout_s": LUMO_PLAN_TIMEOUT_S})
                 short = str(cr.get("plan") or "").strip() if cr.get("ok") else ""
                 if 400 <= len(short) < len(draft):
                     lumo_state += f", its draft shortened by Lumo from {len(draft)} to {len(short)} characters"
@@ -514,26 +554,29 @@ def tool_plan(a):
                "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}, open(plan_review_path(project), "w"))
     problems = validate(prd, verify)
     notes = [str(n) for n in plan.get("notes") or []][:12] if isinstance(plan.get("notes"), list) else []
-    out = {"ok": not problems, "plan_hash": h, "plan_dir": plan_dir(project), "notes": notes, "files_sent": sent,
-           "files_skipped": skipped, "truncated": truncated, "billed_calls": 1, "lumo": lumo_state}
-    if problems:
-        out.update(problems=problems, next="Claude's plan is saved but has the problems listed. Fix them yourself in prd.json / "
-                   "verify.json in the plan dir, then call ralph_validate_plan. Do not call ralph_plan again (it is billed).")
-        return out
+    lines = [x for x in (
+        f"Lumo: {lumo_state}.",
+        "Not sent to Claude: " + ", ".join(f"{k} ({v})" for k, v in skipped.items()) + "." if skipped else "",
+        "Cut to the size limit: " + ", ".join(truncated) + "." if truncated else "",
+        "Claude Code: 1 billed call for this plan; it reviews the result once more at the end.") if x]
+    plan_meta(project, {"notes": notes, "lines": lines})
     # Only the finished text goes back, with nothing next to it to summarize from: handed the tasks and notes as
     # data as well, the local model wrote its own version of the plan.
-    out = {"ok": True, "plan_hash": h, "billed_calls": 1, "lumo": lumo_state}
-    out.update(present=present_plan(prd, verify, notes, [
-                   f"Lumo: {lumo_state}.",
-                   "Not sent to Claude: " + ", ".join(f"{k} ({v})" for k, v in skipped.items()) + "." if skipped else "",
-                   "Cut to the size limit: " + ", ".join(truncated) + "." if truncated else "",
-                   "Claude Code: 1 billed call for this plan; it reviews the result once more at the end."]),
-               next="Your whole reply is: one code block (three backticks) containing the text of 'present' copied character for "
-                    "character, then the single line: Change something, or start? Nothing else. No heading, no summary, no "
-                    "markdown inside the block. Later: a change is ralph_update_task; 'start' is ralph_run with this plan_hash.")
-    with open(os.path.join(plan_dir(project), "PLAN.txt"), "w") as f:
-        f.write(out["present"] + "\n")
-    out["plan_file"] = os.path.join(plan_dir(project), "PLAN.txt")
+    out = {"ok": not problems, "plan_hash": h, "billed_calls": 1, "lumo": lumo_state}
+    try:
+        out["present"] = present_plan(prd, verify, notes, lines)
+        out["plan_file"] = save_plan_text(project, out["present"])
+    except Exception:       # a plan too malformed to print: the problems below say what is wrong
+        out["present"] = ""
+    if problems:
+        out.update(problems=problems, next="Claude's plan is saved but not valid yet. Fix each problem with ralph_update_task (for a "
+                   "verify command: one plain command without unquoted ; & | < > and never a file that no task creates). When "
+                   "ralph_update_task returns ok=true, reply with its 'present' in a code block as usual. Do NOT call ralph_plan "
+                   "again: it is billed and the plan already exists.")
+        return out
+    out["next"] = ("Your whole reply is: one code block (three backticks) containing the text of 'present' copied character for "
+                   "character, then the single line: Change something, or start? Nothing else. No heading, no summary, no "
+                   "markdown inside the block. Later: a change is ralph_update_task; 'start' is ralph_run with this plan_hash.")
     global RESEARCH_CALLS
     RESEARCH_CALLS = 0      # the plan exists: a later question from the user gets a fresh, equally small budget
     return out
@@ -925,6 +968,8 @@ def tool_lumo_consult(a):
                 plan = json.load(r)["choices"][0]["message"]["content"]
         except Exception as e:
             errors.append(f"{base}: {type(e).__name__}: {e}")
+            if "timed out" in str(e).lower():
+                break       # both endpoints reach the same Lumo: when it is slow, a second wait only doubles the delay
             continue
         return {"ok": True, "plan": plan, "files_sent": sent, "files_skipped": skipped, "lumo": base}
     return {"ok": False, "problem": f"Lumo is not available ({'; '.join(errors)}); plan without it",

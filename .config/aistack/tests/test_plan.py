@@ -75,7 +75,17 @@ reset(); bad = json.loads(json.dumps(GOOD)); bad["verify"]["T1"] = ["make test &
 r = plan()
 check("an invalid plan is saved and its problems listed", r.get("ok") is False and any("no shell syntax" in p for p in r.get("problems", []))
       and os.path.exists(STATE + "/plan/prd.json"), str(r)[:300])
+check("an invalid plan still carries the plan text with Claude's notes, and PLAN.txt exists", "assumed python3" in r.get("present", "")
+      and "Lumo:" in r.get("present", "") and os.path.exists(STATE + "/plan/PLAN.txt"), r.get("present", "")[-300:])
 check("an invalid plan still blocks a second billed call", plan().get("already_planned") is True)
+r = mcp.tool_update_task({"project_dir": PROJECT, "task_id": "T1", "verify": ["python3 -m unittest tests.test_thing"]})
+check("after the fix the plan text still has the notes and the Lumo line", r.get("ok") is True and "assumed python3" in r.get("present", "") and "Lumo:" in r.get("present", ""), r.get("present", "")[-300:])
+
+print("verify commands: what needs a shell")
+for cmd, bad in (('python3 -c "import sys; sys.exit(0 if 1 > 0 else 1)"', False), ("python3 -m unittest tests.test_thing", False),
+                 ("grep -q 'a|b' file.txt", False), ("make test && echo ok", True), ("make test;echo ok", True), ("cat a | grep b", True),
+                 ("echo hi > out.txt", True), ("echo $(date)", True), ("echo `date`", True), ('python3 -c "unbalanced', True)):
+    check(("refused: " if bad else "accepted: ") + cmd, mcp.needs_shell(cmd) is bad)
 reset(); n = calls(); reply("I could not do this.")
 r = plan()
 check("no JSON: ok false, raw output kept", r.get("ok") is False and os.path.exists(STATE + "/plan/claude-plan.raw.txt") and calls() == n + 1)
