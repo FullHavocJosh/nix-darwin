@@ -7,21 +7,14 @@ export HOME=${HOME:-/Users/havoc}
 LUMO_TAMER_DIR=${LUMO_TAMER_DIR:-$HOME/lumo-tamer}
 LUMO_TAMER_PORT=${LUMO_TAMER_PORT:-3003}
 LUMO_PLANNER_PORT=${LUMO_PLANNER_PORT:-8765}
-# LUMO_LAN=1 (the desktop, set by nix-modules/macos/lumo.nix): tamer and the planner serve the whole network.
-# Anything else (the laptop): both listen on 127.0.0.1 only, with the host's own Proton sign-in.
-# Every device has its OWN planner key, LUMO_PLANNER_API_KEY in that device's Doppler config (root_macmini for the
-# desktop, root_macbook for the laptop). reauth.sh replaces it each time the device is signed in again.
-# The laptop's tamer and vault keys stay on the laptop and are never read from Doppler.
+# LUMO_LAN=1 (the desktop, set by nix-modules/macos/lumo.nix): tamer and the planner serve the whole network, on
+# purpose (other machines and services use the Mini's Lumo), behind the keys in Doppler FullHavocJosh/root_macmini.
+# Those keys are static: other services are configured with them, so nothing here ever replaces them.
+# Anything else (the laptop): both listen on 127.0.0.1 only, with the host's own Proton sign-in and its own locally
+# generated tamer and vault keys. The laptop's planner has no key: only this machine can reach it.
 LUMO_LAN=${LUMO_LAN:-0}
 LUMO_DOPPLER_PROJECT=${LUMO_DOPPLER_PROJECT:-FullHavocJosh}
-if [[ $LUMO_LAN == 1 ]]; then
-  LUMO_DOPPLER_CONFIG=${LUMO_DOPPLER_CONFIG:-root_macmini}
-else
-  LUMO_DOPPLER_CONFIG=${LUMO_DOPPLER_CONFIG:-root_macbook}
-fi
-# Last planner key this device read from Doppler (mode 600). The laptop starts from it when Doppler cannot be
-# reached (off the network), and the local clients (aistack, aidev) read it to talk to the local planner.
-LUMO_PLANNER_KEY_FILE=${LUMO_PLANNER_KEY_FILE:-$HOME/.lumo-planner-key}
+LUMO_DOPPLER_CONFIG=${LUMO_DOPPLER_CONFIG:-root_macmini}
 
 # lumo_secret NAME -> value on stdout, empty when unset or Doppler is unreachable
 lumo_secret() {
@@ -33,18 +26,6 @@ lumo_secret() {
 # desktop's server, planner or vault keys, so there it always prints nothing and the local files are used.
 lumo_key_secret() {
   [[ $LUMO_LAN == 1 ]] && lumo_secret "$1"
-}
-
-# lumo_planner_key -> this device's planner key: from Doppler (and remembered in the key file), else the key file
-lumo_planner_key() {
-  local k
-  k=$(lumo_secret LUMO_PLANNER_API_KEY)
-  if [[ -n $k ]]; then
-    (umask 077; print -r -- "$k" > "$LUMO_PLANNER_KEY_FILE")
-  else
-    k=$(cat "$LUMO_PLANNER_KEY_FILE" 2>/dev/null)
-  fi
-  print -r -- "$k"
 }
 
 # lumo_tamer_key -> the apiKey tamer's config.yaml serves with

@@ -12,8 +12,6 @@ let
   tamerRev = "0ef587b7f3d5d5165914602f0cc79bdfe7ee4e30"; # 2026-09-23
 
   logs = "${home}/Library/Logs";
-  # each device has its own planner key, in its own Doppler config (.config/lumo/lumo-common.sh)
-  dopplerConfig = if cfg.lan then "root_macmini" else "root_macbook";
   asHavoc = "sudo -u havoc HOME=${home} PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin";
   daemon = script: log: {
     ProgramArguments = [
@@ -41,16 +39,6 @@ in
       signed in from the MacBook with `lumoreauth`.
       false (the laptop): both listen on 127.0.0.1 only, the firewall is not touched, and the host has its own
       keys and its own Proton sign-in (`lumoauth`), separate from the desktop's.
-    '';
-  };
-
-  options.local.lumo.rotateKeyOnSwitch = lib.mkOption {
-    type = lib.types.bool;
-    default = true;
-    description = ''
-      Replace this device's planner key (LUMO_PLANNER_API_KEY in its Doppler config) on every activation, in the
-      background, the same way a sign-in does. The Proton sign-in itself cannot be refreshed here: it needs a browser,
-      so the activation only reports whether it is still valid.
     '';
   };
 
@@ -83,12 +71,6 @@ in
             }"
           fi
         fi
-      ''
-      + lib.optionalString cfg.rotateKeyOnSwitch ''
-        # New planner key for this device on every switch (reauth.sh --key-only: write to Doppler, restart the planner,
-        # check it answers). In the background: it waits for the planner to come back, which must not hold up the switch.
-        ${asHavoc} LUMO_LOCAL_DOPPLER_CONFIG=${dopplerConfig} bash -c '(nohup /bin/zsh ${lumoSrc}/reauth.sh --local --key-only </dev/null >>${logs}/lumo-key-rotate.log 2>&1 &)'
-        echo "[lumo] replacing this device's planner key (Doppler ${dopplerConfig}) in the background -- tail ${logs}/lumo-key-rotate.log"
       ''
       + lib.optionalString (!cfg.lan) ''
         echo "[lumo] loopback only on this host: tamer and the planner bind 127.0.0.1, no firewall rule is added"

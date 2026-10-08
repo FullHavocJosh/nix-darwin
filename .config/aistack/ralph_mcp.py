@@ -647,32 +647,21 @@ LUMO_LOCAL_URL = "http://127.0.0.1:8765/v1"
 LUMO_MINI_URL = os.environ.get("AISTACK_LUMO_MINI_URL", "http://macminim1.rollet.family:8765/v1").rstrip("/")
 
 
-def lumo_local_key():
-    """This device's own planner key (lumo-common.sh keeps a copy of the Doppler value here), or ''."""
-    try:
-        return open(os.environ.get("LUMO_PLANNER_KEY_FILE") or os.path.expanduser("~/.lumo-planner-key")).read().strip()
-    except OSError:
-        return ""
-
-
 def lumo_endpoints():
-    """[(base url, key getter)] to try in order. AISTACK_LUMO_URL pins one. Otherwise this machine's own planner proxy
-    comes first when it answers (loopback only, this device's key: nix-modules/macos/lumo.nix), then the one on
-    MacMiniM1 with the Mini's key. The two devices have different keys."""
+    """[(base url, needs key)] to try in order. AISTACK_LUMO_URL pins one. Otherwise this machine's own planner proxy
+    comes first when it answers (loopback only, no key: nix-modules/macos/lumo.nix), then the one on MacMiniM1."""
     import urllib.request
     pinned = os.environ.get("AISTACK_LUMO_URL")
     if pinned:
-        return [(pinned.rstrip("/"), lumo_key)]
+        return [(pinned.rstrip("/"), True)]
     out = []
     try:
-        k = lumo_local_key()
-        req = urllib.request.Request(LUMO_LOCAL_URL + "/models", headers={"Authorization": f"Bearer {k}"} if k else {})
-        with urllib.request.urlopen(req, timeout=2) as r:
+        with urllib.request.urlopen(LUMO_LOCAL_URL + "/models", timeout=2) as r:
             if r.status == 200:
-                out.append((LUMO_LOCAL_URL, lumo_local_key))
+                out.append((LUMO_LOCAL_URL, False))
     except Exception:
         pass
-    return out + [(LUMO_MINI_URL, lumo_key)]
+    return out + [(LUMO_MINI_URL, True)]
 
 
 def lumo_readable(project, rel):
@@ -715,9 +704,9 @@ def tool_lumo_consult(a):
     prompt = LUMO_PROMPT + request + ("\n\nPROJECT FILES:" + "".join(blocks) if blocks else "")
     body = json.dumps({"model": "lumo-planner", "messages": [{"role": "user", "content": prompt}]}).encode()
     errors = []
-    for base, get_key in lumo_endpoints():
+    for base, needs_key in lumo_endpoints():
         headers = {"Content-Type": "application/json", "X-Lumo-No-Fetch": "1"}
-        key = get_key()
+        key = lumo_key() if needs_key else ""
         if key:
             headers["Authorization"] = f"Bearer {key}"
         try:

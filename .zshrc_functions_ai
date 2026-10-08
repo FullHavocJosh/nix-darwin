@@ -958,11 +958,7 @@ function _aistack_tier0() {
   # the Mini itself) leaves local_code at something other than 200 and the remote probe below decides.
   local local_code=000
   if [[ -z "${AISTACK_LUMO_URL:-}" ]]; then
-    local local_key
-    local -a local_auth
-    local_key=$(cat "${LUMO_PLANNER_KEY_FILE:-$HOME/.lumo-planner-key}" 2>/dev/null)   # this device's own key, if it has one
-    [[ -n "$local_key" ]] && local_auth=(-H "Authorization: Bearer $local_key")
-    local_code=$(curl -s -m 2 -o /dev/null -w '%{http_code}' "${local_auth[@]}" http://127.0.0.1:8765/v1/models 2>/dev/null) || local_code=000
+    local_code=$(curl -s -m 2 -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/v1/models 2>/dev/null) || local_code=000
   fi
   [[ "$local_code" == "200" ]] && { echo lumo; return 0; }
   local url="${AISTACK_LUMO_URL:-http://macminim1.rollet.family:8765/v1}" key="${AISTACK_LUMO_KEY:-}" code
