@@ -209,6 +209,9 @@ function _run_linters() {
     fi
   fi
   
+  local has_shellcheck=false
+  command -v shellcheck &>/dev/null && has_shellcheck=true
+
   # Track files that need linters but linters are unavailable
   local missing_linters=false
   local missing_linters_report=""
@@ -274,6 +277,33 @@ function _run_linters() {
         else
           missing_linters_report="${missing_linters_report}⚠️  $file: ruff not installed\n"
           missing_linters=true
+        fi
+        ;;
+      *.sh|*.bash)
+        # shellcheck only understands sh/bash/dash/ksh; zsh scripts (most of this repo's) are left to `zsh -n`.
+        # Errors only: warnings and style notes on existing scripts would block commits without a real defect.
+        if head -1 "$file" | grep -qE '^#!.*(/|env +)(ba|da|k)?sh( |$)'; then
+          if $has_shellcheck; then
+            local sc_output sc_exit
+            sc_output=$(shellcheck --severity=error "$file" 2>&1)
+            sc_exit=$?
+            if [ $sc_exit -ne 0 ]; then
+              lint_report="${lint_report}🟡 $file: shellcheck errors\n"
+              lint_report="${lint_report}   $(echo "$sc_output" | head -6 | sed 's/^/   /')\n"
+              linting_issues=true
+              file_has_issues=true
+            fi
+          else
+            missing_linters_report="${missing_linters_report}⚠️  $file: shellcheck not installed\n"
+            missing_linters=true
+          fi
+        elif head -1 "$file" | grep -qE '^#!.*zsh'; then
+          local zn_output
+          if ! zn_output=$(zsh -n "$file" 2>&1); then
+            lint_report="${lint_report}🟡 $file: zsh syntax error\n   $(echo "$zn_output" | head -3)\n"
+            linting_issues=true
+            file_has_issues=true
+          fi
         fi
         ;;
     esac
@@ -1679,6 +1709,8 @@ ${batch_context}
 - The surrounding context is provided so you can see if a nearby comment, guard clause, or existing code ALREADY mitigates the concern — if so, do NOT flag it
 - If the code or a comment already acknowledges a known limitation, do NOT flag it as an issue
 - If a prior security analysis has already confirmed an item is a false positive, do NOT flag it
+- Every issue MUST include \"evidence\": ONE line copied exactly from the diff, a line that starts with + (leave the + out). An issue whose evidence is not an added line of that file is discarded, so never describe code you cannot quote.
+- Every issue MUST include \"category\", one of: secret-exposure, injection, destructive-command, broken-syntax, auth-bypass, other. Use \"other\" for anything else; only the first five can block a commit.
 - Report at most 10 issues, most severe first, and keep each \"recommendation\" under 40 words
 - Inside the JSON string values use single quotes only, never double quotes or raw newlines, so the JSON stays valid
 - Output ONLY a JSON array of issues in this exact format:
@@ -1687,7 +1719,9 @@ ${batch_context}
     \"file\": \"path/to/file.ext\",
     \"severity\": \"Critical\" or \"Warning\",
     \"issue\": \"Brief issue description\",
-    \"recommendation\": \"Detailed fix recommendation\"
+    \"recommendation\": \"Detailed fix recommendation\",
+    \"category\": \"injection\",
+    \"evidence\": \"the exact added line this is about\"
   }
 ]
 - If there are no critical/warning issues in this batch, return an empty array: []
@@ -1765,6 +1799,63 @@ ${batch_context}
   echo "  ⚠ Unexpected: Valid exit code but invalid JSON" >&2
   echo "[]"
   return 2
+}
+
+# Helper function: decide which AI review findings may block the commit.
+# Usage: _gpa_guard_issues '<json array of findings>'  -> the BLOCKING findings as a JSON array on stdout
+# The rules are in ~/.config/aistack/gpa_review_guard.py (GPA_REVIEW_GUARD overrides the path): a finding must quote
+# an added line of the staged diff, be Critical in a blocking category, and sit on a line that has not already passed
+# an earlier round. What is left is shown to the model once more, alone with the code around its line, and blocks
+# unless that second look rejects it (no verdict keeps it blocking). Dropped, advisory and waived findings are
+# reported on stderr, never silently. GPA_WAIVE holds waived fingerprints (gpa --waive); the ones that matched a
+# finding are written to GPA_WAIVED_FILE so the caller can record them in the commit message.
+function _gpa_guard_issues() {
+  local issues="$1"
+  local guard="${GPA_REVIEW_GUARD:-${AISTACK_DIR:-$HOME/.config/aistack}/gpa_review_guard.py}"
+  local waive_json out
+  waive_json=$(print -r -- "${GPA_WAIVE:-}" | jq -Rc 'split(" ") | map(select(length > 0))')
+  if [[ -f "$guard" ]] && command -v python3 >/dev/null; then
+    out=$(jq -nc --argjson issues "$issues" --argjson waive "${waive_json:-[]}" '{issues: $issues, waive: $waive}' | python3 "$guard" guard)
+  fi
+  if [[ -z "$out" ]]; then
+    echo "  ⚠ review guard unavailable ($guard): every finding blocks" >&2
+    print -r -- "$issues"
+    return 0
+  fi
+  jq -r '.dropped[] | "  (dropped, \(.why): \(.file): \((.issue // "") | tostring | .[0:100]))"' <<<"$out" >&2
+  jq -r '.advisory[] | "  🟡 advisory, does not block (\(.why)): \(.file): \(.issue)"' <<<"$out" >&2
+  jq -r '.waived[] | "  ⚪ waived \(.fingerprint): \(.file): \(.issue)"' <<<"$out" >&2
+  [[ -n "${GPA_WAIVED_FILE:-}" ]] && jq -r '.waived[].fingerprint' <<<"$out" > "$GPA_WAIVED_FILE"
+
+  local blocking="[]" n i item reply rc verdict
+  n=$(jq '.blocking | length' <<<"$out")
+  for (( i = 0; i < n; i++ )); do
+    item=$(jq -c ".blocking[$i]" <<<"$out")
+    echo "  Confirming finding $((i + 1)) of $n ($(jq -r '.file' <<<"$item"))..." >&2
+    reply=$(print -r -- "A code reviewer reported the problem below about one line of a change. Decide whether it is real.
+
+File: $(jq -r '.file' <<<"$item")
+Reported problem ($(jq -r '.category' <<<"$item")): $(jq -r '.issue' <<<"$item")
+The line it is about: $(jq -r '.evidence' <<<"$item")
+
+The file around that line (the line is marked with >):
+$(jq -r '.context' <<<"$item")
+
+Answer CONFIRMED only if this line, as written and in this context, really has that problem and it would cause a
+security hole, data loss or broken code. Answer REJECTED if the report is wrong, if the surrounding code or a comment
+already handles it, or if it is a matter of style or preference.
+Output ONLY a JSON array with one object and nothing else: [{\"verdict\": \"CONFIRMED\" or \"REJECTED\", \"reason\": \"one sentence\"}]" | _run_ai_direct "sonnet" 2>/dev/null)
+    rc=$?
+    verdict=$(jq -r '(if type == "array" then .[0] else . end) | .verdict // empty' <<<"$reply" 2>/dev/null)
+    if [[ $rc -eq 0 && "${verdict:u}" == "REJECTED" ]]; then
+      echo "  🟡 not confirmed on a second look, now advisory: $(jq -r '"\(.file): \(.issue)"' <<<"$item") -- $(jq -r '(if type == "array" then .[0] else . end) | .reason // ""' <<<"$reply" 2>/dev/null)" >&2
+    else
+      [[ "${verdict:u}" == "CONFIRMED" ]] || echo "  ⚠ the second look gave no verdict, so this finding keeps blocking" >&2
+      blocking=$(jq -c --argjson it "$item" '. + [$it | del(.context)]' <<<"$blocking")
+    fi
+  done
+  jq -nc --argjson b "$blocking" '{blocking: $b}' | python3 "$guard" settle >/dev/null
+  print -r -- "$blocking"
 }
 
 # Helper function: Launch aidev inline with all issues as context
@@ -2356,9 +2447,11 @@ function _prompt_ai_error_action() {
 # Exit code: 0 committed and pushed; non-zero with the findings printed (see _gpa_impl --auto).
 function gpa() {
   local -a rest
-  local msg="" body="" json=0 noreview=""
+  local msg="" body="" json=0 noreview="" waive="" reason=""
   while (( $# )); do
     case "$1" in
+      --waive) waive="${waive:+$waive }$2"; shift 2 ;;
+      --reason) reason="$2"; shift 2 ;;
       -m|--message) msg="$2"; shift 2 ;;
       -d|--description|--body) body="$2"; shift 2 ;;
       --json) json=1; shift ;;
@@ -2368,6 +2461,21 @@ function gpa() {
   done
   local -x AI_COMMIT_MESSAGE="${msg:-${AI_COMMIT_MESSAGE:-}}" AI_COMMIT_BODY="${body:-${AI_COMMIT_BODY:-}}"
   local -x GPA_NO_REVIEW="${noreview:-${GPA_NO_REVIEW:-}}"
+  # --waive <fingerprint> --reason "<why>": let one confirmed review finding through. The fingerprint is printed with
+  # the finding. It is a person's decision, so it is refused together with --auto (the AI-agent interface), and it is
+  # written into the commit message as a "Review-waived:" line, which is why it needs -m.
+  local -x GPA_WAIVE="" GPA_WAIVE_REASON="" GPA_WAIVED_FILE=""
+  if [[ -n "$waive" ]]; then
+    if (( ${rest[(Ie)--auto]} )); then
+      echo "✗ --waive is not available with --auto: a waiver is a person's decision. Report the finding to the user." >&2
+      return 2
+    fi
+    if [[ -z "$reason" || -z "$msg" ]]; then
+      echo "✗ --waive needs --reason \"<why>\" and -m \"<commit subject>\" (the waiver is recorded in the commit message)." >&2
+      return 2
+    fi
+    GPA_WAIVE="$waive" GPA_WAIVE_REASON="$reason" GPA_WAIVED_FILE=$(mktemp)
+  fi
   if (( ! json )); then
     _gpa_impl "${rest[@]}"
     return $?
@@ -3148,6 +3256,18 @@ function _gpa_impl() {
   
   echo "═══════════════════════════════════════════════════════════"
   
+  # Only findings that pass the guard (quoted added line, blocking category, not already reviewed, confirmed on a
+  # second look) may block; everything else was reported above as dropped or advisory. See _gpa_guard_issues.
+  if [ "$ai_review_failed" != true ]; then
+    all_issues=$(_gpa_guard_issues "$all_issues")
+    if [[ -s "${GPA_WAIVED_FILE:-}" ]]; then
+      local waived_fp
+      while read -r waived_fp; do
+        AI_COMMIT_BODY="${AI_COMMIT_BODY:+$AI_COMMIT_BODY$'\n\n'}Review-waived: $waived_fp ${GPA_WAIVE_REASON:-}"
+      done < "$GPA_WAIVED_FILE"
+    fi
+  fi
+
   # Count total issues found
   local total_issue_count=$(echo "$all_issues" | jq 'length')
   
@@ -3157,7 +3277,7 @@ function _gpa_impl() {
     if [ "$ai_review_failed" = true ]; then
       echo "ℹ Proceeding without AI review"
     else
-      echo "✓ Code review complete - no critical issues or warnings found"
+      echo "✓ Code review complete - no blocking findings"
     fi
 
     if $auto_mode; then
@@ -3218,7 +3338,9 @@ function _gpa_impl() {
       echo ""
       echo "$all_issues" | jq -r '.[] | "─────────────────────────────────────────────\nFile: \(.file)\nSeverity: \(.severity)\nIssue: \(.issue)\nRecommendation: \(.recommendation)\n"'
       echo "─────────────────────────────────────────────"
-      echo "Fix these, then re-run 'gpa --auto' (changes remain staged)."
+      print -r -- "$all_issues" | jq -r '.[] | select(.fingerprint) | "  \(.fingerprint)  \(.category)  \(.file): \(.evidence)"'
+      echo "Fix these, then re-run 'gpa --auto' (changes remain staged). A finding you believe is wrong cannot be"
+      echo "skipped from --auto: report it to the user, who can run gpa --waive <fingerprint> --reason '...' -m '...'."
       rm -f /tmp/gpa_secrets_verdict.txt
       return 3
     fi

@@ -7,6 +7,10 @@ export HOME=${HOME:-/Users/havoc}
 LUMO_TAMER_DIR=${LUMO_TAMER_DIR:-$HOME/lumo-tamer}
 LUMO_TAMER_PORT=${LUMO_TAMER_PORT:-3003}
 LUMO_PLANNER_PORT=${LUMO_PLANNER_PORT:-8765}
+# LUMO_LAN=1 (the desktop, set by nix-modules/macos/lumo.nix): tamer and the planner serve the whole network and their
+# keys are shared through Doppler. Anything else (the laptop): both listen on 127.0.0.1 only and the host keeps its
+# own keys and its own Proton sign-in; nothing about them is read from or written to Doppler.
+LUMO_LAN=${LUMO_LAN:-0}
 LUMO_DOPPLER_PROJECT=${LUMO_DOPPLER_PROJECT:-FullHavocJosh}
 LUMO_DOPPLER_CONFIG=${LUMO_DOPPLER_CONFIG:-root_macmini}
 
@@ -14,6 +18,12 @@ LUMO_DOPPLER_CONFIG=${LUMO_DOPPLER_CONFIG:-root_macmini}
 lumo_secret() {
   doppler secrets get "$1" --project "$LUMO_DOPPLER_PROJECT" --config "$LUMO_DOPPLER_CONFIG" \
     --plain 2>/dev/null
+}
+
+# lumo_key_secret NAME -> like lumo_secret, but only on the LAN host. A loopback-only host must not pick up the
+# desktop's server, planner or vault keys, so there it always prints nothing and the local files are used.
+lumo_key_secret() {
+  [[ $LUMO_LAN == 1 ]] && lumo_secret "$1"
 }
 
 # lumo_tamer_key -> the apiKey tamer's config.yaml serves with

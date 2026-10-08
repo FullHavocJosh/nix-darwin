@@ -6,6 +6,9 @@
 #   lumoreauth           sign in, hand over, restart tamer, verify
 #   lumoreauth --check   everything except the handover: Chromium starts, the tunnel carries its debug port
 #                        to the Mini. Changes nothing on the Mini.
+#   lumoauth             (this script with --local) sign in and give the session to THIS machine's own tamer, the
+#                        loopback-only one a laptop runs. No ssh, nothing on the Mini changes. Each machine gets its
+#                        own sign-in this way: sign in again for the Mini with lumoreauth, never share one session.
 #
 # Why a throwaway profile: lumo-tamer's docs say not to reuse the same tokens on two machines. The session
 # handed to the Mini must not stay in a browser that could refresh it, so the profile is deleted on exit.
@@ -16,6 +19,7 @@ CHROMIUM=${LUMO_CHROMIUM:-/Applications/Chromium.app/Contents/MacOS/Chromium}
 LOCAL_PORT=${LUMO_CDP_PORT:-9222}
 REMOTE_PORT=${LUMO_CDP_REMOTE_PORT:-19222}
 CHECK=0; [[ ${1:-} == --check ]] && CHECK=1
+LOCAL=0; [[ ${1:-} == --local ]] && LOCAL=1
 
 SSH=(ssh -i "$SSH_KEY" -o BatchMode=yes -o ConnectTimeout=8 "$MINI_USER@$MINI")
 PROFILE=$(mktemp -d "${TMPDIR:-/tmp}/lumo-reauth.XXXXXX") || exit 1
@@ -29,7 +33,7 @@ die() { print -u2 -r -- "lumoreauth: $*"; exit 1; }
 
 [[ -x $CHROMIUM ]] || die "Chromium not found at $CHROMIUM (set LUMO_CHROMIUM)"
 lsof -nP -iTCP:$LOCAL_PORT -sTCP:LISTEN >/dev/null 2>&1 && die "port $LOCAL_PORT is already in use; quit any Chromium started with --remote-debugging-port"
-"${SSH[@]}" true 2>/dev/null || die "cannot ssh to $MINI_USER@$MINI with $SSH_KEY"
+(( LOCAL )) || "${SSH[@]}" true 2>/dev/null || die "cannot ssh to $MINI_USER@$MINI with $SSH_KEY"
 
 print "Starting Chromium with a temporary profile..."
 "$CHROMIUM" --remote-debugging-port=$LOCAL_PORT --remote-debugging-address=127.0.0.1 --user-data-dir="$PROFILE" \
@@ -48,6 +52,17 @@ fi
 
 print "In the Chromium window, sign in to Lumo (password, 2FA, CAPTCHA) until you see your Lumo chat."
 read -r "?Press Enter when Lumo shows the chat signed in (Ctrl-C to abort): "
+
+if (( LOCAL )); then
+  print "Handing the session to this machine's tamer..."
+  (export PATH=/opt/homebrew/bin:$PATH; cd ~/lumo-tamer && echo http://127.0.0.1:$LOCAL_PORT | tamer auth browser) \
+    || die "tamer auth browser failed; the old session was left as it was"
+  print "Restarting tamer so it loads the new session (launchd starts it again)..."
+  pkill -f "tamer server"; sleep 15
+  (export PATH=/opt/homebrew/bin:$PATH; cd ~/lumo-tamer && tamer auth status 2>&1 | grep -E "Summary|valid|attention|expiresIn")
+  print "Done. This browser profile is deleted on exit; do not sign in to Lumo in it again."
+  exit 0
+fi
 
 print "Handing the session to tamer on $MINI..."
 "${SSH[@]}" "${TUNNEL[@]}" "export PATH=/opt/homebrew/bin:\$PATH; cd ~/lumo-tamer && echo http://127.0.0.1:$REMOTE_PORT | tamer auth browser" \

@@ -475,6 +475,15 @@ function _run_aider_local() {
   if _llamacpp_profile_load && (( lms_max_tokens > LLAMA_CTX_SIZE / 8 )); then
     lms_max_tokens=$(( LLAMA_CTX_SIZE / 8 ))
   fi
+  # Review, judge and secrets calls decide whether a commit goes through, so their sampling is pinned: the same
+  # prompt gives the same findings instead of a new set on every run. Commit messages and plans keep the defaults.
+  local lms_temperature="" lms_seed=""
+  case "$model_alias" in
+    local-coder-review|local-coder-judge|local-coder-secrets)
+      lms_temperature=$'\n    temperature: 0'
+      lms_seed=$'\n      seed: 20261008'
+      ;;
+  esac
   tmp_settings=$(mktemp "${TMPDIR:-/tmp}/aider-llama-settings.XXXXXX") || {
     echo "Error: could not create aider settings file" >&2
     return 1
@@ -483,8 +492,8 @@ function _run_aider_local() {
 - name: openai/${lms_model}
   edit_format: ask
   extra_params:
-    max_tokens: ${lms_max_tokens}
-    extra_body:
+    max_tokens: ${lms_max_tokens}${lms_temperature}
+    extra_body:${lms_seed}
       chat_template_kwargs:
         enable_thinking: false
 EOF
@@ -939,11 +948,19 @@ function lumoplan_func() {
   pi --no-tools --no-extensions --no-skills --provider lumo-planner --model lumo-planner "$@"
 }
 
-# Tier 0 probe: prints "lumo" when the Lumo planner proxy on MacMiniM1 answers /v1/models with its key within
-# 4 s, otherwise "local". AISTACK_TIER0=local forces local; AISTACK_LUMO_URL / AISTACK_LUMO_KEY override the
-# endpoint and key (the key otherwise comes from Doppler, as in pi's lumo-planner provider).
+# Tier 0 probe: prints "lumo" when a Lumo planner proxy answers /v1/models, otherwise "local". This machine's own
+# proxy (127.0.0.1:8765, no key, lumo.nix) is tried first, then the one on MacMiniM1 with its key, 4 s at most.
+# AISTACK_TIER0=local forces local; AISTACK_LUMO_URL / AISTACK_LUMO_KEY override the endpoint and key and skip the
+# loopback try (the key otherwise comes from Doppler, as in pi's lumo-planner provider).
 function _aistack_tier0() {
   [[ "${AISTACK_TIER0:-auto}" == "local" ]] && { echo local; return 0; }
+  # Only an HTTP 200 counts. Anything else (nothing listening, a timeout, 401 from a proxy that wants a key, as on
+  # the Mini itself) leaves local_code at something other than 200 and the remote probe below decides.
+  local local_code=000
+  if [[ -z "${AISTACK_LUMO_URL:-}" ]]; then
+    local_code=$(curl -s -m 2 -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/v1/models 2>/dev/null) || local_code=000
+  fi
+  [[ "$local_code" == "200" ]] && { echo lumo; return 0; }
   local url="${AISTACK_LUMO_URL:-http://macminim1.rollet.family:8765/v1}" key="${AISTACK_LUMO_KEY:-}" code
   local -a auth
   if [[ -z "$key" ]] && command -v doppler >/dev/null; then

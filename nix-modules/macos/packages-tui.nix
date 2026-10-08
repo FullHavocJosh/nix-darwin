@@ -316,6 +316,7 @@ in
       "ripgrep"
       "ruff"
       "rust"
+      "shellcheck" # gpa lints sh/bash scripts with it (errors only)
       "rust-analyzer"
       "shfmt"
       "solargraph"

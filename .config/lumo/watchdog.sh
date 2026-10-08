@@ -43,7 +43,7 @@ notify() { # title, body, priority
     -d "$2" "$url" || log "ntfy post failed"
 }
 
-api_key=$(lumo_secret LUMO_TAMER_API_KEY); [[ -z $api_key ]] && api_key=$(lumo_tamer_key)
+api_key=$(lumo_key_secret LUMO_TAMER_API_KEY); [[ -z $api_key ]] && api_key=$(lumo_tamer_key)
 base=${LUMO_TAMER_URL:-http://127.0.0.1:$LUMO_TAMER_PORT/v1}
 
 check() { # echoes "ok" or a failure reason
@@ -96,7 +96,8 @@ fi
 
 if [[ $prev == ok || $now -ge $(( $(state_get last_alert 0) + ALERT_EVERY )) ]]; then
   case $result in
-    auth|probe) hint="Lumo sign-in expired or was revoked. On your MacBook run: lumoreauth (opens Chromium, you sign in once, it hands the session to this Mini and restarts tamer). Interactive because of Proton CAPTCHA/2FA." ;;
+    auth|probe) hint="Lumo sign-in expired or was revoked. On your MacBook run: lumoreauth (opens Chromium, you sign in once, it hands the session to this Mini and restarts tamer). Interactive because of Proton CAPTCHA/2FA."
+                [[ $LUMO_LAN != 1 ]] && hint="Lumo sign-in expired or was revoked on $(hostname -s). Run there: lumoauth (opens Chromium, you sign in once, the local tamer takes the session and restarts)." ;;
     server)     hint="tamer server is not answering on $base. Check ~/Library/Logs/lumo-tamer.log and 'launchctl print system/org.nixos.lumo-tamer'." ;;
   esac
   notify "Lumo tamer: $result failing" "$hint" high

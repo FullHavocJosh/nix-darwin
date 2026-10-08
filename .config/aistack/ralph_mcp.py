@@ -642,6 +642,28 @@ def lumo_key():
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
+# this machine's own planner proxy, and the always-on LAN host's (AISTACK_LUMO_MINI_URL moves the latter)
+LUMO_LOCAL_URL = "http://127.0.0.1:8765/v1"
+LUMO_MINI_URL = os.environ.get("AISTACK_LUMO_MINI_URL", "http://macminim1.rollet.family:8765/v1").rstrip("/")
+
+
+def lumo_endpoints():
+    """[(base url, needs key)] to try in order. AISTACK_LUMO_URL pins one. Otherwise this machine's own planner proxy
+    comes first when it answers (loopback only, no key: nix-modules/macos/lumo.nix), then the one on MacMiniM1."""
+    import urllib.request
+    pinned = os.environ.get("AISTACK_LUMO_URL")
+    if pinned:
+        return [(pinned.rstrip("/"), True)]
+    out = []
+    try:
+        with urllib.request.urlopen(LUMO_LOCAL_URL + "/models", timeout=2) as r:
+            if r.status == 200:
+                out.append((LUMO_LOCAL_URL, False))
+    except Exception:
+        pass
+    return out + [(LUMO_MINI_URL, True)]
+
+
 def lumo_readable(project, rel):
     """(text, None) or (None, reason) for a file inside project that may be sent to Lumo."""
     import fnmatch
@@ -680,19 +702,22 @@ def tool_lumo_consult(a):
         else:
             total += len(text); sent.append(rel); blocks.append(f"\n--- FILE: {rel} ---\n{text}")
     prompt = LUMO_PROMPT + request + ("\n\nPROJECT FILES:" + "".join(blocks) if blocks else "")
-    url = os.environ.get("AISTACK_LUMO_URL", "http://macminim1.rollet.family:8765/v1").rstrip("/") + "/chat/completions"
-    key = lumo_key()
-    headers = {"Content-Type": "application/json", "X-Lumo-No-Fetch": "1"}
-    if key:
-        headers["Authorization"] = f"Bearer {key}"
     body = json.dumps({"model": "lumo-planner", "messages": [{"role": "user", "content": prompt}]}).encode()
-    try:
-        with urllib.request.urlopen(urllib.request.Request(url, body, headers), timeout=180) as r:
-            plan = json.load(r)["choices"][0]["message"]["content"]
-    except Exception as e:
-        return {"ok": False, "problem": f"Lumo is not available ({type(e).__name__}: {e}); plan without it",
-                "files_sent": sent, "files_skipped": skipped}
-    return {"ok": True, "plan": plan, "files_sent": sent, "files_skipped": skipped}
+    errors = []
+    for base, needs_key in lumo_endpoints():
+        headers = {"Content-Type": "application/json", "X-Lumo-No-Fetch": "1"}
+        key = lumo_key() if needs_key else ""
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
+        try:
+            with urllib.request.urlopen(urllib.request.Request(base + "/chat/completions", body, headers), timeout=180) as r:
+                plan = json.load(r)["choices"][0]["message"]["content"]
+        except Exception as e:
+            errors.append(f"{base}: {type(e).__name__}: {e}")
+            continue
+        return {"ok": True, "plan": plan, "files_sent": sent, "files_skipped": skipped, "lumo": base}
+    return {"ok": False, "problem": f"Lumo is not available ({'; '.join(errors)}); plan without it",
+            "files_sent": sent, "files_skipped": skipped}
 
 
 S = lambda props, req: {"type": "object", "properties": props, "required": req}
