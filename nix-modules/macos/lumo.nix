@@ -43,13 +43,14 @@ in
   };
 
   config = {
-    # Tier 0 of aistack / the researcher in aidev: Lumo (Proton) as a cloud, tool-less assistant, on every personal
-    # Mac. Three LaunchDaemons running as havoc (no login needed):
+    # Lumo (Proton) for aidev, on every personal Mac. Two LaunchDaemons running as havoc (no login needed):
     #   lumo-tamer    lumo-tamer's OpenAI-compatible server for Lumo (port 3003, API key protected)
-    #   lumo-planner  proxy in front of it that lets Lumo ask for repo files (port 8765)
     #   lumo-watchdog every 5 min: auth/server health, ntfy alert, optional headless re-auth
-    # Which interfaces they listen on and where their keys come from depends on local.lumo.lan (above).
+    # Which interfaces tamer listens on and where its keys come from depends on local.lumo.lan (above).
     # Interactive Proton login cannot be declarative: sign each host in once (README).
+    # There used to be a third daemon, lumo-planner (port 8765), a proxy that answered Lumo's requests for files from
+    # one fixed repository. That loop now runs inside aidev against whatever project it is started in
+    # (.config/aistack/ralph_mcp.py, with .config/lumo/lumo_planner.py as a library), so the daemon is gone.
 
     # Only the optional headless re-auth in watchdog.sh uses it (the laptop gets it from packages-gui.nix).
     homebrew.casks = lib.mkIf cfg.lan [ "ungoogled-chromium" ];
@@ -73,25 +74,22 @@ in
         fi
       ''
       + lib.optionalString (!cfg.lan) ''
-        echo "[lumo] loopback only on this host: tamer and the planner bind 127.0.0.1, no firewall rule is added"
+        echo "[lumo] loopback only on this host: tamer binds 127.0.0.1, no firewall rule is added"
       ''
       + lib.optionalString cfg.lan ''
 
-        # The macOS application firewall (enabled on the Mini) drops inbound connections to binaries it has not been
-        # told to allow, and Homebrew's Python is not on its list, so the planner answered on loopback only. Allow
-        # exactly the interpreter the planner runs under. Redone on every activation: the Cellar path changes when
-        # Homebrew upgrades Python. tamer's node is allowed separately below.
+        # Homebrew's Python used to be allowed through the application firewall for the lumo-planner daemon, which no
+        # longer exists. Take the rule away again; this does nothing once it is gone.
         py_base=$(sudo -u havoc HOME=${home} /opt/homebrew/bin/python3 -c 'import sys; print(sys.base_prefix)' 2>/dev/null)
         py_app=$(realpath "$py_base/Resources/Python.app/Contents/MacOS/Python" 2>/dev/null)
-        if [ -n "$py_app" ] && [ -x "$py_app" ]; then
-          /usr/libexec/ApplicationFirewall/socketfilterfw --add "$py_app" >/dev/null
-          /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$py_app" >/dev/null
-          echo "[lumo-planner] application firewall: incoming connections allowed for $py_app"
-        else
-          echo "[lumo-planner] WARNING: Homebrew Python.app not found, firewall rule not added" >&2
+        if [ -n "$py_app" ] && /usr/libexec/ApplicationFirewall/socketfilterfw --listapps | grep -qF "$py_app"; then
+          /usr/libexec/ApplicationFirewall/socketfilterfw --remove "$py_app" >/dev/null
+          echo "[lumo] application firewall: removed the incoming-connections rule for $py_app (the planner daemon is gone)"
         fi
 
-        # tamer (node) as well, so the MacBook can use the Mini's tamer directly (pi provider "lumo"). tamer's own
+        # The macOS application firewall (enabled on the Mini) drops inbound connections to binaries it has not been
+        # told to allow. Allow exactly tamer's node, so other machines can use the Mini's tamer (aidev's second
+        # choice, the public gateway on the Hetzner cluster, and other home services). tamer's own
         # API key (Doppler LUMO_TAMER_API_KEY) is the only protection, so this is LAN only. Any other node program
         # that listens on the Mini becomes reachable too; none does today.
         node_bin=$(realpath "$(sudo -u havoc HOME=${home} /opt/homebrew/bin/node -p 'process.execPath' 2>/dev/null)" 2>/dev/null)
@@ -106,11 +104,6 @@ in
     );
 
     launchd.daemons.lumo-tamer.serviceConfig = daemon "run-tamer.sh" "lumo-tamer.log" // {
-      KeepAlive = true;
-      ThrottleInterval = 10;
-    };
-
-    launchd.daemons.lumo-planner.serviceConfig = daemon "run-planner.sh" "lumo-planner.log" // {
       KeepAlive = true;
       ThrottleInterval = 10;
     };

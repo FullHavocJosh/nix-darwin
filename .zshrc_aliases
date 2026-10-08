@@ -613,7 +613,6 @@ alias gp='git pull && git submodule update --init --recursive'
 
 alias aishow='aiselect --show'
 alias aistack='aidev'   # the two stacks were merged; aidev is the command
-alias lumoplan='lumoplan_func'
 alias lumoreauth='zsh ~/.config/lumo/reauth.sh'
 alias lumoauth='zsh ~/.config/lumo/reauth.sh --local'
 

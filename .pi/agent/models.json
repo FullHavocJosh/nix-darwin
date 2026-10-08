@@ -4,19 +4,27 @@
       "baseUrl": "http://127.0.0.1:8080/v1",
       "api": "openai-completions",
       "apiKey": "sk-local",
-      "models": [{ "id": "qwen/qwen3.5-9b" }]
+      "models": [
+        {
+          "id": "qwen/qwen3.5-9b"
+        }
+      ]
     },
     "lumo": {
       "baseUrl": "http://macminim1.rollet.family:3003/v1",
       "api": "openai-completions",
       "apiKey": "!doppler secrets get LUMO_TAMER_API_KEY --project FullHavocJosh --config root_macmini --plain",
-      "models": [{ "id": "lumo" }, { "id": "lumo-lite" }, { "id": "lumo-max" }]
-    },
-    "lumo-planner": {
-      "baseUrl": "http://macminim1.rollet.family:8765/v1",
-      "api": "openai-completions",
-      "apiKey": "!doppler secrets get LUMO_PLANNER_API_KEY --project FullHavocJosh --config root_macmini --plain",
-      "models": [{ "id": "lumo-planner" }]
+      "models": [
+        {
+          "id": "lumo"
+        },
+        {
+          "id": "lumo-lite"
+        },
+        {
+          "id": "lumo-max"
+        }
+      ]
     }
   }
 }
