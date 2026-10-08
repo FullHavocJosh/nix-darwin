@@ -173,11 +173,17 @@ reset(); r = plan(files=["lib/big.py"])
 seen = open(SEEN).read()
 check("still whole after being asked: only its first 120 lines are sent, and the plan text says so", r.get("ok") is True and "120: line120 = 120" in seen
       and "121: line121" not in seen and "Sent only in part" in r.get("present", ""), r.get("present", "")[-300:])
+mcp._RANGES_ASKED.clear(); reset(); n = calls()
+r = plan(files=["lib/big.py:1-3900"])
+check("a range covering nearly the whole long file is refused like the whole file", r.get("files_need_ranges") == {"lib/big.py:1-3900": 4000} and calls() == n, str(r)[:200])
 reset(); r = plan(files=["lib/big.py:1-900"])
 seen = open(SEEN).read()
 check("a range over 200 lines is cut to 200", "200: line200 = 200" in seen and "201: line201" not in seen and "lib/big.py:1-200" in r.get("present", ""))
 open(PROJECT + "/lib/wide.py", "w").write("".join("x = '" + "y" * 150 + "'\n" for _ in range(110)))     # 110 lines, about 17,000 characters
-reset(); r = plan(files=["lib/wide.py", "lib/wide.py:1-110"])
+reset(); r = plan(files=["lib/wide.py", "lib/small.py"]); seen = open(SEEN).read()
+check("one entry is cut at the per-file limit, so the next one still fits", "[cut here: this entry was over the per-file limit]" in seen and "def small():" in seen
+      and "Sent only in part" in r.get("present", ""), r.get("present", "")[-300:])
+reset(); r = plan(files=["lib/wide.py", "lib/wide.py:1-50", "lib/wide.py:40-90", "lib/wide.py:60-110"])
 check("the total sent to Claude is capped at 24,000 characters", mcp.PLAN_FILES_TOTAL_MAX == 24000 and "total size limit reached" in r.get("present", ""), r.get("present", "")[-300:])
 os.remove(PROJECT + "/lib/wide.py")
 

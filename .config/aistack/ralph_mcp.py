@@ -377,7 +377,8 @@ RESEARCH BRIEF:
 NEED_NOTE = """If that is not enough to write exact tasks, do not explore further and do not guess. Reply with this INSTEAD of a plan, and
 you will be called once more with the answers:
 {"need": {"from_local_model": ["a specific question, or a file and what to look for in it"], "for_lumo": "what its draft should cover or correct, or an empty string"}}
-Ask only for what would change the plan, at most 6 questions."""
+Ask only for what would change the plan, at most 6 questions. If a file the plan depends on is not below, ask for it; do not plan
+around it."""
 FINAL_NOTE = """This is the final attempt: you asked for more before, and the answers are in the brief and the files below. Write the plan
 now. Put anything still unknown in notes. Do not ask again."""
 REVISE_PROMPT = """A planner reviewed your draft build plan and asks for this before it can use it:
@@ -394,6 +395,9 @@ YOUR DRAFT:
 FILE_WHOLE_MAX_LINES = int(os.environ.get("AISTACK_PLAN_WHOLE_FILE_LINES", "120"))
 RANGE_MAX_LINES = int(os.environ.get("AISTACK_PLAN_RANGE_LINES", "200"))
 PLAN_FILES_TOTAL_MAX = int(os.environ.get("AISTACK_PLAN_FILES_CHARS", "24000"))
+# One entry may not use up the whole allowance: on the first measured run two long documents came first and the one
+# workflow file the plan was about no longer fitted.
+PLAN_FILE_ENTRY_MAX = int(os.environ.get("AISTACK_PLAN_ENTRY_CHARS", "7000"))
 _RANGES_ASKED = set()
 
 
@@ -479,15 +483,17 @@ def tool_plan(a):
     specs = [str(f) for f in (a.get("files") or [])][:LUMO_FILES_MAX]
     too_long = {}
     for spec in specs:
-        if not re.search(r":\d+-\d+$", spec):
-            n = file_line_count(project, spec)
-            if n and n > FILE_WHOLE_MAX_LINES:
-                too_long[spec] = n
+        m = re.search(r":(\d+)-(\d+)$", spec)
+        n = file_line_count(project, spec[:m.start()] if m else spec)
+        # a "range" that is nearly the whole of a long file is the whole file (README.md:1-197 was sent that way)
+        whole = not m or (n and int(m.group(2)) - int(m.group(1)) + 1 >= 0.8 * n)
+        if n and n > FILE_WHOLE_MAX_LINES and whole:
+            too_long[spec] = n
     if too_long and project not in _RANGES_ASKED:
         _RANGES_ASKED.add(project)
         return {"ok": False, "billed_calls": 0, "files_need_ranges": too_long,
                 "problem": f"Nothing was sent yet. These files are longer than {FILE_WHOLE_MAX_LINES} lines (line counts given) and must be "
-                           "sent as the lines that matter, not whole.",
+                           "sent as the lines that matter, not whole. A range that covers nearly the whole file counts as whole.",
                 "next": f"Call ralph_plan again with the same request and brief, giving each of these files as path:START-END "
                         f"(at most {RANGE_MAX_LINES} lines per range; the same file may appear twice with different ranges). Use the line "
                         "numbers you saw in repo_read and repo_grep. Do not tell the user about this step."}
@@ -533,9 +539,12 @@ def tool_plan(a):
         if m and int(m.group(2)) - int(m.group(1)) + 1 > RANGE_MAX_LINES:
             lo = int(m.group(1))
             spec = f"{spec[:m.start()]}:{lo}-{lo + RANGE_MAX_LINES - 1}"; trimmed.append(spec)
-        elif not m and spec in too_long:        # still whole after being asked for a range: its head only
-            spec = f"{spec}:1-{FILE_WHOLE_MAX_LINES}"; trimmed.append(spec)
+        elif spec in too_long:                  # still (nearly) whole after being asked for a range: its head only
+            spec = f"{spec[:m.start()] if m else spec}:1-{FILE_WHOLE_MAX_LINES}"; trimmed.append(spec)
         _, text, why = plan_file(project, spec)
+        if text and len(text) > PLAN_FILE_ENTRY_MAX:
+            text = text[:text.rfind("\n", 0, PLAN_FILE_ENTRY_MAX) + 1] + "[cut here: this entry was over the per-file limit]\n"
+            trimmed.append(spec)
         if text is None:
             skipped[spec] = why
         elif total + len(text) > PLAN_FILES_TOTAL_MAX:

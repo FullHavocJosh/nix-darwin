@@ -57,8 +57,10 @@ Tell the user in one line: "Handing this to Lumo and Claude Code for the plan (C
   Do not put your own opinions or recommendations in the brief.
 - files: up to 12 entries, each the LINES a planner must see, written "path/to/file.py:40-120" (at most 200 lines per
   entry; the same file may appear twice with different ranges). repo_read and repo_grep show the line numbers. Send a
-  whole file only when it is under 120 lines. Claude is billed for every line, so send what the plan depends on and
-  nothing else. Do not paste file contents into the brief; the tool inlines the files.
+  whole file only when it is under 120 lines; a range covering nearly all of a longer file is refused like the whole
+  file. Put the files the request is about FIRST (the code or config to change), documentation last: entries are
+  taken in order until the size limit, and each entry is cut at about 7000 characters. Claude is billed for every
+  line, so send what the plan depends on and nothing else. Do not paste file contents into the brief; the tool inlines the files.
 
 What comes back:
 
