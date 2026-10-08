@@ -46,17 +46,16 @@ reply(GOOD)
 r = plan(files=["lib/small.py", "lib/big.py:10-12", "lib/big.py", ".env", "../outside.py"], draft="T1: do it")
 check("ok with a plan_hash", r.get("ok") is True and r.get("plan_hash"), str(r)[:300])
 check("one billed call reported", r.get("billed_calls") == 1 and calls() == 1)
-check("tasks and notes returned", r.get("tasks", [{}])[0].get("id") == "T1" and r.get("notes") == ["assumed python3"])
+check("the plan text has the task and the note, and nothing is returned as data next to it",
+      "T1  Write it" in r.get("present", "") and "assumed python3" in r.get("present", "") and "tasks" not in r and "notes" not in r, str(sorted(r))[:200])
+check("the plan text is saved as PLAN.txt", open(STATE + "/plan/PLAN.txt").read().strip() == r.get("present", "").strip())
 prd, verify = json.load(open(STATE + "/plan/prd.json")), json.load(open(STATE + "/plan/verify.json"))
 check("passes is forced to false", prd["userStories"][0]["passes"] is False)
 check("a single verify command becomes a list", verify["T1"] == ["python3 -m unittest tests.test_thing"])
 check("the saved plan validates", mcp.tool_validate({"project_dir": PROJECT}).get("plan_hash") == r.get("plan_hash"))
 check("ralph_run's review gate is satisfied", json.load(open(STATE + "/plan-review.json")).get("verdict") == "PLANNED")
-check("whole file and line range sent", r.get("files_sent") == ["lib/small.py", "lib/big.py:10-12"], str(r.get("files_sent")))
-sk = r.get("files_skipped", {})
-check("oversized whole file skipped", "larger than" in sk.get("lib/big.py", ""), str(sk))
-check("secret file refused", sk.get(".env") == "denied by policy", str(sk))
-check("path outside the project refused", sk.get("../outside.py") == "outside the project", str(sk))
+pt0 = r.get("present", "")
+check("skipped files are named in the plan text with the reason", all(x in pt0 for x in ("lib/big.py (larger than", ".env (denied by policy)", "../outside.py (outside the project)")), pt0[-500:])
 seen = open(SEEN).read()
 check("prompt has request, brief and draft", all(x in seen for x in ("add a thing", "small() lives in lib/small.py", "T1: do it")))
 check("prompt has the file and the numbered range", "def small():" in seen and "10: line10 = 10" in seen and "12: line12 = 12" in seen)
@@ -84,7 +83,7 @@ check("no JSON: no plan record is written", not os.path.exists(STATE + "/plan-re
 check("empty request refused without a call", mcp.tool_plan({"project_dir": PROJECT, "request": " ", "brief": "x"}).get("ok") is False and calls() == n + 1)
 reset(); reply(GOOD)
 r = plan(brief="b" * 20000)
-check("an oversized brief is cut and reported", r.get("truncated") == ["brief"] and len(open(SEEN).read()) < 20000, str(r.get("truncated")))
+check("an oversized brief is cut and reported", "Cut to the size limit: brief." in r.get("present", "") and len(open(SEEN).read()) < 20000, r.get("present", "")[-300:])
 
 print("ralph_plan: Lumo is consulted by the bridge, not by the chat agent")
 asked = []
@@ -101,6 +100,29 @@ pt = r.get("present", "")
 check("the result carries the finished text for the user", all(x in pt for x in ("PLAN: Add a thing", "T1  Write it", "done when: thing() returns 2",
       "verify: python3 -m unittest tests.test_thing", "NOTES FROM CLAUDE:", "assumed python3", "Lumo: consulted", "say 'start'")), pt[:400])
 check("its draft reaches Claude and the result says so", "LUMO DRAFT: use kubeconform" in open(SEEN).read() and r.get("lumo", "").startswith("consulted"), str(r.get("lumo")))
+LONG = ("para one. " * 300 + "\n\n") * 18 + "WHOLE-MARKER"     # about 54,000 characters
+second = []
+def lumo_long(a, short="SHORT VERSION: " + "task with path lib/a.py. " * 40):
+    if a.get("raw_prompt"):
+        second.append(a["raw_prompt"]); return {"ok": True, "plan": short, "lumo": "x"}
+    return {"ok": True, "plan": LONG, "lumo": "x"}
+mcp.tool_lumo_consult = lumo_long
+reset(); r = plan(); seen = open(SEEN).read()
+check("a long draft goes back to Lumo once, in a fresh request that holds the whole draft", len(second) == 1 and "WHOLE-MARKER" in second[0]
+      and "at most 1200 words" in second[0], str(len(second)))
+check("Claude gets the short version, not the long one", "SHORT VERSION:" in seen and "WHOLE-MARKER" not in seen and len(seen) < 12000, str(len(seen)))
+check("the plan text says the draft was shortened, with both sizes", "shortened by Lumo from" in r.get("present", ""), r.get("present", "")[-300:])
+mcp.tool_lumo_consult = lambda a: {"ok": False, "problem": "timeout"} if a.get("raw_prompt") else {"ok": True, "plan": LONG, "lumo": "x"}
+reset(); r = plan(); seen = open(SEEN).read()
+check("when shortening fails the full draft (under 60000 characters) reaches Claude whole", mcp.PLAN_DRAFT_MAX == 60000 and "WHOLE-MARKER" in seen
+      and "could not be shortened" in r.get("present", "") and "Cut to the size limit" not in r.get("present", ""), r.get("present", "")[-300:])
+mcp.tool_lumo_consult = lambda a: {"ok": True, "plan": "short draft, one task", "lumo": "x"}
+second.clear(); reset(); plan()
+check("a short draft is not sent back", not second)
+mcp.tool_lumo_consult = lambda a: {"ok": False} if a.get("raw_prompt") else {"ok": True, "plan": ("para one. " * 300 + "\n\n") * 24 + "TAIL-MARKER"}
+reset(); r = plan(); seen = open(SEEN).read()
+check("a longer draft is cut at a paragraph, marked, and reported", "[the draft was longer and is cut here]" in seen and "TAIL-MARKER" not in seen
+      and "Cut to the size limit: draft." in r.get("present", ""), r.get("present", "")[-300:])
 mcp.tool_lumo_consult = lambda a: {"ok": False, "problem": "connection refused"}
 reset(); r = plan()
 check("a Lumo failure does not stop the plan", r.get("ok") is True and r.get("lumo", "").startswith("failed"), str(r.get("lumo")))
@@ -127,9 +149,33 @@ check("nothing outside the plan dir was written", sorted(os.listdir(PROJECT)) ==
 reset()
 check("without a plan it refuses", upd(task_id="T1", title="x").get("ok") is False)
 
+print("research tools: budget and guard")
+subprocess.run(["git", "init", "-q"], cwd=PROJECT); subprocess.run(["git", "add", "-A", "-f"], cwd=PROJECT)
+mcp.RESEARCH_CALLS = 0
+A = {"project_dir": PROJECT}
+r = mcp.tool_repo_tree(dict(A))
+check("repo_tree shows the project in one call", r.get("ok") and "lib/big.py" in r["entries"] and "lib/small.py" in r["entries"] and r["calls_left"] == mcp.RESEARCH_BUDGET - 1, str(r)[:300])
+check("repo_tree folds deeper directories", any(e.startswith("lib/") and "files below" in e for e in mcp.tool_repo_tree(dict(A, depth=1))["entries"]))
+r = mcp.tool_repo_tree(dict(A, path="ansible"))
+check("a path that does not exist is called a wrong guess", r.get("ok") is False and "your guess" in r.get("problem", ""))
+r = mcp.tool_repo_read(dict(A, path="lib/big.py", start=10, end=12))
+check("repo_read returns numbered lines, also from a big file", r.get("ok") and r["text"].splitlines() == ["10: line10 = 10", "11: line11 = 11", "12: line12 = 12"] and r["lines"] == "10-12 of 4000", str(r)[:200])
+check("repo_read caps one call at 400 lines", len(mcp.tool_repo_read(dict(A, path="lib/big.py"))["text"].splitlines()) == 400)
+check("repo_read refuses a secret file", mcp.tool_repo_read(dict(A, path=".env")).get("problem", "").endswith("denied by policy"))
+r = mcp.tool_repo_grep(dict(A, pattern="def small|hunter2"))
+check("repo_grep finds code and never returns a line from a secret file", r.get("ok") and any("lib/small.py:1:def small" in m for m in r["matches"]) and not any("hunter2" in m for m in r["matches"]), str(r)[:300])
+used = mcp.RESEARCH_CALLS
+for _ in range(mcp.RESEARCH_BUDGET - used): last = mcp.tool_repo_grep(dict(A, pattern="line1 "))
+check("the last allowed calls warn that ralph_plan is next", "then call ralph_plan" in last.get("note", "") and last["calls_left"] == 0, str(last)[:200])
+r = mcp.tool_repo_read(dict(A, path="lib/small.py"))
+check("past the budget every research tool refuses and points to ralph_plan", r.get("ok") is False and "call ralph_plan now" in r.get("problem", "") and "text" not in r, str(r)[:200])
+reset(); reply(GOOD); plan()
+check("a finished plan gives a fresh budget", mcp.tool_repo_read(dict(A, path="lib/small.py")).get("ok") is True)
+reset()
+
 print("bridge: tool list")
 names = [t["name"] for t in mcp.handle({"method": "tools/list"})["tools"]]
-check("ralph_plan and ralph_update_task are listed and ralph_review_plan is still there", {"ralph_plan", "ralph_update_task", "ralph_review_plan"} <= set(names))
+check("the aidev tools are listed and ralph_review_plan is still there", {"ralph_plan", "ralph_update_task", "ralph_review_plan", "repo_tree", "repo_read", "repo_grep"} <= set(names))
 
 print("aidev dispatcher")
 def aidev(args):
