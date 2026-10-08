@@ -212,8 +212,10 @@ its own copy, with its own keys and its own Proton sign-in; `local.lumo.lan` in 
 | planner cannot read its key          | exits, launchd retries (it no longer falls back to loopback)                     | no key needed                                 |
 
 lumo-tamer has no setting for its listen address, so on a loopback host the provisioner patches the one `listen()`
-call to read `LUMO_TAMER_HOST`, and `run-tamer.sh` refuses to start a build without that patch. After the first
-`darwin-reload switch laptop`, wait for the build (`tail ~/lumo-tamer.provision.log`), then run `lumoauth` once.
+call to read `LUMO_TAMER_HOST`, and `run-tamer.sh` refuses to start a build without that patch. `darwin-reload switch laptop|desktop` (`.zshrc_aliases`) runs `sudo darwin-rebuild switch` for that host (the
+desktop's over ssh when called from the MacBook) and then starts the browser sign-in if that host's Proton session is
+not valid: `lumoauth` for the laptop, `lumoreauth` for the Mini. A valid session is left alone. Plain
+`darwin-rebuild switch` only prints the sign-in state.
 `aistack` and `aidev` use this machine's own Lumo when it answers and fall back to the Mini's.
 
 What follows describes the daemons. Three LaunchDaemons run as `havoc`, so nothing needs a login session:

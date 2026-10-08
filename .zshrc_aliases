@@ -616,3 +616,82 @@ alias aistack='aistack_func'
 alias lumoplan='lumoplan_func'
 alias lumoreauth='zsh ~/.config/lumo/reauth.sh'
 alias lumoauth='zsh ~/.config/lumo/reauth.sh --local'
+
+# darwin-reload -- darwin-rebuild for one of this repo's hosts, followed by the Lumo sign-in when it has expired.
+#
+#   darwin-reload switch laptop            this MacBook
+#   darwin-reload switch desktop           MacMiniM1; from the MacBook it runs there over ssh
+#   darwin-reload switch work
+#   darwin-reload build laptop --show-trace   (build and check also work; extra arguments go to darwin-rebuild)
+#
+# After a successful switch of laptop or desktop it asks that machine's tamer whether the Proton sign-in is still
+# valid. If it is not, the browser sign-in starts here: lumoauth for the laptop, lumoreauth for the Mini (the Mini is
+# headless, so its sign-in always happens in a browser on the MacBook). A valid sign-in is left alone, and no API key
+# is ever changed. Plain `darwin-rebuild switch` only prints the sign-in state (nix-modules/macos/lumo.nix); the
+# activation runs as root without a desktop session and cannot hold a browser sign-in.
+function darwin-reload() {
+  local action="$1" host="$2"
+  if [[ "$action" != (switch|build|check) || "$host" != (laptop|desktop|work) ]]; then
+    echo "usage: darwin-reload <switch|build|check> <laptop|desktop|work> [darwin-rebuild arguments...]" >&2
+    return 2
+  fi
+  shift 2
+  local mini="${LUMO_MINI_USER:-havoc}@${LUMO_MINI_HOST:-macminim1.rollet.family}"
+  local this="$(scutil --get LocalHostName 2>/dev/null)" remote=""
+  # desktop is MacMiniM1: from any other Mac its rebuild runs there (-t: sudo asks for the password)
+  [[ "$host" == desktop && "${this:l}" != macminim1 ]] && remote="$mini"
+  local -a sudo_cmd
+  [[ "$action" == build ]] || sudo_cmd=(sudo)   # switch and check must run as root (darwin-rebuild refuses otherwise)
+  if [[ -n "$remote" ]]; then
+    ssh -t "$remote" "${sudo_cmd[*]} darwin-rebuild $action --flake ~/nix-darwin#macos_desktop ${(j: :)${(q)@}}" || return $?
+  else
+    "${sudo_cmd[@]}" darwin-rebuild "$action" --flake "$HOME/nix-darwin#macos_$host" "$@" || return $?
+  fi
+  [[ "$action" == switch && "$host" != work ]] || return 0
+  _lumo_signin_if_invalid "$host" "$remote"
+}
+
+# Lumo sign-in state of this machine ($1 empty) or of the ssh target in $1: prints valid, invalid, or building
+# (lumo-tamer is not built or has not written its config yet, which is the case right after a first switch).
+function _lumo_signin_state() {
+  local check='export PATH=/opt/homebrew/bin:$PATH; [ -d ~/lumo-tamer/dist ] && [ -f ~/lumo-tamer/config.yaml ] || { echo building; exit 0; }; cd ~/lumo-tamer && tamer auth status 2>&1'
+  local out
+  if [[ -n "$1" ]]; then
+    out=$(ssh -o BatchMode=yes -o ConnectTimeout=8 "$1" "$check" 2>&1)
+  else
+    out=$(/bin/sh -c "$check" 2>&1)
+  fi
+  case "$out" in
+    building) echo building ;;
+    *"Authentication is configured and valid"*) echo valid ;;
+    *) echo invalid ;;
+  esac
+}
+
+# After a switch: start the browser sign-in for $1 (laptop|desktop) when its session is not valid. $2 = ssh target
+# when the desktop was switched from another Mac.
+function _lumo_signin_if_invalid() {
+  local host="$1" remote="$2" state i
+  # a first switch builds lumo-tamer in the background and its daemon then writes config.yaml: give it 2 minutes
+  for i in {1..12}; do
+    state=$(_lumo_signin_state "$remote")
+    [[ "$state" == building ]] || break
+    (( i == 1 )) && echo "Lumo: lumo-tamer is still being set up, waiting up to 2 minutes..."
+    sleep 10
+  done
+  case "$state" in
+    valid) echo "Lumo: Proton sign-in is valid, nothing to do."; return 0 ;;
+    building)
+      echo "Lumo: lumo-tamer is not ready yet (tail ~/lumo-tamer.provision.log). Sign in afterwards with: ${${host:#desktop}:+lumoauth}${${host:#laptop}:+lumoreauth}"
+      return 0 ;;
+  esac
+  if [[ "$host" == laptop ]]; then
+    echo "Lumo: the Proton sign-in on this machine is not valid. Starting the browser sign-in (lumoauth)..."
+    zsh ~/.config/lumo/reauth.sh --local
+  elif [[ -n "$remote" ]]; then
+    echo "Lumo: the Proton sign-in on MacMiniM1 is not valid. Starting the browser sign-in here (lumoreauth)..."
+    zsh ~/.config/lumo/reauth.sh
+  else
+    echo "Lumo: the Proton sign-in on this machine is not valid, and it has no screen. On the MacBook run: lumoreauth"
+  fi
+}
