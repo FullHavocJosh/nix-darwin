@@ -10,7 +10,7 @@
 #                        loopback-only one a laptop runs. No ssh, nothing on the Mini changes. Each machine gets its
 #                        own sign-in this way: sign in again for the Mini with lumoreauth, never share one session.
 # This script only handles the Proton sign-in. It never reads or changes an API key: the Mini's keys are static
-# (other services use them) and the laptop's planner has none.
+# (other services use them).
 #
 # Why a throwaway profile: lumo-tamer's docs say not to reuse the same tokens on two machines. The session
 # handed to the Mini must not stay in a browser that could refresh it, so the profile is deleted on exit.

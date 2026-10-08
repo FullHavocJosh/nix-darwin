@@ -938,16 +938,6 @@ function _get_ai_command() {
   local task_type="${1:-sonnet}"
   echo "_run_ai_direct $task_type"
 }
-# lumoplan -- tier 0 of aistack: a tool-less pi session whose model is Lumo (Proton), reached through
-# the lumo-planner proxy on MacMiniM1 (lumo.nix, README "Lumo tier 0"). Lumo asks for repo files with
-# NEED lines and the proxy fetches them from the Mini's home-infrastructure checkout. Nothing here
-# edits files or runs tools; hand the plan to aistack/tier 1 to execute it.
-#
-#   lumoplan [prompt words...]   e.g.  lumoplan plan adding a new ArgoCD app for ntfy
-function lumoplan_func() {
-  pi --no-tools --no-extensions --no-skills --provider lumo-planner --model lumo-planner "$@"
-}
-
 # Tier 0 probe: prints "lumo" when a lumo-tamer answers /v1/models with its key, otherwise "local". Tried in order:
 # this machine's own tamer (127.0.0.1:3003, key from ~/lumo-tamer/config.yaml), MacMiniM1's on the home network (key
 # from Doppler), then the public endpoint https://lumo.rollet.family/v1 (key from Doppler root_hetzner-cluster, or

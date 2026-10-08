@@ -159,55 +159,45 @@ Lumo is reached through lumo-tamer, tried in this order, each only when the one 
 Lumo can ask for more files while it drafts; those requests are answered on the machine running `aidev`, from the
 project it was started in (secrets refused), by direct lookup or by the local model.
 
-#### Lumo tier 0 (cloud planner, on every personal Mac)
+#### Lumo (lumo-tamer, on every personal Mac)
 
-Proton Lumo as a tool-less planning model (`nix-modules/macos/lumo.nix`, scripts in `.config/lumo/`). Each host runs
+Proton Lumo as a tool-less drafting model for `aidev` (`nix-modules/macos/lumo.nix`, scripts in `.config/lumo/`). Each host runs
 its own copy, with its own keys and its own Proton sign-in; `local.lumo.lan` in `flake.nix` decides who may reach it:
 
-|                                      | `macos_desktop` (MacMiniM1, `lan = true`)                                        | `macos_laptop` (`lan = false`, the default)   |
-| ------------------------------------ | -------------------------------------------------------------------------------- | --------------------------------------------- |
-| tamer :3003, planner :8765           | every device on the network, behind API keys                                     | `127.0.0.1` only                              |
-| application firewall                 | Python and node are allowed in                                                   | not touched                                   |
-| planner key (`LUMO_PLANNER_API_KEY`) | static, in Doppler `root_macmini`; other services use it, so nothing replaces it | none: only this machine can reach the planner |
-| tamer and vault keys                 | Doppler `root_macmini`                                                           | generated and kept on the host                |
-| sign-in                              | `lumoreauth` from the MacBook (the Mini is headless)                             | `lumoauth` on the laptop itself               |
-| planner cannot read its key          | exits, launchd retries (it no longer falls back to loopback)                     | no key needed                                 |
+|                      | `macos_desktop` (MacMiniM1, `lan = true`)            | `macos_laptop` (`lan = false`, the default) |
+| -------------------- | ---------------------------------------------------- | ------------------------------------------- |
+| tamer :3003          | every device on the network, behind its API key      | `127.0.0.1` only                            |
+| application firewall | node (tamer) is allowed in                           | not touched                                 |
+| tamer and vault keys | Doppler `root_macmini`                               | generated and kept on the host              |
+| sign-in              | `lumoreauth` from the MacBook (the Mini is headless) | `lumoauth` on the laptop itself             |
 
 lumo-tamer has no setting for its listen address, so on a loopback host the provisioner patches the one `listen()`
 call to read `LUMO_TAMER_HOST`, and `run-tamer.sh` refuses to start a build without that patch. `darwin-reload switch laptop|desktop` (`.zshrc_aliases`) runs `sudo darwin-rebuild switch` for that host (the
 desktop's over ssh when called from the MacBook) and then starts the browser sign-in if that host's Proton session is
 not valid: `lumoauth` for the laptop, `lumoreauth` for the Mini. A valid session is left alone. Plain
 `darwin-rebuild switch` only prints the sign-in state.
-`aistack` and `aidev` use this machine's own Lumo when it answers and fall back to the Mini's.
+`aidev` uses this machine's own Lumo when it answers, then the Mini's, then `https://lumo.rollet.family/v1`.
 
-What follows describes the daemons. Three LaunchDaemons run as `havoc`, so nothing needs a login session:
+What follows describes the daemons. Two LaunchDaemons run as `havoc`, so nothing needs a login session:
 
 - `lumo-tamer`: [lumo-tamer](https://github.com/ZeroTricks/lumo-tamer), an **unofficial** OpenAI-compatible server
   for Lumo (port 3003, API key). Pinned to one reviewed commit and built by an activation-time provisioner.
   Using it may violate Proton's terms of service (its README says so).
-- `lumo-planner`: `.config/lumo/lumo_planner.py`, a stdlib proxy (port 8765). Lumo cannot call tools, so it is
-  told to end replies with `NEED:` lines (a path, `ls`, `find`, `grep`, or keywords); the proxy answers them from
-  `~/home-infrastructure` and loops until Lumo gives a final plan. No local model is involved. A name-based deny
-  list (`.env`, keys, tfvars, kubeconfig, `*secret*`, ...) is enforced in code. It listens beyond loopback only
-  when Doppler holds `LUMO_PLANNER_API_KEY` (bearer token), and refuses to otherwise. The macOS application
-  firewall also has to allow its interpreter: `lumo.nix` adds Homebrew's `Python.app` to it on every activation.
-  tamer (node) is deliberately left blocked, because only the planner talks to it, on loopback.
 - `lumo-watchdog` (every 5 min): checks `tamer auth status`, the server, and every 30 min a real one-word Lumo
   request; alerts through ntfy on failure and on recovery; optionally re-authenticates by itself.
-
-`lumoplan` opens a tool-less pi session on it (`pi --no-tools ... --provider lumo-planner`). That mode can only
-read the Mini's `home-infrastructure` checkout, which is all the proxy serves.
 
 Inside `aidev`, `ralph_plan` (`.config/aistack/ralph_mcp.py`) asks Lumo for a draft before Claude plans. It talks to
 lumo-tamer directly (this machine's, then MacMiniM1's, then `https://lumo.rollet.family/v1`) and runs the `NEED` loop
 itself, with `lumo_planner.py` as a library and the current project as root, so Lumo can ask for more files in any
 repository. Paths, `ls`, `find` and `grep` are answered directly; vaguer requests go to the local model. Secrets, keys
-and env files are refused (same deny list as the proxy), 4 rounds and 480 s at most. A draft over 12,000 characters is
-sent back to Lumo once to be shortened. If no tamer answers, planning continues without a draft. The planner proxy
-daemon (port 8765) is no longer used by `aidev`; `lumoplan` still uses it.
+and env files are refused (a name-based deny list: `.env`, keys, tfvars, kubeconfig, `*secret*`, ...), 4 rounds and 480 s at most. A draft over 12,000 characters is
+sent back to Lumo once to be shortened. If no tamer answers, planning continues without a draft.
 
-Doppler `FullHavocJosh/root_macmini`, read on the desktop only (optional except `LUMO_PLANNER_API_KEY`, which the planner needs to serve the network):
-`LUMO_VAULT_KEY` (restores a _missing_ key file only), `LUMO_TAMER_API_KEY`, `LUMO_PLANNER_API_KEY`,
+There used to be a third daemon, `lumo-planner` (port 8765), a proxy that ran this loop against one fixed repository,
+and a `lumoplan` command that used it. Both are removed; `lumo_planner.py` remains as the library `aidev` loads.
+
+Doppler `FullHavocJosh/root_macmini`, read on the desktop only (all optional):
+`LUMO_VAULT_KEY` (restores a _missing_ key file only), `LUMO_TAMER_API_KEY`,
 `LUMO_NTFY_URL` (full topic URL), `LUMO_NTFY_TOKEN` (ntfy access token).
 
 First setup and every re-auth: run `lumoreauth` on the MacBook (`.config/lumo/reauth.sh`). The Mini is headless, so the
@@ -221,10 +211,9 @@ re-auth is not possible while a CAPTCHA/2FA sign-in is required.
 (The watchdog still has an opt-in headless re-auth for a Chromium profile signed in on the Mini itself
 (`~/.lumo-chromium` plus `~/.lumo-watchdog/auto-reauth`). It needs a GUI session on the Mini, so it is unused.)
 
-The MacBook has no tamer of its own: pi's `lumo-planner` provider (planner proxy, port 8765) and `lumo` provider
-(tamer directly, port 3003) both point at the Mini. Both need Doppler `LUMO_PLANNER_API_KEY` / `LUMO_TAMER_API_KEY`.
-`lumo.nix` allows the Mini's Python and node through the application firewall for this; both are protected by
-their API keys only, so keep them to the LAN.
+The MacBook runs its own tamer on loopback. pi's `lumo` provider still points at the Mini's tamer (port 3003, Doppler
+`LUMO_TAMER_API_KEY`). `lumo.nix` allows the Mini's node through the application firewall for this; tamer is protected
+by its API key only, so keep it to the LAN. `LUMO_PLANNER_API_KEY` in Doppler is no longer read by anything here.
 
 Moving from a hand-made setup: remove `~/Library/LaunchAgents/com.fullhavoc.lumo-*.plist` (launchctl bootout
 `gui/501/com.fullhavoc.lumo-tamer` and `-planner`) before the first `darwin-rebuild switch`, or both fight for the ports.

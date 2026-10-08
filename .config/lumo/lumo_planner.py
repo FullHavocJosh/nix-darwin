@@ -6,32 +6,30 @@ when it wants more context. Each NEED is resolved from a project root:
 exact paths are read directly, anything else goes to a small local model that
 uses read-only tools (list/glob/grep/read). Results go back to Lumo as the next
 user message. Stdlib only.
+
+Used as a library by aidev (.config/aistack/ralph_mcp.py imports it and calls run_loop
+with the current project as root) and as a one-shot command (see --help). It used to
+run as a daemon too, a proxy on port 8765 tied to one repository; that is gone.
 """
 import argparse
 import fnmatch
-import hmac
 import json
 import math
 import os
 import re
-import socketserver
 import sys
 import time
 import urllib.request
-import uuid
 from collections import Counter
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 LUMO_BASE_URL = os.environ.get("LUMO_BASE_URL", "http://localhost:3000/v1")
 LUMO_MODEL = os.environ.get("LUMO_MODEL", "lumo")
 LUMO_API_KEY = os.environ.get("LUMO_API_KEY", "")
 # Bearer token clients of this proxy must send. Required when listening beyond loopback.
-PLANNER_API_KEY = os.environ.get("PLANNER_API_KEY", "")
 LOCAL_BASE_URL = os.environ.get("LOCAL_BASE_URL", "http://127.0.0.1:8080/v1")
 LOCAL_MODEL = os.environ.get("LOCAL_MODEL", "qwen/qwen3.5-9b")
 
-SERVED_MODEL = "lumo-planner"
 # keyword (default, no model needed) or llm (local model with read-only tools)
 RESOLVER = os.environ.get("RESOLVER", "keyword")
 
@@ -447,131 +445,8 @@ def upstream_messages(client_messages, fetch=True):
     return [{"role": "system", "content": system}] + out
 
 
-def make_handler(sb, max_rounds):
-    cache = {}  # resolver results, shared across requests for this server run
-
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, fmt, *args):
-            log("http: " + fmt % args)
-
-        def _json(self, code, obj):
-            body = json.dumps(obj).encode()
-            self.send_response(code)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def _authorized(self):
-            if not PLANNER_API_KEY:
-                return True
-            got = self.headers.get("Authorization", "")
-            if hmac.compare_digest(got.encode(), f"Bearer {PLANNER_API_KEY}".encode()):
-                return True
-            self._json(401, {"error": "unauthorized"})
-            return False
-
-        def do_GET(self):
-            if not self._authorized():
-                return
-            if self.path.rstrip("/") == "/v1/models":
-                self._json(200, {"object": "list", "data": [
-                    {"id": SERVED_MODEL, "object": "model", "owned_by": "lumo-planner"}]})
-            else:
-                self._json(404, {"error": "not found"})
-
-        def do_POST(self):
-            if not self._authorized():
-                return
-            if self.path.rstrip("/") != "/v1/chat/completions":
-                return self._json(404, {"error": "not found"})
-            try:
-                req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
-                no_fetch = self.headers.get("X-Lumo-No-Fetch") == "1"
-                messages = upstream_messages(req.get("messages", []), fetch=not no_fetch)
-            except (ValueError, TypeError) as e:
-                return self._json(400, {"error": f"bad request: {e}"})
-            rounds = 1 if no_fetch else max_rounds
-            stream = bool(req.get("stream"))
-            cid = f"chatcmpl-{uuid.uuid4().hex[:12]}"
-            created = int(time.time())
-
-            def chunk(delta, finish=None):
-                return "data: " + json.dumps({
-                    "id": cid, "object": "chat.completion.chunk", "created": created,
-                    "model": SERVED_MODEL,
-                    "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}) + "\n\n"
-
-            if stream:
-                self.send_response(200)
-                self.send_header("Content-Type", "text/event-stream")
-                self.send_header("Cache-Control", "no-cache")
-                self.end_headers()
-                try:
-                    self.wfile.write(chunk({"role": "assistant"}).encode())
-                    # SSE comments keep the connection alive and are invisible to clients
-                    text, _ = run_loop(sb, messages, rounds, cache,
-                                       lambda m: self._sse_comment(m))
-                    self.wfile.write(chunk({"content": text}).encode())
-                    self.wfile.write(chunk({}, "stop").encode())
-                    self.wfile.write(b"data: [DONE]\n\n")
-                except OSError as e:
-                    log(f"stream error: {e}")
-                except Exception as e:
-                    log(f"loop error: {e}")
-                    self.wfile.write(chunk({"content": f"[lumo-planner error: {e}]"}).encode())
-                    self.wfile.write(chunk({}, "stop").encode())
-                    self.wfile.write(b"data: [DONE]\n\n")
-            else:
-                try:
-                    text, _ = run_loop(sb, messages, rounds, cache)
-                except Exception as e:
-                    return self._json(502, {"error": f"upstream failure: {e}"})
-                self._json(200, {
-                    "id": cid, "object": "chat.completion", "created": created,
-                    "model": SERVED_MODEL,
-                    "choices": [{"index": 0, "message": {"role": "assistant", "content": text},
-                                 "finish_reason": "stop"}],
-                    "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}})
-
-        def _sse_comment(self, msg):
-            try:
-                self.wfile.write(f": {msg}\n\n".encode())
-                self.wfile.flush()
-            except OSError:
-                pass
-
-    return Handler
-
-
-def serve(argv):
-    ap = argparse.ArgumentParser(prog="lumo_planner.py serve")
-    ap.add_argument("-r", "--root", default=os.getcwd(), help="repo root (default: cwd)")
-    ap.add_argument("--host", default=os.environ.get("LUMO_PLANNER_HOST", "127.0.0.1"))
-    ap.add_argument("--port", type=int, default=int(os.environ.get("LUMO_PLANNER_PORT", "8765")))
-    ap.add_argument("--max-rounds", type=int, default=5)
-    a = ap.parse_args(argv)
-    if a.host not in ("127.0.0.1", "localhost", "::1") and not PLANNER_API_KEY:
-        log("refusing to listen on a non-loopback address without PLANNER_API_KEY")
-        return 2
-    sb = Sandbox(a.root)
-
-    class Server(ThreadingHTTPServer):
-        def server_bind(self):
-            # HTTPServer.server_bind calls socket.getfqdn(), a ~35s reverse-DNS stall on
-            # the Mac Mini that left the port closed (connection refused) after startup.
-            socketserver.TCPServer.server_bind(self)
-            self.server_name, self.server_port = a.host, self.server_address[1]
-
-    srv = Server((a.host, a.port), make_handler(sb, a.max_rounds))
-    log(f"serving {SERVED_MODEL} on http://{a.host}:{a.port}/v1 root={sb.root}")
-    srv.serve_forever()
-    return 0
-
-
 def cli(argv):
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0],
-                                 epilog="Server mode: lumo_planner.py serve --help")
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("task", help="what to plan")
     ap.add_argument("-f", "--file", action="append", default=[], help="initial repo-relative file (repeatable)")
     ap.add_argument("-r", "--root", default=os.getcwd(), help="repo root (default: cwd)")
@@ -589,6 +464,4 @@ def cli(argv):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "serve":
-        sys.exit(serve(sys.argv[2:]))
     sys.exit(cli(sys.argv[1:]))
