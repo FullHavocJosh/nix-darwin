@@ -2,12 +2,14 @@
 Claude is replaced by AISTACK_PLAN_CMD (a shell command that prints a canned reply); nothing here is billed.
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_plan.py
 """
+import http.server
 import importlib.util
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import threading
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
@@ -158,6 +160,37 @@ check("removing a task also removes its verify entry and references to it", r.ge
 check("nothing outside the plan dir was written", sorted(os.listdir(PROJECT)) == [".env", "lib"] and sorted(os.listdir(PROJECT + "/lib")) == ["big.py", "small.py"])
 reset()
 check("without a plan it refuses", upd(task_id="T1", title="x").get("ok") is False)
+
+print("Lumo loop: runs here, through tamer, against this project")
+seen_by_lumo, replies = [], ["I need two things.\nNEED: lib/small.py\nNEED: .env\nNEED: grep hunter2", "FINAL DRAFT: one task in lib/small.py"]
+class Tamer(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def _send(self, obj):
+        b = json.dumps(obj).encode(); self.send_response(200); self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+    def do_GET(self): self._send({"data": [{"id": "lumo"}]})
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        seen_by_lumo.append({"auth": self.headers.get("Authorization"), "messages": body["messages"]})
+        self._send({"choices": [{"message": {"role": "assistant", "content": replies[min(len(seen_by_lumo) - 1, len(replies) - 1)]}}]})
+srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Tamer); threading.Thread(target=srv.serve_forever, daemon=True).start()
+os.environ.update(AISTACK_TAMER_URL=f"http://127.0.0.1:{srv.server_port}/v1", AISTACK_TAMER_KEY="tamer-key", AISTACK_LUMO_RESOLVER="keyword")
+check("a pinned tamer is the only endpoint", mcp.tamer_endpoints() == [(os.environ["AISTACK_TAMER_URL"], "tamer-key")])
+r = mcp.tool_lumo_consult({"project_dir": PROJECT, "request": "add a thing", "files": ["lib/small.py"]})
+check("Lumo is asked twice and its last answer is the draft", r.get("ok") and len(seen_by_lumo) == 2 and r["plan"].startswith("FINAL DRAFT") and r.get("lumo_finished") is True, str(r)[:300])
+check("the tamer key is sent", seen_by_lumo[0]["auth"] == "Bearer tamer-key")
+first, second = json.dumps(seen_by_lumo[0]["messages"]), seen_by_lumo[1]["messages"][-1]["content"]
+check("the first request tells Lumo it may ask (NEED) and carries the listed file", "NEED" in first and "def small():" in first)
+check("what Lumo asked for is answered from this project", "def small():" in second and r.get("lumo_asked_for") == ["lib/small.py", ".env", "grep hunter2"], second[:300])
+check("a secret file is refused and its content never reaches Lumo", "hunter2" not in second.replace("grep hunter2", "") and "TOKEN=" not in second, second[:400])
+seen_by_lumo.clear()
+r = mcp.tool_lumo_consult({"project_dir": PROJECT, "request": "condense", "raw_prompt": "shorten this"})
+check("the shorten request is one plain message with no loop", len(seen_by_lumo) == 1 and seen_by_lumo[0]["messages"] == [{"role": "user", "content": "shorten this"}] and r.get("ok"))
+os.environ["AISTACK_TAMER_URL"] = "http://127.0.0.1:9/v1"
+r = mcp.tool_lumo_consult({"project_dir": PROJECT, "request": "add a thing"})
+check("a tamer that cannot be reached is reported, not raised", r.get("ok") is False and "Lumo is not available" in r.get("problem", ""), str(r)[:200])
+for k in ("AISTACK_TAMER_URL", "AISTACK_TAMER_KEY", "AISTACK_LUMO_RESOLVER"): os.environ.pop(k)
+srv.shutdown()
 
 print("research tools: budget and guard")
 subprocess.run(["git", "init", "-q"], cwd=PROJECT); subprocess.run(["git", "add", "-A", "-f"], cwd=PROJECT)

@@ -948,27 +948,34 @@ function lumoplan_func() {
   pi --no-tools --no-extensions --no-skills --provider lumo-planner --model lumo-planner "$@"
 }
 
-# Tier 0 probe: prints "lumo" when a Lumo planner proxy answers /v1/models, otherwise "local". This machine's own
-# proxy (127.0.0.1:8765, no key, lumo.nix) is tried first, then the one on MacMiniM1 with its key, 4 s at most.
-# AISTACK_TIER0=local forces local; AISTACK_LUMO_URL / AISTACK_LUMO_KEY override the endpoint and key and skip the
-# loopback try (the key otherwise comes from Doppler, as in pi's lumo-planner provider).
+# Tier 0 probe: prints "lumo" when a lumo-tamer answers /v1/models with its key, otherwise "local". Tried in order:
+# this machine's own tamer (127.0.0.1:3003, key from ~/lumo-tamer/config.yaml), MacMiniM1's on the home network (key
+# from Doppler), then the public endpoint when AISTACK_LUMO_PUBLIC_KEY is set. ralph_mcp.py uses the same order for
+# the requests themselves. AISTACK_TIER0=local forces local; AISTACK_TAMER_URL / AISTACK_TAMER_KEY pin one endpoint.
 function _aistack_tier0() {
   [[ "${AISTACK_TIER0:-auto}" == "local" ]] && { echo local; return 0; }
-  # Only an HTTP 200 counts. Anything else (nothing listening, a timeout, 401 from a proxy that wants a key, as on
-  # the Mini itself) leaves local_code at something other than 200 and the remote probe below decides.
-  local local_code=000
-  if [[ -z "${AISTACK_LUMO_URL:-}" ]]; then
-    local_code=$(curl -s -m 2 -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/v1/models 2>/dev/null) || local_code=000
+  local url key
+  _aistack_tamer_ok() {   # url, key -> 0 when /models answers 200
+    local -a auth
+    [[ -n "$2" ]] && auth=(-H "Authorization: Bearer $2")
+    [[ "$(curl -s -m 4 -o /dev/null -w '%{http_code}' "${auth[@]}" "${1%/}/models" 2>/dev/null)" == "200" ]]
+  }
+  url="${AISTACK_TAMER_URL:-${AISTACK_LUMO_URL:-}}"     # AISTACK_LUMO_URL / _KEY: the older names for the same pin
+  if [[ -n "$url" ]]; then
+    _aistack_tamer_ok "$url" "${AISTACK_TAMER_KEY:-${AISTACK_LUMO_KEY:-}}" && echo lumo || echo local
+    return 0
   fi
-  [[ "$local_code" == "200" ]] && { echo lumo; return 0; }
-  local url="${AISTACK_LUMO_URL:-http://macminim1.rollet.family:8765/v1}" key="${AISTACK_LUMO_KEY:-}" code
-  local -a auth
+  key=$(sed -n 's/^ *apiKey: *"\(.*\)" *$/\1/p' "$HOME/lumo-tamer/config.yaml" 2>/dev/null | head -1)
+  _aistack_tamer_ok "http://127.0.0.1:3003/v1" "$key" && { echo lumo; return 0; }
+  key="${AISTACK_TAMER_MINI_KEY:-}"
   if [[ -z "$key" ]] && command -v doppler >/dev/null; then
-    key=$(doppler secrets get LUMO_PLANNER_API_KEY --project FullHavocJosh --config root_macmini --plain 2>/dev/null)
+    key=$(doppler secrets get LUMO_TAMER_API_KEY --project FullHavocJosh --config root_macmini --plain 2>/dev/null)
   fi
-  [[ -n "$key" ]] && auth=(-H "Authorization: Bearer $key")
-  code=$(curl -s -m 4 -o /dev/null -w '%{http_code}' "${auth[@]}" "${url%/}/models" 2>/dev/null)
-  [[ "$code" == "200" ]] && echo lumo || echo local
+  _aistack_tamer_ok "${AISTACK_TAMER_MINI_URL:-http://macminim1.rollet.family:3003/v1}" "$key" && { echo lumo; return 0; }
+  if [[ -n "${AISTACK_LUMO_PUBLIC_KEY:-}" ]]; then
+    _aistack_tamer_ok "${AISTACK_LUMO_PUBLIC_URL:-https://lumo.rollet.family/v1}" "$AISTACK_LUMO_PUBLIC_KEY" && { echo lumo; return 0; }
+  fi
+  echo local
 }
 
 # Is the project's GitHub repository private? Prints yes or no. Anything that cannot be confirmed as public (no
@@ -1025,9 +1032,9 @@ function aistack_func() {
   need_files=(ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh zen_models.py zen-policy.json)
   if [[ "$mode" == "dev" ]]; then
     # ralph_plan waits for one Claude call (AISTACK_PLAN_TIMEOUT_S, 280 s), so pi must wait longer than that
-    # ... and before that it asks Lumo, and asks it again to shorten a long draft (AISTACK_LUMO_TIMEOUT_S, 240 s
-    # each): 2 x 240 + 280 = 760.
-    stack_name="aidev"; variant="-claude"; mcp_timeout=900
+    # ... and before that Lumo drafts, asking this machine for what it needs (AISTACK_LUMO_LOOP_S, 480 s), and
+    # shortens a long draft (one request, up to 300 s): 480 + 300 + 280 = 1060.
+    stack_name="aidev"; variant="-claude"; mcp_timeout=1200
     need_files+=(claude-plan.sh planner-prompt-claude.md planner-tier0-lumo-claude.md planner-tier0-local-claude.md)
   fi
 
@@ -1098,7 +1105,7 @@ function aistack_func() {
     tier0_label="the local model ($lms_model), because MacMiniM1's Lumo is unreachable"
   fi
   if [[ "$mode" == "dev" ]]; then
-    [[ "$tier0" == "lumo" ]] && tier0_label="Lumo adds a draft with online research (this machine's Lumo, else MacMiniM1's)" \
+    [[ "$tier0" == "lumo" ]] && tier0_label="Lumo drafts with online research and asks this machine for the files it needs (own tamer, else MacMiniM1's)" \
       || tier0_label="no Lumo is reachable, so there is no draft from it"
   fi
 
