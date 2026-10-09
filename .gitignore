@@ -67,11 +67,15 @@ ansible-linux/inventory/staging
 !/.claude/settings.json
 
 # Ignore pi folders (auth.json, sessions, skills, catalog cache) but keep
-# agent/models.json tracked so the local llama.cpp provider syncs across machines
+# agent/models.json tracked so the local llama.cpp provider syncs across machines,
+# and agent/extensions/lumo-first.ts (herdr installs its own extension beside it, untracked)
 /.pi/*
 !/.pi/agent/
 /.pi/agent/*
 !/.pi/agent/models.json
+!/.pi/agent/extensions/
+/.pi/agent/extensions/*
+!/.pi/agent/extensions/lumo-first.ts
 
 # Ignore crush folders
 /.crush

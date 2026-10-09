@@ -2233,7 +2233,9 @@ function ai_security_audit() {
   echo "═══════════════════════════════════════════════════════════"
 }
 
-# pi: local llama-server qwen/qwen3.5-9b only. Strip AWS creds so Bedrock models
+# pi: local llama-server qwen/qwen3.5-9b drives the session and owns the tools. ~/.pi/agent/extensions/lumo-first.ts
+# sends every message to Lumo first and runs qwen only when Lumo says files or shell are needed (";" at the start
+# of a message skips Lumo; PI_LUMO_FIRST=0 turns it off). Strip AWS creds so Bedrock models
 # are not auto-detected, strip infra secrets the model could read via env,
 # skip AGENTS.md/CLAUDE.md (they reference MCP servers pi does not have),
 # and skip startup network calls. Models are defined in ~/.pi/agent/models.json.
