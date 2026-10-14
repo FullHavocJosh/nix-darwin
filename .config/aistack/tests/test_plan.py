@@ -877,6 +877,170 @@ check(
 )
 reset()
 
+print("ralph_plan: URLs in the request (RFC 0001)")
+FREPLY, FCOUNT, FSEEN = T + "/freply.txt", T + "/fcount", T + "/fprompt.txt"
+os.environ["AISTACK_FETCH_CMD"] = (
+    f'echo x >> {FCOUNT}; printf "%s" "$AISTACK_FETCH_PROMPT" > {FSEEN}; cat {FREPLY}'
+)
+JIRA, PAGE = "https://smartpager.atlassian.net/browse/PLT-5995", "https://example.com/docs"
+
+
+def fcalls():
+    return len(open(FCOUNT).read().split()) if os.path.exists(FCOUNT) else 0
+
+
+def freply(*items):
+    open(FREPLY, "w").write(
+        json.dumps({"urls": [{"url": u, "ok": True, "content": c} for u, c in items]})
+    )
+
+
+def url_reset():
+    reset()
+    for f in (STATE + "/plan/urls.json", FCOUNT):
+        if os.path.exists(f):
+            os.remove(f)
+
+
+def fetch_cli(text):
+    return subprocess.run(
+        [sys.executable, os.path.join(HERE, "..", "ralph_mcp.py"), "--fetch-urls", PROJECT, text],
+        capture_output=True,
+        text=True,
+        env=dict(os.environ, AISTACK_TIER0="lumo"),
+        timeout=30,
+    )
+
+
+check(
+    "URLs are found in order, once, without trailing punctuation",
+    mcp.extract_urls(f"see {JIRA}. and ({PAGE}), again {JIRA}") == [JIRA, PAGE],
+)
+check(
+    "MCP hosts are the listed domains and their subdomains only",
+    [
+        mcp.mcp_url(u)
+        for u in (
+            JIRA,
+            "https://github.com/o/r/pull/1",
+            "https://registry.terraform.io/providers/hashicorp/aws",
+            "https://developer.hashicorp.com/terraform/language/backend/s3",
+            "https://hashicorp.com/blog",
+            "https://evilgithub.com/x",
+            PAGE,
+        )
+    ]
+    == [True, True, True, True, False, False, False],
+)
+check(
+    "Lumo is asked to name the URLs it could not open",
+    "UNREACHABLE: <url>" in mcp.LUMO_PROMPT
+    and mcp.unreachable_urls(f"tasks...\nUNREACHABLE: {PAGE}\n") == [PAGE],
+)
+
+os.environ["AISTACK_TIER0"] = "lumo"
+lumo_seen = []
+mcp.tool_lumo_consult = lambda a: (
+    lumo_seen.append(a) or {"ok": True, "plan": "LUMO DRAFT", "lumo": "x"}
+)
+url_reset()
+freply((JIRA, "TICKET-BODY: Decisions needed: shared CMK"))
+reply(GOOD)
+r = plan(request=f"plan the rest of {JIRA} using {PAGE}")
+fp = open(FSEEN).read()
+check(
+    "with Lumo: only the MCP-host URL is fetched, in one call, before Lumo",
+    fcalls() == 1 and JIRA in fp and PAGE not in fp,
+    fp[-300:],
+)
+check(
+    "Lumo and Claude both get the fetched content",
+    "TICKET-BODY" in lumo_seen[-1]["request"]
+    and "URL CONTENTS" in open(SEEN).read()
+    and "TICKET-BODY" in open(SEEN).read(),
+)
+check(
+    "the fetch is counted as a billed call and reported",
+    r.get("billed_calls") == 2
+    and r.get("urls") == {JIRA: "fetched"}
+    and "URLs: 1 read by Claude Code (1 small billed fetch call)." in r.get("present", ""),
+    str(r)[:400],
+)
+reset()
+r = plan(request=f"plan the rest of {JIRA}", replan=True)
+check(
+    "a cached URL is not fetched again",
+    fcalls() == 1 and r.get("billed_calls") == 1 and "TICKET-BODY" in open(SEEN).read(),
+    str(r.get("billed_calls")),
+)
+
+url_reset()
+mcp.tool_lumo_consult = lambda a: {
+    "ok": True,
+    "plan": f"LUMO DRAFT\nUNREACHABLE: {PAGE}",
+    "lumo": "x",
+}
+freply((PAGE, "PRIVATE-PAGE"))
+r = plan(request=f"use {PAGE}")
+check(
+    "a URL Lumo could not open is fetched before the plan call",
+    fcalls() == 1 and PAGE in open(FSEEN).read() and "PRIVATE-PAGE" in open(SEEN).read(),
+)
+
+url_reset()
+mcp.tool_lumo_consult = lambda a: {"ok": False, "problem": "connection refused"}
+freply((PAGE, "PAGE-BODY"))
+r = plan(request=f"use {PAGE}")
+check(
+    "when Lumo fails, the typed URLs it would have read are fetched",
+    fcalls() == 1 and "PAGE-BODY" in open(SEEN).read(),
+)
+
+os.environ.pop("AISTACK_TIER0")
+url_reset()
+freply((PAGE, "PAGE-BODY"))
+os.environ["AISTACK_REQUEST_URLS"] = PAGE
+r = plan(request="use the docs page")
+os.environ.pop("AISTACK_REQUEST_URLS")
+check(
+    "without Lumo every typed URL is fetched, also when only the launcher saw it",
+    fcalls() == 1 and PAGE in open(FSEEN).read() and "PAGE-BODY" in open(SEEN).read(),
+)
+
+url_reset()
+open(FREPLY, "w").write("")
+r = plan(request=f"use {JIRA}")
+cache = json.load(open(STATE + "/plan/urls.json"))
+check(
+    "a failed fetch does not stop the plan, and Claude is told the URL was not read",
+    r.get("ok") is True
+    and r.get("urls", {}).get(JIRA, "").startswith("not fetched")
+    and "could not be opened" in open(SEEN).read()
+    and cache[JIRA]["ok"] is False,
+    str(r)[:300],
+)
+
+url_reset()
+freply((JIRA, "CLI-BODY"))
+out = fetch_cli(f"see {JIRA} and {PAGE}")
+check(
+    "--fetch-urls prints the fetched MCP-host URL and caches it for ralph_plan",
+    out.returncode == 0
+    and "CLI-BODY" in out.stdout
+    and PAGE not in out.stdout
+    and fcalls() == 1
+    and json.load(open(STATE + "/plan/urls.json"))[JIRA]["ok"] is True,
+    out.stderr[-300:],
+)
+out = fetch_cli("no links here")
+check(
+    "--fetch-urls with no URL prints nothing and calls nothing",
+    out.stdout == "" and fcalls() == 1,
+)
+os.environ.pop("AISTACK_FETCH_CMD")
+mcp.tool_lumo_consult = real_lumo
+url_reset()
+
 print("bridge: tool list")
 names = [t["name"] for t in mcp.handle({"method": "tools/list"})["tools"]]
 check(

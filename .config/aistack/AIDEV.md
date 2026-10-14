@@ -6,7 +6,7 @@ plan, a free coding agent builds it task by task, the harness decides a task is 
 commands exit 0, and Claude Code reviews the whole result once. Everything this document describes is what the
 files in `.config/aistack/` show: `ralph_mcp.py` (the MCP bridge and tools used by the chat agent), `ralph_driver.py`
 (the detached run driver), `planner-prompt.md` (the local model's prompt), the shell agent wrappers
-(`claude-plan.sh`, `claude-review.sh`, `claude-work.sh`, `opencode-auto.sh`), the templates
+(`claude-plan.sh`, `claude-fetch.sh`, `claude-review.sh`, `claude-work.sh`, `opencode-auto.sh`), the templates
 (`task-template.hbs`, `review-template.hbs`), `zen_models.py`, and the RFC tooling (`rfc_check.py`,
 `rfc-template.md`, `rfcs/`).
 
@@ -74,6 +74,17 @@ consults Lumo automatically when it is reachable and no draft was passed in, inl
 writes them to the plan dir, records a `PLANNED` verdict in `plan-review.json`, and writes the finished text to
 `PLAN.txt`.
 
+URLs in the request (RFC 0001): the local model cannot open them. URLs the user typed on `atlassian.net`,
+`github.com`, `terraform.io` or `developer.hashicorp.com` (`AISTACK_MCP_URL_HOSTS`) are read by `claude-fetch.sh` before Lumo drafts: one small
+billed call (haiku, read-only Atlassian connector, github and terraform MCP tools, WebFetch) that returns each page
+close to verbatim. Lumo and the plan call both get the content. Other URLs are left to Lumo, which browses; a URL
+Lumo reports with an `UNREACHABLE: <url>` line, and every typed URL when there is no Lumo draft, goes to the same fetch
+before the plan call. When the URLs come with the task (`aidev <words with a URL>`), the launcher runs the fetch at
+start (`ralph_mcp.py --fetch-urls`) and hands the content to the local model, so its research is aimed at the right
+code; `ralph_plan` reuses that result from `plan/urls.json`. `AISTACK_REQUEST_URLS` keeps the typed URLs when the
+local model rewords the request. A failed fetch never stops the plan: Claude is told the URL could not be read, and
+the result's `urls` field and the plan text say which.
+
 Results:
 
 - `ok=true`: the plan is valid; the local model shows `present` verbatim in a code block and asks the user to change
@@ -130,6 +141,8 @@ run pauses for the user to rework (re-run the task with the findings) or accept 
   local model does, Lumo, and the free worker are not billed.
 - `ralph_plan` with a plan from an earlier session returns `already_planned` with `billed_calls: 0`. Claude asking
   for more detail costs one call (`billed_calls: 1`), and the follow-up plan call is a second billed call.
+- **URLs** on MCP hosts add one small billed fetch call (haiku, measured about 0.03 USD for one Jira issue); a URL
+  Lumo could not open can add a second. A cached page (`plan/urls.json`, 6 hours) is not fetched again.
 - **Replan** (`ralph_plan` with `replan=true`) adds one billed call.
 - **Rework** (re-run a task whose review failed) adds a review call.
 - **Retry** (re-run a blocked task, or escalate to the billed fallback) can add a billed call.
@@ -182,6 +195,8 @@ The state dir is `AISTACK_STATE_DIR` when set, else `~/.aistack/<basename(projec
   - `calls_left` — research calls remaining after this call (0 for a refused call).
   - `ok` — whether the call worked.
   - `bytes` — `len(json.dumps(result))`.
+- **`plan/urls.json`**: the fetched URLs, `{url: {ok, content, ts}}`; a page is reused for `AISTACK_URL_CACHE_S`, a
+  failure for 10 minutes.
 - Other files the code writes: `plan/need.json` (Claude's questions, removed after the final attempt),
   `plan/claude-plan.raw.txt` (when Claude returned no plan), `project.json` (work dir, branch, PR url), and under
   `runs/<run_id>/`: `state.json`, `config.json`, `events.jsonl`, `control.jsonl`, `driver.log`, plus `tasks/` and
@@ -192,58 +207,65 @@ The state dir is `AISTACK_STATE_DIR` when set, else `~/.aistack/<basename(projec
 All are optional unless noted; the default is the code's fallback. Every name below is read somewhere in
 `.config/aistack/`.
 
-| Variable                                 | Default                                  | Meaning                                                                                     |
-| ---------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `RALPH_MCP_ROOTS`                        | _(none; required)_                       | Colon-separated roots the bridge may run in. Without it the bridge refuses to run anywhere. |
-| `AISTACK_STATE_DIR`                      | `~/.aistack/<project>-<hash>`            | Where all aistack state lives.                                                              |
-| `AISTACK_HOME`                           | `~/.aistack`                             | Parent of the default state dir.                                                            |
-| `AISTACK_RESEARCH_CALLS`                 | `16`                                     | Research budget for `repo_tree` / `repo_read` / `repo_grep`.                                |
-| `AISTACK_TIER0`                          | _(unset)_                                | `lumo` lets `ralph_plan` consult Lumo; `local` skips it because Lumo was unreachable.       |
-| `AISTACK_TIERS`                          | _(unset)_                                | Free text about tiers put in the draft PR body.                                             |
-| `AISTACK_WORKTREE_MODE`                  | _(unset)_                                | `create` makes `ralph_run` create a git worktree + draft PR in a main checkout.             |
-| `AISTACK_WORKTREE_CMD`                   | `gpr_func --auto ...`                    | Command that creates the worktree/PR; its last stdout line is JSON.                         |
-| `AISTACK_PLAN_CMD`                       | `claude-plan.sh -p <prompt>`             | The planning call.                                                                          |
-| `AISTACK_PLAN_TIMEOUT_S`                 | `280`                                    | Timeout for the planning call.                                                              |
-| `AISTACK_PLAN_WHOLE_FILE_LINES`          | `120`                                    | A whole file is accepted only under this many lines.                                        |
-| `AISTACK_PLAN_RANGE_LINES`               | `200`                                    | Most lines one `files` range may cover.                                                     |
-| `AISTACK_PLAN_FILES_CHARS`               | `24000`                                  | Total characters of files sent to Claude.                                                   |
-| `AISTACK_PLAN_ENTRY_CHARS`               | `7000`                                   | Most characters one `files` entry may use.                                                  |
-| `AISTACK_LUMO_CONDENSE_AT`               | `12000`                                  | A Lumo draft over this length is sent back to be shortened.                                 |
-| `AISTACK_LUMO_ROUNDS`                    | `4`                                      | Most rounds of Lumo asking for more files.                                                  |
-| `AISTACK_LUMO_LOOP_S`                    | `480`                                    | Most seconds the Lumo loop may run.                                                         |
-| `AISTACK_LUMO_MODEL`                     | `lumo`                                   | Model name sent to the Lumo endpoint.                                                       |
-| `AISTACK_LUMO_RESOLVER`                  | `llm`                                    | How vague Lumo requests are resolved (through the local model).                             |
-| `AISTACK_LUMO_PLANNER_LIB`               | _(searched)_                             | Path to `lumo_planner.py` used as a library.                                                |
-| `AISTACK_TAMER_URL` / `AISTACK_LUMO_URL` | _(tried in order)_                       | Pin one Lumo endpoint.                                                                      |
-| `AISTACK_TAMER_KEY` / `AISTACK_LUMO_KEY` | _(empty)_                                | Key for the pinned endpoint.                                                                |
-| `AISTACK_TAMER_MINI_URL`                 | `http://macminim1.rollet.family:3003/v1` | MacMiniM1's tamer.                                                                          |
-| `AISTACK_TAMER_MINI_KEY`                 | _(Doppler)_                              | Key for the Mini's tamer.                                                                   |
-| `AISTACK_LUMO_PUBLIC_URL`                | `https://lumo.rollet.family/v1`          | Public endpoint.                                                                            |
-| `AISTACK_LUMO_PUBLIC_KEY`                | _(Doppler)_                              | Key for the public endpoint.                                                                |
-| `AISTACK_PLAN_REVIEW`                    | `on`                                     | `off` disables the plan-review gate in `ralph_run`.                                         |
-| `AISTACK_WORKER_AGENT`                   | `opencode-pickle`                        | The (free) worker agent.                                                                    |
-| `AISTACK_FALLBACK_AGENT`                 | `claude-work`                            | The (billed) fallback agent.                                                                |
-| `AISTACK_REVIEW_AGENT`                   | `claude-review`                          | The reviewer agent.                                                                         |
-| `AISTACK_WORKER_ATTEMPTS`                | `2`                                      | Worker attempts per task.                                                                   |
-| `AISTACK_FALLBACK_ATTEMPTS`              | `1`                                      | Fallback attempts per task.                                                                 |
-| `AISTACK_ATTEMPT_TIMEOUT_S`              | `1500`                                   | Timeout for one agent attempt.                                                              |
-| `AISTACK_VERIFY_TIMEOUT_S`               | `300`                                    | Timeout for one verify command.                                                             |
-| `AISTACK_REVIEW_MODE`                    | `batch`                                  | `batch` = one review call per run; `each` = one per task; `off` = no review.                |
-| `AISTACK_WORK_TEMPLATE`                  | `task-template.hbs`                      | Worker prompt template.                                                                     |
-| `AISTACK_REVIEW_TEMPLATE`                | `review-template.hbs`                    | Review prompt template.                                                                     |
-| `AISTACK_DRIVER`                         | `ralph_driver.py`                        | The run driver script.                                                                      |
-| `AISTACK_BILLED_AGENTS`                  | `claude*` among the agents               | Comma list of agents whose calls are billed.                                                |
-| `RALPH_TUI_BIN`                          | `~/.bun/bin/ralph-tui`                   | The ralph-tui binary the driver runs.                                                       |
-| `AISTACK_CLAUDE_MODEL`                   | `sonnet`                                 | Model for the Claude Code wrappers.                                                         |
-| `AISTACK_CLAUDE_EFFORT`                  | `medium`                                 | Effort for the Claude Code wrappers.                                                        |
-| `AISTACK_CLAUDE_BUDGET_PLAN`             | `1.5`                                    | USD cap for the planning call.                                                              |
-| `AISTACK_CLAUDE_BUDGET_REVIEW`           | `1.5`                                    | USD cap for the review call.                                                                |
-| `AISTACK_CLAUDE_BUDGET_WORK`             | `3`                                      | USD cap for one work (fallback) call.                                                       |
-| `AISTACK_ZEN_CATALOG`                    | _(unset)_                                | Test hook: a fixed models.dev catalog for `zen_models.py`.                                  |
-| `AISTACK_ZEN_OFFERED`                    | _(unset)_                                | Test hook: a fixed list of offered Zen models.                                              |
+| Variable                                 | Default                                                         | Meaning                                                                                     |
+| ---------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `RALPH_MCP_ROOTS`                        | _(none; required)_                                              | Colon-separated roots the bridge may run in. Without it the bridge refuses to run anywhere. |
+| `AISTACK_STATE_DIR`                      | `~/.aistack/<project>-<hash>`                                   | Where all aistack state lives.                                                              |
+| `AISTACK_HOME`                           | `~/.aistack`                                                    | Parent of the default state dir.                                                            |
+| `AISTACK_RESEARCH_CALLS`                 | `16`                                                            | Research budget for `repo_tree` / `repo_read` / `repo_grep`.                                |
+| `AISTACK_TIER0`                          | _(unset)_                                                       | `lumo` lets `ralph_plan` consult Lumo; `local` skips it because Lumo was unreachable.       |
+| `AISTACK_TIERS`                          | _(unset)_                                                       | Free text about tiers put in the draft PR body.                                             |
+| `AISTACK_WORKTREE_MODE`                  | _(unset)_                                                       | `create` makes `ralph_run` create a git worktree + draft PR in a main checkout.             |
+| `AISTACK_WORKTREE_CMD`                   | `gpr_func --auto ...`                                           | Command that creates the worktree/PR; its last stdout line is JSON.                         |
+| `AISTACK_PLAN_CMD`                       | `claude-plan.sh -p <prompt>`                                    | The planning call.                                                                          |
+| `AISTACK_PLAN_TIMEOUT_S`                 | `280`                                                           | Timeout for the planning call.                                                              |
+| `AISTACK_FETCH_CMD`                      | `claude-fetch.sh -p <prompt>`                                   | The URL fetch call.                                                                         |
+| `AISTACK_FETCH_TIMEOUT_S`                | `180`                                                           | Timeout for the URL fetch call.                                                             |
+| `AISTACK_MCP_URL_HOSTS`                  | `atlassian.net,github.com,terraform.io,developer.hashicorp.com` | Typed URLs on these domains (and subdomains) are fetched by Claude, not left to Lumo.       |
+| `AISTACK_URL_CACHE_S`                    | `21600`                                                         | Seconds a fetched page is reused.                                                           |
+| `AISTACK_REQUEST_URLS`                   | _(set by the launcher)_                                         | The URLs typed with the task, for `ralph_plan`.                                             |
+| `AISTACK_CLAUDE_FETCH_MODEL`             | `haiku`                                                         | Model for the URL fetch call.                                                               |
+| `AISTACK_CLAUDE_BUDGET_FETCH`            | `0.3`                                                           | USD cap for the URL fetch call.                                                             |
+| `AISTACK_PLAN_WHOLE_FILE_LINES`          | `120`                                                           | A whole file is accepted only under this many lines.                                        |
+| `AISTACK_PLAN_RANGE_LINES`               | `200`                                                           | Most lines one `files` range may cover.                                                     |
+| `AISTACK_PLAN_FILES_CHARS`               | `24000`                                                         | Total characters of files sent to Claude.                                                   |
+| `AISTACK_PLAN_ENTRY_CHARS`               | `7000`                                                          | Most characters one `files` entry may use.                                                  |
+| `AISTACK_LUMO_CONDENSE_AT`               | `12000`                                                         | A Lumo draft over this length is sent back to be shortened.                                 |
+| `AISTACK_LUMO_ROUNDS`                    | `4`                                                             | Most rounds of Lumo asking for more files.                                                  |
+| `AISTACK_LUMO_LOOP_S`                    | `480`                                                           | Most seconds the Lumo loop may run.                                                         |
+| `AISTACK_LUMO_MODEL`                     | `lumo`                                                          | Model name sent to the Lumo endpoint.                                                       |
+| `AISTACK_LUMO_RESOLVER`                  | `llm`                                                           | How vague Lumo requests are resolved (through the local model).                             |
+| `AISTACK_LUMO_PLANNER_LIB`               | _(searched)_                                                    | Path to `lumo_planner.py` used as a library.                                                |
+| `AISTACK_TAMER_URL` / `AISTACK_LUMO_URL` | _(tried in order)_                                              | Pin one Lumo endpoint.                                                                      |
+| `AISTACK_TAMER_KEY` / `AISTACK_LUMO_KEY` | _(empty)_                                                       | Key for the pinned endpoint.                                                                |
+| `AISTACK_TAMER_MINI_URL`                 | `http://macminim1.rollet.family:3003/v1`                        | MacMiniM1's tamer.                                                                          |
+| `AISTACK_TAMER_MINI_KEY`                 | _(Doppler)_                                                     | Key for the Mini's tamer.                                                                   |
+| `AISTACK_LUMO_PUBLIC_URL`                | `https://lumo.rollet.family/v1`                                 | Public endpoint.                                                                            |
+| `AISTACK_LUMO_PUBLIC_KEY`                | _(Doppler)_                                                     | Key for the public endpoint.                                                                |
+| `AISTACK_PLAN_REVIEW`                    | `on`                                                            | `off` disables the plan-review gate in `ralph_run`.                                         |
+| `AISTACK_WORKER_AGENT`                   | `opencode-pickle`                                               | The (free) worker agent.                                                                    |
+| `AISTACK_FALLBACK_AGENT`                 | `claude-work`                                                   | The (billed) fallback agent.                                                                |
+| `AISTACK_REVIEW_AGENT`                   | `claude-review`                                                 | The reviewer agent.                                                                         |
+| `AISTACK_WORKER_ATTEMPTS`                | `2`                                                             | Worker attempts per task.                                                                   |
+| `AISTACK_FALLBACK_ATTEMPTS`              | `1`                                                             | Fallback attempts per task.                                                                 |
+| `AISTACK_ATTEMPT_TIMEOUT_S`              | `1500`                                                          | Timeout for one agent attempt.                                                              |
+| `AISTACK_VERIFY_TIMEOUT_S`               | `300`                                                           | Timeout for one verify command.                                                             |
+| `AISTACK_REVIEW_MODE`                    | `batch`                                                         | `batch` = one review call per run; `each` = one per task; `off` = no review.                |
+| `AISTACK_WORK_TEMPLATE`                  | `task-template.hbs`                                             | Worker prompt template.                                                                     |
+| `AISTACK_REVIEW_TEMPLATE`                | `review-template.hbs`                                           | Review prompt template.                                                                     |
+| `AISTACK_DRIVER`                         | `ralph_driver.py`                                               | The run driver script.                                                                      |
+| `AISTACK_BILLED_AGENTS`                  | `claude*` among the agents                                      | Comma list of agents whose calls are billed.                                                |
+| `RALPH_TUI_BIN`                          | `~/.bun/bin/ralph-tui`                                          | The ralph-tui binary the driver runs.                                                       |
+| `AISTACK_CLAUDE_MODEL`                   | `sonnet`                                                        | Model for the Claude Code wrappers.                                                         |
+| `AISTACK_CLAUDE_EFFORT`                  | `medium`                                                        | Effort for the Claude Code wrappers.                                                        |
+| `AISTACK_CLAUDE_BUDGET_PLAN`             | `1.5`                                                           | USD cap for the planning call.                                                              |
+| `AISTACK_CLAUDE_BUDGET_REVIEW`           | `1.5`                                                           | USD cap for the review call.                                                                |
+| `AISTACK_CLAUDE_BUDGET_WORK`             | `3`                                                             | USD cap for one work (fallback) call.                                                       |
+| `AISTACK_ZEN_CATALOG`                    | _(unset)_                                                       | Test hook: a fixed models.dev catalog for `zen_models.py`.                                  |
+| `AISTACK_ZEN_OFFERED`                    | _(unset)_                                                       | Test hook: a fixed list of offered Zen models.                                              |
 
 Some names are set **by** the code/launcher rather than read from the user's environment: `AISTACK_WORKDIR`,
-`AISTACK_PLAN_PROMPT`, `AISTACK_REVIEWS_DIR`, `AISTACK_BRANCH`, `AISTACK_PR_TYPE`, `AISTACK_PR_TITLE`,
+`AISTACK_PLAN_PROMPT`, `AISTACK_FETCH_PROMPT`, `AISTACK_REVIEWS_DIR`, `AISTACK_BRANCH`, `AISTACK_PR_TYPE`, `AISTACK_PR_TITLE`,
 `AISTACK_PR_BODY`.
 
 ## Troubleshooting
