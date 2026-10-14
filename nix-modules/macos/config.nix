@@ -312,6 +312,12 @@
               echo "Installing dependencies for $MCP_NAME..."
               npm install || echo "Failed to install dependencies for $MCP_NAME"
             fi
+            # Non-breaking fixes only (no --force). The rewritten package-lock.json
+            # stays uncommitted and is newer than dist, so the build below reruns.
+            if ! npm audit >/dev/null 2>&1; then
+              echo "Applying npm audit fixes for $MCP_NAME..."
+              npm audit fix --no-fund || echo "npm audit fix failed for $MCP_NAME"
+            fi
             if [ ! -f "$MCP_DIST" ] || [ "src" -nt "$MCP_DIST" ] || [ "package-lock.json" -nt "$MCP_DIST" ]; then
               echo "Building $MCP_NAME..."
               npm run build && echo "$MCP_NAME built successfully!" || echo "Failed to build $MCP_NAME"
