@@ -8,6 +8,9 @@ the WHY is non-obvious.
 
 Never use `--` or em dashes in prose; use `:` or `;`. CLI flags in code are exempt.
 
+No attribution in commits, PR titles, or PR descriptions: no Co-Authored-By
+trailers, no "Generated with" lines, no AI or tool mentions.
+
 Git: commit only with `gpa --auto -m "<subject>" -d "<body>" --json`. Never raw
 `git commit`, never `gpc` directly, never commit through `gh` or the GitHub API.
 If gpa fails, fix the cause and re-run gpa; never fall back. Branches,
