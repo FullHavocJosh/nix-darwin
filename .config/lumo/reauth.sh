@@ -9,6 +9,7 @@
 #   lumoauth             (this script with --local) sign in and give the session to THIS machine's own tamer, the
 #                        loopback-only one a laptop runs. No ssh, nothing on the Mini changes. Each machine gets its
 #                        own sign-in this way: sign in again for the Mini with lumoreauth, never share one session.
+#                        Typed on the Mini itself (usually in an ssh session), it runs lumoreauth on the MacBook instead.
 # This script only handles the Proton sign-in. It never reads or changes an API key: the Mini's keys are static
 # (other services use them).
 #
@@ -28,6 +29,16 @@ for arg in "$@"; do
     *) print -u2 -r -- "lumoreauth: unknown option $arg"; exit 2 ;;
   esac
 done
+
+# The Mini has no screen in use, so a browser opened here can never be signed in. Its sign-in always runs in Chromium
+# on the MacBook, so lumoauth typed on the Mini runs this script there (it tunnels back to this Mini's tamer).
+MACBOOK=${LUMO_MACBOOK_HOST:-macbookm2pro.rollet.family}
+MACBOOK_USER=${LUMO_MACBOOK_USER:-havoc}
+if (( LOCAL )) && [[ ${(L)$(scutil --get LocalHostName 2>/dev/null)} == ${(L)MINI%%.*} ]]; then
+  print "This is the Mini: running lumoreauth on $MACBOOK instead, Chromium opens there..."
+  fwd=""; (( CHECK )) && fwd=" --check"
+  exec ssh -t -i "$SSH_KEY" -o ConnectTimeout=8 "$MACBOOK_USER@$MACBOOK" "zsh ~/.config/lumo/reauth.sh$fwd"
+fi
 
 SSH=(ssh -i "$SSH_KEY" -o BatchMode=yes -o ConnectTimeout=8 "$MINI_USER@$MINI")
 PROFILE=$(mktemp -d "${TMPDIR:-/tmp}/lumo-reauth.XXXXXX") || exit 1
