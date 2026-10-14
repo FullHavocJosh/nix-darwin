@@ -1297,6 +1297,116 @@ function aidev() {
   _aidev_stack "${rest[@]}"
 }
 
+# aifo -- the read-only advisor: it researches and advises, it never changes anything. The user is the hands and the brain.
+#
+#   aifo [question words...]       interactive: answers the question first, then stays open for follow-ups
+#   some-command 2>&1 | aifo [why]  pipe an error or log in (the words are optional)
+#   aifo -p "question"             one-shot: print the advice and exit
+#   aifo -c                        continue the last session of this project (after pi crashed or you left)
+#
+# Who does what:  the local model in pi (Qwen) only relays and reports, with no file or shell tools;  Claude Code researches
+# with every MCP server and read-only local reads;  Lumo searches the web for documentation and links. Claude asks Lumo
+# for every doc, manpage and best practice it wants; Qwen summarizes and shows which recommendations have a source.
+#
+# Read-only is enforced outside Claude Code: ~/.config/aifo/aifo_guard.py is a default-deny PreToolUse hook passed with
+# --settings (a plain `claude` run never loads it), Claude runs under a sandbox profile that refuses file writes, and
+# the writing built-in tools are disallowed. Transcripts and state: ~/.aifo/<project>-<hash> (never inside a repository).
+# AIFO_DIR overrides ~/.config/aifo; AIFO_MAX_CLAUDE_CALLS (3) and AIFO_MAX_LUMO_CALLS (2) cap one question;
+# AIFO_CLAUDE_BUDGET_USD (2.0) caps one Claude call; AIFO_SANDBOX=off drops the sandbox profile.
+function aifo() {
+  local adir="${AIFO_DIR:-$HOME/.config/aifo}" sdir="${AISTACK_DIR:-$HOME/.config/aistack}"
+  local endpoint="${LLAMA_CPP_HOST:-http://127.0.0.1:8080}" lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
+  local f a cont=false print_mode=false
+  local -a words
+  for a in "$@"; do
+    case "$a" in
+      -c|--continue) cont=true ;;
+      -p|--print) print_mode=true ;;
+      *) words+=("$a") ;;
+    esac
+  done
+  local task="${words[*]}" piped=""
+  if [[ ! -t 0 ]]; then
+    piped=$(head -c 60000)
+    [[ -n "$piped" ]] && task="${task:+$task
+
+}$piped"
+  fi
+
+  for f in aifo_mcp.py aifo_guard.py aifo-prompt.md claude-system.md lumo-prompt.md; do
+    [[ -e "$adir/$f" ]] || { echo "✗ $adir/$f is missing -- run darwin-rebuild so the aifo files are stowed." >&2; return 1; }
+  done
+  [[ -e "$sdir/ralph_mcp.py" ]] || { echo "✗ $sdir/ralph_mcp.py is missing (aifo reuses its Lumo endpoint lookup)." >&2; return 1; }
+  command -v pi >/dev/null || { echo "✗ pi is not installed." >&2; return 1; }
+  command -v python3 >/dev/null || { echo "✗ python3 is not installed." >&2; return 1; }
+  command -v jq >/dev/null || { echo "✗ jq is not installed." >&2; return 1; }
+  if ! _validate_llamacpp; then
+    echo "✗ The local relay model (llama-server, $lms_model) is not usable at $endpoint. Start it: sudo launchctl kickstart -k system/org.nixos.llama-server-local" >&2
+    return 1
+  fi
+  if ! _validate_claude_code 2>/dev/null; then
+    echo "✗ Claude Code is not logged in. Run: claude auth login" >&2
+    return 1
+  fi
+
+  local project repo_root
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+  project="${repo_root:-$PWD}"
+  local aihome="${AIFO_HOME:-$HOME/.aifo}" aihome_real
+  mkdir -p "$aihome" 2>/dev/null
+  aihome_real=$(cd "$aihome" 2>/dev/null && pwd -P)
+  if [[ -z "$aihome_real" ]] || git -C "$aihome_real" rev-parse --show-toplevel >/dev/null 2>&1; then
+    echo "✗ $aihome resolves to ${aihome_real:-nowhere}${aihome_real:+, which is inside a git repository}; aifo keeps its files outside repositories." >&2
+    return 1
+  fi
+  local state_dir="$aihome_real/${project:t}-$(echo -n "$project" | shasum | cut -c1-10)"
+  local pi_dir="$state_dir/pi"
+  mkdir -p "$pi_dir"
+
+  local tier0
+  tier0=$(_aistack_tier0)
+  local lumo_note="Lumo (online docs) reachable"
+  [[ "$tier0" == "lumo" ]] || lumo_note="Lumo NOT reachable: advice will carry no online documentation (run lumoreauth, or check lumo-tamer)"
+  local claude_model="${AIFO_CLAUDE_MODEL:-${AISTACK_CLAUDE_MODEL:-sonnet}}"
+
+  jq -n --arg url "${endpoint}/v1" --arg id "$lms_model" \
+    '{providers: {llamacpp: {baseUrl: $url, api: "openai-completions", apiKey: "sk-local", models: [{id: $id, reasoning: true}]}}}' \
+    > "$pi_dir/models.json"
+  jq -n --arg py "$(command -v python3)" --arg bridge "$adir/aifo_mcp.py" --arg root "$project" --arg state "$state_dir" --arg sdir "$sdir" \
+    '{mcpServers: {aifo: {command: $py, args: [$bridge],
+       env: {AIFO_PROJECT: $root, AIFO_STATE_DIR: $state, AIFO_AISTACK_DIR: $sdir},
+       exposure: "direct", timeout: 90,
+       description: "Relays a question to Claude (MCP + local reads) and Lumo (online docs). Read-only. Poll aifo_wait."}}}' \
+    > "$pi_dir/mcp.json"
+
+  local prompt
+  prompt=$(<"$adir/aifo-prompt.md")
+  prompt=${prompt//@@PROJECT@@/$project}
+  prompt=${prompt//@@STATE_DIR@@/$state_dir}
+
+  echo "── aifo (read-only advisor) ──"
+  echo "Project:  $project"
+  echo "Relay:    local $lms_model in pi (free; no file or shell tools)"
+  echo "Research: Claude Code $claude_model, all MCP servers, read-only (BILLED, capped per question)   Online: $lumo_note"
+  echo "Enforced: guard hook + sandbox + disallowed write tools; nothing here can edit a file. Transcript: $state_dir"
+  echo ""
+
+  local tools="mcp__aifo__aifo_investigate,mcp__aifo__aifo_ask_claude,mcp__aifo__aifo_ask_lumo,mcp__aifo__aifo_wait,mcp__aifo__aifo_cancel"
+  local -a flags extra
+  flags=(--provider llamacpp --model "$lms_model" --name "aifo" --no-skills --append-system-prompt "$prompt" --tools "$tools")
+  $cont && flags+=(-c)
+  $print_mode && flags+=(-p)
+  extra=(${=AIFO_PI_EXTRA})
+  (
+    cd "$project" || exit 1
+    if [[ -n "$piped" && ! $print_mode == true ]]; then
+      PI_CODING_AGENT_DIR="$pi_dir" pi "${flags[@]}" "${extra[@]}" ${task:+"$task"} </dev/tty
+    else
+      PI_CODING_AGENT_DIR="$pi_dir" pi "${flags[@]}" "${extra[@]}" ${task:+"$task"}
+    fi
+  )
+}
+
 # The direct session: claude, or opencode with the selected provider's model. Used by `aidev --direct`, `aidev -p`,
 # and the gpa/gpc fix helpers, which need a model that edits a file now rather than a planned run.
 function _aidev_direct() {
