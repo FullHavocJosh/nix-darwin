@@ -7,8 +7,9 @@
 # Server key: Doppler LUMO_TAMER_API_KEY wins; otherwise config.yaml keeps its current key, and a
 # first run generates one.
 # Doppler is only consulted on the LAN host (LUMO_LAN=1). A loopback-only host generates and keeps its own keys.
-# Bind address: lumo-tamer has no setting for it, so provision-tamer.sh patches the build to read LUMO_TAMER_HOST.
-# A loopback-only host refuses to start a build without that patch rather than listen on every interface.
+# Bind address: upstream lumo-tamer has no setting for it; the fork's listen() reads LUMO_TAMER_HOST (provision-tamer.sh
+# patches a revision without that). A loopback-only host refuses to start a build without it rather than listen on
+# every interface.
 source "${0:A:h}/lumo-common.sh"
 cd "$LUMO_TAMER_DIR" || { echo "lumo-tamer not provisioned at $LUMO_TAMER_DIR" >&2; exit 1; }
 umask 077

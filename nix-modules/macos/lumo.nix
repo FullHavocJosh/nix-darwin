@@ -9,7 +9,8 @@ let
   lumoSrc = ../../.config/lumo;
 
   # lumo-tamer is third-party and unofficial: pin the exact commit that was reviewed and tested.
-  tamerRev = "0ef587b7f3d5d5165914602f0cc79bdfe7ee4e30"; # 2026-09-23
+  # 2026-10-14: fork main with the LUMO_TAMER_HOST listen() change (lumo-tamer-fullhavoc#1) on top of 0ef587b.
+  tamerRev = "b88c7f31f5354067f69e61e01bad2991414b7875";
 
   logs = "${home}/Library/Logs";
   asHavoc = "sudo -u havoc HOME=${home} PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin";

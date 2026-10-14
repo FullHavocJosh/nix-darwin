@@ -38,9 +38,10 @@ if [[ $head != $TAMER_REV ]]; then
 	rm -rf dist
 fi
 
-# Loopback-only hosts: lumo-tamer listens on every interface and has no setting for the address, so make the one
-# listen() call read LUMO_TAMER_HOST (run-tamer.sh sets it to 127.0.0.1 and refuses to start an unpatched build).
-# The LAN host is left exactly as upstream ships it.
+# Loopback-only hosts: upstream lumo-tamer listens on every interface and has no setting for the address. The fork's
+# listen() reads LUMO_TAMER_HOST since lumo-tamer-fullhavoc#1 (unset means every interface, so the LAN host behaves as
+# upstream); run-tamer.sh sets it to 127.0.0.1 and refuses to start a build without it. This patch is only a fallback
+# for a TAMER_REV that predates #1, and it leaves the checkout dirty when it runs.
 SERVER_TS=src/api/server.ts
 if [[ $LUMO_LAN != 1 ]] && ! grep -q LUMO_TAMER_HOST $SERVER_TS; then
 	/usr/bin/perl -0pi -e 's/this\.expressApp\.listen\(this\.serverConfig\.port, \(\) => \{/this.expressApp.listen(this.serverConfig.port, process.env.LUMO_TAMER_HOST ?? "::", () => {/' $SERVER_TS
