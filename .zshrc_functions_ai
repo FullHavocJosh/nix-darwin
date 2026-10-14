@@ -1389,7 +1389,7 @@ function ainfo() {
   echo "Relay:    local $lms_model in pi (free; no file or shell tools)"
   echo "Research: Claude Code $claude_model, all MCP servers, read-only (BILLED, capped per question)   Online: $lumo_note"
   echo "Enforced: guard hook + sandbox + disallowed write tools; nothing here can edit a file. Transcript: $state_dir"
-  echo "AWS:      aws CLI with *-ro (OpsReadOnly) profiles and read operations only; expired SSO: aws sso login --profile <name>-ro"
+  echo "AWS:      aws CLI with *-ro (OpsReadOnly) profiles and read operations only; expired SSO: Claude runs aws sso login, approve it in the browser"
   echo ""
 
   local tools="mcp__ainfo__ainfo_investigate,mcp__ainfo__ainfo_ask_claude,mcp__ainfo__ainfo_ask_lumo,mcp__ainfo__ainfo_wait,mcp__ainfo__ainfo_cancel"

@@ -545,10 +545,15 @@ def aws_check(args):
         return (
             None if op in ("list", "list-profiles") else "aws configure may only list"
         )
-    if svc in ("sso", "sso-oidc", "login", "logout"):
-        return "aws sso login is the user's job: ask them to run `aws sso login --profile <profile>`"
     cp = aws_config()
     ro = " ".join(aws_ro_profiles(cp)) or "(none found)"
+    if svc in ("sso", "sso-oidc", "login", "logout"):
+        # The login only refreshes the SSO token (the user approves it in the browser); every later call still needs
+        # a -ro profile. Any other flag (--no-browser, --sso-session, ...) is denied.
+        if svc != "sso" or op != "login" or set(flags) != {"--profile"}:
+            return "aws: only `aws sso login --profile <name>-ro` is allowed"
+        why = aws_profile_check(profile, cp)
+        return f"{why}; read-only profiles: {ro}" if why else None
     if not profile:
         return f"aws needs --profile <name>-ro; read-only profiles: {ro}"
     why = aws_profile_check(profile, cp)
