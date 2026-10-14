@@ -651,10 +651,17 @@ function darwin-reload() {
 }
 
 # Lumo sign-in state of this machine ($1 empty) or of the ssh target in $1: prints valid, invalid, building
-# (lumo-tamer is not built or has not written its config yet, which is the case right after a first switch), or
-# unreachable (the ssh connection itself failed, which says nothing about the sign-in).
+# (provision-tamer.sh is running, or tamer is built and its daemon has not written config.yaml yet, which is the case
+# right after a first switch), missing (not built and no provisioner running: that host has not been switched since
+# the tamer directory changed, or its provisioning failed), or unreachable (the ssh connection itself failed, which
+# says nothing about the sign-in).
 function _lumo_signin_state() {
-  local check='export PATH=/opt/homebrew/bin:$PATH; [ -d ~/lumo-tamer-fullhavoc/dist ] && [ -f ~/lumo-tamer-fullhavoc/config.yaml ] || { echo building; exit 0; }; cd ~/lumo-tamer-fullhavoc && tamer auth status 2>&1'
+  local check='export PATH=/opt/homebrew/bin:$PATH; d=$HOME/lumo-tamer-fullhavoc
+if [ ! -d "$d/dist" ] || [ ! -f "$d/config.yaml" ]; then
+  if pgrep -qf provision-tamer.sh || [ -d "$d/dist" ]; then echo building; else echo missing; fi
+  exit 0
+fi
+cd "$d" && tamer auth status 2>&1'
   local out
   if [[ -n "$1" ]]; then
     # -n: this runs from a prompt hook, so ssh must not read (and swallow) what is typed ahead at the terminal
@@ -664,28 +671,32 @@ function _lumo_signin_state() {
     out=$(/bin/sh -c "$check" 2>&1)
   fi
   case "$out" in
-    building) echo building ;;
+    building|missing) echo "$out" ;;
     *"Authentication is configured and valid"*) echo valid ;;
     *) echo invalid ;;
   esac
 }
 
 # After a switch: start the browser sign-in for $1 (laptop|desktop) when its session is not valid. $2 = ssh target
-# when the desktop was switched from another Mac.
+# when the desktop was switched from another Mac. $3 = nowait: check once, do not wait for a provisioner (for a host
+# this switch did not touch).
 function _lumo_signin_if_invalid() {
-  local host="$1" remote="$2" state i
+  local host="$1" remote="$2" nowait="$3" state i
   # a first switch builds lumo-tamer in the background and its daemon then writes config.yaml: give it 2 minutes
   for i in {1..12}; do
     state=$(_lumo_signin_state "$remote")
-    [[ "$state" == building ]] || break
-    (( i == 1 )) && echo "Lumo: lumo-tamer is still being set up, waiting up to 2 minutes..."
+    [[ "$state" == building && "$nowait" != nowait ]] || break
+    (( i == 1 )) && echo "Lumo: lumo-tamer${remote:+ on MacMiniM1} is still being set up, waiting up to 2 minutes..."
     sleep 10
   done
   case "$state" in
     valid) echo "Lumo: Proton sign-in${remote:+ on MacMiniM1} is valid, nothing to do."; return 0 ;;
     unreachable) echo "Lumo: could not reach $remote over ssh, so its sign-in was not checked."; return 0 ;;
     building)
-      echo "Lumo: lumo-tamer is not ready yet (tail ~/lumo-tamer-fullhavoc.provision.log). Sign in afterwards with: ${${host:#desktop}:+lumoauth}${${host:#laptop}:+lumoreauth}"
+      echo "Lumo: lumo-tamer${remote:+ on MacMiniM1} is not ready yet (tail ~/lumo-tamer-fullhavoc.provision.log). Sign in afterwards with: ${${host:#desktop}:+lumoauth}${${host:#laptop}:+lumoreauth}"
+      return 0 ;;
+    missing)
+      echo "Lumo: lumo-tamer${remote:+ on MacMiniM1} is not set up in ~/lumo-tamer-fullhavoc and no provisioner is running. Run: darwin-reload switch $host (if that does not fix it: tail ~/lumo-tamer-fullhavoc.provision.log)"
       return 0 ;;
   esac
   if [[ "$host" == laptop ]]; then
@@ -718,7 +729,8 @@ function _lumo_switch_precmd() {
     _lumo_signin_if_invalid desktop ""
   else
     _lumo_signin_if_invalid laptop ""
-    _lumo_signin_if_invalid desktop "${LUMO_MINI_USER:-havoc}@${LUMO_MINI_HOST:-macminim1.rollet.family}"
+    # a laptop switch starts no provisioning on the Mini, so waiting for one there would only block the prompt
+    _lumo_signin_if_invalid desktop "${LUMO_MINI_USER:-havoc}@${LUMO_MINI_HOST:-macminim1.rollet.family}" nowait
   fi
   return $rc
 }
