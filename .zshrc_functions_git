@@ -815,11 +815,25 @@ $(echo -e "$suspicious_lines" | head -c 4000)" | AI_LOCAL_ALIAS=local-coder-secr
   return 0
 }
 
+# Agent attribution is not allowed in commit messages or PR titles/descriptions: AI Co-Authored-By trailers,
+# "Generated with <tool>" footers, Claude Code links. Checked by gpa, gpc and gpr. Prints the offending lines and
+# returns 0 when any argument contains one.
+_AGENT_ATTRIBUTION_RE='co-authored-by:.*(claude|anthropic|copilot|openai|chatgpt|gpt|opencode|codex|gemini|cursor|aider|devin|\[bot\])|generated (with|by|using) \[?(claude|copilot|chatgpt|gpt|opencode|codex|gemini|cursor|aider|an ai|ai[^a-z]|ai$)|claude\.(com|ai)/(code|claude-code)|noreply@anthropic\.com|🤖'
+function _has_agent_attribution() {
+  local hits
+  hits=$(printf '%s\n' "$@" | grep -iE "$_AGENT_ATTRIBUTION_RE")
+  [[ -z "$hits" ]] && return 1
+  echo "✗ Agent attribution is not allowed in commit messages or PR descriptions. Remove:" >&2
+  printf '    %s\n' "${(@f)hits}" >&2
+  return 0
+}
+
 # Commit the staged changes with a message the caller already wrote, then push. $1 = subject, $2 = optional body.
 # Shared by `gpc -m`, `gpa -m` (which ends in gpc) and anything else that supplies its own message, so no AI
 # provider is involved and nothing can prompt.
 function _gpc_commit_push() {
   local subject="$1" body="$2"
+  _has_agent_attribution "$subject" "$body" && return 1
   echo ""
   echo "═══════════════════════════════════════════════════════════"
   echo "  $subject"
@@ -1195,6 +1209,8 @@ function gpc() {
       echo "✗ Failed to generate commit message after $max_retries attempts" >&2
       return 1
     fi
+
+    _has_agent_attribution "$commit_msg" && return 1
 
     echo ""
     echo "═══════════════════════════════════════════════════════════"
@@ -2460,6 +2476,8 @@ function gpa() {
     esac
   done
   local -x AI_COMMIT_MESSAGE="${msg:-${AI_COMMIT_MESSAGE:-}}" AI_COMMIT_BODY="${body:-${AI_COMMIT_BODY:-}}"
+  # Fail before the review runs; _gpc_commit_push checks again as the backstop.
+  _has_agent_attribution "$AI_COMMIT_MESSAGE" "$AI_COMMIT_BODY" && return 2
   local -x GPA_NO_REVIEW="${noreview:-${GPA_NO_REVIEW:-}}"
   # --waive <fingerprint> --reason "<why>": let one confirmed review finding through. The fingerprint is printed with
   # the finding. It is a person's decision, so it is refused together with --auto (the AI-agent interface), and it is
@@ -3623,6 +3641,7 @@ function gpr_func() {
       *) pos+=("$1"); shift ;;
     esac
   done
+  _has_agent_attribution "$title" "$body" && return 2
   local result_file
   result_file=$(mktemp)
   local -x GPR_TITLE="$title" GPR_BODY="$body" GPR_RESULT_FILE="$result_file" GPR_AUTO="${auto:#0}"
