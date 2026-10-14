@@ -331,66 +331,8 @@
           echo "Skipping MCP server builds (npm or node not available in PATH)"
         fi
 
-        echo "Creating font aliases for terminal compatibility..."
-
-        ALIAS_FONT_DIR="$HOME/Library/Fonts/Aliased"
-
-        ${pkgs.coreutils}/bin/rm -rf "$ALIAS_FONT_DIR"
-        mkdir -p "$ALIAS_FONT_DIR"
-
-        create_font_alias() {
-          local source_font="$1"
-          local new_family_name="$2"
-          local output_font="$3"
-
-          if [ -f "$source_font" ]; then
-            echo "Creating alias: $(basename "$output_font")"
-
-            local temp_dir
-            local temp_xml
-            local temp_font_base
-
-            temp_dir=$(${pkgs.coreutils}/bin/mktemp -d)
-            temp_xml="$temp_dir/font.ttx"
-            temp_font_base="$temp_dir/font"
-
-            ${pkgs.python3Packages.fonttools}/bin/ttx -t name -o "$temp_xml" "$source_font" 2>/dev/null || return 1
-
-            ${pkgs.gnused}/bin/sed -i \
-              -e "s|JetBrainsMono NFM|$new_family_name|g" \
-              -e "s|JetBrainsMono Nerd Font Mono|$new_family_name|g" \
-              "$temp_xml" 2>/dev/null || return 1
-
-            ${pkgs.coreutils}/bin/cp "$source_font" "$temp_font_base.ttf"
-
-            # ttx creates font#1.ttf when font.ttf already exists
-            ${pkgs.python3Packages.fonttools}/bin/ttx -m "$temp_font_base.ttf" "$temp_xml" 2>/dev/null || return 1
-
-            if [ -f "$temp_font_base#1.ttf" ]; then
-              ${pkgs.coreutils}/bin/mv "$temp_font_base#1.ttf" "$output_font"
-            else
-              ${pkgs.coreutils}/bin/mv "$temp_font_base.ttf" "$output_font"
-            fi
-
-            ${pkgs.coreutils}/bin/rm -rf "$temp_dir"
-          fi
-        }
-
-        for style in Regular Bold Italic BoldItalic; do
-          source="$HOME/Library/Fonts/JetBrainsMonoNerdFontMono-$style.ttf"
-          target="$ALIAS_FONT_DIR/JetBrainsMono-$style.ttf"
-
-          if [ -f "$source" ]; then
-            create_font_alias "$source" "JetBrains Mono" "$target"
-          fi
-        done
-
-        echo "Font aliases created. Rebuilding font cache..."
-
-        ${pkgs.coreutils}/bin/touch "$HOME/Library/Fonts/Aliased"
-        /System/Library/Frameworks/ApplicationServices.framework/Frameworks/ATS.framework/Support/atsutil databases -remove 2>/dev/null || true
-        /System/Library/Frameworks/ApplicationServices.framework/Frameworks/ATS.framework/Support/atsutil server -shutdown 2>/dev/null || true
-        /System/Library/Frameworks/ApplicationServices.framework/Frameworks/ATS.framework/Support/atsutil server -ping 2>/dev/null || true
+        # Remove JetBrains Mono aliases left by the old font alias step
+        ${pkgs.coreutils}/bin/rm -rf "$HOME/Library/Fonts/Aliased"
 
         echo "Checking for macOS system updates..."
         UPDATES_AVAILABLE=$(softwareupdate --list 2>&1)

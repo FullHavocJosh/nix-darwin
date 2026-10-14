@@ -3,7 +3,7 @@ command = /bin/zsh
 shell-integration-features = ssh-env,ssh-terminfo
 
 # Font
-font-family = JetBrainsMono Nerd Font Mono
+font-family = Hack Nerd Font Mono
 font-size = 14
 
 # Window

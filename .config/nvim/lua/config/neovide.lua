@@ -1,6 +1,6 @@
 -- Neovide GUI-specific settings
 if vim.g.neovide then
-  vim.o.guifont = "JetBrainsMono_Nerd_Font:h14"
+  vim.o.guifont = "Hack_Nerd_Font_Mono:h14"
 
   vim.g.neovide_padding_top = 0
   vim.g.neovide_padding_bottom = 0
