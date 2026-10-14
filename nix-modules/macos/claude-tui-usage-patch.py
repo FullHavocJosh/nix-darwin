@@ -1,482 +1,63 @@
 #!/usr/bin/env python3
-"""Idempotent source patches for the claude-tui Homebrew formula (slima4/claude-tui).
+"""Idempotent source patch for the claude-tui Homebrew formula (slima4/claude-tui).
 
-Two independent, anchor-checked patches, applied by nix-darwin's activation
-script every run (brew upgrades the formula in place, wiping any local edit
-to the installed copy each time). Each is skipped (with a warning, no crash)
-if its anchor text is missing, i.e. upstream changed the file it targets.
+Applied by nix-darwin's activation script on every run, since brew upgrades
+the formula in place and wipes local edits each time. Each edit is
+anchor-checked against pristine upstream text and skipped with a warning
+(no crash) if upstream changed it. Silent when already applied.
 
-1. network.py / per-account usage cache: fetch_usage() cached Claude.ai's
-   /api/oauth/usage response into a single ~/.claude/usage-cache.json shared
-   by the whole $HOME. On a machine running more than one Claude Code account
-   concurrently (e.g. a personal Claude.ai login alongside a work
-   Enterprise/SSO account with no OAuth usage endpoint at all), that single
-   shared file let one account's cached session/week numbers bleed into the
-   other account's statusline instead of the widget just going blank for the
-   account with no usage data. Patches fetch_usage() to key the cache file by
-   a hash of the resolved token, and to return None (not a stale/foreign
-   cache) when no token resolves at all.
+What it changes, compact statusline only (`claudetui statusline --compact`):
 
-2. formatting.py / most-constraining weekly window: format_usage_weekly()
-   only ever rendered the "seven_day" field. The oauth/usage response also
-   carries "seven_day_sonnet" (a narrower per-model cap) and "extra_usage"
-   (purchased overage), either of which can bind before the plain weekly
-   figure does — so a real, imminent constraint on one of those could go
-   unshown. Patches format_usage_weekly() to render whichever of the three
-   is currently closest to its cap. Superseded for actual rendering by
-   patch 3 below; left in place (and still covered by upstream's own
-   tests) since nothing else references it.
+  ▏▯▯▯▯┆▕ C  0% ⚡0/1.0M ⋮ ▏▮▮▮▋▯▯▕ 5-hour 41% resets in 1h02m
 
-3. Combined single usage widget (formatting.py, network.py, api_clients.py,
-   render.py): the statusline showed session (5-hour) and weekly usage as
-   two separate bars with single-letter labels (S/W) and a bare reset-time
-   countdown, which didn't say what window was being measured or give any
-   sense of when a limit would actually be hit. Adds format_usage_constraint(),
-   a single combined widget: whichever tracked window is currently closest
-   to its cap, plainly labeled, with a linear projection of time-to-cap
-   when one is computable (known fixed window length, reset timestamp
-   present, usage trending upward, and projected to hit the cap before the
-   window would reset anyway) — falling back to a plain "resets in <time>"
-   otherwise. Rewires render.py's line 2, line 3, and compact-line builders
-   to call it once instead of calling format_usage_session +
-   format_usage_weekly separately.
+1. formatting.py: adds format_usage_constraint(), one usage bar for whichever
+   rate_limits window (five_hour, seven_day) is closest to its cap, labeled
+   with the window name. Suffix is a linear "~Xh to limit" projection when
+   usage is on track to hit the cap before reset, else "resets in <time>".
+2. render.py: build_compact_line() drops the model name and shows that one
+   widget instead of separate S/W bars. Full (non-compact) mode is untouched.
 
-4. Real constraint-window keys + local monthly cost + layout cleanup
-   (transcript.py, formatting.py, display_state.py, render.py,
-   statusline.py, new monthly_cost.py): patch 3 above originally tracked
-   five_hour/seven_day/seven_day_sonnet/extra_usage, but reading
-   code.claude.com/docs/en/statusline showed those last two are fields of
-   the separate /api/oauth/usage HTTP response (network.py's fetch_usage())
-   -- a function statusline.py's real render path never calls. The stdin
-   `rate_limits` object Claude Code actually hands the statusline only ever
-   carries five_hour, seven_day, and spend_limit (a work/gateway account's
-   dollar-budget cap, Claude Code v2.1.251+). transcript.py's
-   _build_usage_from_rate_limits() didn't pass spend_limit through at all,
-   so a work account with a real $ budget cap had no way to show it even
-   though Claude Code was already handing it over. Swaps the key set to the
-   real three, adds a new monthly_cost.py module (a local $ estimate summed
-   from this machine's own Claude Code session transcripts, priced through
-   claude_tui_core.models' existing pricing table -- see that module's
-   docstring for caveats), and reworks the compact line to drop the model
-   name and append the monthly estimate after the usage widget. Gated on
-   spend_limit being present in rate_limits (2026-09-22 follow-up), so it
-   never shows on a personal Pro/Max login -- only a real work/gateway
-   account, which is what carries a genuine per-token dollar budget.
-
-5. Running monthly token count (new monthly_tokens.py, display_state.py,
-   render.py, statusline.py): patch 4's monthly estimate is a dollar figure
-   gated to a work/gateway seat, so a flat-subscription Pro/Max login never
-   saw any running monthly total at all. Adds monthly_tokens.py -- same
-   find_sessions/parse_session walk as monthly_cost.py, summing each
-   session's input+cache_read+cache_creation+output token counts instead of
-   pricing them -- and shows it for every account, ungated. Placed directly
-   in the context-bar block (next to the per-turn token count/limit) rather
-   than after the usage widget, since it answers a different question
-   ("how much this month" vs. "how full is the current window").
-
-6. Resync mechanism for both monthly totals (monthly_cost.py,
-   monthly_tokens.py, new usage-sync.md command): patches 4 and 5 only ever
-   recompute on a 15-minute TTL, so either total can sit visibly stale for
-   up to that long after new usage lands, with no way to force a recompute
-   on demand. There's no hook event for Claude Code's built-in /usage
-   command -- it's intercepted client-side before any hook fires, per
-   code.claude.com/docs/en/hooks -- so this can't piggyback on /usage
-   itself. Adds two independent fixes instead: (a) each fetch now also
-   compares the newest session-transcript mtime for the current month (a
-   cheap stat-only find_sessions() scan, no content parsing) against the
-   mtime recorded at the last recompute, and treats the cache as stale the
-   moment any session's transcript changes, not just after the TTL
-   elapses; (b) a force=True parameter that skips every staleness check and
-   recomputes unconditionally, wired up to a new user-invoked /usage-sync
-   command (usage-sync.md, installed to ~/.claude/commands/) for an
-   explicit manual resync.
-
-7. Self-heal for a stranded pre-gating monthly-cost compute block
-   (statusline.py): patch 4's own idempotency marker for its statusline.py
-   edit is the substring "fetch_monthly_cost" -- which an intermediate,
-   ungated one-liner version of that edit (installed by this script before
-   PR #88's spend_limit-gating fix landed) already contained too. So on any
-   machine that ran this script before that fix, the marker check always
-   reported "already applied" and permanently stranded the file on that
-   intermediate text, since the fix only updated NEW_STATUSLINE_COMPUTE in
-   place without changing the marker or accounting for what had already
-   been written to disk. That in turn blocked patches 5 and 6 as well,
-   since their own statusline.py anchors are text that only exists once
-   the gated version has actually landed. Adds a small, separate,
-   silent-when-inapplicable migration step (OLD_STATUSLINE_COMPUTE_V1,
-   _migrate_stranded_text()) that detects exactly that
-   stranded intermediate text and upgrades it in place before the regular
-   patch 4 _apply_patch call runs.
-
-8. Monthly-cost budget-bar, replacing the plain $X.XX/mo text (monthly_cost.py,
-   statusline.py): patch 4's spend_limit gating never actually fired for a
-   real monthly dollar cap -- confirmed empirically by capturing this
-   account's real statusline stdin payload directly: rate_limits is null,
-   so five_hour/seven_day/spend_limit are all unreachable, not just absent
-   for this account. The $800/mo Claude Code gateway credit cap this
-   account genuinely has (visible in /usage's own "Usage credits" section,
-   which reads from a source the statusline script has no access to) was
-   therefore never renderable from rate_limits at all. Replaces the dead
-   spend_limit gate with an explicit monthly_cost.budget setting
-   (~/.claude/claudeui.json) -- format_monthly_cost() renders total/budget
-   as a $-labeled progress bar ("$ 3% $26.70/$800") when a budget is
-   configured, empty otherwise (so an unconfigured Pro/Max seat still never
-   sees a dollar figure). Introduces three more "stranded intermediate
-   text" versions of the statusline.py compute block for the same
-   generic-marker reason as patch 7 -- v1 (pre-gating), v2 (gated, patch 7's
-   fix), and v2+tok (v2 with patch 5's monthly_tokens_part already layered
-   on top, confirmed to be this machine's actual real state) -- all
-   migrated via the same _migrate_stranded_text() helper,
-   generalized to take the replacement text as a parameter instead of
-   hardcoding NEW_STATUSLINE_COMPUTE.
+Earlier versions of this script also patched fetch_usage() caching (only used
+by `claudetui monitor`), a monthly cost/token estimate (never displayed: no
+budget configured, and it rescanned every transcript on each refresh), a
+/usage-sync command, and the model pricing table. The activation wrapper in
+packages-tui.nix reinstalls the formula once to clear those.
 """
 
 import os
 import sys
 
-NETWORK_MARKER = "# nix-darwin: per-account usage cache patch"
-
-OLD_IMPORTS = """import fcntl
-import http.client
-import json
-import os
-import ssl
-import subprocess
-import threading
-import time
-from typing import IO
-
-from .settings import get_setting
-
-# Paths
-CLAUDE_DIR = ".claude"
-STATUS_CACHE_PATH = os.path.join(
-    os.path.expanduser("~"), CLAUDE_DIR, "api-status-cache.json"
-)
-STATUS_LOCK_PATH = STATUS_CACHE_PATH + ".lock"
-USAGE_CACHE_PATH = os.path.join(os.path.expanduser("~"), CLAUDE_DIR, "usage-cache.json")
-USAGE_LOCK_PATH = USAGE_CACHE_PATH + ".lock\""""
-
-NEW_IMPORTS = f"""{NETWORK_MARKER}
-import fcntl
-import hashlib
-import http.client
-import json
-import os
-import ssl
-import subprocess
-import threading
-import time
-from typing import IO
-
-from .settings import get_setting
-
-# Paths
-CLAUDE_DIR = ".claude"
-STATUS_CACHE_PATH = os.path.join(
-    os.path.expanduser("~"), CLAUDE_DIR, "api-status-cache.json"
-)
-STATUS_LOCK_PATH = STATUS_CACHE_PATH + ".lock"
-
-
-def _usage_cache_paths(token: str) -> tuple[str, str]:
-    \"\"\"Per-account cache path, keyed by a hash of the OAuth token.
-
-    Multiple Claude Code accounts (e.g. personal vs an Enterprise/SSO org
-    account) can run concurrently on this machine under the same $HOME. A
-    single shared usage-cache.json would let one account's session/week
-    numbers leak into the other account's statusline. Hashing the token
-    keeps each account's cache isolated.
-    \"\"\"
-    h = hashlib.sha256(token.encode()).hexdigest()[:16]
-    path = os.path.join(os.path.expanduser("~"), CLAUDE_DIR, f"usage-cache-{{h}}.json")
-    return path, path + ".lock\""""
-
-OLD_FETCH_USAGE = '''def fetch_usage(background=False):
-    """Fetch usage data from Anthropic API."""
-    if not get_setting("usage", "enabled", default=True):
-        return None
-
-    rate_limit = max(60, get_setting("usage", "rate_limit", default=60))
-    cache = _read_json_file(USAGE_CACHE_PATH)
-    now = time.time()
-
-    if cache and now < cache.get("retry_after", 0):
-        return cache
-
-    is_stale = not cache or (now - cache.get("fetched_at", 0) >= rate_limit)
-
-    if not is_stale:
-        return cache
-
-    if background:
-        t = threading.Thread(
-            target=fetch_usage, kwargs={"background": False}, daemon=True
-        )
-        t.start()
-        return cache
-
-    lock_fd = _try_acquire_lock(USAGE_LOCK_PATH)
-    if lock_fd is None:
-        return cache
-
-    try:
-        token = _load_oauth_token()
-        if not token:
-            return cache
-
-        status, data = _fetch_https_json(
-            "api.anthropic.com",
-            "/api/oauth/usage",
-            {
-                "Accept": APPLICATION_JSON,
-                "Authorization": f"Bearer {token}",
-                "anthropic-beta": "oauth-2025-04-20",
-                "User-Agent": "claude-code/2.1.80",
-            },
-            timeout=3,
-        )
-        if status == 200 and data:
-            fresh = _build_usage_cache(data)
-            try:
-                _write_json_file(USAGE_CACHE_PATH, fresh)
-            except OSError:
-                pass
-            return fresh
-
-        if status == 429:
-            return _handle_usage_429(cache)
-    finally:
-        _release_lock(lock_fd)
-
-    return cache'''
-
-NEW_FETCH_USAGE = '''def fetch_usage(background=False):
-    """Fetch usage data from Anthropic API."""
-    if not get_setting("usage", "enabled", default=True):
-        return None
-
-    token = _load_oauth_token()
-    if not token:
-        # No resolvable OAuth token for this account/session (e.g. an
-        # Enterprise/SSO or Bedrock/Vertex account with no Claude.ai usage
-        # endpoint) -- return None rather than falling back to a cache file
-        # that may belong to a different account. format_usage_session/
-        # format_usage_weekly already render None as "", so the widget just
-        # goes blank instead of showing another account's numbers.
-        return None
-
-    cache_path, lock_path = _usage_cache_paths(token)
-    rate_limit = max(60, get_setting("usage", "rate_limit", default=60))
-    cache = _read_json_file(cache_path)
-    now = time.time()
-
-    if cache and now < cache.get("retry_after", 0):
-        return cache
-
-    is_stale = not cache or (now - cache.get("fetched_at", 0) >= rate_limit)
-
-    if not is_stale:
-        return cache
-
-    if background:
-        t = threading.Thread(
-            target=fetch_usage, kwargs={"background": False}, daemon=True
-        )
-        t.start()
-        return cache
-
-    lock_fd = _try_acquire_lock(lock_path)
-    if lock_fd is None:
-        return cache
-
-    try:
-        refreshed = _read_json_file(cache_path)
-        if refreshed and now - refreshed.get("fetched_at", 0) < rate_limit:
-            return refreshed
-
-        status, data = _fetch_https_json(
-            "api.anthropic.com",
-            "/api/oauth/usage",
-            {
-                "Accept": APPLICATION_JSON,
-                "Authorization": f"Bearer {token}",
-                "anthropic-beta": "oauth-2025-04-20",
-                "User-Agent": "claude-code/2.1.80",
-            },
-            timeout=3,
-        )
-        if status == 200 and data:
-            fresh = _build_usage_cache(data)
-            try:
-                _write_json_file(cache_path, fresh)
-            except OSError:
-                pass
-            return fresh
-
-        if status == 429:
-            if not cache:
-                cache = {"fetched_at": 0, "retry_count": 0, "retry_after": 0}
-            current_retry = cache.get("retry_count", 0)
-            backoff = min(120 * (2**current_retry), 600)
-            cache["retry_count"] = current_retry + 1
-            cache["retry_after"] = time.time() + backoff
-            try:
-                _write_json_file(cache_path, cache)
-            except OSError:
-                pass
-            return cache
-    finally:
-        _release_lock(lock_fd)
-
-    return cache'''
-
-
-FORMATTING_MARKER = "# nix-darwin: most-constraining-weekly-window patch"
-
-OLD_USAGE_BAR_FNS = '''def _format_usage_bar(usage_data, key, pct_label, length=20):
-    """Format a usage window as a progress bar line."""
-    from claude_tui_components.lines import build_bar_line
-
-    if not usage_data:
-        return ""
-    window = usage_data.get(key, {})
-    pct = window.get("utilization", 0)
-    if pct is None:
-        return ""
-
-    ratio = min(pct / 100.0, 1.0)
-    countdown = _format_reset_countdown(window.get("resets_at", ""))
-    return build_bar_line(ratio, length, pct_label=pct_label, icon="⏱" if countdown else "", suffix=countdown)
-
-
-def format_usage_session(usage_data, length=20):
-    """Format session (5-hour) usage for display."""
-    return _format_usage_bar(usage_data, "five_hour", "S", length)
-
-
-def format_usage_weekly(usage_data, length=20):
-    """Format weekly (7-day) usage for display."""
-    return _format_usage_bar(usage_data, "seven_day", "W", length)'''
-
-NEW_USAGE_BAR_FNS = f'''{FORMATTING_MARKER}
-# seven_day is the plan-wide weekly cap; seven_day_sonnet and extra_usage are
-# narrower windows the API also reports (Sonnet-specific cap, purchased
-# overage) that can bind before the plain weekly figure does. Surfacing only
-# seven_day meant a genuinely blocking constraint on one of the other two
-# windows would never show up on the statusline until it already hit. Any
-# key here not shaped like {{"utilization": <0-100>, ...}} is skipped rather
-# than guessed at -- an unexpected response schema degrades to "ignored",
-# never to a wrong number on screen.
-_WEEKLY_CONSTRAINT_KEYS = ("seven_day", "seven_day_sonnet", "extra_usage")
-
-
-def _most_constraining_window(usage_data, keys):
-    """Pick whichever named usage window has the highest utilization."""
-    best = None
-    best_pct = -1
-    for key in keys:
-        window = usage_data.get(key)
-        if not isinstance(window, dict):
-            continue
-        pct = window.get("utilization")
-        if not isinstance(pct, (int, float)):
-            continue
-        if pct > best_pct:
-            best_pct = pct
-            best = window
-    return best
-
-
-def _format_usage_bar_from_window(window, pct_label, length=20):
-    """Format a usage window dict as a progress bar line."""
-    from claude_tui_components.lines import build_bar_line
-
-    if not window:
-        return ""
-    pct = window.get("utilization", 0)
-    if pct is None:
-        return ""
-
-    ratio = min(pct / 100.0, 1.0)
-    countdown = _format_reset_countdown(window.get("resets_at", ""))
-    return build_bar_line(ratio, length, pct_label=pct_label, icon="⏱" if countdown else "", suffix=countdown)
-
-
-def format_usage_session(usage_data, length=20):
-    """Format session (5-hour) usage for display."""
-    if not usage_data:
-        return ""
-    return _format_usage_bar_from_window(usage_data.get("five_hour", {{}}), "S", length)
-
-
-def format_usage_weekly(usage_data, length=20):
-    """Format whichever weekly-ish usage window (seven_day, seven_day_sonnet,
-    extra_usage) is currently closest to its cap."""
-    if not usage_data:
-        return ""
-    window = _most_constraining_window(usage_data, _WEEKLY_CONSTRAINT_KEYS)
-    return _format_usage_bar_from_window(window, "W", length) if window else ""'''
-
-# --- Patch 3: single combined usage widget ---------------------------------
-
-COMBINED_MARKER = "# nix-darwin: combined-usage-widget patch"
+FORMATTING_MARKER = "# nix-darwin: combined-usage-widget patch"
 
 OLD_DATETIME_IMPORT = "from datetime import datetime, timezone"
 NEW_DATETIME_IMPORT = "from datetime import datetime, timedelta, timezone"
 
-# Anchored on format_usage_weekly's body as patch 2 left it -- patches apply
-# in order, so this targets the post-patch-2 source, not the original.
-OLD_TAIL_FOR_COMBINED = '''def format_usage_weekly(usage_data, length=20):
-    """Format whichever weekly-ish usage window (seven_day, seven_day_sonnet,
-    extra_usage) is currently closest to its cap."""
-    if not usage_data:
-        return ""
-    window = _most_constraining_window(usage_data, _WEEKLY_CONSTRAINT_KEYS)
-    return _format_usage_bar_from_window(window, "W", length) if window else ""'''
+OLD_FORMATTING_TAIL = '''def format_usage_weekly(usage_data, length=20):
+    """Format weekly (7-day) usage for display."""
+    return _format_usage_bar(usage_data, "seven_day", "W", length)'''
 
-NEW_TAIL_FOR_COMBINED = OLD_TAIL_FOR_COMBINED + '''
+NEW_FORMATTING_TAIL = OLD_FORMATTING_TAIL + '''
 
 
-''' + COMBINED_MARKER + '''
-# Single combined usage widget: one %, plainly labeled with which window it
-# is, and (when computable) a projected time to hitting that window's cap --
-# replacing the separate S/W bars, which gave no sense of what was being
-# measured or when it would actually bind. format_usage_session/
-# format_usage_weekly above are left in place (still covered by upstream's
-# own tests) but are no longer called from render.py after this patch.
-_CONSTRAINT_LABELS = {
-    "five_hour": "5-hour",
-    "seven_day": "7-day",
-    "seven_day_sonnet": "7-day (Sonnet)",
-    "extra_usage": "Overage",
-}
+''' + FORMATTING_MARKER + '''
+# Keys are what Claude Code's stdin rate_limits object carries (see
+# code.claude.com/docs/en/statusline); window lengths drive the projection.
+_CONSTRAINT_LABELS = {"five_hour": "5-hour", "seven_day": "7-day"}
+_CONSTRAINT_WINDOW_SECONDS = {"five_hour": 5 * 3600, "seven_day": 7 * 86400}
 
-# Fixed, documented window lengths for Claude's rate-limit windows, used to
-# project "time until this window hits its cap" from a single utilization%
-# reading. extra_usage has no documented fixed window length (it may be a
-# purchased balance with no rolling reset) so it's deliberately absent here:
-# no projection is attempted for it, only the plain percentage.
-_CONSTRAINT_WINDOW_SECONDS = {
-    "five_hour": 5 * 3600,
-    "seven_day": 7 * 86400,
-    "seven_day_sonnet": 7 * 86400,
-}
-
-_ALL_CONSTRAINT_KEYS = ("five_hour", "seven_day", "seven_day_sonnet", "extra_usage")
+# Right after a reset, elapsed time is tiny and any usage projects a false
+# "about to hit the cap" alarm; wait this long before trusting the rate.
+_MIN_ELAPSED_FOR_PROJECTION_SECONDS = 300
 
 
-def _most_constraining_window_and_key(usage_data, keys):
-    """Like _most_constraining_window, but also returns which key won."""
+def _most_constraining_window(usage_data):
     best_key, best, best_pct = None, None, -1
-    for key in keys:
+    for key in _CONSTRAINT_LABELS:
         window = usage_data.get(key)
         if not isinstance(window, dict):
             continue
         pct = window.get("utilization")
-        if not isinstance(pct, (int, float)):
-            continue
-        if pct > best_pct:
+        if isinstance(pct, (int, float)) and pct > best_pct:
             best_key, best, best_pct = key, window, pct
     return best_key, best
 
@@ -496,31 +77,17 @@ def _format_hm(seconds):
     return f"{h}h{m:02d}m" if h > 0 else f"{m}m"
 
 
-# Minimum time into a window before trusting a linear-rate projection. Right
-# after a window resets, elapsed is tiny, so even trivial usage produces a
-# wildly inflated rate estimate (e.g. 1% two minutes in projects hitting the
-# cap in the next few minutes) -- a false alarm, not a real constraint.
-_MIN_ELAPSED_FOR_PROJECTION_SECONDS = 300
-
-
 def _project_time_to_cap(key, pct, reset_dt):
-    """Linear projection of when this window's usage would hit 100%, from
-    its known fixed duration and current utilization. None when: unknown
-    window duration, no reset timestamp, not enough elapsed time yet for a
-    stable rate estimate, usage isn't trending upward, or the window would
-    reset before the cap is reached."""
+    """Seconds until pct hits 100 at the current average rate, or None when
+    it would reset first or there is not enough data for a stable rate."""
     duration = _CONSTRAINT_WINDOW_SECONDS.get(key)
-    if duration is None or reset_dt is None or pct is None or pct <= 0:
+    if duration is None or reset_dt is None or pct <= 0:
         return None
     now = datetime.now(timezone.utc)
-    window_start = reset_dt - timedelta(seconds=duration)
-    elapsed = (now - window_start).total_seconds()
+    elapsed = (now - (reset_dt - timedelta(seconds=duration))).total_seconds()
     if elapsed < _MIN_ELAPSED_FOR_PROJECTION_SECONDS:
         return None
-    rate = pct / elapsed
-    if rate <= 0:
-        return None
-    eta_seconds = (100 - pct) / rate
+    eta_seconds = (100 - pct) / (pct / elapsed)
     seconds_to_reset = (reset_dt - now).total_seconds()
     if seconds_to_reset > 0 and eta_seconds > seconds_to_reset:
         return None
@@ -528,25 +95,17 @@ def _project_time_to_cap(key, pct, reset_dt):
 
 
 def format_usage_constraint(usage_data, length=20):
-    """Single combined usage widget: whichever tracked window (5-hour
-    session, 7-day, 7-day Sonnet-only, purchased overage) is currently
-    closest to its cap -- one %, plainly labeled with which window it is,
-    and a projected time to hitting that cap when one can be computed."""
+    """Single usage bar for whichever window is closest to its cap."""
     from claude_tui_components.lines import build_bar_line
 
     if not usage_data:
         return ""
-    key, window = _most_constraining_window_and_key(usage_data, _ALL_CONSTRAINT_KEYS)
+    key, window = _most_constraining_window(usage_data)
     if window is None:
         return ""
-    pct = window.get("utilization")
-    if not isinstance(pct, (int, float)):
-        return ""
-
+    pct = window["utilization"]
     ratio = min(pct / 100.0, 1.0)
-    label = _CONSTRAINT_LABELS.get(key, key)
-    reset_dt = _parse_iso(window.get("resets_at", ""))
-    eta_seconds = _project_time_to_cap(key, pct, reset_dt)
+    eta_seconds = _project_time_to_cap(key, pct, _parse_iso(window.get("resets_at", "")))
 
     if eta_seconds is not None:
         color = RED if ratio >= 0.8 else ORANGE if ratio >= 0.55 else YELLOW
@@ -555,175 +114,16 @@ def format_usage_constraint(usage_data, length=20):
         countdown = _format_reset_countdown(window.get("resets_at", ""))
         suffix = f"{GRAY}resets in {countdown}{RESET}" if countdown else ""
 
-    return build_bar_line(ratio, length, pct_label=label, suffix=suffix)'''
+    return build_bar_line(ratio, length, pct_label=_CONSTRAINT_LABELS[key], suffix=suffix)'''
 
-OLD_API_CLIENTS = '''from claude_tui_core.network import (
-    fetch_api_status,
-    format_api_status,
-    fetch_usage,
-    format_usage_session,
-    format_usage_weekly,
-)
-
-__all__ = [
-    "fetch_api_status",
-    "format_api_status",
-    "fetch_usage",
-    "format_usage_session",
-    "format_usage_weekly",
-]'''
-
-NEW_API_CLIENTS = '''from claude_tui_core.network import (
-    fetch_api_status,
-    format_api_status,
-    fetch_usage,
-    format_usage_session,
-    format_usage_weekly,
-    format_usage_constraint,
-)
-
-__all__ = [
-    "fetch_api_status",
-    "format_api_status",
-    "fetch_usage",
-    "format_usage_session",
-    "format_usage_weekly",
-    "format_usage_constraint",
-]'''
-
-OLD_NETWORK_REEXPORT = '''from .formatting import (  # noqa: E402
-    format_api_status,
-    format_usage_session,
-    format_usage_weekly,
-)'''
-
-NEW_NETWORK_REEXPORT = '''from .formatting import (  # noqa: E402
-    format_api_status,
-    format_usage_session,
-    format_usage_weekly,
-    format_usage_constraint,
-)'''
+RENDER_MARKER = "format_usage_constraint"
 
 OLD_RENDER_IMPORT = "from .api_clients import format_usage_session, format_usage_weekly"
-NEW_RENDER_IMPORT = "from .api_clients import format_usage_constraint"
+NEW_RENDER_IMPORT = (
+    OLD_RENDER_IMPORT + "\nfrom claude_tui_core.formatting import format_usage_constraint  # nix-darwin"
+)
 
-OLD_RENDER_LINE2 = '''    if is_visible("line2", "usage"):
-        usage_str = format_usage_session(ds.usage, length=ds.bar_length)
-        if usage_str:
-            parts.append(usage_str)'''
-
-NEW_RENDER_LINE2 = '''    if is_visible("line2", "usage"):
-        usage_str = format_usage_constraint(ds.usage, length=ds.bar_length)
-        if usage_str:
-            parts.append(usage_str)'''
-
-OLD_RENDER_LINE3 = '''    lines = []
-    if is_visible("line3", "usage_weekly"):
-        weekly_str = format_usage_weekly(ds.usage, length=ds.bar_length)
-        if weekly_str:
-            lines.append(weekly_str)
-    wrapped = wrap_line_parts('''
-
-NEW_RENDER_LINE3 = '''    lines = []
-    wrapped = wrap_line_parts('''
-
-OLD_RENDER_COMPACT = '''    if ds.usage:
-        session = format_usage_session(ds.usage, length=ds.bar_length)
-        weekly = format_usage_weekly(ds.usage, length=ds.bar_length)
-        if session:
-            parts.append(session)
-        if weekly:
-            parts.append(weekly)'''
-
-NEW_RENDER_COMPACT = '''    if ds.usage:
-        usage_str = format_usage_constraint(ds.usage, length=ds.bar_length)
-        if usage_str:
-            parts.append(usage_str)'''
-
-# --- Patch 4: real constraint-window keys + local monthly cost + layout ----
-
-OLD_TRANSCRIPT_KEYS = '''    for key in ("five_hour", "seven_day"):'''
-NEW_TRANSCRIPT_KEYS = '''    for key in ("five_hour", "seven_day", "spend_limit"):'''
-
-OLD_REAL_KEYS_BLOCK = '''# nix-darwin: combined-usage-widget patch
-# Single combined usage widget: one %, plainly labeled with which window it
-# is, and (when computable) a projected time to hitting that window's cap --
-# replacing the separate S/W bars, which gave no sense of what was being
-# measured or when it would actually bind. format_usage_session/
-# format_usage_weekly above are left in place (still covered by upstream's
-# own tests) but are no longer called from render.py after this patch.
-_CONSTRAINT_LABELS = {
-    "five_hour": "5-hour",
-    "seven_day": "7-day",
-    "seven_day_sonnet": "7-day (Sonnet)",
-    "extra_usage": "Overage",
-}
-
-# Fixed, documented window lengths for Claude's rate-limit windows, used to
-# project "time until this window hits its cap" from a single utilization%
-# reading. extra_usage has no documented fixed window length (it may be a
-# purchased balance with no rolling reset) so it's deliberately absent here:
-# no projection is attempted for it, only the plain percentage.
-_CONSTRAINT_WINDOW_SECONDS = {
-    "five_hour": 5 * 3600,
-    "seven_day": 7 * 86400,
-    "seven_day_sonnet": 7 * 86400,
-}
-
-_ALL_CONSTRAINT_KEYS = ("five_hour", "seven_day", "seven_day_sonnet", "extra_usage")'''
-
-NEW_REAL_KEYS_BLOCK = '''# nix-darwin: combined-usage-widget patch
-# Single combined usage widget: one %, plainly labeled with which window it
-# is, and (when computable) a projected time to hitting that window's cap --
-# replacing the separate S/W bars, which gave no sense of what was being
-# measured or when it would actually bind. format_usage_session/
-# format_usage_weekly above are left in place (still covered by upstream's
-# own tests) but are no longer called from render.py after this patch.
-#
-# Key set corrected 2026-09-21 after reading code.claude.com/docs/en/statusline:
-# the real stdin `rate_limits` object Claude Code hands the statusline only
-# ever carries five_hour, seven_day, and spend_limit (the last one only
-# "behind a Claude apps gateway that sets a spend limit for you", Claude Code
-# v2.1.251+) -- seven_day_sonnet/extra_usage were fields of the separate
-# /api/oauth/usage HTTP response that fetch_usage() (network.py) calls, but
-# that function is never actually invoked by statusline.py's real render
-# path, so those two keys could never appear in practice. spend_limit is the
-# real mechanism for a work/gateway account's dollar-budget cap.
-_CONSTRAINT_LABELS = {
-    "five_hour": "5-hour",
-    "seven_day": "7-day",
-    "spend_limit": "Spend limit",
-}
-
-# Fixed, documented window lengths for Claude's rate-limit windows, used to
-# project "time until this window hits its cap" from a single utilization%
-# reading. spend_limit's reset period is gateway-configured, not a documented
-# fixed duration, so it's deliberately absent here: no projection is
-# attempted for it, only the plain percentage (which can exceed 100 -- see
-# format_usage_constraint).
-_CONSTRAINT_WINDOW_SECONDS = {
-    "five_hour": 5 * 3600,
-    "seven_day": 7 * 86400,
-}
-
-_ALL_CONSTRAINT_KEYS = ("five_hour", "seven_day", "spend_limit")'''
-
-OLD_DISPLAY_STATE = '''    cache_pct: int = 0
-    cost_per_turn: str = ""
-
-    # Layout
-    bar_length: int = 20'''
-
-NEW_DISPLAY_STATE = '''    cache_pct: int = 0
-    cost_per_turn: str = ""
-    monthly_cost_part: str = ""
-
-    # Layout
-    bar_length: int = 20'''
-
-OLD_COMPACT_LINE_V2 = '''def build_compact_line(ds):
-    """Build compact single-line from DisplayState."""
-    parts = []
+OLD_RENDER_COMPACT = '''    parts = []
     if is_visible("line1", "model"):
         parts.append(f"{BOLD}{MAGENTA}{ds.model}{RESET}")
     if is_visible("line1", "context_bar"):
@@ -732,776 +132,27 @@ OLD_COMPACT_LINE_V2 = '''def build_compact_line(ds):
             ctx += f" {format_token_suffix(ds.tokens_str, ds.limit_str)}"
         parts.append(ctx)
     if ds.usage:
-        usage_str = format_usage_constraint(ds.usage, length=ds.bar_length)
-        if usage_str:
-            parts.append(usage_str)
-    sep = f" {GRAY}⋮{RESET} "
-    return sep.join(parts) if parts else ""'''
+        session = format_usage_session(ds.usage, length=ds.bar_length)
+        weekly = format_usage_weekly(ds.usage, length=ds.bar_length)
+        if session:
+            parts.append(session)
+        if weekly:
+            parts.append(weekly)'''
 
-NEW_COMPACT_LINE_V2 = '''def build_compact_line(ds):
-    """Build compact single-line from DisplayState.
-
-    nix-darwin: drops the model name (redundant with what's visible
-    elsewhere in the UI per user request) and appends a local monthly-cost
-    estimate after the usage widget."""
-    parts = []
+NEW_RENDER_COMPACT = '''    parts = []
     if is_visible("line1", "context_bar"):
         ctx = f"{ds.bar}"
         if is_visible("line1", "token_count"):
             ctx += f" {format_token_suffix(ds.tokens_str, ds.limit_str)}"
         parts.append(ctx)
-    if ds.usage:
-        usage_str = format_usage_constraint(ds.usage, length=ds.bar_length)
-        if usage_str:
-            if ds.monthly_cost_part:
-                usage_str += f" {GRAY}·{RESET} {ds.monthly_cost_part}"
-            parts.append(usage_str)
-    elif ds.monthly_cost_part:
-        parts.append(ds.monthly_cost_part)
-    sep = f" {GRAY}⋮{RESET} "
-    return sep.join(parts) if parts else ""'''
-
-OLD_STATUSLINE_IMPORT = '''from statusline_core.transcript import (
-    parse_input_data,
-    parse_transcript,
-)
-from claude_tui_components.utils import format_tokens'''
-
-NEW_STATUSLINE_IMPORT = '''from statusline_core.transcript import (
-    parse_input_data,
-    parse_transcript,
-)
-from claude_tui_components.utils import format_tokens
-from claude_tui_core.monthly_cost import fetch_monthly_cost, format_monthly_cost'''
-
-OLD_STATUSLINE_COMPUTE = '''    usage = basic["usage"]
-
-    ds = DisplayState('''
-
-# v2: PR #88's gating fix (2026-09-22). Superseded below once empirical
-# testing (statusline.py's real stdin payload, captured directly) confirmed
-# rate_limits is always null on this account/session -- spend_limit never
-# actually reaches the statusline, so the gate below never once fired for
-# real; kept only as OLD_STATUSLINE_COMPUTE_V2's migration anchor.
-OLD_STATUSLINE_COMPUTE_V2 = '''    usage = basic["usage"]
-    # nix-darwin: spend_limit only ever appears behind a work/gateway account
-    # (see patch 4 docstring) -- personal Pro/Max logins never get it. Gate
-    # the local monthly-cost estimate on it so a personal-account session
-    # never shows a dollar figure that isn't how that seat is billed.
-    monthly_cost_part = (
-        format_monthly_cost(fetch_monthly_cost(background=True))
-        if usage and "spend_limit" in usage
-        else ""
-    )
-
-    ds = DisplayState('''
-
-# v3: monthly-cost budget-bar patch. rate_limits.spend_limit is unreachable
-# (see OLD_STATUSLINE_COMPUTE_V2's comment), so gating on it is dead code --
-# replaced with an explicit, user-configured monthly_cost.budget setting
-# (see MONTHLY_COST_MODULE_SOURCE's format_monthly_cost()). format_monthly_cost
-# itself stays silent when no budget is configured, so this call is safe to
-# leave unconditional here, the same way monthly_tokens_part already is.
-NEW_STATUSLINE_COMPUTE = '''    usage = basic["usage"]
-    # nix-darwin: monthly-cost budget-bar patch (v3) -- format_monthly_cost()
-    # renders a $-budget progress bar when monthly_cost.budget is configured
-    # (claudeui.json), and stays empty otherwise. No usage/rate_limits gating
-    # here: rate_limits.spend_limit was confirmed empirically to never reach
-    # the statusline on this account, so gating on it was dead code.
-    monthly_cost_part = format_monthly_cost(fetch_monthly_cost(background=True), length=bar_length)
-
-    ds = DisplayState('''
-
-# When PR #88's gating fix (2026-09-22) rewrote NEW_STATUSLINE_COMPUTE above
-# to the gated form, it left OLD_STATUSLINE_COMPUTE pointed at the original
-# pre-patch-4 text (no monthly_cost_part at all). Any machine that had
-# already run the pre-#88 version of this script was left with this
-# intermediate, ungated one-liner instead -- and the _apply_patch call below
-# keys its idempotency check on the substring "fetch_monthly_cost", which
-# this intermediate text also already contains, so that call always reports
-# "already applied" and can never advance a machine stuck here to the gated
-# version. _migrate_stranded_v1_monthly_cost_compute() below detects and
-# repairs exactly this one stranded intermediate state.
-OLD_STATUSLINE_COMPUTE_V1 = '''    usage = basic["usage"]
-    monthly_cost_part = format_monthly_cost(fetch_monthly_cost(background=True))
-
-    ds = DisplayState('''
-
-OLD_STATUSLINE_WIRING = '''        cost_per_turn=calculate_cost_per_turn(cost, metrics["turn_count"]),
-        bar_length=bar_length,
-    )'''
-
-NEW_STATUSLINE_WIRING = '''        cost_per_turn=calculate_cost_per_turn(cost, metrics["turn_count"]),
-        bar_length=bar_length,
-        monthly_cost_part=monthly_cost_part,
-    )'''
-
-MONTHLY_COST_MODULE_SOURCE = '''# nix-darwin: local-monthly-cost patch
-"""Local monthly-cost estimate for the statusline.
-
-Not a real billed total -- there is no local API for that (Anthropic's
-Usage & Cost Admin API and the Claude Enterprise Analytics API both require
-an org admin credential this account may not have). This instead recomputes
-an estimate from this machine's own Claude Code session transcripts: sums
-each session ending in the current UTC calendar month, using each session's
-own token counts priced through claude_tui_core.models' pricing table --
-the same list-price convention claude-code-session-stats already uses for
-its own per-session cost breakdown.
-
-Rendered as a `$`-progress-bar against a user-configured monthly budget
-(monthly_cost.budget in ~/.claude/claudeui.json) -- see format_monthly_cost()
-below. Originally gated on rate_limits carrying a spend_limit window (a
-work/gateway account's real $ cap), but that was confirmed empirically to
-never actually reach the statusline on this account (rate_limits is null in
-the real stdin payload), so it's gated on the budget setting instead. Empty
-when no budget is configured -- a personal Pro/Max login never sees a dollar
-figure that isn't how that seat is billed, same intent as the original
-spend_limit gating, just via an explicit opt-in instead of dead API data.
-
-Caveats, worth surfacing to the user:
-- Local-machine only. Doesn't see sessions run on another device, or any
-  Console/API usage outside Claude Code.
-- Sums every session transcript on this machine ending this month, not just
-  ones run under the currently-active account -- if a personal account was
-  used earlier in the same calendar month on this machine, that usage is
-  still folded into the total shown once a work/gateway account is active.
-- List-price estimate. For a gateway/API account it should track real spend
-  reasonably closely; it's never shown for a flat-subscription seat (see
-  gating above).
-- A session that started last month and continued into this one has its
-  *entire* cost attributed to whichever month its last message landed in
-  (matching the granularity claude-code-session-stats already uses).
-
-Resync: besides the plain TTL below, every fetch also compares the newest
-session-transcript mtime for the current month against the mtime recorded
-at the last recompute (both via find_sessions()'s cheap stat-only scan --
-no transcript content is parsed just to check staleness), so a session that
-wrote new turns invalidates the cache immediately rather than waiting out
-the TTL. force=True additionally skips every staleness check and recomputes
-unconditionally, for the /usage-sync command.
-"""
-
-import importlib.util
-import os
-import threading
-import time
-from datetime import datetime, timezone
-from pathlib import Path
-
-from .network import _read_json_file, _write_json_file, _try_acquire_lock, _release_lock
-from .settings import get_setting
-
-CLAUDE_DIR = ".claude"
-MONTHLY_COST_CACHE_PATH = os.path.join(os.path.expanduser("~"), CLAUDE_DIR, "monthly-cost-cache.json")
-MONTHLY_COST_LOCK_PATH = MONTHLY_COST_CACHE_PATH + ".lock"
-
-# claude_tui_core/monthly_cost.py -> libexec/claude_tui_core/.. -> libexec/
-_SESSION_STATS_PATH = (
-    Path(__file__).resolve().parent.parent / "claude-code-session-stats" / "session-stats.py"
-)
-
-_session_stats_module = None
-_session_stats_load_failed = False
-
-
-def _load_session_stats_module():
-    """Dynamically load the sibling session-stats.py script as a module.
-
-    It's a standalone script (hyphenated dir/file names, not a package), so
-    it's loaded by path rather than imported by name -- the same pattern
-    settings.py's load_widget already uses for widget files.
-    """
-    global _session_stats_module, _session_stats_load_failed
-    if _session_stats_module is not None:
-        return _session_stats_module
-    if _session_stats_load_failed:
-        return None
-    if not _SESSION_STATS_PATH.exists():
-        _session_stats_load_failed = True
-        return None
-    try:
-        spec = importlib.util.spec_from_file_location("claude_code_session_stats", _SESSION_STATS_PATH)
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-    except Exception:
-        _session_stats_load_failed = True
-        return None
-    _session_stats_module = mod
-    return mod
-
-
-def _current_month_key(now=None):
-    now = now or datetime.now(timezone.utc)
-    return f"{now.year:04d}-{now.month:02d}"
-
-
-def _newest_session_mtime(mod, month_key):
-    """Newest mtime (epoch float) among this month's session transcripts, or
-    None if unknown. find_sessions() only stats files -- it never opens or
-    parses transcript content -- so this is cheap enough to call on every
-    fetch, not just on a recompute."""
-    if mod is None:
-        return None
-    try:
-        sessions = mod.find_sessions(days=32)
-    except Exception:
-        return None
-    newest = None
-    for s in sessions:
-        modified = s.get("modified")
-        if modified is None:
-            continue
-        if _current_month_key(modified) != month_key:
-            continue
-        ts = modified.timestamp()
-        if newest is None or ts > newest:
-            newest = ts
-    return newest
-
-
-def _compute_monthly_cost():
-    mod = _load_session_stats_module()
-    if mod is None:
-        return None
-
-    month_key = _current_month_key()
-    total = 0.0
-    try:
-        sessions = mod.find_sessions(days=32)
-    except Exception:
-        return None
-
-    for s in sessions:
-        try:
-            report = mod.parse_session(s["path"])
-        except Exception:
-            continue
-        end_time = report.get("end_time")
-        if not end_time:
-            continue
-        try:
-            end_dt = datetime.fromisoformat(str(end_time).replace("Z", "+00:00"))
-        except ValueError:
-            continue
-        if _current_month_key(end_dt) != month_key:
-            continue
-        total += report.get("cost", {}).get("total", 0.0)
-
-    return total
-
-
-def fetch_monthly_cost(background=False, force=False):
-    """Cached local monthly-cost estimate. Returns a float, or None when
-    disabled, unavailable (session-stats.py missing), or never yet computed
-    and a background refresh was just kicked off. force=True bypasses the
-    TTL and mtime checks and always recomputes (used by /usage-sync)."""
-    if not get_setting("monthly_cost", "enabled", default=True):
-        return None
-
-    ttl = max(300, get_setting("monthly_cost", "ttl", default=900))
-    cache = _read_json_file(MONTHLY_COST_CACHE_PATH)
-    now = time.time()
-    month_key = _current_month_key()
-    mod = _load_session_stats_module()
-    newest_mtime = _newest_session_mtime(mod, month_key)
-
-    is_stale = (
-        force
-        or not cache
-        or cache.get("month") != month_key
-        or now - cache.get("fetched_at", 0) >= ttl
-        or (newest_mtime is not None and newest_mtime > cache.get("newest_mtime", 0))
-    )
-    if not is_stale:
-        return cache.get("total")
-
-    if background:
-        t = threading.Thread(
-            target=fetch_monthly_cost, kwargs={"background": False, "force": force}, daemon=True
-        )
-        t.start()
-        return cache.get("total") if cache and cache.get("month") == month_key else None
-
-    lock_fd = _try_acquire_lock(MONTHLY_COST_LOCK_PATH)
-    if lock_fd is None:
-        return cache.get("total") if cache else None
-
-    try:
-        if not force:
-            refreshed = _read_json_file(MONTHLY_COST_CACHE_PATH)
-            if (
-                refreshed
-                and refreshed.get("month") == month_key
-                and now - refreshed.get("fetched_at", 0) < ttl
-                and (newest_mtime is None or newest_mtime <= refreshed.get("newest_mtime", 0))
-            ):
-                return refreshed.get("total")
-
-        total = _compute_monthly_cost()
-        if total is None:
-            return cache.get("total") if cache and cache.get("month") == month_key else None
-
-        fresh = {"fetched_at": now, "month": month_key, "total": total, "newest_mtime": newest_mtime or 0}
-        try:
-            _write_json_file(MONTHLY_COST_CACHE_PATH, fresh)
-        except OSError:
-            pass
-        return total
-    finally:
-        _release_lock(lock_fd)
-
-
-def format_monthly_cost(total, length=20):
-    """Format the monthly-cost estimate as a $-budget progress bar when
-    monthly_cost.budget is configured (e.g. {"monthly_cost": {"budget": 800}}
-    in ~/.claude/claudeui.json), matching the real cap the account is known
-    to carry even though rate_limits.spend_limit itself is unreachable. ''
-    when no budget is configured or total is unavailable -- see this
-    module's docstring for why that's the right default."""
-    if total is None:
-        return ""
-    budget = get_setting("monthly_cost", "budget", default=None)
-    if not budget:
-        return ""
-    from .formatting import GRAY, RESET
-    from claude_tui_components.lines import build_bar_line
-
-    ratio = min(total / budget, 1.0) if budget > 0 else 0.0
-    suffix = f"{GRAY}${total:.2f}/${budget:.0f}{RESET}"
-    return build_bar_line(ratio, length, pct_label="$", suffix=suffix)
-'''
-
-# --- Patch 5: running monthly token count, next to the context bar --------
-
-MONTHLY_TOKENS_MODULE_SOURCE = '''# nix-darwin: local-monthly-tokens patch
-"""Local running monthly token count for the statusline.
-
-Sums every Claude Code session transcript on this machine ending in the
-current UTC calendar month (input + cache_read + cache_creation + output),
-using the same find_sessions/parse_session walk monthly_cost.py already
-does for its own per-session breakdown -- see that module's docstring for
-the same caveats (local-machine only, all accounts on this machine this
-month, last-message-month attribution). Shown for every account, unlike
-monthly_cost.py's dollar estimate which is gated to a work/gateway seat
-with a real spend_limit -- a running token count is meaningful on a flat
-subscription seat too.
-
-Resync: besides the plain TTL below, every fetch also compares the newest
-session-transcript mtime for the current month against the mtime recorded
-at the last recompute (both via find_sessions()'s cheap stat-only scan --
-no transcript content is parsed just to check staleness), so a session that
-wrote new turns invalidates the cache immediately rather than waiting out
-the TTL. force=True additionally skips every staleness check and recomputes
-unconditionally, for the /usage-sync command.
-"""
-
-import importlib.util
-import os
-import threading
-import time
-from datetime import datetime, timezone
-from pathlib import Path
-
-from .network import _read_json_file, _write_json_file, _try_acquire_lock, _release_lock
-from .settings import get_setting
-
-CLAUDE_DIR = ".claude"
-MONTHLY_TOKENS_CACHE_PATH = os.path.join(os.path.expanduser("~"), CLAUDE_DIR, "monthly-tokens-cache.json")
-MONTHLY_TOKENS_LOCK_PATH = MONTHLY_TOKENS_CACHE_PATH + ".lock"
-
-_SESSION_STATS_PATH = (
-    Path(__file__).resolve().parent.parent / "claude-code-session-stats" / "session-stats.py"
-)
-
-_session_stats_module = None
-_session_stats_load_failed = False
-
-
-def _load_session_stats_module():
-    """Dynamically load the sibling session-stats.py script as a module --
-    duplicated from monthly_cost.py rather than imported from it, so this
-    module has no load-order dependency on that patch having applied."""
-    global _session_stats_module, _session_stats_load_failed
-    if _session_stats_module is not None:
-        return _session_stats_module
-    if _session_stats_load_failed:
-        return None
-    if not _SESSION_STATS_PATH.exists():
-        _session_stats_load_failed = True
-        return None
-    try:
-        spec = importlib.util.spec_from_file_location("claude_code_session_stats_tok", _SESSION_STATS_PATH)
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-    except Exception:
-        _session_stats_load_failed = True
-        return None
-    _session_stats_module = mod
-    return mod
-
-
-def _current_month_key(now=None):
-    now = now or datetime.now(timezone.utc)
-    return f"{now.year:04d}-{now.month:02d}"
-
-
-def _newest_session_mtime(mod, month_key):
-    """Newest mtime (epoch float) among this month's session transcripts, or
-    None if unknown -- duplicated from monthly_cost.py for the same
-    no-load-order-dependency reason as _load_session_stats_module above."""
-    if mod is None:
-        return None
-    try:
-        sessions = mod.find_sessions(days=32)
-    except Exception:
-        return None
-    newest = None
-    for s in sessions:
-        modified = s.get("modified")
-        if modified is None:
-            continue
-        if _current_month_key(modified) != month_key:
-            continue
-        ts = modified.timestamp()
-        if newest is None or ts > newest:
-            newest = ts
-    return newest
-
-
-def _compute_monthly_tokens():
-    mod = _load_session_stats_module()
-    if mod is None:
-        return None
-
-    month_key = _current_month_key()
-    total = 0
-    try:
-        sessions = mod.find_sessions(days=32)
-    except Exception:
-        return None
-
-    for s in sessions:
-        try:
-            report = mod.parse_session(s["path"])
-        except Exception:
-            continue
-        end_time = report.get("end_time")
-        if not end_time:
-            continue
-        try:
-            end_dt = datetime.fromisoformat(str(end_time).replace("Z", "+00:00"))
-        except ValueError:
-            continue
-        if _current_month_key(end_dt) != month_key:
-            continue
-        tok = report.get("tokens", {})
-        total += (
-            tok.get("input_total", 0)
-            + tok.get("cache_read_total", 0)
-            + tok.get("cache_creation_total", 0)
-            + tok.get("output_total", 0)
-        )
-
-    return total
-
-
-def fetch_monthly_tokens(background=False, force=False):
-    """Cached local monthly token total. Returns an int, or None when
-    disabled, unavailable (session-stats.py missing), or never yet computed
-    and a background refresh was just kicked off. force=True bypasses the
-    TTL and mtime checks and always recomputes (used by /usage-sync)."""
-    if not get_setting("monthly_tokens", "enabled", default=True):
-        return None
-
-    ttl = max(300, get_setting("monthly_tokens", "ttl", default=900))
-    cache = _read_json_file(MONTHLY_TOKENS_CACHE_PATH)
-    now = time.time()
-    month_key = _current_month_key()
-    mod = _load_session_stats_module()
-    newest_mtime = _newest_session_mtime(mod, month_key)
-
-    is_stale = (
-        force
-        or not cache
-        or cache.get("month") != month_key
-        or now - cache.get("fetched_at", 0) >= ttl
-        or (newest_mtime is not None and newest_mtime > cache.get("newest_mtime", 0))
-    )
-    if not is_stale:
-        return cache.get("total")
-
-    if background:
-        t = threading.Thread(
-            target=fetch_monthly_tokens, kwargs={"background": False, "force": force}, daemon=True
-        )
-        t.start()
-        return cache.get("total") if cache and cache.get("month") == month_key else None
-
-    lock_fd = _try_acquire_lock(MONTHLY_TOKENS_LOCK_PATH)
-    if lock_fd is None:
-        return cache.get("total") if cache else None
-
-    try:
-        if not force:
-            refreshed = _read_json_file(MONTHLY_TOKENS_CACHE_PATH)
-            if (
-                refreshed
-                and refreshed.get("month") == month_key
-                and now - refreshed.get("fetched_at", 0) < ttl
-                and (newest_mtime is None or newest_mtime <= refreshed.get("newest_mtime", 0))
-            ):
-                return refreshed.get("total")
-
-        total = _compute_monthly_tokens()
-        if total is None:
-            return cache.get("total") if cache and cache.get("month") == month_key else None
-
-        fresh = {"fetched_at": now, "month": month_key, "total": total, "newest_mtime": newest_mtime or 0}
-        try:
-            _write_json_file(MONTHLY_TOKENS_CACHE_PATH, fresh)
-        except OSError:
-            pass
-        return total
-    finally:
-        _release_lock(lock_fd)
-
-
-def format_monthly_tokens(total):
-    """Format a monthly token total as a compact '150k tok/mo' suffix, or ''."""
-    if total is None:
-        return ""
-    from .formatting import GRAY, RESET
-    from claude_tui_components.utils import format_tokens
-
-    return f"{GRAY}{format_tokens(total)} tok/mo{RESET}"
-'''
-
-# --- Patch 6: /usage-sync command, forces an immediate resync ------------
-
-USAGE_SYNC_COMMAND_SOURCE = '''---
-description: Force the statusline's monthly token count and monthly cost estimate to resync right now, bypassing their cache TTL
-allowed-tools: Bash
----
-
-Run this to force claude-tui's monthly token/cost totals (shown on the statusline next to the context bar and usage widget) to recompute immediately, bypassing their normal ~15-minute cache TTL. Use this when those numbers look stale or out of sync with actual usage.
-
-```bash
-python3 - <<'PYEOF'
-import sys
-sys.path.insert(0, "/opt/homebrew/opt/claude-tui/libexec")
-from claude_tui_core.monthly_tokens import fetch_monthly_tokens, format_monthly_tokens
-from claude_tui_core.monthly_cost import fetch_monthly_cost, format_monthly_cost
-
-tokens = fetch_monthly_tokens(background=False, force=True)
-cost = fetch_monthly_cost(background=False, force=True)
-
-print(f"Monthly tokens resynced: {format_monthly_tokens(tokens) or '(unavailable)'}")
-print(f"Monthly cost resynced:   {format_monthly_cost(cost) or '(unavailable -- not a work/gateway account)'}")
-PYEOF
-```
-
-Show the output as-is. Do not add commentary.
-'''
-
-OLD_DISPLAY_STATE_TOK = '''    cache_pct: int = 0
-    cost_per_turn: str = ""
-    monthly_cost_part: str = ""
-
-    # Layout
-    bar_length: int = 20'''
-
-NEW_DISPLAY_STATE_TOK = '''    cache_pct: int = 0
-    cost_per_turn: str = ""
-    monthly_cost_part: str = ""
-    monthly_tokens_part: str = ""
-
-    # Layout
-    bar_length: int = 20'''
-
-OLD_COMPACT_LINE_TOK = '''def build_compact_line(ds):
-    """Build compact single-line from DisplayState.
-
-    nix-darwin: drops the model name (redundant with what's visible
-    elsewhere in the UI per user request) and appends a local monthly-cost
-    estimate after the usage widget."""
-    parts = []
-    if is_visible("line1", "context_bar"):
-        ctx = f"{ds.bar}"
-        if is_visible("line1", "token_count"):
-            ctx += f" {format_token_suffix(ds.tokens_str, ds.limit_str)}"
-        parts.append(ctx)
-    if ds.usage:
-        usage_str = format_usage_constraint(ds.usage, length=ds.bar_length)
-        if usage_str:
-            if ds.monthly_cost_part:
-                usage_str += f" {GRAY}·{RESET} {ds.monthly_cost_part}"
-            parts.append(usage_str)
-    elif ds.monthly_cost_part:
-        parts.append(ds.monthly_cost_part)
-    sep = f" {GRAY}⋮{RESET} "
-    return sep.join(parts) if parts else ""'''
-
-# monthly_tokens_part was briefly shown in the compact line (next to the
-# context bar), then removed per user request -- "64.1M tok/mo" wasn't a
-# metric they wanted tracked at a glance. OLD_COMPACT_LINE_V2_TOK is the
-# with-tokens text patch 5 actually installed (textually identical to what
-# OLD_COMPACT_LINE_TOK already is, once the tokens line is dropped, so
-# there's no separate "NEW" constant here -- the target state already
-# exists above). Reverted via _migrate_stranded_text() below rather than a
-# plain _apply_patch(), since any machine that already has patch 5 applied
-# is -- by definition -- already past OLD_COMPACT_LINE_TOK (the v0 anchor
-# _apply_patch would otherwise look for).
-OLD_COMPACT_LINE_V2_TOK = '''def build_compact_line(ds):
-    """Build compact single-line from DisplayState.
-
-    nix-darwin: drops the model name (redundant with what's visible
-    elsewhere in the UI per user request), appends a running monthly token
-    count next to the context bar, and appends a local monthly-cost
-    estimate after the usage widget."""
-    parts = []
-    if is_visible("line1", "context_bar"):
-        ctx = f"{ds.bar}"
-        if is_visible("line1", "token_count"):
-            ctx += f" {format_token_suffix(ds.tokens_str, ds.limit_str)}"
-        if ds.monthly_tokens_part:
-            ctx += f" {GRAY}·{RESET} {ds.monthly_tokens_part}"
-        parts.append(ctx)
-    if ds.usage:
-        usage_str = format_usage_constraint(ds.usage, length=ds.bar_length)
-        if usage_str:
-            if ds.monthly_cost_part:
-                usage_str += f" {GRAY}·{RESET} {ds.monthly_cost_part}"
-            parts.append(usage_str)
-    elif ds.monthly_cost_part:
-        parts.append(ds.monthly_cost_part)
-    sep = f" {GRAY}⋮{RESET} "
-    return sep.join(parts) if parts else ""'''
-
-OLD_STATUSLINE_IMPORT_TOK = '''from statusline_core.transcript import (
-    parse_input_data,
-    parse_transcript,
-)
-from claude_tui_components.utils import format_tokens
-from claude_tui_core.monthly_cost import fetch_monthly_cost, format_monthly_cost'''
-
-NEW_STATUSLINE_IMPORT_TOK = '''from statusline_core.transcript import (
-    parse_input_data,
-    parse_transcript,
-)
-from claude_tui_components.utils import format_tokens
-from claude_tui_core.monthly_cost import fetch_monthly_cost, format_monthly_cost
-from claude_tui_core.monthly_tokens import fetch_monthly_tokens, format_monthly_tokens'''
-
-OLD_STATUSLINE_COMPUTE_TOK = '''    usage = basic["usage"]
-    # nix-darwin: monthly-cost budget-bar patch (v3) -- format_monthly_cost()
-    # renders a $-budget progress bar when monthly_cost.budget is configured
-    # (claudeui.json), and stays empty otherwise. No usage/rate_limits gating
-    # here: rate_limits.spend_limit was confirmed empirically to never reach
-    # the statusline on this account, so gating on it was dead code.
-    monthly_cost_part = format_monthly_cost(fetch_monthly_cost(background=True), length=bar_length)
-
-    ds = DisplayState('''
-
-NEW_STATUSLINE_COMPUTE_TOK = '''    usage = basic["usage"]
-    # nix-darwin: monthly-cost budget-bar patch (v3) -- format_monthly_cost()
-    # renders a $-budget progress bar when monthly_cost.budget is configured
-    # (claudeui.json), and stays empty otherwise. No usage/rate_limits gating
-    # here: rate_limits.spend_limit was confirmed empirically to never reach
-    # the statusline on this account, so gating on it was dead code.
-    monthly_cost_part = format_monthly_cost(fetch_monthly_cost(background=True), length=bar_length)
-    # nix-darwin: running monthly token count, shown for every account
-    # (unlike monthly_cost_part above) -- a token total is meaningful on a
-    # flat subscription seat too, not just a dollar-metered gateway account.
-    monthly_tokens_part = format_monthly_tokens(fetch_monthly_tokens(background=True))
-
-    ds = DisplayState('''
-
-# Combined-state anchor: any machine that already had BOTH patch 4 (v2,
-# spend_limit-gated) and patch 5 (monthly_tokens_part) applied before this
-# v3 budget-bar change landed has a compute block that is v2's gated text
-# PLUS the monthly_tokens_part addition, as one contiguous unit -- which
-# matches neither OLD_STATUSLINE_COMPUTE_V1/_V2 (patch-4-only shapes) nor
-# OLD_STATUSLINE_COMPUTE (pristine). Confirmed this is exactly the real
-# state patch 5's own rollout already put this machine in. Migrated
-# directly to NEW_STATUSLINE_COMPUTE_TOK (v3 + tokens) in one hop.
-OLD_STATUSLINE_COMPUTE_V2_TOK = '''    usage = basic["usage"]
-    # nix-darwin: spend_limit only ever appears behind a work/gateway account
-    # (see patch 4 docstring) -- personal Pro/Max logins never get it. Gate
-    # the local monthly-cost estimate on it so a personal-account session
-    # never shows a dollar figure that isn't how that seat is billed.
-    monthly_cost_part = (
-        format_monthly_cost(fetch_monthly_cost(background=True))
-        if usage and "spend_limit" in usage
-        else ""
-    )
-    # nix-darwin: running monthly token count, shown for every account
-    # (unlike monthly_cost_part above) -- a token total is meaningful on a
-    # flat subscription seat too, not just a dollar-metered gateway account.
-    monthly_tokens_part = format_monthly_tokens(fetch_monthly_tokens(background=True))
-
-    ds = DisplayState('''
-
-OLD_STATUSLINE_WIRING_TOK = '''        cost_per_turn=calculate_cost_per_turn(cost, metrics["turn_count"]),
-        bar_length=bar_length,
-        monthly_cost_part=monthly_cost_part,
-    )'''
-
-NEW_STATUSLINE_WIRING_TOK = '''        cost_per_turn=calculate_cost_per_turn(cost, metrics["turn_count"]),
-        bar_length=bar_length,
-        monthly_cost_part=monthly_cost_part,
-        monthly_tokens_part=monthly_tokens_part,
-    )'''
-
-
-
-# 9. Model pricing (models.py): claude-tui substring-matches the model ID against MODEL_PRICING in dict order, so
-# "claude-opus-5-5" matched the "claude-opus-5" entry (Opus 5: $5/$25, cache read $0.50) instead of Opus 5.5 ($4/$20,
-# cache read $0.20 = 0.05x), and "claude-sonnet-5-5"/"claude-sonnet-5" matched $3/$15 although Sonnet 5.x is $2/$10
-# (the intro rate became the standard rate). monthly_cost.py prices every transcript through this table, so the work
-# account's budget bar over-reported (cache reads dominate Claude Code traffic and were priced 2.5x too high on Opus 5.5).
-# Rates: platform.claude.com/docs/en/about-claude/pricing (per MTok: input, 5m cache write, cache read, output).
-# New entries go first so they win the substring match; Haiku 5.5 is left out because its rate depends on prompt length.
-PRICING_MARKER = '"claude-opus-5-5"'
-OLD_PRICING_HEAD = "MODEL_PRICING = {\n"
-NEW_PRICING_HEAD = """MODEL_PRICING = {
-    "claude-fable-5-1": {   # nix-darwin: 0.025x cache reads
-        "input": 10.0,
-        "cache_read": 0.25,
-        "cache_write": 12.5,
-        "output": 50.0,
-    },
-    "claude-opus-5-5": {   # nix-darwin: 0.05x cache reads
-        "input": 4.0,
-        "cache_read": 0.20,
-        "cache_write": 5.0,
-        "output": 20.0,
-    },
-    "claude-sonnet-5-5": {   # nix-darwin
-        "input": 2.0,
-        "cache_read": 0.20,
-        "cache_write": 2.5,
-        "output": 10.0,
-    },
-"""
-SONNET5_MARKER = "# nix-darwin: Sonnet 5 standard rate"
-OLD_SONNET5 = '''    "claude-sonnet-5": {
-        "input": 3.0,
-        "cache_read": 0.30,
-        "cache_write": 3.75,
-        "output": 15.0,
-    },'''
-NEW_SONNET5 = '''    "claude-sonnet-5": {   # nix-darwin: Sonnet 5 standard rate
-        "input": 2.0,
-        "cache_read": 0.20,
-        "cache_write": 2.5,
-        "output": 10.0,
-    },'''
+    usage_str = format_usage_constraint(ds.usage, length=ds.bar_length)
+    if usage_str:
+        parts.append(usage_str)'''
 
 
 def _apply_patch(target, marker, replacements, label):
-    """Apply one or more (old, new) replacements to target as a single unit,
-    gated by one marker check so a multi-part patch can't apply half of
-    itself (idempotency marker only appears in one of the replacements)."""
+    """Apply (old, new) replacements to target as one unit, gated by a single
+    marker check so a multi-part patch can't half-apply."""
     try:
         with open(target, "r") as f:
             src = f.read()
@@ -1510,11 +161,9 @@ def _apply_patch(target, marker, replacements, label):
         return
 
     if marker in src:
-        print(f"[claude-tui-usage-patch] {label} already applied")
         return
 
-    missing = [old for old, _ in replacements if old not in src]
-    if missing:
+    if any(old not in src for old, _ in replacements):
         print(
             f"WARNING: [claude-tui-usage-patch] {label} anchor text not found in {target} "
             "(upstream claude-tui changed) -- skipping",
@@ -1522,59 +171,13 @@ def _apply_patch(target, marker, replacements, label):
         )
         return
 
-    patched = src
     for old, new in replacements:
-        patched = patched.replace(old, new)
+        src = src.replace(old, new)
     tmp = target + ".tmp"
     with open(tmp, "w") as f:
-        f.write(patched)
-    import os as _os
-
-    _os.replace(tmp, target)
-    print(f"[claude-tui-usage-patch] {label} patched {target}")
-
-def _ensure_file(target, content, label):
-    """Write content to target if it's not already there. For a brand-new
-    file wholly owned by this patch script (nothing to merge with upstream
-    changes), so an idempotent overwrite is simpler than an anchor check."""
-    try:
-        with open(target, "r") as f:
-            if f.read() == content:
-                print(f"[claude-tui-usage-patch] {label} already up to date")
-                return
-    except OSError:
-        pass
-    tmp = target + ".tmp"
-    with open(tmp, "w") as f:
-        f.write(content)
-    import os as _os
-
-    _os.replace(tmp, target)
-    print(f"[claude-tui-usage-patch] {label} wrote {target}")
-
-
-def _migrate_stranded_text(target, old_text, new_text, label):
-    """Self-heal a known-stranded intermediate state in a patched file --
-    generic over which file/block, since the same "a too-generic marker let
-    a machine get stuck mid-upgrade" failure mode has shown up more than
-    once (see OLD_STATUSLINE_COMPUTE_V1/_V2's comments for the fullest
-    writeup). Silent no-op when old_text isn't present -- that's the
-    expected case on every machine that was never stuck in that particular
-    intermediate state, so it's not a warning-worthy condition the way a
-    missing anchor normally is."""
-    try:
-        with open(target, "r") as f:
-            src = f.read()
-    except OSError:
-        return
-    if old_text not in src:
-        return
-    patched = src.replace(old_text, new_text)
-    tmp = target + ".tmp"
-    with open(tmp, "w") as f:
-        f.write(patched)
+        f.write(src)
     os.replace(tmp, target)
-    print(f"[claude-tui-usage-patch] self-heal: migrated {label} in {target}")
+    print(f"[claude-tui-usage-patch] {label} patched {target}")
 
 
 def main() -> int:
@@ -1584,150 +187,17 @@ def main() -> int:
 
     libexec = sys.argv[1]
     _apply_patch(
-        f"{libexec}/claude_tui_core/network.py",
-        NETWORK_MARKER,
-        [(OLD_IMPORTS, NEW_IMPORTS), (OLD_FETCH_USAGE, NEW_FETCH_USAGE)],
-        "per-account cache",
-    )
-    _apply_patch(
         f"{libexec}/claude_tui_core/formatting.py",
         FORMATTING_MARKER,
-        [(OLD_USAGE_BAR_FNS, NEW_USAGE_BAR_FNS)],
-        "most-constraining weekly window",
-    )
-    _apply_patch(
-        f"{libexec}/claude_tui_core/formatting.py",
-        COMBINED_MARKER,
-        [(OLD_DATETIME_IMPORT, NEW_DATETIME_IMPORT), (OLD_TAIL_FOR_COMBINED, NEW_TAIL_FOR_COMBINED)],
-        "combined usage widget (formatting.py)",
-    )
-    _apply_patch(
-        f"{libexec}/claude_tui_core/network.py",
-        "format_usage_constraint",
-        [(OLD_NETWORK_REEXPORT, NEW_NETWORK_REEXPORT)],
-        "combined usage widget (network.py re-export)",
-    )
-    _apply_patch(
-        f"{libexec}/claude-code-statusline/statusline_core/api_clients.py",
-        "format_usage_constraint",
-        [(OLD_API_CLIENTS, NEW_API_CLIENTS)],
-        "combined usage widget (api_clients.py re-export)",
+        [(OLD_DATETIME_IMPORT, NEW_DATETIME_IMPORT), (OLD_FORMATTING_TAIL, NEW_FORMATTING_TAIL)],
+        "usage widget (formatting.py)",
     )
     _apply_patch(
         f"{libexec}/claude-code-statusline/statusline_core/render.py",
-        "format_usage_constraint",
-        [
-            (OLD_RENDER_IMPORT, NEW_RENDER_IMPORT),
-            (OLD_RENDER_LINE2, NEW_RENDER_LINE2),
-            (OLD_RENDER_LINE3, NEW_RENDER_LINE3),
-            (OLD_RENDER_COMPACT, NEW_RENDER_COMPACT),
-        ],
-        "combined usage widget (render.py)",
+        RENDER_MARKER,
+        [(OLD_RENDER_IMPORT, NEW_RENDER_IMPORT), (OLD_RENDER_COMPACT, NEW_RENDER_COMPACT)],
+        "compact line (render.py)",
     )
-    _apply_patch(
-        f"{libexec}/claude-code-statusline/statusline_core/transcript.py",
-        "spend_limit",
-        [(OLD_TRANSCRIPT_KEYS, NEW_TRANSCRIPT_KEYS)],
-        "real constraint keys (transcript.py spend_limit passthrough)",
-    )
-    _apply_patch(
-        f"{libexec}/claude_tui_core/formatting.py",
-        '"spend_limit": "Spend limit"',
-        [(OLD_REAL_KEYS_BLOCK, NEW_REAL_KEYS_BLOCK)],
-        "real constraint keys (formatting.py)",
-    )
-    _ensure_file(
-        f"{libexec}/claude_tui_core/monthly_cost.py",
-        MONTHLY_COST_MODULE_SOURCE,
-        "monthly cost module",
-    )
-    _apply_patch(
-        f"{libexec}/claude-code-statusline/statusline_core/display_state.py",
-        "monthly_cost_part",
-        [(OLD_DISPLAY_STATE, NEW_DISPLAY_STATE)],
-        "monthly cost (display_state.py field)",
-    )
-    _apply_patch(
-        f"{libexec}/claude-code-statusline/statusline_core/render.py",
-        "monthly_cost_part",
-        [(OLD_COMPACT_LINE_V2, NEW_COMPACT_LINE_V2)],
-        "monthly cost + drop model (render.py compact line)",
-    )
-    _statusline_target = f"{libexec}/claude-code-statusline/statusline.py"
-    _migrate_stranded_text(
-        _statusline_target,
-        OLD_STATUSLINE_COMPUTE_V1,
-        NEW_STATUSLINE_COMPUTE,
-        "stranded pre-gating (v1) monthly-cost compute block",
-    )
-    _migrate_stranded_text(
-        _statusline_target,
-        OLD_STATUSLINE_COMPUTE_V2,
-        NEW_STATUSLINE_COMPUTE,
-        "stranded gated (v2) monthly-cost compute block",
-    )
-    _migrate_stranded_text(
-        _statusline_target,
-        OLD_STATUSLINE_COMPUTE_V2_TOK,
-        NEW_STATUSLINE_COMPUTE_TOK,
-        "stranded gated+tokens (v2+tok) monthly-cost compute block",
-    )
-    _apply_patch(
-        _statusline_target,
-        "monthly-cost budget-bar patch (v3)",
-        [
-            (OLD_STATUSLINE_IMPORT, NEW_STATUSLINE_IMPORT),
-            (OLD_STATUSLINE_COMPUTE, NEW_STATUSLINE_COMPUTE),
-            (OLD_STATUSLINE_WIRING, NEW_STATUSLINE_WIRING),
-        ],
-        "monthly cost (statusline.py wiring)",
-    )
-    _ensure_file(
-        f"{libexec}/claude_tui_core/monthly_tokens.py",
-        MONTHLY_TOKENS_MODULE_SOURCE,
-        "monthly tokens module",
-    )
-    _apply_patch(
-        f"{libexec}/claude-code-statusline/statusline_core/display_state.py",
-        "monthly_tokens_part",
-        [(OLD_DISPLAY_STATE_TOK, NEW_DISPLAY_STATE_TOK)],
-        "monthly tokens (display_state.py field)",
-    )
-    _migrate_stranded_text(
-        f"{libexec}/claude-code-statusline/statusline_core/render.py",
-        OLD_COMPACT_LINE_V2_TOK,
-        OLD_COMPACT_LINE_TOK,
-        "monthly tokens removed from compact line (render.py)",
-    )
-    _apply_patch(
-        f"{libexec}/claude-code-statusline/statusline.py",
-        "fetch_monthly_tokens",
-        [
-            (OLD_STATUSLINE_IMPORT_TOK, NEW_STATUSLINE_IMPORT_TOK),
-            (OLD_STATUSLINE_COMPUTE_TOK, NEW_STATUSLINE_COMPUTE_TOK),
-            (OLD_STATUSLINE_WIRING_TOK, NEW_STATUSLINE_WIRING_TOK),
-        ],
-        "monthly tokens (statusline.py wiring)",
-    )
-    _ensure_file(
-        os.path.expanduser("~/.claude/commands/usage-sync.md"),
-        USAGE_SYNC_COMMAND_SOURCE,
-        "usage-sync command",
-    )
-
-    _apply_patch(
-        f"{libexec}/claude_tui_core/models.py",
-        PRICING_MARKER,
-        [(OLD_PRICING_HEAD, NEW_PRICING_HEAD)],
-        "model pricing (Opus 5.5, Sonnet 5.5, Fable 5.1)",
-    )
-    _apply_patch(
-        f"{libexec}/claude_tui_core/models.py",
-        SONNET5_MARKER,
-        [(OLD_SONNET5, NEW_SONNET5)],
-        "model pricing (Sonnet 5 standard rate)",
-    )
-
     return 0
 
 
