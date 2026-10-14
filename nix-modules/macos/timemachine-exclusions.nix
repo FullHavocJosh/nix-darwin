@@ -41,12 +41,15 @@ in
   # activationScripts names in the built `activate`, so any other key evaluates
   # fine and then never runs.
   system.activationScripts.postActivation.text = lib.mkAfter ''
-    # Time Machine exclusions, sticky (no -p): they are re-applied on every
-    # darwin-rebuild, which is what restores them after `tmutil resetexclusions`
-    # or a machine restore. Every step is non-fatal on purpose -- a directory
-    # that does not exist (the list is shared by machines that do not all have
-    # every cache dir), a path tmutil refuses, or tmutil missing entirely must
-    # never fail the whole activation, so failures only print a warning.
+    # Time Machine exclusions, fixed-path (-p): these are the ones System
+    # Settings > Time Machine > Options lists (sticky exclusions are an xattr
+    # on the directory and never appear there). They are re-applied on every
+    # darwin-rebuild, which is what restores them after `tmutil
+    # resetexclusions` or a machine restore. Every step is non-fatal on
+    # purpose -- a directory that does not exist (the list is shared by
+    # machines that do not all have every cache dir), a path tmutil refuses,
+    # or tmutil missing entirely must never fail the whole activation, so
+    # failures only print a warning.
     USER_NAME="${config.system.primaryUser}"
     USER_HOME=$(eval echo ~$USER_NAME)
 
@@ -54,22 +57,27 @@ in
       ${lib.concatMapStringsSep "\n  " quoted paths}
     )
 
+    # Fixed-path exclusions live in the SkipPaths array of this root-owned
+    # plist; `tmutil isexcluded` cannot tell them from sticky ones.
+    tm_skip=$(/usr/bin/defaults read /Library/Preferences/com.apple.TimeMachine SkipPaths 2>/dev/null || true)
+
     tm_added=0
     for p in "''${tm_exclusions[@]}"; do
       # Nothing to exclude: the path is absent on this machine.
       if [ ! -e "$p" ]; then
         continue
       fi
-      # Already excluded, nothing to do. `isexcluded` prints [Excluded] or
-      # [NotExcluded]; 2>/dev/null because tmutil complains when the path is
-      # not on a Time Machine capable volume.
-      if /usr/bin/tmutil isexcluded "$p" 2>/dev/null | grep -q '\[Excluded\]'; then
-        continue
+      if ! printf '%s\n' "$tm_skip" | grep -qF "\"$p\""; then
+        if /usr/bin/tmutil addexclusion -p "$p"; then
+          tm_added=$((tm_added + 1))
+        else
+          echo "warning: could not exclude $p" >&2
+        fi
       fi
-      if /usr/bin/tmutil addexclusion "$p"; then
-        tm_added=$((tm_added + 1))
-      else
-        echo "warning: could not exclude $p" >&2
+      # Drop the sticky exclusion an earlier version of this module set, so
+      # each path carries one exclusion, the one Settings shows.
+      if /usr/bin/xattr -p com.apple.metadata:com_apple_backup_excludeItem "$p" >/dev/null 2>&1; then
+        /usr/bin/tmutil removeexclusion "$p" || echo "warning: could not clear sticky exclusion on $p" >&2
       fi
     done
     echo "[timemachine] $tm_added exclusion(s) added from timemachine-exclusions.txt"
