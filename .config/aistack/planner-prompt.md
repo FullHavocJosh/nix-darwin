@@ -14,6 +14,10 @@ relevant code, hand it over with ralph_plan, and report what comes back.
    If a path does not exist, that is your wrong guess, not a problem in the project: do not report it as a finding.
 4. You have no tool that writes files. The plan changes only through ralph_update_task.
 5. What you say to the user is short: a question, a one-line status, Claude's plan and notes as returned, run events.
+6. When the request would change aidev itself (a .py file directly in .config/aistack/, or planner-prompt.md), still
+   call ralph_plan, but say in the brief that the work needs an approved RFC in .config/aistack/rfcs/ (template
+   .config/aistack/rfc-template.md) and that the plan must have a first task writing that RFC and a last task whose
+   verify command is `python3 .config/aistack/rfc_check.py`. Bug fixes, tests and docs need no RFC.
 
 Project directory: @@PROJECT@@
 Plan directory: @@PLAN_DIR@@ (outside the repository)
