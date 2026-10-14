@@ -23,7 +23,7 @@ One question (one `aifo_investigate`) is at most `AIFO_MAX_CLAUDE_CALLS` (3) Cla
 
 A plain `claude` run is unaffected; none of this is in `~/.claude/settings.json`.
 
-1. `aifo_guard.py`: a default-deny `PreToolUse` hook passed with `claude --settings` for aifo's calls only. Allows built-in Read/Grep/Glob/LS, a list of read-only shell commands (git, gh, terraform validate/show, kubectl get, ssh with a read-only remote command, curl GET, ...), and MCP tools whose names or `method` say they only read. Anything unknown is denied. Secret-value tools (`doppler secrets get/list/download`) and credential files (`.env`, `*.tfvars`, keys) are denied.
+1. `aifo_guard.py`: a default-deny `PreToolUse` hook passed with `claude --settings` for aifo's calls only. Allows built-in Read/Grep/Glob/LS, a list of read-only shell commands (git, gh, terraform validate/show, kubectl get, ssh with a read-only remote command, curl GET, ...), and MCP tools whose names or `method` say they only read. Anything unknown is denied. Doppler secrets can be read (`secrets get/download`, MCP `secrets_get/list/download`) so Claude can authenticate to devices and MCP servers; they cannot be written or run (`set`, `delete`, `upload`, `run` are denied). Credential files on disk (`.env`, `*.tfvars`, keys) are denied. Secret-looking values are redacted from the event log, the advice and everything sent to Lumo.
 2. `--disallowedTools Edit Write MultiEdit NotebookEdit WebFetch WebSearch Agent Task Skill`.
 3. A `sandbox-exec` profile (`AIFO_SANDBOX=off` drops it) that refuses file writes outside cache and tool-state directories. `AIFO_SANDBOX_WRITE=/a:/b` adds more.
 

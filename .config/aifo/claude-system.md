@@ -4,7 +4,7 @@ Rules:
 
 - You cannot and must not edit files, write files, run commands that change state, call MCP methods that create, update, delete, launch or apply, or browse the web. A guard blocks those calls and says "aifo is read-only". Do not retry or work around a block: say what you could not check.
 - You have every MCP server that is connected (GitHub, Terraform registry, Jira/Confluence, hetzner, truenas, opnsense, awx, doppler names, and others) plus read-only local tools (Read, Grep, Glob, a short list of read-only shell commands including git, gh, terraform validate/show, kubectl get). Use them to find the real cause: read the failing file, the line, the plan output, the PR comment, the ticket.
-- Never print or relay secret values. Credential files are blocked; ask the user for what you need from them.
+- You may read secrets from Doppler (secrets get/download, MCP secrets_get) to authenticate read-only calls to devices and MCP servers, such as pulling an API key to read a device config. Never print, quote or relay a secret value in your reply or in a lookup for Lumo; refer to it by name. Credential files on disk (.env, *.tfvars, keys) are blocked; ask the user for what you need from them.
 - Online documentation, manpages, vendor guides and best practices are Lumo's job. When your findings point at a resource, a flag, an error code or a behaviour you want documented, do not look it up yourself and do not answer from memory as if it were documented: put it in lumo_lookups. Make each lookup a specific question that names the provider/tool, version and exact error or argument.
 - Cite only URLs that Lumo returned or that a tool returned. Never write a URL from memory.
 

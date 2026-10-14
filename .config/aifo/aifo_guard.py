@@ -328,9 +328,12 @@ def doppler_check(args):
         ["get"],
     ):
         return None
-    if a[:1] == ["secrets"] and "--only-names" in args:
+    # secret VALUES may be read (Claude pulls device and MCP API keys to read configs); never written or run
+    if a[:1] == ["secrets"] and (
+        a[1:2] in ([], ["get"], ["download"], ["names"]) or "--only-names" in args
+    ):
         return None
-    return "doppler may only list projects, configs or secret NAMES (never values)"
+    return "doppler may only read: projects, configs, secrets get/download/names (no set, delete, upload or run)"
 
 
 def nix_check(args):
@@ -664,6 +667,7 @@ READ_WORDS = {"get", "list", "read", "search", "query", "find", "describe", "sho
 WRITE_WORDS = {"create", "update", "delete", "set", "add", "remove", "post", "send", "write", "edit", "run", "launch", "execute", "apply", "push", "merge", "approve", "suggest", "attach", "detach", "assign", "unassign", "change", "enable", "disable", "reset", "reboot", "rebuild", "resize", "power", "shutdown", "import", "rollback", "revoke", "lease", "lock", "unlock", "clone", "cancel", "toggle", "flush", "move", "insert", "replace", "register", "unregister", "authenticate", "complete", "upgrade", "purge", "install", "retry", "request", "confirm", "rename", "format", "generate", "index", "checkpoint", "commit", "reconfigure", "revert", "savepoint", "start", "stop", "restart", "kill", "sync", "mkdir", "save", "store", "observations", "predict", "trigger", "invoke", "optimize"}  # fmt: skip
 # decisions the word rules would get wrong
 MCP_ALLOW = {
+    "mcp__doppler__secrets_download",
     "mcp__awx__awx_job_stdout", "mcp__awx__awx_job_events", "mcp__awx__awx_job_failure_summary", "mcp__awx__awx_system_info",
     "mcp__awx__project_playbooks", "mcp__awx__validate_playbook", "mcp__hetzner__hetzner_wait_for_action",
     "mcp__hetzner__hetzner_export_zonefile", "mcp__sequential-thinking__sequentialthinking", "mcp__memory__read_graph",
@@ -676,8 +680,6 @@ MCP_ALLOW = {
     "mcp__token-optimizer-mcp__wiki_read",
 }  # fmt: skip
 MCP_DENY = {
-    # secret values
-    "mcp__doppler__secrets_get", "mcp__doppler__secrets_list", "mcp__doppler__secrets_download",
     # runs code, or writes through a back door
     "mcp__token-savior__ts_execute", "mcp__token-savior__run_project_action", "mcp__token-savior__run_impacted_tests",
     "mcp__context-mode__ctx_execute", "mcp__context-mode__ctx_execute_file", "mcp__context-mode__ctx_batch_execute",

@@ -29,10 +29,16 @@ import urllib.request
 HERE = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.realpath(os.environ.get("AIFO_PROJECT") or os.getcwd())
 STATE_DIR = os.environ.get("AIFO_STATE_DIR") or os.path.expanduser("~/.aifo/default")
-AISTACK_DIR = os.environ.get("AIFO_AISTACK_DIR") or os.path.expanduser("~/.config/aistack")
+AISTACK_DIR = os.environ.get("AIFO_AISTACK_DIR") or os.path.expanduser(
+    "~/.config/aistack"
+)
 CLAUDE_BIN = os.environ.get("AIFO_CLAUDE_BIN", "claude")
-CLAUDE_MODEL = os.environ.get("AIFO_CLAUDE_MODEL") or os.environ.get("AISTACK_CLAUDE_MODEL", "sonnet")
-CLAUDE_EFFORT = os.environ.get("AIFO_CLAUDE_EFFORT") or os.environ.get("AISTACK_CLAUDE_EFFORT", "medium")
+CLAUDE_MODEL = os.environ.get("AIFO_CLAUDE_MODEL") or os.environ.get(
+    "AISTACK_CLAUDE_MODEL", "sonnet"
+)
+CLAUDE_EFFORT = os.environ.get("AIFO_CLAUDE_EFFORT") or os.environ.get(
+    "AISTACK_CLAUDE_EFFORT", "medium"
+)
 CLAUDE_BUDGET = os.environ.get("AIFO_CLAUDE_BUDGET_USD", "2.0")  # per Claude call
 CLAUDE_TIMEOUT_S = int(os.environ.get("AIFO_CLAUDE_TIMEOUT_S", "900"))
 LUMO_TIMEOUT_S = int(os.environ.get("AIFO_LUMO_TIMEOUT_S", "300"))
@@ -42,12 +48,22 @@ SANDBOX = os.environ.get("AIFO_SANDBOX", "on") != "off"
 WAIT_S = 25
 PROTOCOL = "2024-11-05"
 
-CLAUDE_SYSTEM = open(os.path.join(HERE, "claude-system.md")).read() if os.path.exists(os.path.join(HERE, "claude-system.md")) else ""
-LUMO_PROMPT = open(os.path.join(HERE, "lumo-prompt.md")).read() if os.path.exists(os.path.join(HERE, "lumo-prompt.md")) else "{questions}"
+
+def read_text(name, default):
+    try:
+        with open(os.path.join(HERE, name)) as f:
+            return f.read()
+    except OSError:
+        return default
+
+
+CLAUDE_SYSTEM = read_text("claude-system.md", "")
+LUMO_PROMPT = read_text("lumo-prompt.md", "{questions}")
 
 JOBS = {}
 LOCK = threading.Lock()
 STATE_LOCK = threading.Lock()
+
 
 # ---- state ------------------------------------------------------------------------------------------------------
 def state_path():
@@ -58,19 +74,27 @@ def load_state():
     try:
         return json.load(open(state_path()))
     except (OSError, ValueError):
-        return {"claude_session": "", "lumo_history": [], "cost_usd": 0.0, "claude_calls": 0, "lumo_calls": 0, "advice_n": 0}
+        return {
+            "claude_session": "",
+            "lumo_history": [],
+            "cost_usd": 0.0,
+            "claude_calls": 0,
+            "lumo_calls": 0,
+            "advice_n": 0,
+        }
 
 
 def save_state(st):
     with STATE_LOCK:
         os.makedirs(STATE_DIR, exist_ok=True)
         tmp = state_path() + ".tmp"
-        json.dump(st, open(tmp, "w"), indent=1)
+        with open(tmp, "w") as f:
+            json.dump(st, f, indent=1)
         os.replace(tmp, state_path())
 
 
 def log_event(job, kind, text):
-    ev = {"t": time.strftime("%H:%M:%S"), "who": kind, "text": text[:600]}
+    ev = {"t": time.strftime("%H:%M:%S"), "who": kind, "text": redact(text)[:600]}
     with LOCK:
         job["events"].append(ev)
     try:
@@ -83,15 +107,28 @@ def log_event(job, kind, text):
 
 # ---- redaction (everything that goes to Lumo) ---------------------------------------------------------------------
 REDACTIONS = [
-    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----"), "[REDACTED PRIVATE KEY]"),
+    (
+        re.compile(
+            r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----"
+        ),
+        "[REDACTED PRIVATE KEY]",
+    ),
     (re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"), "[REDACTED TOKEN]"),
     (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"), "[REDACTED TOKEN]"),
     (re.compile(r"\bxox[baprs]-[\w-]{10,}"), "[REDACTED TOKEN]"),
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "[REDACTED AWS KEY]"),
-    (re.compile(r"\bdp\.(?:st|pt|sa|ct|scim)\.[\w.-]{20,}"), "[REDACTED DOPPLER TOKEN]"),
+    (
+        re.compile(r"\bdp\.(?:st|pt|sa|ct|scim)\.[\w.-]{20,}"),
+        "[REDACTED DOPPLER TOKEN]",
+    ),
     (re.compile(r"\beyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]*"), "[REDACTED JWT]"),
     (re.compile(r"(?i)\bBearer\s+[\w.~+/=-]{16,}"), "Bearer [REDACTED]"),
-    (re.compile(r"(?i)((?:token|secret|passw(?:or)?d|api[_-]?key|authorization|private[_-]?key)[\"']?\s*[:=]\s*[\"']?)([^\s\"',;}{]{6,})"), r"\1[REDACTED]"),
+    (
+        re.compile(
+            r"(?i)((?:token|secret|passw(?:or)?d|api[_-]?key|authorization|private[_-]?key)[\"']?\s*[:=]\s*[\"']?)([^\s\"',;}{]{6,})"
+        ),
+        r"\1[REDACTED]",
+    ),
     (re.compile(r"\b[A-Fa-f0-9]{40,}\b"), "[REDACTED HEX]"),
 ]
 
@@ -113,13 +150,45 @@ def urls_in(text):
 
 
 # ---- Claude -----------------------------------------------------------------------------------------------------
-DISALLOWED = ["Edit", "Write", "MultiEdit", "NotebookEdit", "WebFetch", "WebSearch", "Agent", "Task", "Skill"]
+DISALLOWED = [
+    "Edit",
+    "Write",
+    "MultiEdit",
+    "NotebookEdit",
+    "WebFetch",
+    "WebSearch",
+    "Agent",
+    "Task",
+    "Skill",
+]
 
 
 def sandbox_profile():
     h = os.path.expanduser("~")
-    sub = lambda p: f'(subpath "{p}")'  # noqa: E731
-    allow = [sub(p) for p in ("/private/tmp", "/private/var/folders", "/private/var/tmp", f"{h}/.claude", f"{h}/.claude-global", f"{h}/.cache", f"{h}/.npm", f"{h}/.local", f"{h}/.aifo", f"{h}/.bun", f"{h}/.token-optimizer", f"{h}/Library/Caches", f"{h}/.config/claude", f"{h}/.config/configstore", f"{h}/.docker", f"{h}/.cargo", f"{h}/.rustup", f"{h}/.pi")]
+    sub = lambda p: f'(subpath "{p}")'
+    allow = [
+        sub(p)
+        for p in (
+            "/private/tmp",
+            "/private/var/folders",
+            "/private/var/tmp",
+            f"{h}/.claude",
+            f"{h}/.claude-global",
+            f"{h}/.cache",
+            f"{h}/.npm",
+            f"{h}/.local",
+            f"{h}/.aifo",
+            f"{h}/.bun",
+            f"{h}/.token-optimizer",
+            f"{h}/Library/Caches",
+            f"{h}/.config/claude",
+            f"{h}/.config/configstore",
+            f"{h}/.docker",
+            f"{h}/.cargo",
+            f"{h}/.rustup",
+            f"{h}/.pi",
+        )
+    ]
     extra = [sub(p) for p in os.environ.get("AIFO_SANDBOX_WRITE", "").split(":") if p]
     prof = (
         "(version 1)\n(allow default)\n(deny file-write*)\n"
@@ -129,16 +198,33 @@ def sandbox_profile():
     )
     path = os.path.join(STATE_DIR, "sandbox.sb")
     os.makedirs(STATE_DIR, exist_ok=True)
-    open(path, "w").write(prof)
+    with open(path, "w") as f:
+        f.write(prof)
     return path
 
 
 def settings_file():
     path = os.path.join(STATE_DIR, "claude-settings.json")
     guard = os.path.join(HERE, "aifo_guard.py")
-    cfg = {"hooks": {"PreToolUse": [{"matcher": ".*", "hooks": [{"type": "command", "command": f"{sys.executable} {guard}", "timeout": 10}]}]}}
+    cfg = {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": ".*",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": f"{sys.executable} {guard}",
+                            "timeout": 10,
+                        }
+                    ],
+                }
+            ]
+        }
+    }
     os.makedirs(STATE_DIR, exist_ok=True)
-    json.dump(cfg, open(path, "w"))
+    with open(path, "w") as f:
+        json.dump(cfg, f)
     return path
 
 
@@ -147,9 +233,18 @@ def brief(tool, tin):
     if tool == "Bash":
         return "runs: " + str(tin.get("command", ""))[:160]
     if tool in ("Read", "Grep", "Glob", "LS"):
-        return f"{tool}: " + str(tin.get("file_path") or tin.get("pattern") or tin.get("path") or "")[:160]
+        return (
+            f"{tool}: "
+            + str(tin.get("file_path") or tin.get("pattern") or tin.get("path") or "")[
+                :160
+            ]
+        )
     short = tool.replace("mcp__", "").replace("__", ": ")
-    args = ", ".join(f"{k}={str(v)[:50]}" for k, v in list(tin.items())[:3]) if isinstance(tin, dict) else ""
+    args = (
+        ", ".join(f"{k}={str(v)[:50]}" for k, v in list(tin.items())[:3])
+        if isinstance(tin, dict)
+        else ""
+    )
     return f"{short}({args})"[:200]
 
 
@@ -170,13 +265,34 @@ def run_claude(job, prompt, st):
     if SANDBOX and shutil.which("sandbox-exec"):
         cmd = ["sandbox-exec", "-f", sandbox_profile()] + cmd
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
-    p = subprocess.Popen(cmd, cwd=PROJECT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, start_new_session=True)
+    p = subprocess.Popen(
+        cmd,
+        cwd=PROJECT,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        start_new_session=True,
+    )
     job["procs"].append(p)
-    killer = threading.Timer(CLAUDE_TIMEOUT_S, lambda: os.killpg(p.pid, signal.SIGTERM) if p.poll() is None else None)
+    killer = threading.Timer(
+        CLAUDE_TIMEOUT_S,
+        lambda: os.killpg(p.pid, signal.SIGTERM) if p.poll() is None else None,
+    )
     killer.start()
-    out = {"text": "", "cost": 0.0, "session": st.get("claude_session", ""), "error": "", "seen_urls": set(), "denied": []}
+    out = {
+        "text": "",
+        "cost": 0.0,
+        "session": st.get("claude_session", ""),
+        "error": "",
+        "seen_urls": set(),
+        "denied": [],
+    }
     stderr_buf = []
-    threading.Thread(target=lambda: stderr_buf.append(p.stderr.read()), daemon=True).start()
+    threading.Thread(
+        target=lambda: stderr_buf.append(p.stderr.read()), daemon=True
+    ).start()
     try:
         p.stdin.write(prompt)
         p.stdin.close()
@@ -188,36 +304,59 @@ def run_claude(job, prompt, st):
                 continue
             t = d.get("type")
             if t == "system" and d.get("subtype") == "init":
-                bad = [m.get("name") for m in d.get("mcp_servers", []) if m.get("status") not in ("connected", "pending")]
+                bad = [
+                    m.get("name")
+                    for m in d.get("mcp_servers", [])
+                    if m.get("status") not in ("connected", "pending")
+                ]
                 if bad and not job.get("warned_mcp"):
                     job["warned_mcp"] = True
-                    log_event(job, "claude", "MCP servers not connected: " + ", ".join(map(str, bad)))
+                    log_event(
+                        job,
+                        "claude",
+                        "MCP servers not connected: " + ", ".join(map(str, bad)),
+                    )
             elif t == "assistant":
                 for b in d.get("message", {}).get("content", []) or []:
                     if b.get("type") == "tool_use":
                         tool_names[b.get("id")] = b.get("name")
-                        log_event(job, "claude", brief(b.get("name", ""), b.get("input") or {}))
+                        log_event(
+                            job,
+                            "claude",
+                            brief(b.get("name", ""), b.get("input") or {}),
+                        )
                     elif b.get("type") == "text" and b.get("text", "").strip():
                         texts.append(b["text"])
             elif t == "user":
-                for b in (d.get("message", {}).get("content") or []) if isinstance(d.get("message", {}).get("content"), list) else []:
+                for b in (
+                    (d.get("message", {}).get("content") or [])
+                    if isinstance(d.get("message", {}).get("content"), list)
+                    else []
+                ):
                     if b.get("type") == "tool_result":
                         txt = tool_result_text(b)
                         out["seen_urls"] |= urls_in(txt)
                         if b.get("is_error") and "aifo is read-only" in txt:
-                            out["denied"].append(f"{tool_names.get(b.get('tool_use_id'), '?')}: {txt[:140]}")
+                            out["denied"].append(
+                                f"{tool_names.get(b.get('tool_use_id'), '?')}: {txt[:140]}"
+                            )
                             log_event(job, "guard", "blocked " + out["denied"][-1])
             elif t == "result":
                 out["cost"] = float(d.get("total_cost_usd") or 0)
                 out["session"] = d.get("session_id") or out["session"]
                 if d.get("is_error"):
-                    out["error"] = str(d.get("result") or d.get("subtype") or "error")[:400]
+                    out["error"] = str(d.get("result") or d.get("subtype") or "error")[
+                        :400
+                    ]
                 out["text"] = str(d.get("result") or "") or "\n".join(texts[-1:])
         p.wait(timeout=30)
     finally:
         killer.cancel()
     if not out["text"] and not out["error"]:
-        out["error"] = ("claude exited without a result: " + (stderr_buf[0] if stderr_buf else "")[-300:]).strip()
+        out["error"] = (
+            "claude exited without a result: "
+            + (stderr_buf[0] if stderr_buf else "")[-300:]
+        ).strip()
     return out
 
 
@@ -237,7 +376,9 @@ def split_contract(text):
 
 # ---- Lumo -------------------------------------------------------------------------------------------------------
 def load_ralph():
-    spec = importlib.util.spec_from_file_location("ralph_mcp", os.path.join(AISTACK_DIR, "ralph_mcp.py"))
+    spec = importlib.util.spec_from_file_location(
+        "ralph_mcp", os.path.join(AISTACK_DIR, "ralph_mcp.py")
+    )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -246,7 +387,7 @@ def load_ralph():
 def lumo_available():
     try:
         return next(iter(load_ralph().tamer_endpoints()), None) is not None
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -260,24 +401,37 @@ def run_lumo(job, questions_text, st):
     errors = []
     try:
         endpoints = load_ralph().tamer_endpoints()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return "", f"cannot find the tamer helpers in {AISTACK_DIR} ({e})"
     for base, key in endpoints:
         log_event(job, "lumo", f"researching online via {base}")
         req = urllib.request.Request(
             base.rstrip("/") + "/chat/completions",
-            data=json.dumps({"model": os.environ.get("AIFO_LUMO_MODEL", "lumo"), "messages": messages}).encode(),
-            headers={"Content-Type": "application/json", **({"Authorization": f"Bearer {key}"} if key else {})},
+            data=json.dumps(
+                {
+                    "model": os.environ.get("AIFO_LUMO_MODEL", "lumo"),
+                    "messages": messages,
+                }
+            ).encode(),
+            headers={
+                "Content-Type": "application/json",
+                **({"Authorization": f"Bearer {key}"} if key else {}),
+            },
         )
         try:
             with urllib.request.urlopen(req, timeout=LUMO_TIMEOUT_S) as r:
                 reply = json.load(r)["choices"][0]["message"].get("content") or ""
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             errors.append(f"{base}: {type(e).__name__}: {e}")
             if "timed out" in str(e).lower():
                 break
             continue
-        st.setdefault("lumo_history", []).extend([{"role": "user", "content": prompt[:6000]}, {"role": "assistant", "content": reply}])
+        st.setdefault("lumo_history", []).extend(
+            [
+                {"role": "user", "content": prompt[:6000]},
+                {"role": "assistant", "content": reply},
+            ]
+        )
         st["lumo_history"] = st["lumo_history"][-8:]
         return reply, ""
     return "", "; ".join(errors) or "no Lumo (lumo-tamer) answered"
@@ -311,7 +465,14 @@ def check_sources(advice, lumo_urls, claude_urls):
 def investigate(job, question, context):
     st = load_state()
     claude_urls, lumo_urls, lookups_log = set(), set(), []
-    prompt = FIRST.format(question=(question + ("\n\nEXTRA CONTEXT:\n" + context if context else "")).strip(), cwd=PROJECT, n=1, max_claude=MAX_CLAUDE)
+    prompt = FIRST.format(
+        question=(
+            question + ("\n\nEXTRA CONTEXT:\n" + context if context else "")
+        ).strip(),
+        cwd=PROJECT,
+        n=1,
+        max_claude=MAX_CLAUDE,
+    )
     lumo_calls, claude_calls, cost = 0, 0, 0.0
     lumo_ok = lumo_available()
     if not lumo_ok:
@@ -319,11 +480,18 @@ def investigate(job, question, context):
     prose, contract = "", {}
     while True:
         claude_calls += 1
-        log_event(job, "stack", f"Claude round {claude_calls}/{MAX_CLAUDE}: {'researching' if claude_calls == 1 else 'reading Lumo findings'}")
+        log_event(
+            job,
+            "stack",
+            f"Claude round {claude_calls}/{MAX_CLAUDE}: {'researching' if claude_calls == 1 else 'reading Lumo findings'}",
+        )
         r = run_claude(job, prompt, st)
         cost += r["cost"]
         claude_urls |= r["seen_urls"]
-        st["claude_session"], st["cost_usd"] = r["session"], round(st.get("cost_usd", 0) + r["cost"], 4)
+        st["claude_session"], st["cost_usd"] = (
+            r["session"],
+            round(st.get("cost_usd", 0) + r["cost"], 4),
+        )
         st["claude_calls"] = st.get("claude_calls", 0) + 1
         save_state(st)
         if r["error"]:
@@ -332,15 +500,40 @@ def investigate(job, question, context):
                 return {"ok": False, "problem": r["error"], "cost_usd": round(cost, 3)}
             break
         prose, contract = split_contract(r["text"])
-        asks = [a for a in (contract.get("lumo_lookups") or []) if isinstance(a, dict) and a.get("question")]
-        log_event(job, "claude", f"round {claude_calls} done (${r['cost']:.2f}); asks Lumo {len(asks)} thing(s)" if asks else f"round {claude_calls} done (${r['cost']:.2f}); no more lookups")
-        if not asks or contract.get("final") is True or claude_calls >= MAX_CLAUDE or lumo_calls >= MAX_LUMO or not lumo_ok:
+        asks = [
+            a
+            for a in (contract.get("lumo_lookups") or [])
+            if isinstance(a, dict) and a.get("question")
+        ]
+        log_event(
+            job,
+            "claude",
+            f"round {claude_calls} done (${r['cost']:.2f}); asks Lumo {len(asks)} thing(s)"
+            if asks
+            else f"round {claude_calls} done (${r['cost']:.2f}); no more lookups",
+        )
+        if (
+            not asks
+            or contract.get("final") is True
+            or claude_calls >= MAX_CLAUDE
+            or lumo_calls >= MAX_LUMO
+            or not lumo_ok
+        ):
             break
         for a in asks:
             log_event(job, "claude->lumo", f"{a.get('id', '?')}: {a['question']}"[:300])
-        qtext = "\n".join(f"{a.get('id', f'L{i + 1}')}. {a['question']}" + (f"\n   why it matters: {a['why']}" if a.get("why") else "") for i, a in enumerate(asks))
+        qtext = "\n".join(
+            f"{a.get('id', f'L{i + 1}')}. {a['question']}"
+            + (f"\n   why it matters: {a['why']}" if a.get("why") else "")
+            for i, a in enumerate(asks)
+        )
         if prose:
-            qtext = "Findings so far from the local investigation (for context):\n" + prose[:3000] + "\n\nQUESTIONS:\n" + qtext
+            qtext = (
+                "Findings so far from the local investigation (for context):\n"
+                + prose[:3000]
+                + "\n\nQUESTIONS:\n"
+                + qtext
+            )
         lumo_calls += 1
         reply, err = run_lumo(job, qtext, st)
         st["lumo_calls"] = st.get("lumo_calls", 0) + 1
@@ -351,31 +544,60 @@ def investigate(job, question, context):
             prompt = LUMO_DOWN
             continue
         lumo_urls |= urls_in(reply)
-        lookups_log.append({"asked": [a["question"] for a in asks], "reply_chars": len(reply)})
-        log_event(job, "lumo->claude", f"{len(urls_in(reply))} link(s), {len(reply)} chars returned")
-        prompt = AFTER_LUMO.format(lumo=reply, n=claude_calls + 1, max_claude=MAX_CLAUDE)
+        lookups_log.append(
+            {"asked": [a["question"] for a in asks], "reply_chars": len(reply)}
+        )
+        log_event(
+            job,
+            "lumo->claude",
+            f"{len(urls_in(reply))} link(s), {len(reply)} chars returned",
+        )
+        prompt = AFTER_LUMO.format(
+            lumo=reply, n=claude_calls + 1, max_claude=MAX_CLAUDE
+        )
         if claude_calls + 1 >= MAX_CLAUDE:
             prompt += "\n" + LAST_ROUND
+    prose = redact(
+        prose
+    )  # Claude may read secrets to authenticate; none belongs in the advice
     st["advice_n"] = st.get("advice_n", 0) + 1
     save_state(st)
     path = os.path.join(STATE_DIR, f"advice-{st['advice_n']:03d}.md")
     srcs = check_sources(prose, lumo_urls, claude_urls)
     try:
-        open(path, "w").write(f"# {question[:200]}\n\n{prose}\n")
+        with open(path, "w") as f:
+            f.write(f"# {question[:200]}\n\n{prose}\n")
     except OSError:
         path = ""
-    out = {"ok": True, "advice": prose, "source_check": srcs, "need_from_user": contract.get("need_from_user") or [], "calls": {"claude": claude_calls, "lumo": lumo_calls}, "cost_usd": round(cost, 3), "session_total_usd": st["cost_usd"], "saved_to": path}
+    out = {
+        "ok": True,
+        "advice": prose,
+        "source_check": srcs,
+        "need_from_user": contract.get("need_from_user") or [],
+        "calls": {"claude": claude_calls, "lumo": lumo_calls},
+        "cost_usd": round(cost, 3),
+        "session_total_usd": st["cost_usd"],
+        "saved_to": path,
+    }
     if not lumo_ok:
-        out["warning"] = "Lumo was not available: the advice has no online documentation behind it"
+        out["warning"] = (
+            "Lumo was not available: the advice has no online documentation behind it"
+        )
     if srcs["unverified"]:
-        out["warning"] = (out.get("warning", "") + " URLs in the advice that no tool or Lumo returned: they may be invented; do not trust them").strip()
+        out["warning"] = (
+            out.get("warning", "")
+            + " URLs in the advice that no tool or Lumo returned: they may be invented; do not trust them"
+        ).strip()
     return out
 
 
 def single_claude(job, request):
     st = load_state()
     r = run_claude(job, request, st)
-    st["claude_session"], st["cost_usd"] = r["session"], round(st.get("cost_usd", 0) + r["cost"], 4)
+    st["claude_session"], st["cost_usd"] = (
+        r["session"],
+        round(st.get("cost_usd", 0) + r["cost"], 4),
+    )
     save_state(st)
     if r["error"]:
         return {"ok": False, "problem": r["error"]}
@@ -387,13 +609,26 @@ def single_lumo(job, question):
     st = load_state()
     reply, err = run_lumo(job, question, st)
     save_state(st)
-    return {"ok": False, "problem": err} if err else {"ok": True, "lumo": reply, "links": sorted(urls_in(reply))}
+    return (
+        {"ok": False, "problem": err}
+        if err
+        else {"ok": True, "lumo": reply, "links": sorted(urls_in(reply))}
+    )
 
 
 # ---- jobs -------------------------------------------------------------------------------------------------------
 def start_job(kind, fn, *args):
     jid = f"{kind}-{int(time.time())}"
-    job = {"id": jid, "kind": kind, "events": [], "cursor": 0, "done": False, "result": None, "procs": [], "started": time.time()}
+    job = {
+        "id": jid,
+        "kind": kind,
+        "events": [],
+        "cursor": 0,
+        "done": False,
+        "result": None,
+        "procs": [],
+        "started": time.time(),
+    }
     with LOCK:
         JOBS[jid] = job
 
@@ -414,30 +649,60 @@ def tool_investigate(a):
     if not q:
         return {"ok": False, "problem": "question is empty"}
     job = start_job("investigate", investigate, q, str(a.get("context") or ""))
-    return {"ok": True, "job_id": job["id"], "next": "call aifo_wait with this job_id and report each event to the user"}
+    return {
+        "ok": True,
+        "job_id": job["id"],
+        "next": "call aifo_wait with this job_id and report each event to the user",
+    }
 
 
 def tool_ask_claude(a):
     q = str(a.get("request") or "").strip()
-    return {"ok": False, "problem": "request is empty"} if not q else {"ok": True, "job_id": start_job("claude", single_claude, q)["id"], "next": "call aifo_wait"}
+    return (
+        {"ok": False, "problem": "request is empty"}
+        if not q
+        else {
+            "ok": True,
+            "job_id": start_job("claude", single_claude, q)["id"],
+            "next": "call aifo_wait",
+        }
+    )
 
 
 def tool_ask_lumo(a):
     q = str(a.get("question") or "").strip()
-    return {"ok": False, "problem": "question is empty"} if not q else {"ok": True, "job_id": start_job("lumo", single_lumo, q)["id"], "next": "call aifo_wait"}
+    return (
+        {"ok": False, "problem": "question is empty"}
+        if not q
+        else {
+            "ok": True,
+            "job_id": start_job("lumo", single_lumo, q)["id"],
+            "next": "call aifo_wait",
+        }
+    )
 
 
 def tool_wait(a):
     job = JOBS.get(str(a.get("job_id") or ""))
     if not job:
-        return {"ok": False, "problem": "unknown job_id; jobs from before pi restarted are gone: ask the question again (Claude and Lumo keep their context)"}
+        return {
+            "ok": False,
+            "problem": "unknown job_id; jobs from before pi restarted are gone: ask the question again (Claude and Lumo keep their context)",
+        }
     end = time.time() + WAIT_S
-    while time.time() < end and not job["done"] and len(job["events"]) - job["cursor"] < 8:
+    while (
+        time.time() < end and not job["done"] and len(job["events"]) - job["cursor"] < 8
+    ):
         time.sleep(0.5)
     with LOCK:
         new = job["events"][job["cursor"] :]
         job["cursor"] = len(job["events"])
-    out = {"job_id": job["id"], "done": job["done"], "elapsed_s": int(time.time() - job["started"]), "events": [f"{e['t']} [{e['who']}] {e['text']}" for e in new]}
+    out = {
+        "job_id": job["id"],
+        "done": job["done"],
+        "elapsed_s": int(time.time() - job["started"]),
+        "events": [f"{e['t']} [{e['who']}] {e['text']}" for e in new],
+    }
     if job["done"]:
         out["result"] = job["result"]
     else:
@@ -455,13 +720,29 @@ def tool_cancel(a):
     return {"ok": True, "cancelled": job["id"]}
 
 
-S = lambda props, req: {"type": "object", "properties": props, "required": req}  # noqa: E731
+S = lambda props, req: {"type": "object", "properties": props, "required": req}
 STR = {"type": "string"}
 TOOLS = {
-    "aifo_investigate": (tool_investigate, "Start the full investigation of a question, error or URL: Claude researches with its MCP servers and local reads, Lumo looks up online documentation, Claude writes the advice. Returns a job_id: call aifo_wait.", S({"question": STR, "context": STR}, ["question"])),
-    "aifo_ask_claude": (tool_ask_claude, "Relay one request to Claude only (MCP and local read-only research). Returns a job_id: call aifo_wait.", S({"request": STR}, ["request"])),
-    "aifo_ask_lumo": (tool_ask_lumo, "Relay one question to Lumo only (online documentation and best-practice search). Returns a job_id: call aifo_wait.", S({"question": STR}, ["question"])),
-    "aifo_wait": (tool_wait, "News from a job: what Claude is looking at and what is passed between Claude and Lumo, plus the final result when done. Waits up to 25 s.", S({"job_id": STR}, ["job_id"])),
+    "aifo_investigate": (
+        tool_investigate,
+        "Start the full investigation of a question, error or URL: Claude researches with its MCP servers and local reads, Lumo looks up online documentation, Claude writes the advice. Returns a job_id: call aifo_wait.",
+        S({"question": STR, "context": STR}, ["question"]),
+    ),
+    "aifo_ask_claude": (
+        tool_ask_claude,
+        "Relay one request to Claude only (MCP and local read-only research). Returns a job_id: call aifo_wait.",
+        S({"request": STR}, ["request"]),
+    ),
+    "aifo_ask_lumo": (
+        tool_ask_lumo,
+        "Relay one question to Lumo only (online documentation and best-practice search). Returns a job_id: call aifo_wait.",
+        S({"question": STR}, ["question"]),
+    ),
+    "aifo_wait": (
+        tool_wait,
+        "News from a job: what Claude is looking at and what is passed between Claude and Lumo, plus the final result when done. Waits up to 25 s.",
+        S({"job_id": STR}, ["job_id"]),
+    ),
     "aifo_cancel": (tool_cancel, "Stop a running job.", S({"job_id": STR}, ["job_id"])),
 }
 
@@ -469,20 +750,42 @@ TOOLS = {
 def handle(req):
     m = req.get("method")
     if m == "initialize":
-        return {"protocolVersion": PROTOCOL, "capabilities": {"tools": {}}, "serverInfo": {"name": "aifo", "version": "0.1.0"}}
+        return {
+            "protocolVersion": PROTOCOL,
+            "capabilities": {"tools": {}},
+            "serverInfo": {"name": "aifo", "version": "0.1.0"},
+        }
     if m == "ping":
         return {}
     if m == "tools/list":
-        return {"tools": [{"name": n, "description": d, "inputSchema": s} for n, (_, d, s) in TOOLS.items()]}
+        return {
+            "tools": [
+                {"name": n, "description": d, "inputSchema": s}
+                for n, (_, d, s) in TOOLS.items()
+            ]
+        }
     if m == "tools/call":
         p = req.get("params", {})
         fn = TOOLS.get(p.get("name"))
         if not fn:
-            return {"content": [{"type": "text", "text": f"unknown tool {p.get('name')}"}], "isError": True}
+            return {
+                "content": [{"type": "text", "text": f"unknown tool {p.get('name')}"}],
+                "isError": True,
+            }
         try:
-            return {"content": [{"type": "text", "text": json.dumps(fn[0](p.get("arguments") or {}), indent=1)}]}
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(fn[0](p.get("arguments") or {}), indent=1),
+                    }
+                ]
+            }
         except Exception as e:  # noqa: BLE001
-            return {"content": [{"type": "text", "text": f"{type(e).__name__}: {e}"}], "isError": True}
+            return {
+                "content": [{"type": "text", "text": f"{type(e).__name__}: {e}"}],
+                "isError": True,
+            }
     return None
 
 
@@ -496,9 +799,21 @@ def main():
             continue
         try:
             res = handle(req)
-            msg = {"jsonrpc": "2.0", "id": req["id"], "result": res} if res is not None else {"jsonrpc": "2.0", "id": req["id"], "error": {"code": -32601, "message": "method not found"}}
+            msg = (
+                {"jsonrpc": "2.0", "id": req["id"], "result": res}
+                if res is not None
+                else {
+                    "jsonrpc": "2.0",
+                    "id": req["id"],
+                    "error": {"code": -32601, "message": "method not found"},
+                }
+            )
         except Exception as e:  # noqa: BLE001
-            msg = {"jsonrpc": "2.0", "id": req["id"], "error": {"code": -32603, "message": str(e)}}
+            msg = {
+                "jsonrpc": "2.0",
+                "id": req["id"],
+                "error": {"code": -32603, "message": str(e)},
+            }
         sys.stdout.write(json.dumps(msg) + "\n")
         sys.stdout.flush()
 
