@@ -152,5 +152,10 @@
     "claude-opus-5-5": {
       "effortLevel": "high"
     }
+  },
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
   }
 }
