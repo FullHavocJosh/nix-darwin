@@ -316,7 +316,7 @@
             cd "$MCP_DIR"
             if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ] || [ "package-lock.json" -nt "node_modules" ]; then
               echo "Installing dependencies for $MCP_NAME..."
-              npm install || echo "Failed to install dependencies for $MCP_NAME"
+              npm install --no-audit --no-fund || echo "Failed to install dependencies for $MCP_NAME"
             fi
             # Non-breaking fixes only (no --force). The rewritten package-lock.json
             # stays uncommitted and is newer than dist, so the build below reruns.
