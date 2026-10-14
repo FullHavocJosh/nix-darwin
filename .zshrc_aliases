@@ -550,6 +550,7 @@ alias itvim='_herdr_project Infrastructure-Terrakube ~/Infrastructure-Terrakube'
 # git repo directly under ~/ (any dir with a .git) and opens a workspace for each,
 # so newly cloned repos get picked up automatically without editing this file.
 # Add repo names to the case statement below to exclude them from the scan.
+# When ~/pscloudops exists, ~/pscloudops/terraform-infrastructure gets a workspace too.
 _herdr_dev() {
   if herdr session list --json 2>/dev/null | jq -e '.sessions[] | select(.name=="dev" and .running==true)' >/dev/null 2>&1; then
     herdr --session dev
@@ -572,6 +573,14 @@ _herdr_dev() {
     esac
     _herdr_devlayout "$base" "$repo"
   done
+  # ~/pscloudops (work laptop only) holds its repos one level down, which the scan above never reaches.
+  if [ -d ~/pscloudops ]; then
+    if [ -d ~/pscloudops/terraform-infrastructure ]; then
+      _herdr_devlayout terraform-infrastructure ~/pscloudops/terraform-infrastructure
+    else
+      echo "herdr: ~/pscloudops/terraform-infrastructure does not exist, skipping terraform-infrastructure" >&2
+    fi
+  fi
   [ -d ~/nix-darwin ] && nxvim
   unset HERDR_ENV HERDR_SESSION
   cd "$orig_dir"
