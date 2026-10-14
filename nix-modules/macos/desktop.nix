@@ -56,6 +56,12 @@ in
   networking.hostName = "MacMiniM1";
   networking.computerName = "MacMiniM1";
 
+  # Makes plain gpc/gpa/gpr behave like their -local variants (llama.cpp only,
+  # no cloud fallback) on this host -- see the guards at the top of gpc()/gpa()
+  # in .zshrc_functions_git. Same as laptop.nix/work.nix. Does NOT affect
+  # aiselect or aidev/opencode. Override for one shell with `unset AI_LOCAL_DEFAULT`.
+  environment.variables.AI_LOCAL_DEFAULT = "1";
+
   homebrew.casks = [
     "ollama-app"
   ];
