@@ -5,7 +5,7 @@ module.exports = {
   config: {
     // Font configuration
     fontSize: 14,
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: '"Hack Nerd Font Mono", monospace',
     fontWeight: "normal",
     fontWeightBold: "bold",
 

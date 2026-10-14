@@ -390,7 +390,6 @@ in
       "warrensbox/tap/tfswitch"
       "claude-code"
       "font-hack-nerd-font"
-      "font-jetbrains-mono-nerd-font"
     ];
     masApps = { };
     onActivation.cleanup = "none";
