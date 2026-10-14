@@ -28,6 +28,7 @@
           ./nix-modules/macos/config.nix
           ./nix-modules/macos/personal.nix
           ./nix-modules/macos/laptop.nix
+          ./nix-modules/macos/timemachine-exclusions.nix
           ./nix-modules/macos/llamacpp-local.nix
           ./nix-modules/macos/lumo.nix # loopback only, own keys and sign-in (local.lumo.lan defaults to false)
           nix-homebrew.darwinModules.nix-homebrew
@@ -42,6 +43,7 @@
           ./nix-modules/macos/config.nix
           ./nix-modules/macos/personal.nix
           ./nix-modules/macos/desktop.nix
+          ./nix-modules/macos/timemachine-exclusions.nix
           ./nix-modules/macos/llamacpp-local.nix
           ./nix-modules/macos/lumo.nix
           { local.lumo.lan = true; } # serve Lumo to every device on the network

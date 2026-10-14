@@ -1,6 +1,6 @@
 # Applies the Time Machine exclusion list from the repo root
-# (nix-darwin/timemachine-exclusions.txt) to every profile that imports
-# config.nix. The list is the single source of truth:
+# (nix-darwin/timemachine-exclusions.txt) to the laptop and desktop
+# profiles (imported in flake.nix; the work profile does not get it). The list is the single source of truth:
 # scripts/check-timemachine-exclusions.sh validates it, this module applies it.
 { config, lib, ... }:
 let
@@ -33,7 +33,7 @@ let
     else if escaped == rest then
       "\"$USER_HOME/${escaped}\""
     else
-      "\"$USER_HOME/" + escaped;
+      "\"$USER_HOME/\"" + escaped;
 in
 {
   # Must be `postActivation` via lib.mkAfter (which merges with the other
