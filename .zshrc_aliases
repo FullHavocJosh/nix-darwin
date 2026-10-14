@@ -706,7 +706,7 @@ function _lumo_signin_if_invalid() {
     echo "Lumo: the Proton sign-in on MacMiniM1 is not valid. Starting the browser sign-in here (lumoreauth)..."
     zsh ~/.config/lumo/reauth.sh
   else
-    echo "Lumo: the Proton sign-in on this machine is not valid, and it has no screen. On the MacBook run: lumoreauth"
+    echo "Lumo: the Proton sign-in on this machine is not valid, and it has no screen. Run lumoauth here (Chromium opens on the MacBook) or lumoreauth on the MacBook"
   fi
 }
 
