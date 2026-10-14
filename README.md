@@ -171,8 +171,9 @@ its own copy, with its own keys and its own Proton sign-in; `local.lumo.lan` in 
 | tamer and vault keys | Doppler `root_macmini`                               | generated and kept on the host              |
 | sign-in              | `lumoreauth` from the MacBook (the Mini is headless) | `lumoauth` on the laptop itself             |
 
-lumo-tamer has no setting for its listen address, so on a loopback host the provisioner patches the one `listen()`
-call to read `LUMO_TAMER_HOST`, and `run-tamer.sh` refuses to start a build without that patch. `darwin-reload switch laptop|desktop` (`.zshrc_aliases`) runs `sudo darwin-rebuild switch` for that host (the
+Upstream lumo-tamer has no setting for its listen address, so the fork's one `listen()` call reads `LUMO_TAMER_HOST`
+(unset means every interface); `run-tamer.sh` sets it to `127.0.0.1` on a loopback host and refuses to start a build
+without it. `darwin-reload switch laptop|desktop` (`.zshrc_aliases`) runs `sudo darwin-rebuild switch` for that host (the
 desktop's over ssh when called from the MacBook) and then starts the browser sign-in if that host's Proton session is
 not valid: `lumoauth` for the laptop, `lumoreauth` for the Mini. A valid session is left alone. Plain
 `darwin-rebuild switch` only prints the sign-in state.
