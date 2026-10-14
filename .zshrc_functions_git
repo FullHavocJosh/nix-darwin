@@ -816,9 +816,10 @@ $(echo -e "$suspicious_lines" | head -c 4000)" | AI_LOCAL_ALIAS=local-coder-secr
 }
 
 # Agent attribution is not allowed in commit messages or PR titles/descriptions: AI Co-Authored-By trailers,
-# "Generated with <tool>" footers, Claude Code links. Checked by gpa, gpc and gpr. Prints the offending lines and
-# returns 0 when any argument contains one.
+# "Generated with <tool>" footers, Claude Code links. gpa and gpc strip matching lines; gpr refuses them.
 _AGENT_ATTRIBUTION_RE='co-authored-by:.*(claude|anthropic|copilot|openai|chatgpt|gpt|opencode|codex|gemini|cursor|aider|devin|\[bot\])|generated (with|by|using) \[?(claude|copilot|chatgpt|gpt|opencode|codex|gemini|cursor|aider|an ai|ai[^a-z]|ai$)|claude\.(com|ai)/(code|claude-code)|noreply@anthropic\.com|🤖'
+
+# Prints the offending lines and returns 0 when any argument contains attribution.
 function _has_agent_attribution() {
   local hits
   hits=$(printf '%s\n' "$@" | grep -iE "$_AGENT_ATTRIBUTION_RE")
@@ -828,12 +829,29 @@ function _has_agent_attribution() {
   return 0
 }
 
+# Prints $1 without attribution lines and notes what it removed on stderr. Use as x=$(_strip_agent_attribution "$x"):
+# the command substitution also drops the blank lines a removed footer leaves at the end.
+function _strip_agent_attribution() {
+  local removed
+  removed=$(printf '%s\n' "$1" | grep -iE "$_AGENT_ATTRIBUTION_RE")
+  if [[ -n "$removed" ]]; then
+    echo "ℹ Removed agent attribution from the commit message:" >&2
+    printf '    %s\n' "${(@f)removed}" >&2
+  fi
+  printf '%s\n' "$1" | grep -viE "$_AGENT_ATTRIBUTION_RE"
+}
+
 # Commit the staged changes with a message the caller already wrote, then push. $1 = subject, $2 = optional body.
 # Shared by `gpc -m`, `gpa -m` (which ends in gpc) and anything else that supplies its own message, so no AI
 # provider is involved and nothing can prompt.
 function _gpc_commit_push() {
-  local subject="$1" body="$2"
-  _has_agent_attribution "$subject" "$body" && return 1
+  local subject body
+  subject=$(_strip_agent_attribution "$1")
+  body=$(_strip_agent_attribution "$2")
+  if [[ -z "$subject" ]]; then
+    echo "✗ Commit subject was only agent attribution; nothing left to commit with" >&2
+    return 1
+  fi
   echo ""
   echo "═══════════════════════════════════════════════════════════"
   echo "  $subject"
@@ -1210,7 +1228,11 @@ function gpc() {
       return 1
     fi
 
-    _has_agent_attribution "$commit_msg" && return 1
+    commit_msg=$(_strip_agent_attribution "$commit_msg")
+    if [[ -z "$commit_msg" ]]; then
+      echo "✗ Generated commit message was only agent attribution; nothing left to commit with" >&2
+      return 1
+    fi
 
     echo ""
     echo "═══════════════════════════════════════════════════════════"
@@ -2476,8 +2498,15 @@ function gpa() {
     esac
   done
   local -x AI_COMMIT_MESSAGE="${msg:-${AI_COMMIT_MESSAGE:-}}" AI_COMMIT_BODY="${body:-${AI_COMMIT_BODY:-}}"
-  # Fail before the review runs; _gpc_commit_push checks again as the backstop.
-  _has_agent_attribution "$AI_COMMIT_MESSAGE" "$AI_COMMIT_BODY" && return 2
+  # Strip before the review runs and before a Review-waived line is appended; gpc strips again as the backstop.
+  if [[ -n "$AI_COMMIT_MESSAGE" ]]; then
+    AI_COMMIT_MESSAGE=$(_strip_agent_attribution "$AI_COMMIT_MESSAGE")
+    if [[ -z "$AI_COMMIT_MESSAGE" ]]; then
+      echo "✗ Commit subject was only agent attribution; nothing left to commit with" >&2
+      return 2
+    fi
+  fi
+  AI_COMMIT_BODY=$(_strip_agent_attribution "$AI_COMMIT_BODY")
   local -x GPA_NO_REVIEW="${noreview:-${GPA_NO_REVIEW:-}}"
   # --waive <fingerprint> --reason "<why>": let one confirmed review finding through. The fingerprint is printed with
   # the finding. It is a person's decision, so it is refused together with --auto (the AI-agent interface), and it is
