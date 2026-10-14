@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""aifo read-only guard: a Claude Code PreToolUse hook that denies everything not known to be read-only.
+"""ainfo read-only guard: a Claude Code PreToolUse hook that denies everything not known to be read-only.
 
-aifo hands this file to Claude with `--settings` (see aifo_mcp.py), so it only exists for aifo's own Claude calls;
+ainfo hands this file to Claude with `--settings` (see ainfo_mcp.py), so it only exists for ainfo's own Claude calls;
 a plain `claude` run never loads it. Default is DENY: a tool, MCP method or shell command is allowed only when a
 rule below says it only reads. Hook input is JSON on stdin; the answer is one JSON line on stdout.
 
 Layers: this hook (tool and command policy), `--disallowedTools` (the same denials, enforced by Claude Code itself)
-and a macOS sandbox profile that refuses file writes outside a few cache directories (aifo_mcp.py).
+and a macOS sandbox profile that refuses file writes outside a few cache directories (ainfo_mcp.py).
 """
 
 import fnmatch
@@ -766,7 +766,7 @@ def decide(ev):
         return (why is None), (why or "")
     return (
         False,
-        f"{tool} is not allowed: aifo is read-only and online research belongs to Lumo",
+        f"{tool} is not allowed: ainfo is read-only and online research belongs to Lumo",
     )
 
 
@@ -777,9 +777,9 @@ def main():
         ev = {}
     allow, reason = decide(ev)
     msg = (
-        "aifo read-only guard: allowed"
+        "ainfo read-only guard: allowed"
         if allow
-        else f"aifo is read-only: {reason}. Do not retry; report what you could not check."
+        else f"ainfo is read-only: {reason}. Do not retry; report what you could not check."
     )
     print(
         json.dumps(

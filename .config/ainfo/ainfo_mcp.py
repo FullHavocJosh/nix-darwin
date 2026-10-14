@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""aifo bridge: an MCP server (stdio, JSON-RPC 2.0) that lets the local model in pi relay between Claude and Lumo.
+"""ainfo bridge: an MCP server (stdio, JSON-RPC 2.0) that lets the local model in pi relay between Claude and Lumo.
 
 pi (Qwen) has exactly these tools and no file, shell or edit tools of its own:
-  aifo_investigate(question)   Claude researches (MCP servers + local reads), Lumo looks up online docs, Claude writes
+  ainfo_investigate(question)   Claude researches (MCP servers + local reads), Lumo looks up online docs, Claude writes
                                the advice. Runs as a background job; the bridge does the hand-offs.
-  aifo_ask_claude(request)     one Claude call, when the user asks Claude something directly
-  aifo_ask_lumo(question)      one Lumo call, when the user asks Lumo something directly
-  aifo_wait(job_id)            news from a job (what Claude is reading, what Lumo was asked) and the final result
+  ainfo_ask_claude(request)     one Claude call, when the user asks Claude something directly
+  ainfo_ask_lumo(question)      one Lumo call, when the user asks Lumo something directly
+  ainfo_wait(job_id)            news from a job (what Claude is reading, what Lumo was asked) and the final result
 
-Read-only is enforced here, not in prompts: Claude runs with aifo_guard.py as a PreToolUse hook (`--settings`),
+Read-only is enforced here, not in prompts: Claude runs with ainfo_guard.py as a PreToolUse hook (`--settings`),
 `--disallowedTools` for every writing built-in, and inside a macOS sandbox that refuses file writes outside a few
 cache directories. Lumo has no tools at all. State (Claude session id, Lumo history, event log, advice files) lives in
-AIFO_STATE_DIR (~/.aifo/<project key>), never in a repository, so a crashed pi session can be resumed.
+AINFO_STATE_DIR (~/.ainfo/<project key>), never in a repository, so a crashed pi session can be resumed.
 """
 
 import importlib.util
@@ -27,24 +27,24 @@ import time
 import urllib.request
 
 HERE = os.path.dirname(os.path.realpath(__file__))
-PROJECT = os.path.realpath(os.environ.get("AIFO_PROJECT") or os.getcwd())
-STATE_DIR = os.environ.get("AIFO_STATE_DIR") or os.path.expanduser("~/.aifo/default")
-AISTACK_DIR = os.environ.get("AIFO_AISTACK_DIR") or os.path.expanduser(
+PROJECT = os.path.realpath(os.environ.get("AINFO_PROJECT") or os.getcwd())
+STATE_DIR = os.environ.get("AINFO_STATE_DIR") or os.path.expanduser("~/.ainfo/default")
+AISTACK_DIR = os.environ.get("AINFO_AISTACK_DIR") or os.path.expanduser(
     "~/.config/aistack"
 )
-CLAUDE_BIN = os.environ.get("AIFO_CLAUDE_BIN", "claude")
-CLAUDE_MODEL = os.environ.get("AIFO_CLAUDE_MODEL") or os.environ.get(
+CLAUDE_BIN = os.environ.get("AINFO_CLAUDE_BIN", "claude")
+CLAUDE_MODEL = os.environ.get("AINFO_CLAUDE_MODEL") or os.environ.get(
     "AISTACK_CLAUDE_MODEL", "sonnet"
 )
-CLAUDE_EFFORT = os.environ.get("AIFO_CLAUDE_EFFORT") or os.environ.get(
+CLAUDE_EFFORT = os.environ.get("AINFO_CLAUDE_EFFORT") or os.environ.get(
     "AISTACK_CLAUDE_EFFORT", "medium"
 )
-CLAUDE_BUDGET = os.environ.get("AIFO_CLAUDE_BUDGET_USD", "2.0")  # per Claude call
-CLAUDE_TIMEOUT_S = int(os.environ.get("AIFO_CLAUDE_TIMEOUT_S", "900"))
-LUMO_TIMEOUT_S = int(os.environ.get("AIFO_LUMO_TIMEOUT_S", "300"))
-MAX_CLAUDE = int(os.environ.get("AIFO_MAX_CLAUDE_CALLS", "3"))  # per aifo_investigate
-MAX_LUMO = int(os.environ.get("AIFO_MAX_LUMO_CALLS", "2"))  # per aifo_investigate
-SANDBOX = os.environ.get("AIFO_SANDBOX", "on") != "off"
+CLAUDE_BUDGET = os.environ.get("AINFO_CLAUDE_BUDGET_USD", "2.0")  # per Claude call
+CLAUDE_TIMEOUT_S = int(os.environ.get("AINFO_CLAUDE_TIMEOUT_S", "900"))
+LUMO_TIMEOUT_S = int(os.environ.get("AINFO_LUMO_TIMEOUT_S", "300"))
+MAX_CLAUDE = int(os.environ.get("AINFO_MAX_CLAUDE_CALLS", "3"))  # per ainfo_investigate
+MAX_LUMO = int(os.environ.get("AINFO_MAX_LUMO_CALLS", "2"))  # per ainfo_investigate
+SANDBOX = os.environ.get("AINFO_SANDBOX", "on") != "off"
 WAIT_S = 25
 PROTOCOL = "2024-11-05"
 
@@ -136,7 +136,7 @@ REDACTIONS = [
 def redact(text):
     for rx, rep in REDACTIONS:
         text = rx.sub(rep, text)
-    extra = os.environ.get("AIFO_REDACT_EXTRA")
+    extra = os.environ.get("AINFO_REDACT_EXTRA")
     if extra:
         text = re.sub(extra, "[REDACTED]", text)
     return text
@@ -177,7 +177,7 @@ def sandbox_profile():
             f"{h}/.cache",
             f"{h}/.npm",
             f"{h}/.local",
-            f"{h}/.aifo",
+            f"{h}/.ainfo",
             f"{h}/.bun",
             f"{h}/.token-optimizer",
             f"{h}/Library/Caches",
@@ -189,7 +189,7 @@ def sandbox_profile():
             f"{h}/.pi",
         )
     ]
-    extra = [sub(p) for p in os.environ.get("AIFO_SANDBOX_WRITE", "").split(":") if p]
+    extra = [sub(p) for p in os.environ.get("AINFO_SANDBOX_WRITE", "").split(":") if p]
     prof = (
         "(version 1)\n(allow default)\n(deny file-write*)\n"
         '(allow file-write* (literal "/dev/null") (literal "/dev/tty") (literal "/dev/dtracehelper") (regex #"^/dev/(tty|pty|fd/)"))\n'
@@ -205,7 +205,7 @@ def sandbox_profile():
 
 def settings_file():
     path = os.path.join(STATE_DIR, "claude-settings.json")
-    guard = os.path.join(HERE, "aifo_guard.py")
+    guard = os.path.join(HERE, "ainfo_guard.py")
     cfg = {
         "hooks": {
             "PreToolUse": [
@@ -336,7 +336,7 @@ def run_claude(job, prompt, st):
                     if b.get("type") == "tool_result":
                         txt = tool_result_text(b)
                         out["seen_urls"] |= urls_in(txt)
-                        if b.get("is_error") and "aifo is read-only" in txt:
+                        if b.get("is_error") and "ainfo is read-only" in txt:
                             out["denied"].append(
                                 f"{tool_names.get(b.get('tool_use_id'), '?')}: {txt[:140]}"
                             )
@@ -409,7 +409,7 @@ def run_lumo(job, questions_text, st):
             base.rstrip("/") + "/chat/completions",
             data=json.dumps(
                 {
-                    "model": os.environ.get("AIFO_LUMO_MODEL", "lumo"),
+                    "model": os.environ.get("AINFO_LUMO_MODEL", "lumo"),
                     "messages": messages,
                 }
             ).encode(),
@@ -652,7 +652,7 @@ def tool_investigate(a):
     return {
         "ok": True,
         "job_id": job["id"],
-        "next": "call aifo_wait with this job_id and report each event to the user",
+        "next": "call ainfo_wait with this job_id and report each event to the user",
     }
 
 
@@ -664,7 +664,7 @@ def tool_ask_claude(a):
         else {
             "ok": True,
             "job_id": start_job("claude", single_claude, q)["id"],
-            "next": "call aifo_wait",
+            "next": "call ainfo_wait",
         }
     )
 
@@ -677,7 +677,7 @@ def tool_ask_lumo(a):
         else {
             "ok": True,
             "job_id": start_job("lumo", single_lumo, q)["id"],
-            "next": "call aifo_wait",
+            "next": "call ainfo_wait",
         }
     )
 
@@ -706,7 +706,7 @@ def tool_wait(a):
     if job["done"]:
         out["result"] = job["result"]
     else:
-        out["next"] = "report these events to the user, then call aifo_wait again"
+        out["next"] = "report these events to the user, then call ainfo_wait again"
     return out
 
 
@@ -723,27 +723,31 @@ def tool_cancel(a):
 S = lambda props, req: {"type": "object", "properties": props, "required": req}
 STR = {"type": "string"}
 TOOLS = {
-    "aifo_investigate": (
+    "ainfo_investigate": (
         tool_investigate,
-        "Start the full investigation of a question, error or URL: Claude researches with its MCP servers and local reads, Lumo looks up online documentation, Claude writes the advice. Returns a job_id: call aifo_wait.",
+        "Start the full investigation of a question, error or URL: Claude researches with its MCP servers and local reads, Lumo looks up online documentation, Claude writes the advice. Returns a job_id: call ainfo_wait.",
         S({"question": STR, "context": STR}, ["question"]),
     ),
-    "aifo_ask_claude": (
+    "ainfo_ask_claude": (
         tool_ask_claude,
-        "Relay one request to Claude only (MCP and local read-only research). Returns a job_id: call aifo_wait.",
+        "Relay one request to Claude only (MCP and local read-only research). Returns a job_id: call ainfo_wait.",
         S({"request": STR}, ["request"]),
     ),
-    "aifo_ask_lumo": (
+    "ainfo_ask_lumo": (
         tool_ask_lumo,
-        "Relay one question to Lumo only (online documentation and best-practice search). Returns a job_id: call aifo_wait.",
+        "Relay one question to Lumo only (online documentation and best-practice search). Returns a job_id: call ainfo_wait.",
         S({"question": STR}, ["question"]),
     ),
-    "aifo_wait": (
+    "ainfo_wait": (
         tool_wait,
         "News from a job: what Claude is looking at and what is passed between Claude and Lumo, plus the final result when done. Waits up to 25 s.",
         S({"job_id": STR}, ["job_id"]),
     ),
-    "aifo_cancel": (tool_cancel, "Stop a running job.", S({"job_id": STR}, ["job_id"])),
+    "ainfo_cancel": (
+        tool_cancel,
+        "Stop a running job.",
+        S({"job_id": STR}, ["job_id"]),
+    ),
 }
 
 
@@ -753,7 +757,7 @@ def handle(req):
         return {
             "protocolVersion": PROTOCOL,
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "aifo", "version": "0.1.0"},
+            "serverInfo": {"name": "ainfo", "version": "0.1.0"},
         }
     if m == "ping":
         return {}
