@@ -175,6 +175,9 @@ btop.log
 .copilot
 .copilot/
 
+# token-optimizer-mcp per-repo cache and wiki
+.token-optimizer/
+
 # Generic AI tool artifacts
 .ai
 .ai/
