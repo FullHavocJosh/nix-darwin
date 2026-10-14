@@ -23,6 +23,7 @@ import signal
 import subprocess
 import sys
 import time
+import urllib.parse
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 ROOTS = [
@@ -417,6 +418,183 @@ def plan_review_path(project):
     return os.path.join(state_dir(project), "plan-review.json")
 
 
+# ---- aidev: URLs in the request (RFC 0001) -----------------------------------------------------------------------
+# The local model cannot open a URL: given a Jira link it grepped the repository for the ticket key (PLT-5995,
+# 2026-10-14) and Claude planned without the ticket. URLs the user typed on hosts Claude reaches through MCP (Jira and
+# Confluence through the claude.ai Atlassian connector, GitHub, Terraform and HashiCorp docs) are fetched by one small billed call
+# (claude-fetch.sh) before Lumo drafts, so Lumo and Claude both see them. Other URLs are left to Lumo, which browses;
+# one it reports it could not open goes to the same fetch before the plan call. With no Lumo draft, every typed URL
+# goes to the fetch (it has WebFetch for public pages). Results are cached in <plan dir>/urls.json, so the launcher's
+# fetch at start (--fetch-urls) and ralph_plan's are one billed call, not two.
+URL_RE = re.compile(r"https?://[^\s<>\"'`)\]]+")
+MCP_URL_HOSTS = tuple(
+    h.strip().lower()
+    for h in os.environ.get(
+        "AISTACK_MCP_URL_HOSTS", "atlassian.net,github.com,terraform.io,developer.hashicorp.com"
+    ).split(",")
+    if h.strip()
+)
+URLS_MAX, URL_CONTENT_MAX, URL_BLOCK_MAX = 6, 12_000, 24_000
+# A fetched page is reused for this long (a ticket changes between sessions); a failure only briefly, so fixing the
+# cause (a connector that needs a login) and asking again works without waiting.
+URL_CACHE_OK_S = int(os.environ.get("AISTACK_URL_CACHE_S", "21600"))
+URL_CACHE_FAILED_S = 600
+FETCH_PROMPT = """Fetch each URL below and reply with ONE JSON object and nothing else (no prose, no code fence):
+{"urls": [{"url": "the URL exactly as given", "ok": true, "content": "..."}]}
+Use the Atlassian tools for atlassian.net (Jira issues, Confluence pages), the github tools for github.com, the terraform tools for
+terraform.io and developer.hashicorp.com (WebFetch when they do not cover a page), and WebFetch for anything else. For a URL you cannot open, give ok false and the reason in content.
+content is the page close to verbatim, as plain text or markdown: for a Jira issue the summary, status, description and every
+comment with author and date; for a pull request the title, description, changed files and review comments; for documentation
+the parts that matter for building something. Keep every decision, open question, number, name, path and command. At most %d
+characters per URL. Read only: do not change anything anywhere.
+
+URLS:
+%s"""
+UNREACHABLE_RE = re.compile(r"^\W*UNREACHABLE:(.*)$", re.MULTILINE | re.IGNORECASE)
+
+
+def extract_urls(text):
+    """The distinct http(s) URLs in text, in order, at most URLS_MAX; trailing punctuation is not part of a URL."""
+    out = []
+    for u in URL_RE.findall(text or ""):
+        u = u.rstrip(".,;:!?*")
+        if u not in out:
+            out.append(u)
+    return out[:URLS_MAX]
+
+
+def mcp_url(url):
+    """True when url is on a host Claude reaches through MCP (AISTACK_MCP_URL_HOSTS, a domain and its subdomains)."""
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    return any(host == h or host.endswith("." + h) for h in MCP_URL_HOSTS)
+
+
+def submitted_urls(request):
+    """URLs the user typed: in ralph_plan's request, and in the launcher's (AISTACK_REQUEST_URLS), which still has them
+    when the local model rewords the request."""
+    return extract_urls(os.environ.get("AISTACK_REQUEST_URLS", "") + " " + (request or ""))
+
+
+def urls_path(project):
+    return os.path.join(plan_dir(project), "urls.json")
+
+
+def extract_fetched(text):
+    """{url: {"ok", "content"}} from the fetch call's reply: the first JSON object with a 'urls' list."""
+    dec = json.JSONDecoder()
+    for m in re.finditer(r"\{", text or ""):
+        try:
+            obj, _ = dec.raw_decode(text, m.start())
+        except ValueError:
+            continue
+        if isinstance(obj, dict) and isinstance(obj.get("urls"), list):
+            return {
+                str(i.get("url", "")).rstrip("/"): {
+                    "ok": i.get("ok") is True and bool(str(i.get("content") or "").strip()),
+                    "content": str(i.get("content") or "")[:URL_CONTENT_MAX],
+                }
+                for i in obj["urls"]
+                if isinstance(i, dict) and i.get("url")
+            }
+    return {}
+
+
+def resolve_urls(project, urls):
+    """({url: {"ok", "content", "ts"}}, billed): the URLs not freshly cached are fetched by claude-fetch.sh in ONE call
+    (billed is 1 then, else 0). A URL the reply leaves out is recorded as failed, so it is not paid for again at once."""
+    cache = rj(urls_path(project), {}) or {}
+    now = time.time()
+
+    def fresh(u):
+        c = cache.get(u) or {}
+        return now - c.get("ts", 0) < (URL_CACHE_OK_S if c.get("ok") else URL_CACHE_FAILED_S)
+
+    todo = [u for u in urls if not fresh(u)]
+    if not todo:
+        return {u: cache[u] for u in urls}, 0
+    prompt = FETCH_PROMPT % (URL_CONTENT_MAX, "\n".join(todo))
+    cmd = os.environ.get("AISTACK_FETCH_CMD")
+    argv = (
+        ["/bin/sh", "-c", cmd]
+        if cmd
+        else [os.path.join(HERE, "claude-fetch.sh"), "-p", prompt]
+    )
+    env = dict(os.environ, AISTACK_WORKDIR=project, AISTACK_FETCH_PROMPT=prompt)
+    try:
+        r = subprocess.run(
+            argv,
+            cwd=project,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=int(os.environ.get("AISTACK_FETCH_TIMEOUT_S", "180")),
+            stdin=subprocess.DEVNULL,
+        )
+        text, why = r.stdout or "", f"exit {r.returncode}"
+    except (OSError, subprocess.TimeoutExpired) as e:
+        text, why = "", f"{type(e).__name__}: {e}"
+    got = extract_fetched(text)
+    for u in todo:
+        item = got.get(u.rstrip("/")) or {
+            "ok": False,
+            "content": f"the fetch call returned nothing for it ({why})",
+        }
+        cache[u] = dict(item, ts=now)
+    os.makedirs(plan_dir(project), exist_ok=True)
+    with open(urls_path(project), "w") as f:
+        json.dump(cache, f, indent=1)
+    return {u: cache[u] for u in urls}, 1
+
+
+def url_block(results):
+    """The fetched URLs as text for a prompt, at most URL_BLOCK_MAX characters; a URL that failed says why."""
+    out, total = [], 0
+    for u, it in results.items():
+        body = it.get("content") if it.get("ok") else f"(could not be opened: {it.get('content')})"
+        s = f"\n--- URL: {u} ---\n{body}\n"
+        if total + len(s) > URL_BLOCK_MAX:
+            s = f"\n--- URL: {u} ---\n(left out: the size limit for URL contents was reached)\n"
+        total += len(s)
+        out.append(s)
+    return "".join(out)
+
+
+def unreachable_urls(draft):
+    """URLs Lumo said it could not open: its 'UNREACHABLE: <url>' lines (LUMO_PROMPT asks for them)."""
+    return extract_urls(" ".join(UNREACHABLE_RE.findall(draft or "")))
+
+
+def url_line(results, billed):
+    """The plan text's line on URLs: how many were read and what the fetch cost; empty when there were none."""
+    if not results:
+        return ""
+    ok = [u for u, it in results.items() if it.get("ok")]
+    bad = [u for u in results if u not in ok]
+    return (
+        f"URLs: {len(ok)} read by Claude Code"
+        + (f"; not readable: {', '.join(bad)}" if bad else "")
+        + (f" ({billed} small billed fetch call)." if billed else " (fetched earlier, no new call).")
+    )
+
+
+def fetch_urls_cli(project, text):
+    """`ralph_mcp.py --fetch-urls PROJECT TEXT`: the launcher's fetch at start, for the URLs ralph_plan would fetch
+    before Lumo. Prints their url_block (nothing when there are none); a short status goes to stderr."""
+    lumo = os.environ.get("AISTACK_TIER0") == "lumo"
+    urls = [u for u in extract_urls(text) if mcp_url(u) or not lumo]
+    if not urls:
+        return 0
+    sys.stderr.write(
+        f"Fetching {len(urls)} URL(s) through Claude Code (small billed call, read-only tools)...\n"
+    )
+    results, _ = resolve_urls(os.path.realpath(project), urls)
+    bad = [u for u, it in results.items() if not it.get("ok")]
+    if bad:
+        sys.stderr.write("⚠ could not fetch: " + ", ".join(bad) + "\n")
+    sys.stdout.write(url_block(results))
+    return 0
+
+
 # ---- aidev: Claude Code writes the plan (one billed call) instead of reviewing one -------------------------------
 # The chat agent (the local model) does the research for free and passes it in: a brief, the files that matter
 # (inlined here, so the local model does not have to copy code through its own output), and Lumo's draft if any.
@@ -474,7 +652,7 @@ USER REQUEST:
 
 RESEARCH BRIEF:
 %s
-%s%s"""
+%s%s%s"""
 
 
 # Every Claude turn re-reads the whole prompt, and three real runs spent 4-5 turns on 7-10 lookups. So Claude is told
@@ -634,7 +812,12 @@ def tool_plan(a):
         if draft
         else "not available"
     )
-    if not draft and os.environ.get("AISTACK_TIER0") == "lumo":
+    # Typed URLs on MCP hosts (or every typed URL when there is no Lumo) are fetched before Lumo drafts (RFC 0001).
+    lumo_on = os.environ.get("AISTACK_TIER0") == "lumo"
+    urls = submitted_urls(request)
+    early = [u for u in urls if mcp_url(u) or not lumo_on]
+    fetched, fetch_billed = resolve_urls(project, early) if early else ({}, 0)
+    if not draft and lumo_on:
         lr = tool_lumo_consult(
             {
                 "project_dir": project,
@@ -642,6 +825,12 @@ def tool_plan(a):
                 + (
                     "\n\nWhat a local model found in the code:\n" + brief[:6000]
                     if brief
+                    else ""
+                )
+                + (
+                    "\n\nContent of the URLs in the request (already fetched for you):"
+                    + url_block(fetched)[:URL_BLOCK_MAX // 2]
+                    if fetched
                     else ""
                 ),
                 "files": [
@@ -672,6 +861,12 @@ def tool_plan(a):
                     lumo_state += f", its {len(draft)}-character draft could not be shortened and went to Claude as it is"
         else:
             lumo_state = "failed: " + str(lr.get("problem", ""))[:160]
+    # What Lumo could not open, and with no draft at all the typed URLs it was meant to read, go to the fetch now.
+    late = [u for u in unreachable_urls(draft) + ([] if draft else urls) if u not in fetched]
+    if late:
+        more, billed = resolve_urls(project, late[:URLS_MAX])
+        fetched.update(more)
+        fetch_billed += billed
     truncated = ["brief"] if brief_cut else []
     if len(draft) > PLAN_DRAFT_MAX:
         cut = draft.rfind("\n\n", 0, PLAN_DRAFT_MAX)
@@ -713,6 +908,10 @@ def tool_plan(a):
         brief or "(none)",
         "\nPROJECT FILES:" + "".join(blocks) if blocks else "",
         "\nDRAFT PLAN FROM ANOTHER ASSISTANT:\n" + draft if draft else "",
+        "\nURL CONTENTS (the pages the request links to, fetched for this plan; the user's source material):"
+        + url_block(fetched)
+        if fetched
+        else "",
     )
     cmd = os.environ.get("AISTACK_PLAN_CMD")
     argv = (
@@ -735,6 +934,7 @@ def tool_plan(a):
         return {
             "ok": False,
             "problem": f"the planning call (Claude Code) did not finish: {type(e).__name__}: {e}",
+            "billed_calls": fetch_billed,
         }
     text = (r.stdout or "").strip()
     plan = extract_plan(text) if r.returncode == 0 else None
@@ -775,7 +975,7 @@ def tool_plan(a):
         return {
             "ok": False,
             "needs_more": True,
-            "billed_calls": 1,
+            "billed_calls": 1 + fetch_billed,
             "questions": questions,
             "lumo": (
                 "Lumo revised its draft as Claude asked"
@@ -798,7 +998,7 @@ def tool_plan(a):
             "ok": False,
             "problem": f"Claude returned no plan (exit {r.returncode}); its output is in {raw}",
             "tail": (text or r.stderr or "")[-600:],
-            "billed_calls": 1,
+            "billed_calls": 1 + fetch_billed,
             "next": "Tell the user. Do not call ralph_plan again unless they ask (each call is billed).",
         }
     prd = plan["prd"]
@@ -850,6 +1050,7 @@ def tool_plan(a):
             ""
             if final_attempt
             else "Claude Code: 1 billed call for this plan; it reviews the result once more at the end.",
+            url_line(fetched, fetch_billed),
         )
         if x
     ]
@@ -860,7 +1061,17 @@ def tool_plan(a):
     plan_meta(project, {"notes": notes, "lines": lines})
     # Only the finished text goes back, with nothing next to it to summarize from: handed the tasks and notes as
     # data as well, the local model wrote its own version of the plan.
-    out = {"ok": not problems, "plan_hash": h, "billed_calls": 1, "lumo": lumo_state}
+    out = {
+        "ok": not problems,
+        "plan_hash": h,
+        "billed_calls": 1 + fetch_billed,
+        "lumo": lumo_state,
+    }
+    if fetched:
+        out["urls"] = {
+            u: "fetched" if it.get("ok") else "not fetched: " + str(it.get("content"))[:160]
+            for u, it in fetched.items()
+        }
     try:
         out["present"] = present_plan(prd, verify, notes, lines)
         out["plan_file"] = save_plan_text(project, out["present"])
@@ -1392,6 +1603,8 @@ Output, in this order:
    acceptance criteria; dependsOn (task ids, if any); and ONE verify command that exits 0 only when the task is done.
    Verify commands run without a shell: no ; & | < > backtick or $(), so a multi-step check becomes a task that creates a script.
 3. Open questions for the user.
+4. Only if you could not open a URL you needed (login page, not found, error): one line per URL at the very end,
+   written exactly UNREACHABLE: <url>
 Keep tasks small enough for one agent session. Do not write the implementation.
 Always check online for the latest best practices/documentation before answering.
 
@@ -1684,7 +1897,9 @@ TOOLS = {
             "questions), brief (what you found: how the relevant code works, constraints, how it is tested; at most 16000 characters), "
             "files (at most 12 entries; the lines that matter as 'path:START-END', e.g. 'lib/a.py:40-120', at most 200 lines per range; a "
             "whole file only when it is under 120 lines; secrets are refused), "
-            "Lumo is consulted automatically when it is reachable (the result says so in 'lumo'); do not pass draft. Returns the tasks, "
+            "Lumo is consulted automatically when it is reachable (the result says so in 'lumo'); do not pass draft. Keep every URL "
+            "the user gave in request unchanged: ralph_plan fetches them (Jira, GitHub, Terraform through Claude's MCP tools) and "
+            "says so in 'urls'. Returns the tasks, "
             "a plan_hash and notes for the user. A second call returns already_planned without a billed call unless replan=true."
         ),
         S(
@@ -1903,4 +2118,6 @@ def main():
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--fetch-urls"] and len(sys.argv) == 4:
+        sys.exit(fetch_urls_cli(sys.argv[2], sys.argv[3]))
     main()

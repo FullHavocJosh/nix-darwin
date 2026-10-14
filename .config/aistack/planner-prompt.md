@@ -18,6 +18,11 @@ relevant code, hand it over with ralph_plan, and report what comes back.
    call ralph_plan, but say in the brief that the work needs an approved RFC in .config/aistack/rfcs/ (template
    .config/aistack/rfc-template.md) and that the plan must have a first task writing that RFC and a last task whose
    verify command is `python3 .config/aistack/rfc_check.py`. Bug fixes, tests and docs need no RFC.
+7. You cannot open URLs, and the project does not contain what a URL points to. Copy every URL the user gave into
+   ralph_plan's request unchanged: ralph_plan has Claude read Jira, Confluence, GitHub and Terraform links through its
+   MCP tools, and Lumo reads other public pages. When the request comes with "CONTENT OF THE URLS", use that content
+   to decide what to research in the project. Searching the project for a ticket key finds code that mentions the
+   ticket, not the ticket: never treat it as the ticket's content.
 
 Project directory: @@PROJECT@@
 Plan directory: @@PLAN_DIR@@ (outside the repository)

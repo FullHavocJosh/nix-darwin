@@ -1015,7 +1015,7 @@ function _aidev_stack() {
   # (one request, up to 300 s), then one Claude call (AISTACK_PLAN_TIMEOUT_S, 280 s): 480 + 300 + 280 = 1060.
   local stack_name="aidev" mcp_timeout=1200
   local -a need_files
-  need_files=(ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh claude-plan.sh zen_models.py zen-policy.json)
+  need_files=(ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh claude-plan.sh claude-fetch.sh zen_models.py zen-policy.json)
 
   # ---- preflight ---------------------------------------------------------------------------------------------
   for f in $need_files; do
@@ -1163,6 +1163,15 @@ TOML
     fi
   } > "$state_dir/ralph/.ralph-tui/config.toml"
 
+  # URLs typed with the task (RFC 0001): the ones on MCP hosts (Jira, GitHub, Terraform; every one when there is no Lumo)
+  # are fetched now by one small billed Claude call, so the local model researches with the ticket in front of it.
+  # ralph_plan reuses the cached result; AISTACK_REQUEST_URLS keeps the URLs even if the local model rewords the request.
+  local req_urls="" url_block=""
+  if [[ "$task" == *http* ]]; then
+    req_urls=$(grep -oE 'https?://[^[:space:]]+' <<<"$task" | tr '\n' ' ')
+    url_block=$(AISTACK_STATE_DIR="$state_dir" AISTACK_TIER0="$tier0" python3 "$adir/ralph_mcp.py" --fetch-urls "$project" "$task")
+  fi
+
   # pi: isolated agent dir (models.json for llama-server, mcp.json for the bridge), regenerated every run.
   local pi_dir="$cache_dir/aistack-pi/$(echo -n "$project" | shasum | cut -c1-10)"
   mkdir -p "$pi_dir"
@@ -1172,12 +1181,12 @@ TOML
   local tiers_text="research local $lms_model; plan $claude_label (billed); build ${worker_label}; review $claude_label (billed)"
   jq -n --arg py "$(command -v python3)" --arg bridge "$adir/ralph_mcp.py" --arg root "$project" \
     --arg worker "$worker" --arg fallback "$fallback" --arg reviewer "$reviewer" --arg fa "$fallback_attempts" \
-    --arg ralph "$ralph_bin" --arg tier0 "$tier0" --arg state "$state_dir" --arg wtmode "$wt_mode" --arg reviewmode "${AISTACK_REVIEW_MODE:-batch}" --arg tiers "$tiers_text" --arg to "$mcp_timeout" \
+    --arg ralph "$ralph_bin" --arg tier0 "$tier0" --arg state "$state_dir" --arg wtmode "$wt_mode" --arg reviewmode "${AISTACK_REVIEW_MODE:-batch}" --arg tiers "$tiers_text" --arg to "$mcp_timeout" --arg urls "$req_urls" \
     '{mcpServers: {ralph: {command: $py, args: [$bridge],
        env: {RALPH_MCP_ROOTS: $root, AISTACK_WORKER_AGENT: $worker, AISTACK_FALLBACK_AGENT: $fallback,
              AISTACK_REVIEW_AGENT: $reviewer, AISTACK_FALLBACK_ATTEMPTS: $fa, RALPH_TUI_BIN: $ralph,
              AISTACK_TIER0: $tier0, AISTACK_STATE_DIR: $state, AISTACK_WORKTREE_MODE: $wtmode,
-             AISTACK_REVIEW_MODE: $reviewmode, AISTACK_TIERS: $tiers},
+             AISTACK_REVIEW_MODE: $reviewmode, AISTACK_TIERS: $tiers, AISTACK_REQUEST_URLS: $urls},
        exposure: "direct", timeout: ($to|tonumber),
        description: "Runs the confirmed plan through Ralph: worker agents, verification, retries, review. Poll ralph_status."},
       github: {command: "npx", args: ["-y", "@edjl/github-mcp"], exposure: "direct", timeout: 60,
@@ -1227,6 +1236,9 @@ TOML
   [[ -n "$task" ]] && task="REQUEST FROM THE USER: $task
 
 (Rules for you, the coordinator: do NOT answer this request yourself, however broad it is. Look with repo_tree first, then a few repo_read or repo_grep calls (the tools stop you after 16), then call ralph_plan with the request, your brief and the files that matter. Lumo and Claude Code do the thinking; you report what they return.)"
+  [[ -n "$url_block" ]] && task+="
+
+CONTENT OF THE URLS IN THE REQUEST (fetched by Claude Code at start; ralph_plan passes it on, so do not try to open the URLs; use it to decide what to look at in the project):$url_block"
   local -a extra
   extra=(${=AISTACK_PI_EXTRA})
   (
