@@ -8,7 +8,7 @@
 //   - A message that starts with ";" skips Lumo and goes straight to the local model.
 //
 // The tamer is found in the same order as _aistack_tier0 in .zshrc_functions_ai: this machine's own
-// (127.0.0.1:3003, key from ~/lumo-tamer/config.yaml), MacMiniM1's on the home network, then the public
+// (127.0.0.1:3003, key from ~/lumo-tamer-fullhavoc/config.yaml), MacMiniM1's on the home network, then the public
 // endpoint, both with keys from Doppler. PI_LUMO_URL / PI_LUMO_KEY pin one endpoint. PI_LUMO_FIRST=0 turns the
 // extension off. When no tamer answers, the message goes to the local model unchanged.
 //
@@ -62,7 +62,7 @@ function doppler(name: string, config: string): Promise<string> {
 async function localKey(): Promise<string> {
   try {
     const text = await readFile(
-      path.join(homedir(), "lumo-tamer", "config.yaml"),
+      path.join(homedir(), "lumo-tamer-fullhavoc", "config.yaml"),
       "utf8",
     );
     return /^\s*apiKey:\s*"(.*)"\s*$/m.exec(text)?.[1] ?? "";

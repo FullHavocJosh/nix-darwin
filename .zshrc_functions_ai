@@ -939,7 +939,7 @@ function _get_ai_command() {
   echo "_run_ai_direct $task_type"
 }
 # Tier 0 probe: prints "lumo" when a lumo-tamer answers /v1/models with its key, otherwise "local". Tried in order:
-# this machine's own tamer (127.0.0.1:3003, key from ~/lumo-tamer/config.yaml), MacMiniM1's on the home network (key
+# this machine's own tamer (127.0.0.1:3003, key from ~/lumo-tamer-fullhavoc/config.yaml), MacMiniM1's on the home network (key
 # from Doppler), then the public endpoint https://lumo.rollet.family/v1 (key from Doppler root_hetzner-cluster, or
 # AISTACK_LUMO_PUBLIC_KEY). Each is tried only when the one before does not answer. ralph_mcp.py uses the same order for
 # the requests themselves. AISTACK_TIER0=local forces local; AISTACK_TAMER_URL / AISTACK_TAMER_KEY pin one endpoint.
@@ -956,7 +956,7 @@ function _aistack_tier0() {
     _aistack_tamer_ok "$url" "${AISTACK_TAMER_KEY:-${AISTACK_LUMO_KEY:-}}" && echo lumo || echo local
     return 0
   fi
-  key=$(sed -n 's/^ *apiKey: *"\(.*\)" *$/\1/p' "$HOME/lumo-tamer/config.yaml" 2>/dev/null | head -1)
+  key=$(sed -n 's/^ *apiKey: *"\(.*\)" *$/\1/p' "$HOME/lumo-tamer-fullhavoc/config.yaml" 2>/dev/null | head -1)
   _aistack_tamer_ok "http://127.0.0.1:3003/v1" "$key" && { echo lumo; return 0; }
   key="${AISTACK_TAMER_MINI_KEY:-}"
   if [[ -z "$key" ]] && command -v doppler >/dev/null; then
