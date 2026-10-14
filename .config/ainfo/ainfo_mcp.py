@@ -165,7 +165,11 @@ DISALLOWED = [
 
 def sandbox_profile():
     h = os.path.expanduser("~")
-    sub = lambda p: f'(subpath "{p}")'
+    # Seatbelt matches resolved paths: ~/.claude is a symlink into the dotfiles repo, and without its target Claude
+    # cannot save the session transcript, so every --resume fails with error_during_execution.
+    sub = lambda p: " ".join(
+        f'(subpath "{q}")' for q in dict.fromkeys((p, os.path.realpath(p)))
+    )
     allow = [
         sub(p)
         for p in (
@@ -350,10 +354,20 @@ def run_claude(job, prompt, st):
                     out["error"] = str(d.get("result") or d.get("subtype") or "error")[
                         :400
                     ]
+                    out["stale_session"] = bool(
+                        st.get("claude_session") and not d.get("num_turns")
+                    )
                 out["text"] = str(d.get("result") or "") or "\n".join(texts[-1:])
         p.wait(timeout=30)
     finally:
         killer.cancel()
+    if out.pop("stale_session", False):
+        log_event(
+            job,
+            "stack",
+            "cannot resume the saved Claude session; starting a new one",
+        )
+        return run_claude(job, prompt, {**st, "claude_session": ""})
     if not out["text"] and not out["error"]:
         out["error"] = (
             "claude exited without a result: "
