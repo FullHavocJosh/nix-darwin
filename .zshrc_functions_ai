@@ -1310,7 +1310,7 @@ function aidev() {
 #
 # Read-only is enforced outside Claude Code: ~/.config/ainfo/ainfo_guard.py is a default-deny PreToolUse hook passed with
 # --settings (a plain `claude` run never loads it), Claude runs under a sandbox profile that refuses file writes, and
-# the writing built-in tools are disallowed. Transcripts and state: ~/.ainfo/<project>-<hash> (never inside a repository).
+# the writing built-in tools are disallowed. AWS: the aws CLI with *-ro (OpsReadOnly) profiles and read operations only. Transcripts and state: ~/.ainfo/<project>-<hash> (never inside a repository).
 # AINFO_DIR overrides ~/.config/ainfo; AINFO_MAX_CLAUDE_CALLS (3) and AINFO_MAX_LUMO_CALLS (2) cap one question;
 # AINFO_CLAUDE_BUDGET_USD (2.0) caps one Claude call; AINFO_SANDBOX=off drops the sandbox profile.
 function ainfo() {
@@ -1389,6 +1389,7 @@ function ainfo() {
   echo "Relay:    local $lms_model in pi (free; no file or shell tools)"
   echo "Research: Claude Code $claude_model, all MCP servers, read-only (BILLED, capped per question)   Online: $lumo_note"
   echo "Enforced: guard hook + sandbox + disallowed write tools; nothing here can edit a file. Transcript: $state_dir"
+  echo "AWS:      aws CLI with *-ro (OpsReadOnly) profiles and read operations only; expired SSO: aws sso login --profile <name>-ro"
   echo ""
 
   local tools="mcp__ainfo__ainfo_investigate,mcp__ainfo__ainfo_ask_claude,mcp__ainfo__ainfo_ask_lumo,mcp__ainfo__ainfo_wait,mcp__ainfo__ainfo_cancel"

@@ -187,6 +187,8 @@ def sandbox_profile():
             f"{h}/.cargo",
             f"{h}/.rustup",
             f"{h}/.pi",
+            f"{h}/.aws/sso/cache",  # aws CLI refreshes the SSO token and caches role credentials here
+            f"{h}/.aws/cli/cache",
         )
     ]
     extra = [sub(p) for p in os.environ.get("AINFO_SANDBOX_WRITE", "").split(":") if p]
