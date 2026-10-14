@@ -138,6 +138,89 @@ class Bash(unittest.TestCase):
             self.assertFalse(bash(c), c)
 
 
+class Aws(unittest.TestCase):
+    CONFIG = """[sso-session aws]
+sso_region = us-east-1
+[profile ps-prod-ro]
+sso_session = aws
+sso_role_name = OpsReadOnly
+[profile ps-prod]
+sso_session = aws
+sso_role_name = AdministratorAccess
+[profile fake-ro]
+sso_session = aws
+sso_role_name = AdministratorAccess
+[profile chain-ro]
+role_arn = arn:aws:iam::111111111111:role/OpsReadOnly
+"""
+
+    def setUp(self):
+        import tempfile
+
+        fd, self.path = tempfile.mkstemp()
+        with os.fdopen(fd, "w") as f:
+            f.write(self.CONFIG)
+        self.old = os.environ.get("AWS_CONFIG_FILE")
+        os.environ["AWS_CONFIG_FILE"] = self.path
+
+    def tearDown(self):
+        os.unlink(self.path)
+        if self.old is None:
+            os.environ.pop("AWS_CONFIG_FILE", None)
+        else:
+            os.environ["AWS_CONFIG_FILE"] = self.old
+
+    def test_reads_allowed(self):
+        for c in (
+            "aws sts get-caller-identity --profile ps-prod-ro",
+            "aws --profile ps-prod-ro --region us-east-1 transfer describe-server --server-id s-1",
+            "aws transfer describe-server --server-id s-1 --profile=ps-prod-ro --query 'Server.LoggingRole'",
+            "aws cloudtrail describe-trails --profile ps-prod-ro --output json",
+            "aws s3api get-bucket-encryption --bucket b --profile ps-prod-ro",
+            "aws s3 ls s3://b --profile ps-prod-ro",
+            "aws logs filter-log-events --log-group-name g --profile ps-prod-ro",
+            "aws cloudtrail lookup-events --profile ps-prod-ro --max-items 5",
+            "aws ssm get-parameter --name p --profile ps-prod-ro",
+            "aws kms describe-key --key-id k --profile chain-ro",
+            "aws configure list-profiles",
+            "aws transfer list-servers --profile ps-prod-ro | jq '.Servers[].ServerId'",
+        ):
+            self.assertTrue(bash(c), c)
+
+    def test_writes_denied(self):
+        for c in (
+            "aws sts get-caller-identity",
+            "aws sts get-caller-identity --profile ps-prod",
+            "aws sts get-caller-identity --profile fake-ro",
+            "aws sts get-caller-identity --profile nope-ro",
+            "aws transfer update-server --server-id s-1 --profile ps-prod-ro",
+            "aws transfer delete-server --server-id s-1 --profile ps-prod-ro",
+            "aws ec2 run-instances --profile ps-prod-ro",
+            "aws s3 cp s3://b/k . --profile ps-prod-ro",
+            "aws s3 sync . s3://b --profile ps-prod-ro",
+            "aws s3api get-object --bucket b --key k out --profile ps-prod-ro",
+            "aws s3api put-object --bucket b --key k --profile ps-prod-ro",
+            "aws secretsmanager get-secret-value --secret-id x --profile ps-prod-ro",
+            "aws ssm get-parameter --name p --with-decryption --profile ps-prod-ro",
+            "aws ecr get-login-password --profile ps-prod-ro",
+            "aws eks get-token --cluster-name c --profile ps-prod-ro",
+            "aws sts assume-role --role-arn r --role-session-name s --profile ps-prod-ro",
+            "aws dynamodb scan --table-name t --profile ps-prod-ro",
+            "aws dynamodb get-item --table-name t --key k --profile ps-prod-ro",
+            "aws ec2 get-password-data --instance-id i --profile ps-prod-ro",
+            "aws transfer describe-server --cli-input-json file://x.json --profile ps-prod-ro",
+            "aws sts get-caller-identity --profile ps-prod-ro --debug",
+            "aws sts get-caller-identity --profile ps-prod-ro --endpoint-url https://evil",
+            "aws sso login --profile ps-prod-ro",
+            "aws configure get aws_secret_access_key",
+            "aws configure export-credentials --profile ps-prod-ro",
+            "aws logs tail g --follow --profile ps-prod-ro",
+            "AWS_PROFILE=ps-prod-ro aws sts get-caller-identity",
+            "aws",
+        ):
+            self.assertFalse(bash(c), c)
+
+
 class Tools(unittest.TestCase):
     def test_builtins(self):
         for t in (

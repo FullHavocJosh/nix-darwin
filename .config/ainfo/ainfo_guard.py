@@ -9,6 +9,7 @@ Layers: this hook (tool and command policy), `--disallowedTools` (the same denia
 and a macOS sandbox profile that refuses file writes outside a few cache directories (ainfo_mcp.py).
 """
 
+import configparser
 import fnmatch
 import json
 import os
@@ -455,6 +456,122 @@ def ssh_check(args):
     return None if why is None else f"remote command: {why}"
 
 
+# AWS is read through the CLI with a read-only SSO profile: a `*-ro` profile whose role is in AINFO_AWS_RO_ROLES (every
+# `*-ro` profile in ~/.aws/config maps to OpsReadOnly), so IAM refuses a write even if a rule here is wrong. On top of
+# that: only read operations, nothing that hands out credentials or secret values, no file:// arguments.
+AWS_RO_ROLES = {
+    r.strip()
+    for r in os.environ.get("AINFO_AWS_RO_ROLES", "OpsReadOnly").split(",")
+    if r.strip()
+}
+AWS_VALUE_GLOBALS = {"--profile", "--region", "--output", "--query", "--color", "--cli-read-timeout",
+                     "--cli-connect-timeout", "--cli-binary-format", "--max-items", "--page-size", "--starting-token"}  # fmt: skip
+AWS_BAD_GLOBALS = {"--debug", "--endpoint-url", "--no-verify-ssl", "--ca-bundle", "--cli-auto-prompt"}  # fmt: skip
+AWS_READ_PREFIXES = ("describe-", "get-", "list-", "lookup-", "search-", "batch-describe-", "batch-get-")
+AWS_READ_OPS = {"filter-log-events", "head-bucket", "head-object", "simulate-principal-policy", "simulate-custom-policy"}  # fmt: skip
+# read operations that return credentials, secret values or table data, or write an output file
+AWS_DENY_OPS = {
+    "secretsmanager": {"get-secret-value", "batch-get-secret-value"},
+    "sts": {"get-session-token", "get-federation-token"},
+    "ecr": {"get-login-password", "get-authorization-token"},
+    "ecr-public": {"get-login-password", "get-authorization-token"},
+    "codeartifact": {"get-authorization-token"},
+    "eks": {"get-token"},
+    "redshift": {"get-cluster-credentials", "get-cluster-credentials-with-iam"},
+    "redshift-serverless": {"get-credentials"},
+    "cognito-identity": {"get-credentials-for-identity", "get-open-id-token", "get-open-id-token-for-developer-identity"},
+    "ec2": {"get-password-data"},
+    "lightsail": {"get-instance-access-details", "get-relational-database-master-user-password"},
+    "s3api": {"get-object", "get-object-torrent"},
+    "dynamodb": {"get-item", "batch-get-item"},
+}  # fmt: skip
+AWS_DENY_FLAGS = {"--with-decryption", "--include-value", "--include-values"}
+
+
+def aws_config():
+    cp = configparser.RawConfigParser()
+    try:
+        cp.read(
+            os.path.expanduser(os.environ.get("AWS_CONFIG_FILE") or "~/.aws/config")
+        )
+    except configparser.Error:
+        pass
+    return cp
+
+
+def aws_profile_check(profile, cp):
+    """None when the profile only reads: named *-ro and its role is a known read-only role."""
+    if not profile.endswith("-ro"):
+        return f"profile {profile} is not a -ro profile"
+    sec = f"profile {profile}"
+    if not cp.has_section(sec):
+        return f"profile {profile} is not in ~/.aws/config"
+    role = cp.get(sec, "sso_role_name", fallback="") or cp.get(
+        sec, "role_arn", fallback=""
+    ).rsplit("/", 1)[-1]
+    if role not in AWS_RO_ROLES:
+        return f"profile {profile} uses role {role or '(none)'}, not a read-only role ({', '.join(sorted(AWS_RO_ROLES))})"
+    return None
+
+
+def aws_ro_profiles(cp):
+    names = [s[len("profile ") :] for s in cp.sections() if s.startswith("profile ")]
+    return sorted(p for p in names if aws_profile_check(p, cp) is None)
+
+
+def aws_check(args):
+    pos, flags, profile, i = [], [], "", 0
+    while i < len(args):
+        a = args[i]
+        if "file://" in a or "fileb://" in a:
+            return "aws file:// arguments are not allowed"
+        if a.startswith("--"):
+            name, eq, val = a.partition("=")
+            if name in AWS_BAD_GLOBALS:
+                return f"aws {name} is not allowed"
+            flags.append(name)
+            if name in AWS_VALUE_GLOBALS and not eq:
+                val = args[i + 1] if i + 1 < len(args) else ""
+                i += 1
+            if name == "--profile":
+                profile = val
+        elif len(pos) < 2:
+            pos.append(a)
+        i += 1
+    if len(pos) < 2:
+        return "aws needs a service and an operation"
+    svc, op = pos[0], pos[1]
+    if svc == "configure":
+        return (
+            None if op in ("list", "list-profiles") else "aws configure may only list"
+        )
+    if svc in ("sso", "sso-oidc", "login", "logout"):
+        return "aws sso login is the user's job: ask them to run `aws sso login --profile <profile>`"
+    cp = aws_config()
+    ro = " ".join(aws_ro_profiles(cp)) or "(none found)"
+    if not profile:
+        return f"aws needs --profile <name>-ro; read-only profiles: {ro}"
+    why = aws_profile_check(profile, cp)
+    if why:
+        return f"{why}; read-only profiles: {ro}"
+    if svc == "s3":
+        return None if op == "ls" else "aws s3 may only ls"
+    if op in AWS_DENY_OPS.get(svc, set()):
+        return f"aws {svc} {op} returns credentials, secret values or data"
+    bad = next((f for f in flags if f in AWS_DENY_FLAGS), None)
+    if bad:
+        return f"aws {bad} reveals secret values"
+    if (
+        svc == "glue"
+        and op in ("get-connection", "get-connections")
+        and "--hide-password" not in flags
+    ):
+        return "aws glue connections need --hide-password"
+    if op.startswith(AWS_READ_PREFIXES) or op in AWS_READ_OPS:
+        return None
+    return f"aws {svc} {op} is not a read operation (describe-, get-, list-, lookup-, search-)"
+
+
 READ_ONLY_WORDS = {
     **{
         w: None
@@ -546,6 +663,7 @@ READ_ONLY_WORDS = {
     "curl": curl_check,
     "git": git_check,
     "gh": gh_check,
+    "aws": aws_check,
     "terraform": terraform_check,
     "tofu": terraform_check,
     "kubectl": kubectl_check,
