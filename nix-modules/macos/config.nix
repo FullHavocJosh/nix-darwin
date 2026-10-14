@@ -249,15 +249,21 @@
                 && echo "  Stashed uncommitted changes."
             fi
 
+            # Prefer the remote's default branch (origin/HEAD), so repos whose
+            # default isn't main/master (e.g. azerothcore-wotlk on Playerbot)
+            # still get updated; fall back to local main/master.
             local main_branch
-            if git -C "$repo_path" rev-parse --verify main &>/dev/null; then
-              main_branch="main"
-            elif git -C "$repo_path" rev-parse --verify master &>/dev/null; then
-              main_branch="master"
-            else
-              echo "  No main/master branch found, skipping."
-              [ "$stash_created" -eq 1 ] && git -C "$repo_path" stash pop
-              return 0
+            main_branch=$(git -C "$repo_path" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || true)
+            if [ -z "$main_branch" ]; then
+              if git -C "$repo_path" rev-parse --verify main &>/dev/null; then
+                main_branch="main"
+              elif git -C "$repo_path" rev-parse --verify master &>/dev/null; then
+                main_branch="master"
+              else
+                echo "  No default branch (origin/HEAD, main, master) found, skipping."
+                [ "$stash_created" -eq 1 ] && git -C "$repo_path" stash pop
+                return 0
+              fi
             fi
 
             if [ "$current_branch" != "$main_branch" ]; then
