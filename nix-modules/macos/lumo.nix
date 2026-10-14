@@ -60,11 +60,11 @@ in
     system.activationScripts.postActivation.text = lib.mkAfter (
       ''
             sudo -u havoc HOME=${home} LUMO_LAN=${if cfg.lan then "1" else "0"} bash -c '(nohup /bin/zsh ${lumoSrc}/provision-tamer.sh ${tamerRev} </dev/null >/dev/null 2>&1 &)'
-            echo "[lumo-tamer-provisioner] check running in background -- tail ${home}/lumo-tamer.provision.log"
+            echo "[lumo-tamer-provisioner] check running in background -- tail ${home}/lumo-tamer-fullhavoc.provision.log"
 
         # Sign-in state, so an expired one is noticed at the next switch and not only through the watchdog's alert.
-        if [ -d ${home}/lumo-tamer/dist ]; then
-          if ${asHavoc} /usr/bin/perl -e 'alarm shift; exec @ARGV' 20 /bin/sh -c 'cd ${home}/lumo-tamer && tamer auth status 2>&1' | grep -q "Authentication is configured and valid"; then
+        if [ -d ${home}/lumo-tamer-fullhavoc/dist ]; then
+          if ${asHavoc} /usr/bin/perl -e 'alarm shift; exec @ARGV' 20 /bin/sh -c 'cd ${home}/lumo-tamer-fullhavoc && tamer auth status 2>&1' | grep -q "Authentication is configured and valid"; then
             echo "[lumo] Proton sign-in: valid"
           else
             echo "[lumo] Proton sign-in: NEEDS ATTENTION -- ${

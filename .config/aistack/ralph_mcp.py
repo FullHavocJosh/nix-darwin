@@ -1445,7 +1445,7 @@ def tamer_local_key():
     try:
         m = re.search(
             r'^\s*apiKey:\s*"(.*)"\s*$',
-            open(os.path.expanduser("~/lumo-tamer/config.yaml")).read(),
+            open(os.path.expanduser("~/lumo-tamer-fullhavoc/config.yaml")).read(),
             re.MULTILINE,
         )
         return m.group(1) if m else ""

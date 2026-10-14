@@ -4,7 +4,7 @@
 export PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
 export HOME=${HOME:-/Users/havoc}
 
-LUMO_TAMER_DIR=${LUMO_TAMER_DIR:-$HOME/lumo-tamer}
+LUMO_TAMER_DIR=${LUMO_TAMER_DIR:-$HOME/lumo-tamer-fullhavoc}
 LUMO_TAMER_PORT=${LUMO_TAMER_PORT:-3003}
 # LUMO_LAN=1 (the desktop, set by nix-modules/macos/lumo.nix): tamer serves the whole network, on
 # purpose (other machines and services use the Mini's Lumo), behind the keys in Doppler FullHavocJosh/root_macmini.
@@ -17,17 +17,17 @@ LUMO_DOPPLER_CONFIG=${LUMO_DOPPLER_CONFIG:-root_macmini}
 
 # lumo_secret NAME -> value on stdout, empty when unset or Doppler is unreachable
 lumo_secret() {
-  doppler secrets get "$1" --project "$LUMO_DOPPLER_PROJECT" --config "$LUMO_DOPPLER_CONFIG" \
-    --plain 2>/dev/null
+	doppler secrets get "$1" --project "$LUMO_DOPPLER_PROJECT" --config "$LUMO_DOPPLER_CONFIG" \
+		--plain 2>/dev/null
 }
 
 # lumo_key_secret NAME -> like lumo_secret, but only on the LAN host. A loopback-only host must not pick up the
 # desktop's server or vault keys, so there it always prints nothing and the local files are used.
 lumo_key_secret() {
-  [[ $LUMO_LAN == 1 ]] && lumo_secret "$1"
+	[[ $LUMO_LAN == 1 ]] && lumo_secret "$1"
 }
 
 # lumo_tamer_key -> the apiKey tamer's config.yaml serves with
 lumo_tamer_key() {
-  sed -n 's/^ *apiKey: *"\(.*\)" *$/\1/p' "$LUMO_TAMER_DIR/config.yaml" 2>/dev/null | head -1
+	sed -n 's/^ *apiKey: *"\(.*\)" *$/\1/p' "$LUMO_TAMER_DIR/config.yaml" 2>/dev/null | head -1
 }

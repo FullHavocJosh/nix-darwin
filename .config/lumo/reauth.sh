@@ -63,19 +63,19 @@ read -r "?Press Enter when Lumo shows the chat signed in (Ctrl-C to abort): "
 
 if (( LOCAL )); then
   print "Handing the session to this machine's tamer..."
-  (export PATH=/opt/homebrew/bin:$PATH; cd ~/lumo-tamer && echo http://127.0.0.1:$LOCAL_PORT | tamer auth browser) \
+  (export PATH=/opt/homebrew/bin:$PATH; cd ~/lumo-tamer-fullhavoc && echo http://127.0.0.1:$LOCAL_PORT | tamer auth browser) \
     || die "tamer auth browser failed; the old session was left as it was"
   print "Restarting tamer so it loads the new session (launchd starts it again)..."
   pkill -f "tamer server"; sleep 15
-  (export PATH=/opt/homebrew/bin:$PATH; cd ~/lumo-tamer && tamer auth status 2>&1 | grep -E "Summary|valid|attention|expiresIn")
+  (export PATH=/opt/homebrew/bin:$PATH; cd ~/lumo-tamer-fullhavoc && tamer auth status 2>&1 | grep -E "Summary|valid|attention|expiresIn")
   print "Done. This browser profile is deleted on exit; do not sign in to Lumo in it again."
   exit 0
 fi
 
 print "Handing the session to tamer on $MINI..."
-"${SSH[@]}" "${TUNNEL[@]}" "export PATH=/opt/homebrew/bin:\$PATH; cd ~/lumo-tamer && echo http://127.0.0.1:$REMOTE_PORT | tamer auth browser" \
+"${SSH[@]}" "${TUNNEL[@]}" "export PATH=/opt/homebrew/bin:\$PATH; cd ~/lumo-tamer-fullhavoc && echo http://127.0.0.1:$REMOTE_PORT | tamer auth browser" \
   || die "tamer auth browser failed on the Mini; the old session was left as it was"
 
 print "Restarting tamer so it loads the new session..."
-"${SSH[@]}" 'pkill -f "tamer server"; sleep 15; export PATH=/opt/homebrew/bin:$PATH; cd ~/lumo-tamer && tamer auth status 2>&1 | grep -E "Summary|valid|attention|expiresIn"'
+"${SSH[@]}" 'pkill -f "tamer server"; sleep 15; export PATH=/opt/homebrew/bin:$PATH; cd ~/lumo-tamer-fullhavoc && tamer auth status 2>&1 | grep -E "Summary|valid|attention|expiresIn"'
 print "Done. This browser profile is deleted on exit; do not sign in to Lumo in it again."
