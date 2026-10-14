@@ -1,0 +1,51 @@
+# Time Machine exclusions
+#
+# One directory per line. Every directory listed here only holds data that can
+# be re-downloaded or regenerated, so backing it up costs gigabytes and buys
+# nothing. Anything holding keys, config, binaries, documents or application
+# state is deliberately left out and must never be added here.
+#
+# Rules (all enforced by scripts/check-timemachine-exclusions.sh):
+#   * one path per line, every path starts with '~/'
+#   * no wildcards: '*' and '?' are rejected
+#   * '#' comment lines and blank lines are ignored
+#   * each path appears exactly once
+#   * never list a protected directory (~/Documents, ~/.ssh, ~/.config,
+#     ~/.gnupg, ~/.local, ~/Library, ~/nix-darwin, ...) or a parent of one,
+#     even when only part of it is replaceable (e.g. ~/.cargo/registry is fine,
+#     ~/.cargo is not: it also holds the cargo binary and credentials)
+
+# --- AI models --------------------------------------------------------------
+# Model weights are gigabytes and a single `ollama pull` / LM Studio download
+# brings them back.
+~/.ollama/models
+~/.lmstudio/models
+
+# --- Package manager caches -------------------------------------------------
+# Re-downloadable indexes, tarballs and package stores.
+~/.npm
+~/.bun/install/cache
+~/.pnpm-store
+~/Library/pnpm/store
+~/.nuget/packages
+~/.terraform.d/plugin-cache
+
+# --- Language toolchain caches ----------------------------------------------
+# Downloaded crates, git checkouts and toolchains: rebuilt by cargo/rustup/go.
+~/.cargo/registry
+~/.cargo/git
+~/.rustup/toolchains
+~/go/pkg/mod
+
+# --- Build caches -----------------------------------------------------------
+# Recreated by the next build.
+~/.gradle/caches
+~/.m2/repository
+~/Library/Developer/Xcode/DerivedData
+
+# --- Application caches -----------------------------------------------------
+# Finder/system caches, the XDG cache directory (pip, uv, go-build, Hugging
+# Face, ...) and the Xcode simulator runtimes, which are downloadable again.
+~/.cache
+~/Library/Caches
+~/Library/Developer/CoreSimulator
