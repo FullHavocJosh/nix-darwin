@@ -216,6 +216,10 @@ function _run_linters() {
   local missing_linters=false
   local missing_linters_report=""
   
+  # Declare once, outside the loop: a bare `local x` on an already-set var makes zsh print it (the ruff_output=$'...' dumps).
+  # Assign separately: `local x=$(cmd)` makes $? the exit status of `local` (always 0), which hid every linter failure.
+  local ruff_output ruff_exit sc_output sc_exit zn_output
+
   # Run linters based on file types
   for file in "${files[@]}"; do
     # Skip deleted files
@@ -262,8 +266,6 @@ function _run_linters() {
         ;;
       *.py)
         if $has_ruff; then
-          # declare first: `local x=$(cmd)` makes $? the exit status of `local` (always 0), which hid every ruff failure
-          local ruff_output ruff_exit
           ruff_output=$(ruff check "$file" 2>&1)
           ruff_exit=$?
           # ruff returns non-zero exit code when issues are found
@@ -284,7 +286,6 @@ function _run_linters() {
         # Errors only: warnings and style notes on existing scripts would block commits without a real defect.
         if head -1 "$file" | grep -qE '^#!.*(/|env +)(ba|da|k)?sh( |$)'; then
           if $has_shellcheck; then
-            local sc_output sc_exit
             sc_output=$(shellcheck --severity=error "$file" 2>&1)
             sc_exit=$?
             if [ $sc_exit -ne 0 ]; then
@@ -298,7 +299,6 @@ function _run_linters() {
             missing_linters=true
           fi
         elif head -1 "$file" | grep -qE '^#!.*zsh'; then
-          local zn_output
           if ! zn_output=$(zsh -n "$file" 2>&1); then
             lint_report="${lint_report}🟡 $file: zsh syntax error\n   $(echo "$zn_output" | head -3)\n"
             linting_issues=true
@@ -349,9 +349,14 @@ function _run_linters() {
       echo "ℹ Auto mode: auto-fixing formatting issues"
       lint_choice="f"
     else
+      # On recheck, [f] already ran: offering it again only loops on rules the linter can't fix
+      if $recheck; then
+        echo "ℹ Remaining issues are not auto-fixable; edit the files or ignore."
+        echo ""
+      fi
       echo "Options:"
       echo "  [e] Edit files with AI assistance (opens herdr workspace)"
-      echo "  [f] Auto-fix formatting issues (where possible)"
+      $recheck || echo "  [f] Auto-fix formatting issues (where possible)"
       echo "  [i] Ignore and continue"
       echo "  [q] Quit and fix manually"
       echo ""
@@ -408,9 +413,13 @@ function _run_linters() {
         return $?
         ;;
       f | F)
+        if $recheck; then
+          echo "✗ Auto-fix already ran; remaining issues need a manual fix."
+          return 1
+        fi
         echo ""
         echo "ℹ Auto-fixing formatting issues..."
-        for file in "${files[@]}"; do
+        for file in "${files_with_issues[@]}"; do
           if [ ! -f "$file" ]; then
             continue
           fi
@@ -447,15 +456,21 @@ function _run_linters() {
               fi
               ;;
             *.py)
+              # EXE001: ruff never changes file modes, so make shebang files executable here
+              if [[ ! -x "$file" ]] && head -1 "$file" | grep -q '^#!'; then
+                chmod +x "$file"
+                echo "  ✓ chmod +x (shebang): $file"
+              fi
               if $has_ruff; then
                 echo "  Checking $file with ruff..."
                 if ruff check --fix "$file" 2>&1; then
                   echo "  ✓ Fixed: $file"
-                  git add "$file"
                 else
-                  echo "  ✗ Failed to fix: $file"
+                  echo "  ✗ Not auto-fixable: $file"
                 fi
               fi
+              # stage even on failure: a partial ruff fix or chmod must not be left unstaged
+              git add "$file"
               ;;
           esac
         done
