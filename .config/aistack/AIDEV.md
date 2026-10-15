@@ -135,6 +135,22 @@ writes a report whose first line is `Verdict: PASS` or `Verdict: FAIL`. `AISTACK
 **one** review call covers the whole run. `each` reviews one task per call; `off` skips review. If a review fails the
 run pauses for the user to rework (re-run the task with the findings) or accept it as is.
 
+## Handoff from an interactive Claude Code session
+
+When a build was worked out in a normal Claude Code session, that session already holds the context, so pi's research
+and the billed `ralph_plan` call add nothing. `/aidev-handoff` (`.config/aistack/aidev-handoff.md`, linked into
+`~/.claude/commands` by activation) has Claude write `prd.json` and `verify.json` with the same rules as `PLAN_PROMPT`,
+show them to the user, and run `aidev --handoff <dir>`:
+
+- The launcher does its usual setup (tier 1 choice, Ralph config, worktree mode) but skips the local model and Lumo,
+  then calls `ralph_mcp.py --handoff <project> <dir>`.
+- `--handoff` refuses while a run of the project is active, validates the plan (same `problems` as `ralph_validate_plan`),
+  writes it to the plan dir, records it in `plan-review.json` with `source: claude-code-session`, and starts the run
+  exactly like `ralph_run` (worktree and draft PR through `gpr` in a main checkout). It prints one JSON object.
+- With no free tier-1 model it refuses unless `AISTACK_ASSUME_YES=1`: it usually runs from Claude Code's shell, where
+  nobody answers the billing question.
+- The session then stops; `aidev` in the project follows the run through pi like any other.
+
 ## Cost model
 
 - A **normal run has exactly two billed Claude calls**: the plan (`ralph_plan`) and the final review. Everything the

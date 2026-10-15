@@ -1,13 +1,5 @@
 {
   "mcpServers": {
-    "memory": {
-      "command": "npx",
-      "args": ["@modelcontextprotocol/server-memory"]
-    },
-    "sequential-thinking": {
-      "command": "npx",
-      "args": ["@modelcontextprotocol/server-sequential-thinking"]
-    },
     "github": {
       "command": "npx",
       "args": ["@edjl/github-mcp"]
@@ -27,10 +19,6 @@
         "FASTMCP_LOG_LEVEL": "ERROR"
       }
     },
-    "mcp-server-chart": {
-      "command": "npx",
-      "args": ["-y", "@antv/mcp-server-chart"]
-    },
     "aws-pricing-mcp-server": {
       "command": "uvx",
       "args": ["awslabs.aws-pricing-mcp-server@latest"],
@@ -38,9 +26,6 @@
         "FASTMCP_LOG_LEVEL": "ERROR",
         "AWS_PROFILE": "services"
       }
-    },
-    "context-mode": {
-      "command": "context-mode"
     },
     "terraform-cloud": {
       "command": "uvx",
@@ -108,20 +93,6 @@
       "command": "npx",
       "args": ["-y", "@dopplerhq/mcp-server"]
     },
-    "prettier": {
-      "command": "npx",
-      "args": ["-y", "@prettier/mcp"]
-    },
-    "token-savior": {
-      "command": "__HOME__/bench/venv-tokensavior/bin/token-savior",
-      "env": {
-        "WORKSPACE_ROOTS": "__HOME__",
-        "TOKEN_SAVIOR_PROFILE": "core"
-      }
-    },
-    "token-optimizer-mcp": {
-      "command": "token-optimizer-mcp"
-    },
     "mcp-stack-fullhavoc": {
       "command": "uv",
       "args": [
@@ -133,6 +104,10 @@
       "env": {
         "VG_THRESHOLDS": "comment_ratio=0.4,pr_words=350,ticket_words=500,similarity=0.75,fixme_chatter=5"
       }
+    },
+    "lumo": {
+      "command": "python3",
+      "args": ["__HOME__/.config/lumo/lumo_mcp.py"]
     }
   }
 }

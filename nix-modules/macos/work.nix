@@ -139,7 +139,6 @@ in
       "microsoft-teams"
       "microsoft-word"
       "onedrive"
-      "opcode"
       "rode-central"
       "slack"
       "teamviewer-host"

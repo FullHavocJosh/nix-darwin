@@ -389,13 +389,17 @@
             ;;
         esac
 
-        # Register context-mode with Claude Code if already installed
-        if command -v context-mode &>/dev/null && command -v claude &>/dev/null; then
-          if ! grep -q '"context-mode"' "$HOME/.claude.json" 2>/dev/null; then
-            claude mcp add --scope user context-mode context-mode 2>/dev/null && \
-              echo "Registered context-mode with Claude Code." || \
-              echo "Failed to register context-mode with Claude Code."
-          fi
+        # MCP servers retired from claude-desktop-mcp.json on 2026-10-15: none was called more than a handful of times
+        # in 60 days of transcripts (token-optimizer-mcp was called, but only because its hooks forced it, and its
+        # results were larger than the built-in tools'). The sync below only adds, so unregister them on every host.
+        if command -v claude &>/dev/null; then
+          for SERVER_NAME in token-optimizer-mcp token-savior context-mode mcp-server-chart memory sequential-thinking prettier; do
+            if jq -e --arg s "$SERVER_NAME" '.mcpServers[$s]' "$HOME/.claude.json" >/dev/null 2>&1; then
+              claude mcp remove --scope user "$SERVER_NAME" >/dev/null 2>&1 && \
+                echo "Removed retired MCP server $SERVER_NAME from Claude Code." || \
+                echo "Failed to remove retired MCP server $SERVER_NAME."
+            fi
+          done
         fi
 
         # mcp-stack-fullhavoc is a uv-managed Python project, not part of the

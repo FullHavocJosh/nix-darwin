@@ -404,7 +404,9 @@ function _aidev_stack() {
   ralph_bin=$(command -v ralph-tui 2>/dev/null || echo "$HOME/.bun/bin/ralph-tui")
   [[ -x "$ralph_bin" ]] || { echo "✗ ralph-tui not found. Install it: bun install -g ralph-tui" >&2; return 1; }
 
-  if ! _validate_llamacpp; then
+  # A handoff (aidev --handoff) skips pi, so it needs neither the local model nor Lumo.
+  local handoff_dir="${AIDEV_HANDOFF_DIR:-}"
+  if [[ -z "$handoff_dir" ]] && ! _validate_llamacpp; then
     echo "✗ The local planner model (llama-server, $lms_model) is not usable at $endpoint." >&2
     echo "  It must listen on this machine's loopback only. Start it: sudo launchctl kickstart -k system/org.nixos.llama-server-local" >&2
     echo "  (the model file is ~/models/Qwen3.5-9B-Q4_K_M.gguf; see ~/models/download.log and /tmp/llama-server-local.error.log)" >&2
@@ -450,7 +452,11 @@ function _aidev_stack() {
 
   # ---- tier 0: Lumo on MacMiniM1, or the local model when it is unreachable ------------------------------------
   local tier0 tier0_label
-  tier0=$(_aistack_tier0)
+  if [[ -n "$handoff_dir" ]]; then
+    tier0=local
+  else
+    tier0=$(_aistack_tier0)
+  fi
   if [[ "$tier0" == "lumo" ]]; then
     tier0_label="Lumo drafts with online research and asks this machine for the files it needs (own tamer, then MacMiniM1's, then lumo.rollet.family)"
   else
@@ -478,6 +484,11 @@ function _aidev_stack() {
   fi
   if [[ -z "$zen_model" ]]; then
     echo "⚠ Tier 1 has no free model, so $claude_label (billed) would build the tasks as well as review them."
+    # A handoff usually runs from Claude Code's shell, where `read` gets no answer: never bill without a yes.
+    if [[ -n "$handoff_dir" && "${AISTACK_ASSUME_YES:-}" != "1" ]]; then
+      echo "✗ Not starting the handoff: run it yourself with AISTACK_ASSUME_YES=1 to let Claude build (billed)." >&2
+      return 1
+    fi
     if [[ "${AISTACK_ASSUME_YES:-}" != "1" ]]; then
       echo -n "Continue with Claude as tier 1? [Y/n] "
       read -r reply
@@ -535,6 +546,24 @@ timeout = 1500000
 TOML
     fi
   } > "$state_dir/ralph/.ralph-tui/config.toml"
+
+  # ---- handoff: a plan written in an interactive Claude Code session runs without pi ---------------------------------
+  if [[ -n "$handoff_dir" ]]; then
+    local out
+    out=$(cd "$project" && RALPH_MCP_ROOTS="$project" AISTACK_WORKER_AGENT="$worker" AISTACK_FALLBACK_AGENT="$fallback" \
+      AISTACK_REVIEW_AGENT="$reviewer" AISTACK_FALLBACK_ATTEMPTS="$fallback_attempts" RALPH_TUI_BIN="$ralph_bin" \
+      AISTACK_TIER0="$tier0" AISTACK_STATE_DIR="$state_dir" AISTACK_WORKTREE_MODE="$wt_mode" \
+      AISTACK_REVIEW_MODE="${AISTACK_REVIEW_MODE:-batch}" \
+      AISTACK_TIERS="plan Claude Code session (handed off); build ${worker_label}; review $claude_label (billed)" \
+      python3 "$adir/ralph_mcp.py" --handoff "$project" "$handoff_dir")
+    local rc=$?
+    print -r -- "$out"
+    if (( rc == 0 )); then
+      echo "Build:  $worker_label   Review: $claude_label (billed, once)"
+      echo "The run continues on its own. Follow it with \`aidev\` in $project (pi offers to follow the active run)."
+    fi
+    return $rc
+  fi
 
   # URLs typed with the task (RFC 0001): the ones on MCP hosts (Jira, GitHub, Terraform; every one when there is no Lumo)
   # are fetched now by one small billed Claude call, so the local model researches with the ticket in front of it.
@@ -663,21 +692,33 @@ function _aidev_opencode() {
 #   aidev                        then describe the work as pi's first message
 #   aidev --direct [args...]     a plain interactive OpenCode Zen session (Big Pickle)
 #   aidev -p "prompt"            one headless OpenCode Zen call (any flag means --direct)
+#   aidev --handoff DIR          run a plan an interactive Claude Code session wrote (DIR/prd.json, DIR/verify.json;
+#                                the /aidev-handoff command writes them): no pi, no billed planning call
 #
 # Who does what:  the local model in pi talks to you, finds the code and follows the run (free);  Lumo adds a draft
 # with online research when MacMiniM1 is reachable (free);  Claude Code writes the plan in ONE call from that research
 # (ralph_plan + claude-plan.sh);  OpenCode's free model builds;  Claude Code reviews once at the end.
 # The stack itself is _aidev_stack above. `aistack` is an alias for this command.
 function aidev() {
-  local a direct=false
+  local direct=false handoff=""
   local -a rest
-  for a in "$@"; do
-    case "$a" in
+  while (( $# )); do
+    case "$1" in
+      --handoff) handoff="$2"; shift 2; continue ;;
       --direct) direct=true ;;
-      -*) direct=true; rest+=("$a") ;;
-      *) rest+=("$a") ;;
+      -*) direct=true; rest+=("$1") ;;
+      *) rest+=("$1") ;;
     esac
+    shift
   done
+  if [[ -n "$handoff" ]]; then
+    if [[ ! -f "$handoff/prd.json" || ! -f "$handoff/verify.json" ]]; then
+      echo "✗ aidev --handoff DIR needs DIR/prd.json and DIR/verify.json (see /aidev-handoff)." >&2
+      return 1
+    fi
+    AIDEV_HANDOFF_DIR="${handoff:A}" _aidev_stack
+    return
+  fi
   if $direct; then
     _aidev_direct "${rest[@]}"
     return

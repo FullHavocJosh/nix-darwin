@@ -2043,6 +2043,52 @@ TOOLS = {
 }
 
 
+def handoff(project_dir, src):
+    """`aidev --handoff DIR`: run a plan an interactive Claude Code session wrote (DIR/prd.json and DIR/verify.json,
+    same format and rules as PLAN_PROMPT), without pi and without a billed planning call. The launcher sets the same
+    environment as for the MCP bridge. Nothing is written while another run of this project is active."""
+    project = project_of({"project_dir": project_dir})
+    rid0 = latest_run(project)
+    if rid0 and run_state(project, rid0).get("state") in ("running", "waiting_user", "starting"):
+        return {"started": False, "problem": f"run {rid0} is still active; follow it with aidev (pi) or cancel it first"}
+    prd, verify = rj(os.path.join(src, "prd.json")), rj(os.path.join(src, "verify.json"))
+    if isinstance(prd, dict):
+        for s in prd.get("userStories") or []:
+            if isinstance(s, dict):
+                s["passes"] = False
+    if isinstance(verify, dict):
+        verify = {k: [v] if isinstance(v, str) else v for k, v in verify.items()}
+    problems = validate(prd, verify)
+    if problems:
+        return {"started": False, "problems": problems}
+    os.makedirs(plan_dir(project), exist_ok=True)
+    for name, obj in (("prd.json", prd), ("verify.json", verify)):
+        with open(os.path.join(plan_dir(project), name), "w") as f:
+            json.dump(obj, f, indent=1)
+    _, _, h = load_plan(project)
+    # ralph_run wants a Claude verdict on the plan; this one was written by Claude in the session that handed it off
+    json.dump(
+        {
+            "plan_hash": h,
+            "name": prd.get("name"),
+            "verdict": "PLANNED",
+            "source": "claude-code-session",
+            "request": f"handed off from {src}",
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        },
+        open(plan_review_path(project), "w"),
+    )
+    lines = ["Plan written in an interactive Claude Code session and handed off (no billed planning call)."]
+    plan_meta(project, {"notes": [], "lines": lines})
+    save_plan_text(project, present_plan(prd, verify, (), lines))
+    out = tool_run({"project_dir": project, "plan_hash": h})
+    out["plan_dir"] = plan_dir(project)
+    if out.get("started"):
+        out["events"] = os.path.join(runs_dir(project), out["run_id"], "events.jsonl")
+        out["next"] = "The run continues on its own. Follow it with `aidev` in the project (pi offers to follow it)."
+    return out
+
+
 def handle(req):
     m = req.get("method")
     if m == "initialize":
@@ -2120,4 +2166,8 @@ def main():
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--fetch-urls"] and len(sys.argv) == 4:
         sys.exit(fetch_urls_cli(sys.argv[2], sys.argv[3]))
+    if sys.argv[1:2] == ["--handoff"] and len(sys.argv) == 4:
+        result = handoff(sys.argv[2], sys.argv[3])
+        print(json.dumps(result, indent=1))
+        sys.exit(0 if result.get("started") else 1)
     main()
