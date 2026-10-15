@@ -446,11 +446,15 @@ in
           ${claudeSettingsCleanup}
         ) || echo "WARNING: claude settings cleanup failed — continuing activation" >&2
 
-        # /aidev-handoff: lets an interactive Claude Code session write an aidev plan and start the run (see AIDEV.md).
-        if [ -f "$HOME/.config/aistack/aidev-handoff.md" ]; then
-          mkdir -p "$HOME/.claude/commands"
-          ln -sfn "$HOME/.config/aistack/aidev-handoff.md" "$HOME/.claude/commands/aidev-handoff.md"
-        fi
+        # Claude Code commands that move work to aidev's free model (see AIDEV.md):
+        #   /aidev-handoff  write an aidev plan in the session and start the run
+        #   /delegate       hand one large mechanical edit to `aidev -p` and only review it
+        mkdir -p "$HOME/.claude/commands"
+        for CMD_FILE in aidev-handoff.md delegate.md; do
+          if [ -f "$HOME/.config/aistack/$CMD_FILE" ]; then
+            ln -sfn "$HOME/.config/aistack/$CMD_FILE" "$HOME/.claude/commands/$CMD_FILE"
+          fi
+        done
 
         (
           if command -v claudetui &>/dev/null; then

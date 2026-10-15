@@ -151,6 +151,14 @@ show them to the user, and run `aidev --handoff <dir>`:
   nobody answers the billing question.
 - The session then stops; `aidev` in the project follows the run through pi like any other.
 
+### Delegating one edit
+
+`/delegate` (`.config/aistack/delegate.md`) is the small version of the handoff: for one large, mechanical, cheaply
+verified edit, Claude writes a spec, runs `aidev -p` (OpenCode Zen, `opencode run --auto`), and reviews only the
+verify result and `git diff --stat`. Small or subtle edits stay with Claude: dispatch plus review costs about as many
+turns as making a small edit directly. Local Qwen is not used for this: on the same 10-line edit it took 152 s and
+missed part of the spec, where Big Pickle took 83 s and matched it.
+
 ## Cost model
 
 - A **normal run has exactly two billed Claude calls**: the plan (`ralph_plan`) and the final review. Everything the
