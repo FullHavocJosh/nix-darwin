@@ -752,7 +752,7 @@ Detections:
 $(echo -e "$secrets_report" | head -60)
 
 Context from diff (matching lines with surrounding lines for context):
-$(echo -e "$suspicious_lines" | head -c 4000)" | AI_LOCAL_ALIAS=local-coder-secrets _run_ai_plain "sonnet" 2>&1)
+$(echo -e "$suspicious_lines" | head -c 4000)" | AI_LOCAL_ALIAS=local-coder-secrets _run_ai_plain 2>&1)
     # (declared apart from the assignment: `local x=$(cmd)` makes $? the status of `local`, which is always 0, so a
     # failed analysis used to pass as a finished one)
     exit_code=$?
@@ -885,15 +885,7 @@ function gpc() {
   # Usage: gpc [-m|--message "<subject>"] [-d|--description "<body>"]
   # With -m the commit message is yours: no AI provider is called and nothing prompts (the same message can come in
   # through AI_COMMIT_MESSAGE / AI_COMMIT_BODY, which is how `gpa -m` hands it down).
-  # AI_LOCAL_DEFAULT (set system-wide on hosts with a local llama-server, see
-  # llamacpp-local.nix) makes plain gpc behave like gpc-local: local-only, no
-  # cloud fallback. Guarded on AI_LOCAL_ONLY being unset so gpc-local calling
-  # back into gpc here doesn't recurse. Override for one call with
-  # `unset AI_LOCAL_DEFAULT` first.
-  if [[ -n "$AI_LOCAL_DEFAULT" ]] && [[ -z "$AI_LOCAL_ONLY" ]]; then
-    gpc-local "$@"
-    return $?
-  fi
+  # Without -m the message comes from the local model (llama.cpp through aider); no cloud model is called.
   local AI_COMMIT_MESSAGE="${AI_COMMIT_MESSAGE:-}" AI_COMMIT_BODY="${AI_COMMIT_BODY:-}"
   while (( $# )); do
     case "$1" in
@@ -912,112 +904,8 @@ function gpc() {
       _gpc_commit_push "$AI_COMMIT_MESSAGE" "$AI_COMMIT_BODY"
       return $?
     fi
-    # Commit messages use Haiku when available for efficiency
-    # Try llama.cpp first if available, fall back to selected provider
-    local active_provider=$(_get_ai_provider)
-    local override_provider=""
-    
-    # Always try llama.cpp first for all providers (saves API costs and uses local resources)
-    # Only exception: if already using llama.cpp, don't override
-    if [[ "$active_provider" != "llama-cpp" ]] && [[ "$active_provider" != "llama.cpp" ]]; then
-      if _validate_llamacpp 2>/dev/null; then
-        override_provider="llama-cpp"
-        
-        # Show different message based on original provider
-        case "$active_provider" in
-          opencode)
-            if _is_opencode_free_model; then
-              echo "ℹ Using llama.cpp for commit message (saving OpenCode Zen free tier credits)"
-            else
-              echo "ℹ Using llama.cpp for commit message (fallback: OpenCode Zen)"
-            fi
-            ;;
-          github-copilot)
-            echo "ℹ Using llama.cpp for commit message (fallback: GitHub Copilot)"
-            ;;
-          claude-code)
-            echo "ℹ Using llama.cpp for commit message (fallback: Anthropic)"
-            ;;
-          *)
-            echo "ℹ Using llama.cpp for commit message (fallback: $active_provider)"
-            ;;
-        esac
-      fi
-    fi
-    
-    # Use override provider if set, otherwise use active provider
-    local provider_for_commit="${override_provider:-$active_provider}"
-    
-    # Determine appropriate model tier for commit messages
-    local model_tier="haiku"
-    
-    # Check if provider supports multi-tier (will return false for free models and llama.cpp)
-    if ! _supports_multi_tier; then
-      # Single model only - use whatever is available
-      model_tier="sonnet"  # _get_opencode_model will handle free/llama.cpp cases
-    fi
-    
-    # Check if a specific model is selected via config
-    # Only check config if NOT using override provider (llama.cpp fallback)
-    local selected_model=""
-    if [[ -z "$override_provider" ]]; then
-      if [[ "$active_provider" == "opencode" ]] || [[ "$active_provider" == "github-copilot" ]]; then
-        local config_file="$HOME/.config/opencode/opencode.json"
-        if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
-          local config_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
-          # Only use the model if it matches the current provider
-          if [[ -n "$config_model" && "$config_model" != "null" ]]; then
-            if [[ "$active_provider" == "opencode" && "$config_model" == opencode/* ]]; then
-              selected_model="$config_model"
-            elif [[ "$active_provider" == "github-copilot" && "$config_model" == github-copilot/* ]]; then
-              selected_model="$config_model"
-            fi
-          fi
-        fi
-      fi
-    fi
-    
-    # Get model name for display purposes
-    local model_name
-    if [[ -n "$selected_model" && "$selected_model" != "null" ]]; then
-      model_name="$selected_model"
-    elif [[ "$provider_for_commit" == "llama-cpp" ]] || [[ "$provider_for_commit" == "llama.cpp" ]]; then
-      # For llama.cpp, get the short model name directly
-      model_name=$(_llamacpp_model_short)
-    else
-      # For other providers, get the model using the current provider
-      model_name=$(_get_opencode_model "$model_tier")
-    fi
-
     echo ""
-    # Show provider and model being used
-    local provider_display
-    case "$provider_for_commit" in
-      github-copilot)
-        provider_display="GitHub Copilot"
-        ;;
-      opencode)
-        provider_display="OpenCode Zen"
-        ;;
-      llama-cpp|llama.cpp)
-        provider_display="llama.cpp"
-        ;;
-      claude-code)
-        provider_display="Anthropic"
-        ;;
-      *)
-        provider_display="$provider_for_commit"
-        ;;
-    esac
-
-    if [[ "$provider_for_commit" == "llama-cpp" ]] || [[ "$provider_for_commit" == "llama.cpp" ]]; then
-      echo "⚪ $provider_display | $model_name — Generating commit message..."
-    elif [[ -n "$selected_model" && "$selected_model" != "null" ]]; then
-      echo "🟢 $provider_display | $selected_model — Generating commit message..."
-    else
-      echo "🟢 $provider_display | $model_name — Generating commit message..."
-    fi
-
+    echo "⚪ llama.cpp | $(_llamacpp_model_short) — Generating commit message..."
     # Get the diff of staged changes
     local diff_output=$(git diff --cached)
     
@@ -1032,23 +920,8 @@ function gpc() {
     local commit_msg=""
     local generation_succeeded=false
     
-    # Temporarily switch provider if override is set
-    local session_file="/tmp/.ai_provider_session_$(id -u)"
-    local saved_provider=""
-    if [[ -n "$override_provider" ]]; then
-      saved_provider=$(cat "$session_file" 2>/dev/null || echo "")
-      echo "$override_provider" > "$session_file"
-    fi
-    
     while [ $retry_count -lt $max_retries ]; do
-      # Use AI to generate commit message
-      # GitHub Copilot: use sonnet-4.5 (4-6 only available via Claude-Code or OpenCode Zen)
-      # Other providers: use haiku for efficiency
-      local commit_model_tier="haiku"
-      if [[ "$provider_for_commit" == "github-copilot" ]]; then
-        commit_model_tier="sonnet"
-      fi
-      local ai_output=$(echo "Review the following git diff and generate a concise, single-sentence commit message that describes the changes. The message should be in imperative mood (e.g., 'Add feature' not 'Added feature'). Maximum 72 characters. Return ONLY the commit message, nothing else.\n\n$diff_output" | _run_ai_plain "$commit_model_tier" 2>&1)
+      local ai_output=$(echo "Review the following git diff and generate a concise, single-sentence commit message that describes the changes. The message should be in imperative mood (e.g., 'Add feature' not 'Added feature'). Maximum 72 characters. Return ONLY the commit message, nothing else.\n\n$diff_output" | _run_ai_plain 2>&1)
       local ai_exit=$?
       
       # Check if AI command succeeded
@@ -1217,15 +1090,6 @@ function gpc() {
       break
     done
     
-    # Restore original provider if it was overridden
-    if [[ -n "$override_provider" ]]; then
-      if [[ -n "$saved_provider" ]]; then
-        echo "$saved_provider" > "$session_file"
-      else
-        rm -f "$session_file"
-      fi
-    fi
-    
     # Check if we exhausted retries
     if [ "$generation_succeeded" != true ]; then
       echo "" >&2
@@ -1268,22 +1132,9 @@ function gpc() {
     return 1
   fi
 }
-# Local-only test variant of gpc: pins the provider chain to llama-cpp for
-# this call so it never silently falls through to a cloud provider. Fails
-# loud (via the normal retry/manual-entry prompt) instead of escalating.
+# Kept so the name still works: gpc only ever uses the local model now, so this is plain gpc.
 function gpc-local() {
-  local _had_prev=0
-  [[ -n "${AI_LOCAL_ONLY+x}" ]] && _had_prev=1
-  local _prev="$AI_LOCAL_ONLY"
-  export AI_LOCAL_ONLY=1
   gpc "$@"
-  local ret=$?
-  if [[ $_had_prev -eq 1 ]]; then
-    export AI_LOCAL_ONLY="$_prev"
-  else
-    unset AI_LOCAL_ONLY
-  fi
-  return $ret
 }
 
 
@@ -1543,79 +1394,6 @@ function _gpa_should_escalate() {
   return 1  # No critical security issues found
 }
 
-# Helper function: Determine appropriate AI model tier based on batch characteristics
-# Usage: _gpa_determine_tier <batch_files_json> <batch_lines> [total_batch_count]
-# Returns: "local" (llama-cpp provider), "haiku", "sonnet", or "opus" (cloud providers)
-#
-# llama-cpp size routing (based on total_batch_count, each batch ~300 lines):
-#   ≤2 batches  (~600 lines)  → local 7B  (~30s/batch, ~60s total)
-#   3-4 batches (~1200 lines) → cloud Haiku (fast, cheap)
-#   5+ batches  (~1500+ lines) → cloud Sonnet (large diff, needs quality)
-function _gpa_determine_tier() {
-  local batch_files_json="$1"
-  local batch_lines="$2"
-  local total_batch_count="${3:-1}"
-
-  local provider=$(_get_ai_provider)
-
-  # AI_LOCAL_ONLY (gpa-local): never escalate by diff size, always local.
-  if [[ -n "$AI_LOCAL_ONLY" ]]; then
-    echo "local"
-    return 0
-  fi
-  
-  # llama.cpp: Hybrid escalation strategy
-  if [[ "$provider" == "llama-cpp" ]] || [[ "$provider" == "llama.cpp" ]]; then
-    # For small diffs, keep local. For larger diffs, escalate to cloud.
-    if [ "$total_batch_count" -ge 5 ]; then
-      echo "sonnet"  # large diff — cloud quality
-    elif [ "$total_batch_count" -ge 3 ]; then
-      echo "haiku"   # medium diff — fast cloud
-    else
-      echo "local"   # small diff — local 7B is fast enough
-    fi
-    return 0
-  fi
-
-  # OpenCode with free model: Always use the configured free model
-  if [[ "$provider" == "opencode" ]] && _is_opencode_free_model; then
-    echo "free"  # Special marker for free model
-    return 0
-  fi
-
-  # Check if provider supports multiple tiers
-  if ! _supports_multi_tier; then
-    # Single model only (shouldn't happen for cloud providers, but safety check)
-    echo "sonnet"
-    return 0
-  fi
-
-  # Multi-tier providers: Intelligent tier selection based on complexity
-  
-  # Check for critical file paths that should use Opus (if available)
-  if _supports_opus; then
-    local critical_paths=("security" "auth" "payment" "encryption" "credential" "secret" "iam" "policy" "kms")
-    local batch_files_str=$(echo "$batch_files_json" | jq -r '.[]' | tr '\n' ' ')
-    
-    for critical_path in "${critical_paths[@]}"; do
-      if echo "$batch_files_str" | grep -qi "$critical_path"; then
-        echo "opus"
-        return 0
-      fi
-    done
-    
-    # Check for large batches (>500 lines) - use Opus for better accuracy
-    if [ "$batch_lines" -gt 500 ]; then
-      echo "opus"
-      return 0
-    fi
-  fi
-  
-  # Default to sonnet for code review
-  echo "sonnet"
-  return 0
-}
-
 # Helper function: Review a batch of files and return structured issues
 # Usage: _gpa_review_batch <batch_files_json> <batch_number> <total_batches> [tier_override]
 function _gpa_review_batch() {
@@ -1668,27 +1446,9 @@ function _gpa_review_batch() {
   # Count lines in this batch
   local batch_lines=$(echo -e "$batch_diff" | wc -l)
   
-  # Determine which AI tier to use
-  # First check if a specific model is already selected in opencode.json
-  local selected_model=""
-  local _active_provider=$(_get_ai_provider)
-  if [[ "$_active_provider" == "opencode" ]] || [[ "$_active_provider" == "github-copilot" ]]; then
-    local config_file="$HOME/.config/opencode/opencode.json"
-    if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
-      selected_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
-    fi
-  fi
-  
-  local ai_tier="sonnet"
-  if [[ -n "$selected_model" && "$selected_model" != "null" ]]; then
-    # A specific model is selected - use "selected" as the tier marker
-    ai_tier="selected"
-  elif [[ "$tier_override" == "auto" ]]; then
-    ai_tier=$(_gpa_determine_tier "$batch_files_json" "$batch_lines" "$total_batches")
-  else
-    ai_tier="$tier_override"
-  fi
-  
+  # "auto" reviews on the local model; gpa --tier=<haiku|sonnet|opus> and "cloud-escalation" go to Claude Code
+  local ai_tier="local"
+  [[ "$tier_override" != "auto" ]] && ai_tier="$tier_override"
   # Check if any Terraform files are in this batch
   local has_terraform=false
   for file in "${batch_files[@]}"; do
@@ -1774,44 +1534,29 @@ ${batch_context}
   # (was being cleared by progress spinner)
 
   # ── Route the API call ──────────────────────────────────────────────────────
-  # "local"            → llama-cpp via _run_ai_direct (provider already set)
-  # "cloud-escalation" → cloud fallback provider via _run_ai_direct_cloud
-  # anything else      → cloud provider via _run_ai_direct (haiku/sonnet/opus)
+  # "local"            → llama.cpp via _run_ai_direct; a hard failure falls back to Claude Code sonnet unless
+  #                      AI_LOCAL_ONLY (gpa-local, or AI_LOCAL_DEFAULT hosts)
+  # "cloud-escalation" → Claude Code sonnet via _run_ai_direct_claude
+  # haiku/sonnet/opus  → Claude Code with that model (gpa --tier=...)
   local batch_result
   local api_exit_code
 
-  local _route_provider=$(_get_ai_provider)
-  local _route_model
-  
-  # Use selected model if available, otherwise use tier-based selection
-  if [[ "$ai_tier" == "selected" && -n "$selected_model" ]]; then
-    _route_model="$selected_model"
-  else
-    _route_model=$(_get_opencode_model "$ai_tier")
-  fi
-
-  if [[ "$ai_tier" == "cloud-escalation" ]]; then
-    local _cloud=$(_get_cloud_fallback_provider)
-    local _cloud_model=$(_get_cloud_model "sonnet")
-    echo "  ☁  Routing to cloud [$_cloud / $_cloud_model] for escalation..." >&2
-    batch_result=$(echo "$full_prompt" | _run_ai_direct_cloud "sonnet" 2>&1)
-    api_exit_code=$?
-  elif [[ "$ai_tier" == "local" ]]; then
-    echo "  ⚪ Using local model [$_route_provider / $(_llamacpp_model_short)]" >&2
-    batch_result=$(echo "$full_prompt" | _run_ai_direct "sonnet" 2>&1)
+  if [[ "$ai_tier" == "local" ]]; then
+    echo "  ⚪ Using local model [llama.cpp / $(_llamacpp_model_short)]" >&2
+    batch_result=$(echo "$full_prompt" | _run_ai_direct 2>&1)
     api_exit_code=$?
     if [ $api_exit_code -eq 1 ] && [[ -z "$AI_LOCAL_ONLY" ]]; then
-      local _cloud=$(_get_cloud_fallback_provider)
-      echo "  ⚠ Local model failed — falling back to cloud [$_cloud]..." >&2
-      batch_result=$(echo "$full_prompt" | _run_ai_direct_cloud "sonnet" 2>&1)
+      echo "  ⚠ Local model failed — falling back to Claude Code sonnet..." >&2
+      batch_result=$(echo "$full_prompt" | _run_ai_direct_claude sonnet 2>&1)
       api_exit_code=$?
     fi
   else
-    echo "  🤖 Using [$_route_provider / $_route_model]" >&2
-    batch_result=$(echo "$full_prompt" | _run_ai_direct "$ai_tier" 2>&1)
+    local _claude_model="$ai_tier"
+    [[ "$ai_tier" == "cloud-escalation" ]] && _claude_model="sonnet"
+    echo "  ☁  Using Claude Code [$_claude_model]" >&2
+    batch_result=$(echo "$full_prompt" | _run_ai_direct_claude "$_claude_model" 2>&1)
     api_exit_code=$?
   fi
-
   # Check exit codes
   if [ $api_exit_code -eq 1 ]; then
     # Hard failure - API error, timeout, network issue
@@ -1887,7 +1632,7 @@ $(jq -r '.context' <<<"$item")
 Answer CONFIRMED only if this line, as written and in this context, really has that problem and it would cause a
 security hole, data loss or broken code. Answer REJECTED if the report is wrong, if the surrounding code or a comment
 already handles it, or if it is a matter of style or preference.
-Output ONLY a JSON array with one object and nothing else: [{\"verdict\": \"CONFIRMED\" or \"REJECTED\", \"reason\": \"one sentence\"}]" | _run_ai_direct "sonnet" 2>/dev/null)
+Output ONLY a JSON array with one object and nothing else: [{\"verdict\": \"CONFIRMED\" or \"REJECTED\", \"reason\": \"one sentence\"}]" | _run_ai_direct 2>/dev/null)
     rc=$?
     verdict=$(jq -r '(if type == "array" then .[0] else . end) | .verdict // empty' <<<"$reply" 2>/dev/null)
     if [[ $rc -eq 0 && "${verdict:u}" == "REJECTED" ]]; then
@@ -2024,30 +1769,14 @@ function _gpa_review_files() {
   done
 
   local batch_count=1
-  local batch_lines=$(git diff --cached -- "${target_files[@]}" | wc -l | tr -d ' ')
-  local _active_provider=$(_get_ai_provider)
 
   echo "═══════════════════════════════════════════════════════════"
   echo "ℹ Re-reviewing ${#target_files[@]} changed file(s)..."
   echo "═══════════════════════════════════════════════════════════"
   echo ""
 
-  local tier=$(_gpa_determine_tier "$batch" "$batch_lines" "1")
-  # llama.cpp runs every tier on the local model (_run_ai_direct maps any tier to it), so label it as local.
-  [[ "$_active_provider" == "llama-cpp" || "$_active_provider" == "llama.cpp" ]] && tier="local"
-  local tier_icon="" tier_label="" tier_model_arg="$tier"
-  case "$tier" in
-    opus)   tier_icon="🔴"; tier_label="Opus" ;;
-    sonnet) tier_icon="🔵"; tier_label="Sonnet" ;;
-    haiku)  tier_icon="🟢"; tier_label="Haiku" ;;
-    local)  tier_icon="⚪"; tier_label="$(_llamacpp_model_short)"; tier_model_arg="sonnet" ;;
-    free)   tier_icon="⚪"; tier_label="Free model"; tier_model_arg="sonnet" ;;
-    *)      tier_icon="⚪"; tier_label="$tier"; tier_model_arg="sonnet" ;;
-  esac
-
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "$tier_icon $tier_label — Reviewing ${#target_files[@]} file(s)... [$(_provider_display_name "$_active_provider") | $(_get_opencode_model "$tier_model_arg")]"
-
+  echo "⚪ $(_llamacpp_model_short) — Reviewing ${#target_files[@]} file(s)... [llama.cpp]"
   local batch_issues
   batch_issues=$(_gpa_review_batch_with_timeout "$batch" "1" "1" "auto")
   local review_status=$?
@@ -2311,20 +2040,15 @@ function _gpa_review_batch_with_timeout() {
   # Local model (qwen3.5-9b via aider on llama.cpp): a review batch can take several minutes, mostly generation
   # at 10-22 tok/s (see _local_llm_timeout in .zshrc_functions_ai for the numbers), so the local limit is
   # AI_LOCAL_REVIEW_TIMEOUT (default 900s). It must not be lower than the aider call's own limit or this outer
-  # watchdog kills a review that is still working. Cloud APIs: ~5-15s, 90s limit.
-  # Pass total_batches=1 so tier defaults to "local" only when genuinely local.
-  # For cloud tiers (haiku/sonnet/opus) always use 90s.
-  local _tier_for_timeout="$tier_override"
-  if [[ "$_tier_for_timeout" == "auto" ]]; then
-    _tier_for_timeout=$(_gpa_determine_tier "[]" "0" "$total_batches")
-  fi
+  # watchdog kills a review that is still working. Claude Code (--tier): one call is capped at GPA_CLAUDE_TIMEOUT
+  # (default 180s) inside _run_ai_direct_claude, so the watchdog allows a little more.
   local timeout max_retries
-  if [[ "$_tier_for_timeout" == "local" ]]; then
+  if [[ "$tier_override" == "auto" ]]; then
     timeout=$(_local_llm_timeout review)
     max_retries=2
   else
-    timeout=90
-    max_retries=3
+    timeout=$(( ${GPA_CLAUDE_TIMEOUT:-180} + 30 ))
+    max_retries=2
   fi
   local retry_count=0
   
@@ -2557,6 +2281,10 @@ function _gpa_impl() {
   # Git Partial Add with AI code review
   # Usage: gpa [--tier=haiku|sonnet|opus] [--auto]
   #
+  # Reviews run on the local model (llama.cpp through aider). --tier=<model> reviews with that Claude Code model
+  # instead (billed); Claude Code sonnet is also the fallback when the local model fails and the escalation target
+  # for Critical security findings, both suppressed under AI_LOCAL_ONLY.
+  #
   # --auto: non-interactive mode for AI-agent callers (e.g. Claude Code).
   # Stages all changes, auto-fixes lint issues, auto-escalates ambiguous
   # AI-review escalation prompts, and never blindly proceeds past something
@@ -2565,8 +2293,8 @@ function _gpa_impl() {
   # the interactive fix loop or recursing into aidev — the caller is
   # expected to read the findings, fix them itself, and re-run `gpa --auto`.
   # AI_LOCAL_DEFAULT (set system-wide on hosts with a local llama-server, see
-  # llamacpp-local.nix) makes plain gpa behave like gpa-local: local-only, no
-  # cloud fallback/escalation. Guarded on AI_LOCAL_ONLY being unset so
+  # llamacpp-local.nix) makes plain gpa behave like gpa-local: no Claude Code
+  # fallback/escalation (an explicit --tier still asks Claude Code). Guarded on AI_LOCAL_ONLY being unset so
   # gpa-local calling back into gpa here doesn't recurse. Override for one
   # call with `unset AI_LOCAL_DEFAULT` first.
   if [[ -n "$AI_LOCAL_DEFAULT" ]] && [[ -z "$AI_LOCAL_ONLY" ]]; then
@@ -2595,11 +2323,7 @@ function _gpa_impl() {
     esac
   done
 
-  # GitHub Copilot does not support Opus — block explicit --tier=opus
-  if [[ "$tier_override" == "opus" && "$(_get_ai_provider)" == "github-copilot" ]]; then
-    echo "✗ Opus is not available with GitHub Copilot. Use haiku or sonnet."
-    return 1
-  fi
+
   
   # Save current shell options and disable tracing
   local prev_opts=$-
@@ -2608,15 +2332,6 @@ function _gpa_impl() {
 
   # Validate git repository
   _check_git_repo || return 1
-
-  # Ensure an AI provider is configured for this session. Not needed when the caller supplies the commit message and
-  # skips the review (gpa -m ... --no-review): nothing below would call a provider.
-  if [[ -z "${GPA_NO_REVIEW:-}" || -z "${AI_COMMIT_MESSAGE:-}" ]]; then
-    _ensure_ai_provider || return 1
-  fi
-
-  # Use the aiselect'd provider for code review
-  # (removed llama.cpp override — Qwen doesn't work inside opencode sessions)
 
   # Check if there are ANY changes (staged, unstaged, or untracked)
   local has_unstaged=$(git diff --quiet; echo $?)
@@ -2924,50 +2639,12 @@ function _gpa_impl() {
   
   echo "ℹ Processing $total_files file(s) in $batch_count batch(es)"
   echo "  Total changes: $total_lines lines"
-  local _active_provider=$(_get_ai_provider)
-  echo "  Provider: $(_provider_display_name "$_active_provider")"
-  
-  # Check if a specific model is set in opencode.json
-  local selected_model=""
-  if [[ "$_active_provider" == "opencode" ]] || [[ "$_active_provider" == "github-copilot" ]]; then
-    local config_file="$HOME/.config/opencode/opencode.json"
-    if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
-      local config_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
-      # Only use the model if it matches the current provider
-      if [[ -n "$config_model" && "$config_model" != "null" ]]; then
-        if [[ "$_active_provider" == "opencode" && "$config_model" == opencode/* ]]; then
-          selected_model="$config_model"
-        elif [[ "$_active_provider" == "github-copilot" && "$config_model" == github-copilot/* ]]; then
-          selected_model="$config_model"
-        fi
-      fi
-    fi
-  fi
-  
-  # Display model information
-  if [[ -n "$selected_model" && "$selected_model" != "null" ]]; then
-    # A specific model is selected - show it with tier indicators if applicable
-    if _supports_multi_tier; then
-      # Multi-tier provider - show available tiers
-      echo "  Model: $selected_model (Selected)"
-      echo "        Available: $(_model_tier_display "$_active_provider")"
-    else
-      # Single-model provider (free tier or llama.cpp) - just show the model
-      echo "  Model: $(_model_tier_display "$_active_provider")"
-    fi
-  elif [[ "$tier_override" == "auto" ]]; then
-    echo "  Model: Auto-detect ($(_model_tier_display "$_active_provider"))"
+  if [[ "$tier_override" == "auto" ]]; then
+    echo "  Model: ⚪ llama.cpp | $(_llamacpp_model_short)"
   else
-    local tier_emoji=""
-    case "$tier_override" in
-      opus) tier_emoji="🔴" ;;
-      sonnet) tier_emoji="🔵" ;;
-      haiku) tier_emoji="🟢" ;;
-    esac
-    echo "  Model: $tier_emoji $tier_override (forced) → $(_get_opencode_model "$tier_override")"
+    echo "  Model: ☁ Claude Code $tier_override (--tier)"
   fi
   echo ""
-  
   # Process each batch and collect all issues
   local all_issues="[]"
   local batch_index=0
@@ -2979,107 +2656,10 @@ function _gpa_impl() {
     local batch=$(echo "$batches" | jq -c ".[$batch_index]")
     local batch_num=$((batch_index + 1))
     
-    # Determine which tier will be used for this batch (for display purposes)
-    local batch_tier="$tier_override"
-    local batch_using_selected_model=false
-    
-    # Check if a specific model is selected
-    if [[ "$_active_provider" == "opencode" ]] || [[ "$_active_provider" == "github-copilot" ]]; then
-      local config_file="$HOME/.config/opencode/opencode.json"
-      if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
-        local check_selected_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
-        # Only use the model if it matches the current provider
-        if [[ -n "$check_selected_model" && "$check_selected_model" != "null" ]]; then
-          if [[ "$_active_provider" == "opencode" && "$check_selected_model" == opencode/* ]] || \
-             [[ "$_active_provider" == "github-copilot" && "$check_selected_model" == github-copilot/* ]]; then
-            batch_tier="selected"
-            batch_using_selected_model=true
-          fi
-        fi
-      fi
+    local tier_icon="⚪" tier_label="$(_llamacpp_model_short)" full_model_display="llama.cpp | $(_llamacpp_model_short)"
+    if [[ "$tier_override" != "auto" ]]; then
+      tier_icon="☁"; tier_label="Claude $tier_override"; full_model_display="Claude Code | $tier_override"
     fi
-    
-    if [[ "$batch_using_selected_model" == "false" && "$tier_override" == "auto" ]]; then
-      # Pre-calculate tier for display (will be recalculated inside _gpa_review_batch)
-      local batch_files_json=$(echo "$batch" | jq -c '.')
-      local batch_diff_lines=$(echo "$batch_files_json" | jq -r '.[]' | xargs git diff --cached -- | wc -l)
-      batch_tier=$(_gpa_determine_tier "$batch_files_json" "$batch_diff_lines" "$batch_count")
-    fi
-    # llama.cpp runs every tier on the local model (_run_ai_direct maps any tier to it), so a haiku/sonnet/opus
-    # tier chosen by hybrid size routing or --tier would otherwise be labelled as a cloud model that is not used.
-    if [[ "$_active_provider" == "llama-cpp" || "$_active_provider" == "llama.cpp" ]] && [[ "$batch_using_selected_model" != "true" ]]; then
-      batch_tier="local"
-    fi
-    
-    # Display tier icon and label with provider and model info
-    local tier_icon="" tier_label="" full_model_display=""
-    local provider_display
-    case "$_active_provider" in
-      github-copilot)
-        provider_display="GitHub Copilot"
-        ;;
-      opencode)
-        provider_display="OpenCode Zen"
-        ;;
-      llama-cpp|llama.cpp)
-        provider_display="llama.cpp"
-        ;;
-      claude-code)
-        provider_display="Anthropic"
-        ;;
-      *)
-        provider_display="$_active_provider"
-        ;;
-    esac
-    
-    if [[ "$batch_using_selected_model" == "true" ]]; then
-      # Show the selected model name
-      local selected_model_name=$(jq -r '.model' "$config_file" 2>/dev/null)
-      tier_icon=""
-      tier_label="$selected_model_name"
-      full_model_display="$provider_display | $selected_model_name"
-    else
-      case "$batch_tier" in
-        opus)   
-          tier_icon="🔴"
-          tier_label="Opus"
-          local opus_model=$(_get_opencode_model "opus")
-          full_model_display="$provider_display | $opus_model"
-          ;;
-        sonnet) 
-          tier_icon="🔵"
-          tier_label="Sonnet"
-          local sonnet_model=$(_get_opencode_model "sonnet")
-          full_model_display="$provider_display | $sonnet_model"
-          ;;
-        haiku)  
-          tier_icon="🟢"
-          tier_label="Haiku"
-          local haiku_model=$(_get_opencode_model "haiku")
-          full_model_display="$provider_display | $haiku_model"
-          ;;
-        local)  
-          tier_icon="⚪"
-          tier_label="$(_llamacpp_model_short)"
-          full_model_display="$provider_display | $tier_label"
-          ;;
-        free)
-          tier_icon="⚪"
-          local free_model=$(_get_opencode_model)
-          local free_model_name="${free_model#opencode/}"
-          # Capitalize and format nicely
-          tier_label=$(echo "$free_model_name" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2))}1')
-          full_model_display="$provider_display | $free_model (Free)"
-          ;;
-        *)      
-          tier_icon="🔵"
-          tier_label="Sonnet"
-          local default_model=$(_get_opencode_model "sonnet")
-          full_model_display="$provider_display | $default_model"
-          ;;
-      esac
-    fi
-
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "$tier_icon $tier_label — Reviewing batch $batch_num of $batch_count... [$full_model_display]"
     
@@ -3102,96 +2682,49 @@ function _gpa_impl() {
           if [ "$issue_count" -gt 0 ]; then
             echo "  Found $issue_count issue(s) in this batch"
             
-            # Check if we should escalate (only when auto-selected or non-opus cloud tier)
-            local active_provider=$(_get_ai_provider)
+            # Escalate local Critical+security findings to Claude Code sonnet. Only for local reviews (--tier already
+            # used Claude Code) and never under AI_LOCAL_ONLY (gpa-local, AI_LOCAL_DEFAULT hosts).
             local can_escalate=false
-            if [[ "$tier_override" == "auto" ]] || [[ "$tier_override" == "sonnet" ]] || \
-               [[ "$tier_override" == "haiku" ]] || [[ "$tier_override" == "local" ]]; then
-              can_escalate=true
-            fi
-            # AI_LOCAL_ONLY (gpa-local): never offer the cloud escalation prompt.
-            [[ -n "$AI_LOCAL_ONLY" ]] && can_escalate=false
+            [[ "$tier_override" == "auto" && -z "$AI_LOCAL_ONLY" ]] && can_escalate=true
 
             if $can_escalate && _gpa_should_escalate "$valid_batch_issues"; then
               echo ""
               echo "  ⚠ CRITICAL SECURITY ISSUE DETECTED"
+              echo "  Local model found Critical+security issues."
+              echo ""
+              echo "  Recommendation: Re-review with Claude Code sonnet (billed) for authoritative security analysis."
+              echo ""
 
-              if [[ "$active_provider" == "llama-cpp" ]]; then
-                # Hybrid mode: escalate local findings to cloud Sonnet
-                local cloud_provider=$(_get_cloud_fallback_provider)
-                echo "  Local model found Critical+security issues."
-                echo ""
-                local cloud_source_model=$(_get_opencode_model "sonnet")
-                echo "  Recommendation: Re-review with cloud ($cloud_provider $cloud_source_model)"
-                echo "  for authoritative security analysis."
-                echo ""
-
-                local escalate_choice
-                if $auto_mode; then
-                  echo "  ℹ Auto mode: escalating to cloud for authoritative review"
-                  escalate_choice="y"
-                else
-                  echo "  Options:"
-                  echo "    [y] Yes - Escalate to cloud (recommended)"
-                  echo "    [n] No  - Keep local findings"
-                  echo ""
-                  echo -n "  Your choice: "
-                  read -r escalate_choice
-                fi
-
-                if [[ "$escalate_choice" == "y" || "$escalate_choice" == "Y" ]]; then
-                  echo ""
-                  echo "  ☁  Escalating to $cloud_provider $cloud_source_model..."
-                  local cloud_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "cloud-escalation")
-                  local cloud_status=$?
-
-                  if [ $cloud_status -eq 0 ] && [ -n "$cloud_issues" ] && echo "$cloud_issues" | jq empty 2>/dev/null; then
-                    local valid_cloud_issues=$(echo "$cloud_issues" | jq '[.[] | select(type == "object" and has("file") and has("severity") and has("issue") and has("recommendation"))]' 2>/dev/null)
-                    local cloud_issue_count=$(echo "$valid_cloud_issues" | jq 'length')
-                    echo "  ☁  Cloud review complete: Found $cloud_issue_count issue(s)"
-                    valid_batch_issues="$valid_cloud_issues"
-                  else
-                    echo "  ⚠ Cloud escalation failed, keeping local findings"
-                  fi
-                  echo ""
-                fi
+              local escalate_choice
+              if $auto_mode; then
+                echo "  ℹ Auto mode: escalating to Claude Code for authoritative review"
+                escalate_choice="y"
               else
-                # Cloud-only mode: escalate to Opus on same provider
-                local source_model_name
-                if [[ "$batch_using_selected_model" == "true" ]]; then
-                  source_model_name=$(jq -r '.model // "unknown"' "$config_file" 2>/dev/null)
-                elif [[ -n "$tier_label" ]]; then
-                  source_model_name="$tier_label"
-                else
-                  source_model_name="$batch_tier"
-                fi
-                local target_model_name=$(_get_opencode_model "opus")
-                if [[ "$target_model_name" == "$source_model_name" || "$target_model_name" == "$(jq -r '.model // "unknown"' "$config_file" 2>/dev/null)" ]]; then
-                  echo "  ⚠ No better model available for escalation (target == source). Keeping $source_model_name findings."
-                else
-                  echo "  $source_model_name found Critical severity issues with security implications."
-                  echo "  🔴 Automatically escalating to $target_model_name for comprehensive security review..."
-                  echo ""
-                  local opus_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "opus")
-                  local opus_status=$?
+                echo "  Options:"
+                echo "    [y] Yes - Escalate to Claude Code (recommended)"
+                echo "    [n] No  - Keep local findings"
+                echo ""
+                echo -n "  Your choice: "
+                read -r escalate_choice
+              fi
 
-                  if [ $opus_status -eq 0 ] && [ -n "$opus_issues" ] && echo "$opus_issues" | jq empty 2>/dev/null; then
-                    local valid_opus_issues=$(echo "$opus_issues" | jq '[.[] | select(type == "object" and has("file") and has("severity") and has("issue") and has("recommendation"))]' 2>/dev/null)
-                    if [ -n "$valid_opus_issues" ]; then
-                      local opus_issue_count=$(echo "$valid_opus_issues" | jq 'length')
-                      echo "  🔴 $target_model_name review complete: Found $opus_issue_count issue(s)"
-                      valid_batch_issues="$valid_opus_issues"
-                    else
-                      echo "  🔴 $target_model_name review found no additional issues"
-                    fi
-                  else
-                    echo "  ⚠ Escalation review failed, keeping $source_model_name findings"
-                  fi
+              if [[ "$escalate_choice" == "y" || "$escalate_choice" == "Y" ]]; then
+                echo ""
+                echo "  ☁  Escalating to Claude Code sonnet..."
+                local cloud_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "cloud-escalation")
+                local cloud_status=$?
+
+                if [ $cloud_status -eq 0 ] && [ -n "$cloud_issues" ] && echo "$cloud_issues" | jq empty 2>/dev/null; then
+                  local valid_cloud_issues=$(echo "$cloud_issues" | jq '[.[] | select(type == "object" and has("file") and has("severity") and has("issue") and has("recommendation"))]' 2>/dev/null)
+                  local cloud_issue_count=$(echo "$valid_cloud_issues" | jq 'length')
+                  echo "  ☁  Claude Code review complete: Found $cloud_issue_count issue(s)"
+                  valid_batch_issues="$valid_cloud_issues"
+                else
+                  echo "  ⚠ Claude Code escalation failed, keeping local findings"
                 fi
                 echo ""
               fi
             fi
-            
             all_issues=$(echo "$all_issues" | jq --argjson batch "$valid_batch_issues" '. + $batch')
           else
             echo "  ✓ No issues found in this batch"
@@ -3406,11 +2939,9 @@ function _gpa_impl() {
   fi
   rm -f /tmp/gpa_secrets_verdict.txt
 }
-# Local-only test variant of gpa: pins the provider chain to llama-cpp for
-# this call. Batch tier is always "local" (no size-based cloud escalation)
-# and the local-model-failed / critical-security-finding cloud fallbacks are
-# both suppressed -- a run either completes on-device or fails, never quietly
-# switches providers.
+# Local-only variant of gpa: the local-model-failed fallback and the critical-security-finding escalation to
+# Claude Code are both suppressed -- a run either completes on-device or fails, never quietly switches to a billed
+# model. An explicit --tier still asks Claude Code.
 function gpa-local() {
   local _had_prev=0
   [[ -n "${AI_LOCAL_ONLY+x}" ]] && _had_prev=1

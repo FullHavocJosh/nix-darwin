@@ -27,274 +27,6 @@ function _read_key() {
   fi
 }
 
-# Discover latest Claude model for a provider
-# Usage: _discover_latest_model <provider> <model_type>  (model_type: sonnet|haiku|opus)
-function _discover_latest_model() {
-  local provider="$1"
-  local model_type="$2"
-
-  local models
-  models=$(opencode models "$provider" 2>/dev/null)
-  [[ -z "$models" ]] && return 1
-
-  local filtered_models
-  filtered_models=$(echo "$models" | grep -i "$model_type")
-  [[ -z "$filtered_models" ]] && return 1
-
-  # Exclude dated variants (-20241022) and -latest aliases
-  local base_models
-  base_models=$(echo "$filtered_models" | grep -Ev -- '-[0-9]{8}$|-latest$')
-  [[ -z "$base_models" ]] && base_models="$filtered_models"
-
-  echo "$base_models" | sort -V | tail -1
-}
-
-# Discover the latest active Claude model for a given tier on GitHub Copilot,
-# using `opencode models --verbose`'s family/status/release_date metadata
-# instead of a plain name sort — a bare version-string sort put "sonnet-4.5"
-# ahead of "sonnet-5" and this is exactly the class of bug that left
-# claude-sonnet-4.5 hardcoded for months after GitHub removed it from the
-# catalog. "-fast" variants share their sibling's release_date but trade
-# quality for speed, so they only win a tie, never outrank a newer release.
-# Usage: _discover_latest_copilot_claude_model <haiku|sonnet|opus>
-# Prints the bare model id (e.g. "claude-opus-5"); returns 1 on any failure
-# (network, opencode missing, catalog shape changed) so callers can fall back.
-function _discover_latest_copilot_claude_model() {
-  local tier="$1"
-  local raw
-  raw=$(timeout 10 opencode models --verbose github-copilot 2>/dev/null)
-  [[ -z "$raw" ]] && return 1
-
-  local script='
-import sys, json, re
-
-tier = sys.argv[1]
-text = sys.stdin.read()
-# opencode prints a bare "provider/model-id" label line before each JSON
-# block; strip those so the rest decodes as back-to-back JSON objects.
-lines = [l for l in text.splitlines() if not re.match(r"^[\w.-]+/[\w.-]+$", l)]
-blob = "\n".join(lines)
-
-decoder = json.JSONDecoder()
-models = []
-rest = blob
-while True:
-    rest = rest.lstrip()
-    if not rest:
-        break
-    try:
-        obj, idx = decoder.raw_decode(rest)
-    except ValueError:
-        break
-    models.append(obj)
-    rest = rest[idx:]
-
-family = "claude-" + tier
-candidates = [m for m in models if m.get("family") == family and m.get("status") == "active"]
-if not candidates:
-    sys.exit(1)
-
-def sort_key(m):
-    is_fast = "fast" in m.get("name", "").lower()
-    return (m.get("release_date", ""), not is_fast)
-
-print(max(candidates, key=sort_key)["id"])
-'
-  python3 -c "$script" "$tier" <<< "$raw"
-}
-
-# Cached wrapper around _discover_latest_copilot_claude_model — the discovery
-# call is a real network round-trip (~1.5s), too slow to pay on every gpc/gpa
-# invocation. Refreshes at most once per day per tier; falls back to a stale
-# cache (better than nothing) and finally to a hardcoded last-known-good model
-# if discovery fails outright (network down, opencode missing, catalog shape
-# changed) — this must never be the thing that breaks gpc/gpa.
-# Usage: _get_copilot_claude_model <haiku|sonnet|opus>
-function _get_copilot_claude_model() {
-  local tier="$1"
-  local cache_dir="$HOME/.cache/nix-darwin-ai"
-  local cache_file="$cache_dir/github-copilot-claude-${tier}.txt"
-  local ttl=86400
-  local fallback
-  case "$tier" in
-    haiku) fallback="claude-haiku-4.5" ;;
-    opus)  fallback="claude-opus-5" ;;
-    *)     fallback="claude-sonnet-5" ;;
-  esac
-
-  mkdir -p "$cache_dir" 2>/dev/null
-
-  if [[ -f "$cache_file" ]]; then
-    local age=$(( $(date +%s) - $(stat -f %m "$cache_file" 2>/dev/null || echo 0) ))
-    if [[ $age -lt $ttl ]]; then
-      cat "$cache_file"
-      return 0
-    fi
-  fi
-
-  local discovered
-  discovered=$(_discover_latest_copilot_claude_model "$tier" 2>/dev/null)
-  if [[ -n "$discovered" ]]; then
-    echo "$discovered" > "$cache_file"
-    echo "$discovered"
-    return 0
-  fi
-
-  # Discovery failed: prefer a stale cache over the hardcoded fallback.
-  if [[ -f "$cache_file" ]]; then
-    cat "$cache_file"
-  else
-    echo "$fallback"
-  fi
-}
-
-# Returns a human-readable provider name with proper capitalisation.
-function _provider_display_name() {
-  case "$1" in
-    claude-code)    echo "Anthropic" ;;
-    github-copilot) echo "GitHub Copilot" ;;
-    opencode)       echo "OpenCode" ;;
-    llama-cpp)      echo "llama.cpp" ;;
-    *)              echo "$1" ;;
-  esac
-}
-
-# Returns the model tier display string (with version numbers) for a provider.
-# Usage: _model_tier_display <provider>
-function _model_tier_display() {
-  local provider="${1:-$(_get_ai_provider)}"
-  
-  case "$provider" in
-    claude-code|github-copilot)
-      # Built from live/cached discovery (_get_copilot_claude_model), not a
-      # version string typed into this file — that's what let claude-sonnet-4.5
-      # sit here silently for months after GitHub retired it.
-      local h="${$(_get_copilot_claude_model haiku)#claude-haiku-}"
-      local s="${$(_get_copilot_claude_model sonnet)#claude-sonnet-}"
-      local o="${$(_get_copilot_claude_model opus)#claude-opus-}"
-      local suffix=""
-      [[ "$provider" == "claude-code" ]] && suffix=" (Copilot)"
-      echo "🟢 Haiku ${h}${suffix} | 🔵 Sonnet ${s}${suffix} | 🔴 Opus ${o}${suffix}"
-      ;;
-    opencode)
-      # Check if using a free model
-      if _is_opencode_free_model; then
-        local model=$(_get_current_opencode_model)
-        local model_name="${model#opencode/}"
-        # Capitalize first letter and replace hyphens with spaces
-        model_name=$(echo "$model_name" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2))}1')
-        echo "⚪ $model_name (Free)"
-      else
-        echo "🟢 Haiku 4.5 | 🔵 Sonnet 4.6 | 🔴 Opus 4.7"
-      fi
-      ;;
-    llama-cpp|llama.cpp)
-      echo "⚪ $(_llamacpp_model_short) (local)"
-      ;;
-    *)
-      echo "🟢 Haiku | 🔵 Sonnet | 🔴 Opus"
-      ;;
-  esac
-}
-
-function _get_opencode_model() {
-  local task_type="${1:-sonnet}"
-  local provider=$(_get_ai_provider)
-
-  # Special case: OpenCode with free model - always return the configured free model
-  if [[ "$provider" == "opencode" ]] && _is_opencode_free_model; then
-    _get_current_opencode_model
-    return 0
-  fi
-
-  # Special case: llama.cpp - always return the local model
-  if [[ "$provider" == "llama-cpp" ]] || [[ "$provider" == "llama.cpp" ]]; then
-    echo "llamacpp/${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
-    return 0
-  fi
-
-  # GitHub Copilot: skip auto-discovery (4.6 listed but not actually supported)
-  # Claude Code: skip auto-discovery — all tiers route via Copilot, never Anthropic directly
-  if [[ "$provider" != "github-copilot" ]] && [[ "$provider" != "claude-code" ]]; then
-    local model=""
-    if [[ "$task_type" == "haiku" ]]; then
-      model=$(_discover_latest_model "$provider" "haiku")
-    elif [[ "$task_type" == "opus" ]]; then
-      model=$(_discover_latest_model "$provider" "opus")
-    else
-      model=$(_discover_latest_model "$provider" "sonnet")
-    fi
-    if [[ -n "$model" ]]; then
-      echo "$model"
-      return 0
-    fi
-  fi
-
-  case $provider in
-    github-copilot)
-      # Always the latest active model per tier (cached ~1 day) — see
-      # _get_copilot_claude_model. A hardcoded version string is exactly what
-      # left claude-sonnet-4.5 in place for months after GitHub retired it.
-      echo "github-copilot/$(_get_copilot_claude_model "$task_type")"
-      ;;
-    opencode)
-      # OpenCode Zen: Use latest available Claude models with hyphens (claude-haiku-4-5)
-      # Note: Models available via API but may not appear in `opencode models` due to CLI bug
-      if [[ "$task_type" == "haiku" ]]; then
-        echo "opencode/claude-haiku-4-5"
-      elif [[ "$task_type" == "opus" ]]; then
-        # Latest Opus: 4.7 > 4.6 > 4.5
-        echo "opencode/claude-opus-4-7"
-      else
-        # Latest Sonnet: 4.6 > 4.5 > 4
-        echo "opencode/claude-sonnet-4-6"
-      fi
-      ;;
-    claude-code)
-      # All tiers route via GitHub Copilot, never Anthropic directly — the
-      # user's Anthropic/Claude Code quota is reserved for the interactive
-      # Claude Code session, not consumed by git-helper automation. Always
-      # the latest active model per tier — see _get_copilot_claude_model.
-      echo "github-copilot/$(_get_copilot_claude_model "$task_type")"
-      ;;
-    llama-cpp|llama.cpp)
-      echo "llamacpp/${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
-      ;;
-    *)
-      echo "github-copilot/$(_get_copilot_claude_model sonnet)"
-      ;;
-  esac
-}
-
-# Check if the current OpenCode Zen model is a free tier model
-# Returns 0 (true) if free model, 1 (false) if Claude/paid model
-function _is_opencode_free_model() {
-  local provider=$(_get_ai_provider)
-  [[ "$provider" != "opencode" ]] && return 1
-  
-  local config_file="$HOME/.config/opencode/opencode.json"
-  [[ ! -f "$config_file" ]] && return 1
-  
-  local model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
-  [[ -z "$model" ]] && return 1
-  
-  # OpenCode Zen suffixes every free-tier model id with "-free", except its
-  # rotating stealth model "big-pickle" -- matched by suffix instead of a
-  # hardcoded id whitelist because the free roster rotates: ids that used to
-  # be here (deepseek-v4-flash-free, minimax-m2.5-free/m2.7-free,
-  # nemotron-3-super-free, qwen3.6-plus-free) are gone from the catalog as
-  # of 2026-09-29, replaced by a different set. A whitelist goes stale
-  # silently; a suffix match self-adapts.
-  case "$model" in
-    opencode/big-pickle|opencode/*-free)
-      return 0  # Is a free model
-      ;;
-    *)
-      return 1  # Is a Claude/paid model
-      ;;
-  esac
-}
-
 # Free OpenCode Zen model choice lives in ~/.config/aistack/zen_models.py: the models.dev catalog says what is free,
 # `opencode models` says what this account is offered, zen-policy.json (from the Zen docs) says which free models are
 # zero-retention. The helpers that used to be here called `opencode models --verbose opencode`, which opencode v2
@@ -306,62 +38,6 @@ function _discover_best_free_zen_model() {
 }
 function _get_free_zen_model() {
   _discover_best_free_zen_model
-}
-
-# Get the current OpenCode model from config
-# Returns the model string or empty if not found
-function _get_current_opencode_model() {
-  local provider=$(_get_ai_provider)
-  [[ "$provider" != "opencode" ]] && return 1
-  
-  local config_file="$HOME/.config/opencode/opencode.json"
-  [[ ! -f "$config_file" ]] && return 1
-  
-  jq -r '.model // empty' "$config_file" 2>/dev/null
-}
-
-# Check if provider supports multiple model tiers (Haiku/Sonnet/Opus)
-# Returns 0 if multi-tier support available, 1 if single model only
-function _supports_multi_tier() {
-  local provider=$(_get_ai_provider)
-  
-  case "$provider" in
-    claude-code|github-copilot)
-      return 0  # Both support Haiku/Sonnet/Opus (all routed via GitHub Copilot)
-      ;;
-    opencode)
-      # OpenCode supports multi-tier ONLY if using a Claude model (not free)
-      _is_opencode_free_model && return 1 || return 0
-      ;;
-    llama-cpp|llama.cpp)
-      return 1  # Single model only
-      ;;
-    *)
-      return 1  # Unknown provider, assume single model
-      ;;
-  esac
-}
-
-# Check if provider supports Opus tier
-# Returns 0 if Opus available, 1 if not
-function _supports_opus() {
-  local provider=$(_get_ai_provider)
-  
-  case "$provider" in
-    claude-code)
-      return 0  # Claude Code supports Opus (routed via GitHub Copilot, not Anthropic directly)
-      ;;
-    github-copilot)
-      return 0  # Opus (4.7/4.7-fast/4.8/4.8-fast/5) confirmed available 2026-09-16
-      ;;
-    opencode)
-      # OpenCode Zen supports Opus only with Claude models
-      _is_opencode_free_model && return 1 || return 0
-      ;;
-    *)
-      return 1  # Default: no Opus
-      ;;
-  esac
 }
 
 # AI Command Execution Functions
@@ -553,391 +229,88 @@ EOF
   return 1
 }
 
-
-# Execute AI command with plain text output (for commit messages, etc.)
-# Usage: echo "prompt" | _run_ai_plain ["haiku"|"sonnet"|"opus"]
+# Plain-text call to the local model (commit messages, gpa's secrets analysis). gpa/gpc/gpr only ever run on
+# llama.cpp through aider; the one cloud path is gpa's escalation to Claude Code (_run_ai_direct_claude).
+# Usage: echo "prompt" | _run_ai_plain
 function _run_ai_plain() {
-  local task_type="${1:-sonnet}"
-  local provider=$(_get_ai_provider)
-  local model=$(_get_opencode_model "$task_type")
-  
-  # Read stdin into a variable
   local prompt=$(cat)
-  
-  # Make direct API call based on provider
-  case $provider in
-    github-copilot)
-      local result
-      result=$(echo "$prompt" | timeout 90s opencode run --model "$model" 2>&1)
-      local exit_code=$?
-      _herdr_report_opencode_idle
-      if [ $exit_code -eq 124 ]; then
-        echo "Error: OpenCode command timeout after 90s" >&2
-        return 1
-      elif [ $exit_code -ne 0 ]; then
-        echo "Error: OpenCode command failed (exit code: $exit_code)" >&2
-        return 1
-      fi
-      echo "$result"
-      return 0
-      ;;
 
-    opencode)
-      # Use OpenCode CLI for all opencode provider requests
-      # This handles authentication and API endpoints correctly
-      local result
-      result=$(echo "$prompt" | timeout 90s opencode run --model "$model" 2>&1)
-      local exit_code=$?
-      _herdr_report_opencode_idle
-      if [ $exit_code -eq 124 ]; then
-        echo "Error: OpenCode command timeout after 90s" >&2
-        return 1
-      elif [ $exit_code -ne 0 ]; then
-        echo "Error: OpenCode command failed (exit code: $exit_code)" >&2
-        return 1
-      fi
-      echo "$result"
-      return 0
-      ;;
-      
-    claude-code)
-      # All tiers route via opencode+Copilot — never claude --print — so this
-      # never touches the Anthropic API directly. _get_opencode_model always
-      # returns a github-copilot/* model for this provider (see above); the
-      # direct-Anthropic branch this used to have for the opus tier is gone
-      # on purpose, not an oversight.
-      local result exit_code
-      result=$(echo "$prompt" | timeout 90s opencode run --model "$model" 2>&1)
-      exit_code=$?
-      _herdr_report_opencode_idle
-      if [ $exit_code -eq 124 ]; then
-        echo "Error: OpenCode command timeout after 90s" >&2
-        return 1
-      elif [ $exit_code -ne 0 ]; then
-        echo "Error: OpenCode command failed (exit code: $exit_code)" >&2
-        return 1
-      fi
-      echo "$result"
-      return 0
-      ;;
-
-    llama-cpp)
-      # Truncate prompt to ~6000 chars to keep it fast for plain-text tasks
-      # (commit messages only need a representative sample of the diff)
-      local truncated_prompt="${prompt:0:6000}"
-      local prompt_len=${#prompt}
-      if [ $prompt_len -gt 6000 ]; then
-        truncated_prompt="${truncated_prompt}
+  # Truncate prompt to ~6000 chars to keep it fast for plain-text tasks
+  # (commit messages only need a representative sample of the diff)
+  local truncated_prompt="${prompt:0:6000}"
+  local prompt_len=${#prompt}
+  if [ $prompt_len -gt 6000 ]; then
+    truncated_prompt="${truncated_prompt}
 ... [diff truncated at 6000 chars for speed — ${prompt_len} total]"
-      fi
+  fi
 
-      # Routed through Aider instead of a direct curl call -- Aider handles
-      # response extraction robustly (its own --chat-mode ask flow), so this
-      # replaces what used to be a hand-rolled curl+jq+perl chain here (raw
-      # newline JSON parsing, <think> block stripping, markdown fence
-      # stripping all lived in this branch and each had its own real bug
-      # fixed earlier). The chat_template_kwargs.enable_thinking=false fix is
-      # preserved via .config/aider/model-settings.yml's openai/local-coder-commit
-      # entry instead of being inlined in the request body here.
-      _run_aider_local "${AI_LOCAL_ALIAS:-local-coder-commit}" "$(_local_llm_timeout commit)" "$truncated_prompt"
-      return $?
-      ;;
-
-
-    *)
-      echo "Error: Unknown provider $provider" >&2
-      return 1
-      ;;
-  esac
+  # Routed through Aider instead of a direct curl call -- Aider handles
+  # response extraction robustly (its own --chat-mode ask flow), so this
+  # replaces what used to be a hand-rolled curl+jq+perl chain here (raw
+  # newline JSON parsing, <think> block stripping, markdown fence
+  # stripping all lived in this branch and each had its own real bug
+  # fixed earlier). The chat_template_kwargs.enable_thinking=false fix is
+  # preserved via .config/aider/model-settings.yml's openai/local-coder-commit
+  # entry instead of being inlined in the request body here.
+  _run_aider_local "${AI_LOCAL_ALIAS:-local-coder-commit}" "$(_local_llm_timeout commit)" "$truncated_prompt"
 }
 
-# Execute AI command with direct API call (returns JSON array)
-# Usage: echo "prompt" | _run_ai_direct ["haiku"|"sonnet"|"opus"]
+# Structured call to the local model that prints a JSON array (gpa's review and its second look at a finding).
+# Exit codes: 0 = valid JSON array, 1 = hard failure (timeout, server down), 2 = reply not parseable ("[]" printed).
+# Usage: echo "prompt" | _run_ai_direct
 function _run_ai_direct() {
-  local task_type="${1:-sonnet}"
-  local provider=$(_get_ai_provider)
-  local model=$(_get_opencode_model "$task_type")
-  
-  # Read stdin into a variable
   local prompt=$(cat)
-  
-  # Make direct API call based on provider
-  case $provider in
-    github-copilot)
-      local model_name="$model"
-      local json_prompt="$prompt
 
-CRITICAL INSTRUCTIONS - READ CAREFULLY:
-You MUST respond with ONLY a JSON array. Do not include:
-- Any conversational text before the JSON
-- Any explanations after the JSON
-- Any markdown code blocks or backticks
-- Any commentary or notes
-
-Your entire response must be valid JSON starting with [ and ending with ].
-If there are no issues to report, respond with exactly: []
-
-Example of CORRECT response format:
-[{\"file\":\"example.tf\",\"severity\":\"Critical\",\"issue\":\"Hardcoded secret\",\"recommendation\":\"Use variable\"}]
-
-Example of INCORRECT response (DO NOT DO THIS):
-Here are the issues I found:
-\`\`\`json
-[{...}]
-\`\`\`
-Let me know if you need anything else!
-
-START YOUR RESPONSE NOW WITH [ OR []:"
-
-      local result=$(echo "$json_prompt" | timeout 90s opencode run --model "$model_name" 2>&1)
-      local exit_code=$?
-      _herdr_report_opencode_idle
-
-      if [ $exit_code -eq 124 ]; then
-        echo "Error: OpenCode command timeout after 90s" >&2
-        return 1
-      elif [ $exit_code -ne 0 ]; then
-        echo "Error: OpenCode command failed (exit code: $exit_code)" >&2
-        if [[ -n "$result" ]]; then
-          echo "Output: $(echo "$result" | head -c 200)" >&2
-        fi
-        return 1
-      fi
-
-      # Empty or whitespace-only output is NOT "no issues found" (jq empty
-      # accepts empty input). Soft failure: user must retry or ignore.
-      if [ -z "$result" ] || [[ -z "${result//[[:space:]]/}" ]]; then
-        echo "Error: OpenCode returned empty response" >&2
-        echo "[]"
-        return 2
-      fi
-
-      # Error response (first non-empty line starts with "Error:") is a hard
-      # failure: never run jq on it, never emit "[]" as if it were valid.
-      if echo "$result" | grep -m1 -v '^[[:space:]]*$' | grep -q '^Error:'; then
-        echo "Error: OpenCode returned an error response: $(echo "$result" | head -c 200)" >&2
-        return 1
-      fi
-
-      # Extract JSON: first [ to last ] (handles wrapped JSON)
-      local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
-
-      # Validate it's proper JSON (empty extraction must not reach jq)
-      if [[ -z "${extracted//[[:space:]]/}" ]]; then
-        echo "[]"
-        return 2
-      fi
-      if echo "$extracted" | jq empty 2>/dev/null; then
-        echo "$extracted"
-        return 0
-      fi
-
-      # Soft failure: Could not parse response
-      # Exit code 2 = unparseable output (user should be warned)
-      echo "Error: Could not parse AI response as JSON" >&2
-      echo "[]"
-      return 2
-      ;;
-
-    opencode)
-      # Use OpenCode CLI for all opencode provider requests
-      local model_name="$model"
-      local json_prompt="$prompt
-
-CRITICAL INSTRUCTIONS - READ CAREFULLY:
-You MUST respond with ONLY a JSON array. Do not include:
-- Any conversational text before the JSON
-- Any explanations after the JSON  
-- Any markdown code blocks or backticks
-- Any commentary or notes
-
-Your entire response must be valid JSON starting with [ and ending with ].
-If there are no issues to report, respond with exactly: []
-"
-      
-      local result
-      result=$(echo "$json_prompt" | timeout 90s opencode run --model "$model" 2>&1)
-      local exit_code=$?
-      _herdr_report_opencode_idle
-      
-      if [ $exit_code -eq 124 ]; then
-        echo "Error: OpenCode timeout after 90s" >&2
-        return 1
-      elif [ $exit_code -ne 0 ]; then
-        echo "Error: OpenCode failed (exit $exit_code)" >&2
-        return 1
-      fi
-      
-      # Empty response is a soft failure, never "no issues found"
-      if [ -z "$result" ] || [[ -z "${result//[[:space:]]/}" ]]; then
-        echo "Error: OpenCode returned empty response" >&2
-        echo "[]"
-        return 2
-      fi
-
-      # Error response (first non-empty line starts with "Error:") is a hard
-      # failure: never run jq on it, never emit "[]" as if it were valid.
-      if echo "$result" | grep -m1 -v '^[[:space:]]*$' | grep -q '^Error:'; then
-        echo "Error: OpenCode returned an error response: $(echo "$result" | head -c 200)" >&2
-        return 1
-      fi
-
-      # Extract JSON array from response
-      local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
-      if [[ -z "${extracted//[[:space:]]/}" ]]; then
-        echo "[]"
-        return 2
-      fi
-      if echo "$extracted" | jq empty 2>/dev/null; then
-        echo "$extracted"
-        return 0
-      fi
-      
-      echo "[]"
-      return 2
-      ;;
-      
-    llama-cpp)
-      # Cap the prompt to keep prompt processing reasonable, but keep BOTH ends: the review prompt ends
-      # with the instructions ("Output ONLY a JSON array ...", the issue limit), so a plain prefix cut dropped
-      # them and the model answered with an unbounded markdown review that ran into max_tokens (seen twice
-      # on 2026-10-06, ~3.8k output tokens, cut off mid-sentence). The middle of the diff is what gets omitted.
-      # (Output max_tokens comes from _run_aider_local's per-alias cap.)
-      local max_chars=6000 tail_chars=2400
-      local truncated_prompt="$prompt"
-      local prompt_len=${#prompt}
-      if [ $prompt_len -gt $max_chars ]; then
-        truncated_prompt="${prompt:0:$((max_chars - tail_chars))}
+  # Cap the prompt to keep prompt processing reasonable, but keep BOTH ends: the review prompt ends
+  # with the instructions ("Output ONLY a JSON array ...", the issue limit), so a plain prefix cut dropped
+  # them and the model answered with an unbounded markdown review that ran into max_tokens (seen twice
+  # on 2026-10-06, ~3.8k output tokens, cut off mid-sentence). The middle of the diff is what gets omitted.
+  # (Output max_tokens comes from _run_aider_local's per-alias cap.)
+  local max_chars=6000 tail_chars=2400
+  local truncated_prompt="$prompt"
+  local prompt_len=${#prompt}
+  if [ $prompt_len -gt $max_chars ]; then
+    truncated_prompt="${prompt:0:$((max_chars - tail_chars))}
 ... [diff middle omitted: ${prompt_len} chars total, first $((max_chars - tail_chars)) and last ${tail_chars} kept] ...
 ${prompt: -$tail_chars}"
-      fi
+  fi
 
-      # Routed through Aider instead of a direct curl call -- see the matching
-      # comment in _run_ai_plain's llama-cpp branch. The limit comes from
-      # _local_llm_timeout (900s by default; see the measurements there): a
-      # review that uses its whole 4096-token output budget needs ~430s at
-      # the 9B's slowest measured generation speed.
-      local aider_output
-      aider_output=$(_run_aider_local "local-coder-review" "$(_local_llm_timeout review)" "$truncated_prompt")
-      local aider_exit=$?
-      if [ $aider_exit -ne 0 ]; then
-        echo "$aider_output" >&2
-        return 1
-      fi
+  # The limit comes from _local_llm_timeout (900s by default; see the measurements there): a review that uses its
+  # whole 4096-token output budget needs ~430s at the 9B's slowest measured generation speed.
+  local aider_output
+  aider_output=$(_run_aider_local "local-coder-review" "$(_local_llm_timeout review)" "$truncated_prompt")
+  local aider_exit=$?
+  if [ $aider_exit -ne 0 ]; then
+    echo "$aider_output" >&2
+    return 1
+  fi
 
-      # Extract JSON array from the response (same strategy as the other
-      # provider branches) -- _run_aider_local already stripped Aider's own
-      # chrome and any markdown fence, but the array-extraction regex stays
-      # as a safety net in case the model wraps the array in stray prose.
-      if [[ -z "${aider_output//[[:space:]]/}" ]]; then
-        echo "Error: Aider returned empty response" >&2
-        echo "[]"
-        return 2
-      fi
-      # Error response (first non-empty line starts with "Error:") is a hard
-      # failure: never run jq on it, never emit "[]" as if it were valid.
-      if echo "$aider_output" | grep -m1 -v '^[[:space:]]*$' | grep -q '^Error:'; then
-        echo "Error: Aider returned an error response: $(echo "$aider_output" | head -c 200)" >&2
-        return 1
-      fi
+  # _run_aider_local already stripped Aider's own chrome and any markdown fence, but the array-extraction regex
+  # stays as a safety net in case the model wraps the array in stray prose.
+  if [[ -z "${aider_output//[[:space:]]/}" ]]; then
+    echo "Error: Aider returned empty response" >&2
+    echo "[]"
+    return 2
+  fi
+  # Error response (first non-empty line starts with "Error:") is a hard
+  # failure: never run jq on it, never emit "[]" as if it were valid.
+  if echo "$aider_output" | grep -m1 -v '^[[:space:]]*$' | grep -q '^Error:'; then
+    echo "Error: Aider returned an error response: $(echo "$aider_output" | head -c 200)" >&2
+    return 1
+  fi
 
-      local json_extracted=$(echo "$aider_output" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
-      if [[ -n "${json_extracted//[[:space:]]/}" ]] && echo "$json_extracted" | jq empty 2>/dev/null; then
-        echo "$json_extracted"
-        return 0
-      fi
+  local json_extracted=$(echo "$aider_output" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
+  if [[ -n "${json_extracted//[[:space:]]/}" ]] && echo "$json_extracted" | jq empty 2>/dev/null; then
+    echo "$json_extracted"
+    return 0
+  fi
 
-      # Soft failure: response not parseable as JSON
-      echo "Error: Could not parse aider response as JSON" >&2
-      echo "[]"
-      return 2
-      ;;
-
-
-    claude-code)
-      local json_prompt="$prompt
-
-CRITICAL INSTRUCTIONS - READ CAREFULLY:
-You MUST respond with ONLY a JSON array. Do not include:
-- Any conversational text before the JSON
-- Any explanations after the JSON
-- Any markdown code blocks or backticks
-- Any commentary or notes
-
-Your entire response must be valid JSON starting with [ and ending with ].
-If there are no issues to report, respond with exactly: []
-
-Example of CORRECT response format:
-[{\"file\":\"example.tf\",\"severity\":\"Critical\",\"issue\":\"Hardcoded secret\",\"recommendation\":\"Use variable\"}]
-
-START YOUR RESPONSE NOW WITH [ OR []:"
-
-      # All tiers route via opencode+Copilot — never claude --print — so this
-      # never touches the Anthropic API directly. _get_opencode_model always
-      # returns a github-copilot/* model for this provider (see above); the
-      # direct-Anthropic branch this used to have for the opus tier is gone
-      # on purpose, not an oversight.
-      local result exit_code
-      result=$(echo "$json_prompt" | timeout 90s opencode run --model "$model" 2>&1)
-      exit_code=$?
-      _herdr_report_opencode_idle
-      if [ $exit_code -eq 124 ]; then
-        echo "Error: OpenCode command timeout after 90s" >&2
-        return 1
-      elif [ $exit_code -ne 0 ]; then
-        echo "Error: OpenCode command failed (exit code: $exit_code)" >&2
-        return 1
-      fi
-      if [ -z "$result" ] || [[ -z "${result//[[:space:]]/}" ]]; then
-        echo "Error: OpenCode returned empty response" >&2
-        echo "[]"
-        return 2
-      fi
-      # Error response (first non-empty line starts with "Error:") is a hard
-      # failure: never run jq on it, never emit "[]" as if it were valid.
-      if echo "$result" | grep -m1 -v '^[[:space:]]*$' | grep -q '^Error:'; then
-        echo "Error: OpenCode returned an error response: $(echo "$result" | head -c 200)" >&2
-        return 1
-      fi
-
-      local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
-      if [[ -z "${extracted//[[:space:]]/}" ]]; then
-        echo "[]"
-        return 2
-      fi
-      if echo "$extracted" | jq empty 2>/dev/null; then
-        echo "$extracted"
-        return 0
-      fi
-      echo "Error: Could not parse AI response as JSON" >&2
-      echo "[]"
-      return 2
-      ;;
-
-    *)
-      echo "Error: Unknown provider $provider" >&2
-      return 1
-      ;;
-  esac
+  # Soft failure: response not parseable as JSON
+  echo "Error: Could not parse aider response as JSON" >&2
+  echo "[]"
+  return 2
 }
 
-# Execute AI command via OpenCode agent (full agent capabilities, slower)
-# Usage: echo "prompt" | _run_ai_agent ["haiku"|"sonnet"|"opus"]
-function _run_ai_agent() {
-  local task_type="${1:-sonnet}"
-  local model=$(_get_opencode_model "$task_type")
-  local prompt=$(cat)
-  opencode run --model "$model" "$prompt"
-}
-
-function _run_ai_command() {
-  _run_ai_direct "$@"
-}
-
-function _get_ai_command() {
-  local task_type="${1:-sonnet}"
-  echo "_run_ai_direct $task_type"
-}
 # Tier 0 probe: prints "lumo" when a lumo-tamer answers /v1/models with its key, otherwise "local". Tried in order:
 # this machine's own tamer (127.0.0.1:3003, key from ~/lumo-tamer-fullhavoc/config.yaml), MacMiniM1's on the home network (key
 # from Doppler), then the public endpoint https://lumo.rollet.family/v1 (key from Doppler root_hetzner-cluster, or
@@ -1274,6 +647,9 @@ function _aidev_opencode() {
   shift 2
   if $print_mode; then
     opencode run --model "$model" "$@"
+    local rc=$?
+    _herdr_report_opencode_idle
+    return $rc
   elif (( $# > 0 )); then
     opencode mini --model "$model" --prompt "$*"
   else
@@ -1285,8 +661,8 @@ function _aidev_opencode() {
 #
 #   aidev [task words...]        e.g.  aidev add a --json flag to the report command
 #   aidev                        then describe the work as pi's first message
-#   aidev --direct [args...]     the plain interactive session of the selected provider (what aidev used to be)
-#   aidev -p "prompt"            one headless call to the selected provider (any flag means --direct)
+#   aidev --direct [args...]     a plain interactive OpenCode Zen session (Big Pickle)
+#   aidev -p "prompt"            one headless OpenCode Zen call (any flag means --direct)
 #
 # Who does what:  the local model in pi talks to you, finds the code and follows the run (free);  Lumo adds a draft
 # with online research when MacMiniM1 is reachable (free);  Claude Code writes the plan in ONE call from that research
@@ -1420,20 +796,20 @@ function ainfo() {
   )
 }
 
-# The direct session: claude, or opencode with the selected provider's model. Used by `aidev --direct`, `aidev -p`,
-# and the gpa/gpc fix helpers, which need a model that edits a file now rather than a planned run.
+# The direct session: OpenCode Zen with the model opencode.json sets (Big Pickle), the stack's coding/editing agent.
+# Used by `aidev --direct`, `aidev -p`, and the gpa/gpc fix helpers, which need a model that edits a file now rather
+# than a planned run.
 function _aidev_direct() {
   local GREEN='\033[0;32m'
+  local RED='\033[0;31m'
   local NC='\033[0m'
 
-  _ensure_ai_provider || return 1
+  if ! _validate_opencode_zen; then
+    echo "${RED}✗${NC} OpenCode Zen is not set up on this host (no API key). Run darwin-rebuild switch so Doppler injects it." >&2
+    return 1
+  fi
 
-  local provider=$(_get_ai_provider)
-
-  echo "${GREEN}✓${NC} Provider: $(_provider_display_name "$provider")"
-
-  # Detect -p/--print flag and translate for providers that don't support it.
-  # claude uses -p for headless mode; opencode uses `run` as the subcommand.
+  # claude-style -p/--print means one headless call: `opencode run` (see _aidev_opencode).
   local print_mode=false
   local filtered_args=()
   for arg in "$@"; do
@@ -1444,74 +820,19 @@ function _aidev_direct() {
     fi
   done
 
-  case "$provider" in
-    claude-code)
-      echo ""
-      if $print_mode; then
-        claude -p "${filtered_args[@]}"
-      else
-        claude "${filtered_args[@]}"
-      fi
-      ;;
-    llama-cpp)
-      local local_model="llamacpp/${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
-      echo "${GREEN}✓${NC} Model:    ⚪ $(_llamacpp_model_short) → $local_model"
-      echo ""
-      _aidev_opencode "$local_model" $print_mode "${filtered_args[@]}"
-      ;;
-    github-copilot)
-      # GitHub Copilot via OpenCode
-      local model=$(_get_opencode_model "sonnet")
-      echo "${GREEN}✓${NC} Model:    $model"
-      echo ""
-      _aidev_opencode "$model" $print_mode "${filtered_args[@]}"
-      ;;
-    opencode)
-      # OpenCode Zen - check if a specific model is set in opencode.json
-      local model=""
-      local config_file="$HOME/.config/opencode/opencode.json"
-      if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
-        model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
-      fi
-      
-      # Fallback to discovering latest Sonnet if no model is set
-      if [[ -z "$model" || "$model" == "null" ]]; then
-        model=$(_get_opencode_model "sonnet")
-      fi
-      
-      echo "${GREEN}✓${NC} Model:    $model"
-      echo ""
-      _aidev_opencode "$model" $print_mode "${filtered_args[@]}"
-      ;;
-    *)
-      # Unknown provider - fall back to github-copilot
-      local model=$(_get_opencode_model "sonnet")
-      echo "${GREEN}✓${NC} Model:    $model (fallback)"
-      echo ""
-      _aidev_opencode "$model" $print_mode "${filtered_args[@]}"
-      ;;
-  esac
+  local model=""
+  local config_file="$HOME/.config/opencode/opencode.json"
+  if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
+    model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
+  fi
+  [[ -z "$model" || "$model" == "null" ]] && model="opencode/big-pickle"
+
+  echo "${GREEN}✓${NC} OpenCode Zen: $model"
+  echo ""
+  _aidev_opencode "$model" $print_mode "${filtered_args[@]}"
 }
 
 # Validation Functions for AI Providers
-
-# Validate GitHub Copilot authentication
-function _validate_github_copilot() {
-  # Check if GitHub Copilot is authenticated via OpenCode
-  if command -v opencode &>/dev/null; then
-    if opencode auth list 2>/dev/null | grep -q "GitHub Copilot"; then
-      return 0
-    fi
-  fi
-  
-  if command -v gh &>/dev/null; then
-    if gh auth status &>/dev/null; then
-      return 0
-    fi
-  fi
-  
-  return 1
-}
 
 function _validate_opencode_zen() {
   [[ -n "$OPENCODE_ZEN_API_KEY" ]] && return 0
@@ -1596,664 +917,52 @@ function _validate_claude_code() {
   return 1
 }
 
-# Check internet connectivity using curl or dig (not ping)
-function _is_online() {
-  if command -v curl &>/dev/null; then
-    curl -sf --max-time 2 --connect-timeout 1 https://1.1.1.1 >/dev/null 2>&1 && return 0
-  fi
-  if command -v dig &>/dev/null; then
-    dig +time=1 +tries=1 @1.1.1.1 cloudflare.com >/dev/null 2>&1 && return 0
-  fi
-  if command -v ping &>/dev/null; then
-    ping -c1 -W1 1.1.1.1 >/dev/null 2>&1 && return 0
-  fi
-  return 1
-}
-
-function _get_ai_provider() {
-  # gpc-local/gpa-local/gpr-local set this to pin the whole resolution chain
-  # to llama-cpp for a run, bypassing session/preference files entirely.
-  [[ -n "$AI_LOCAL_ONLY" ]] && echo "llama-cpp" && return 0
-  local session_file="/tmp/.ai_provider_session_$(id -u)"
-  local preference_file="$HOME/.ai_provider_preference"
-  [[ -f "$session_file" ]] && cat "$session_file" && return 0
-  [[ -f "$preference_file" ]] && cat "$preference_file" && return 0
-  _validate_claude_code 2>/dev/null && echo "claude-code" && return 0
-  echo "github-copilot"
-}
-
-# Dispatch validation to the appropriate provider validator
-function _validate_provider() {
-  case "$1" in
-    claude-code)    _validate_claude_code ;;
-    github-copilot) _validate_github_copilot ;;
-    opencode)       _validate_opencode_zen ;;
-    llama-cpp)      _validate_llamacpp ;;
-    *)              return 1 ;;
-  esac
-}
-
-# Ensure a valid provider is set for this session.
-# - No session file: auto-detect silently (no cascade, _get_ai_provider handles it).
-# - Session file exists but provider is invalid: re-run aiselect cascade.
-function _ensure_ai_provider() {
-  local session_file="/tmp/.ai_provider_session_$(id -u)"
-  local RED='\033[0;31m'
-  local NC='\033[0m'
-  [[ ! -f "$session_file" ]] && return 0
-  local provider
-  provider=$(cat "$session_file")
-  if _validate_provider "$provider" 2>/dev/null; then
-    return 0
-  fi
-  echo "${RED}✗${NC} Provider '$provider' is no longer valid — re-running aiselect..."
-  rm -f "$session_file"
-  aiselect
-}
-
-# Hybrid routing: llama-cpp → cloud escalation
-# gpc/gpr always local; gpa escalates to cloud on critical/security findings
-# Cloud provider stored in ~/.ai_cloud_provider_preference (separate from main provider).
-# Defaults to github-copilot, not anthropic: git-helper cloud escalation should
-# never consume the Anthropic/Claude Code API quota, which is reserved for the
-# interactive Claude Code session.
-function _get_cloud_fallback_provider() {
-  local cloud_pref="$HOME/.ai_cloud_provider_preference"
-  if [[ -f "$cloud_pref" ]]; then
-    cat "$cloud_pref"
-  else
-    echo "github-copilot"
-  fi
-}
-
-function _get_cloud_model() {
-  local task_type="${1:-sonnet}"
-  local provider=$(_get_cloud_fallback_provider)
-
-  case $provider in
-    github-copilot)
-      echo "github-copilot/$(_get_copilot_claude_model "$task_type")"
-      ;;
-    opencode)
-      [[ "$task_type" == "opus"  ]] && echo "opencode/claude-opus-4.5"        && return
-      [[ "$task_type" == "haiku" ]] && echo "opencode/claude-3-5-haiku"        && return
-      echo "opencode/claude-sonnet-4.5"
-      ;;
-    anthropic|*)
-      [[ "$task_type" == "opus"  ]] && echo "anthropic/claude-opus-4-5"  && return
-      [[ "$task_type" == "haiku" ]] && echo "anthropic/claude-haiku-4-5" && return
-      echo "anthropic/claude-sonnet-4-6"
-      ;;
-  esac
-}
-
-# Plain-text AI call against cloud fallback provider (for llama-cpp escalation)
-# Usage: echo "prompt" | _run_ai_plain_cloud ["haiku"|"sonnet"|"opus"]
-function _run_ai_plain_cloud() {
-  local task_type="${1:-sonnet}"
-  local provider=$(_get_cloud_fallback_provider)
-  local model=$(_get_cloud_model "$task_type")
+# gpa's one cloud path: a structured review call to Claude Code, used when the local review hard-fails, when it finds
+# a Critical security issue and the user escalates, or when --tier names a model. Never runs under AI_LOCAL_ONLY
+# (gpa-local, or plain gpa on hosts that set AI_LOCAL_DEFAULT): the callers check that. Billed, so it is small:
+#   --tools ""                the diff is in the prompt; no file, shell or web tools
+#   --setting-sources ""      no user/project settings, so no hooks, plugins or permission rules run here
+#   --strict-mcp-config       no MCP servers
+#   --json-schema             Claude Code validates the reply; the issues come back in .structured_output
+#   --max-budget-usd          hard cap for the one call (GPA_CLAUDE_BUDGET_USD)
+# Prints a JSON array with the same exit codes as _run_ai_direct: 0 ok, 1 hard failure, 2 unparseable ("[]" printed).
+# Usage: echo "prompt" | _run_ai_direct_claude [haiku|sonnet|opus]
+function _run_ai_direct_claude() {
+  local model="${1:-sonnet}"
   local prompt=$(cat)
-
-  case $provider in
-    anthropic | github-copilot)
-      local result
-      result=$(echo "$prompt" | timeout 90s opencode run --model "$model" 2>&1)
-      local exit_code=$?
-      _herdr_report_opencode_idle
-      [ $exit_code -eq 124 ] && { echo "Error: cloud timeout after 90s" >&2; return 1; }
-      [ $exit_code -ne 0  ] && { echo "Error: cloud call failed (exit $exit_code)" >&2; return 1; }
-      echo "$result"
-      ;;
-    opencode)
-      # Use OpenCode CLI for all opencode provider requests
-      local result
-      result=$(echo "$prompt" | timeout 90s opencode run --model "$model" 2>&1)
-      local exit_code=$?
-      _herdr_report_opencode_idle
-      [ $exit_code -eq 124 ] && { echo "Error: OpenCode timeout after 90s" >&2; return 1; }
-      [ $exit_code -ne 0  ] && { echo "Error: OpenCode failed (exit $exit_code)" >&2; return 1; }
-      echo "$result"
-      ;;
-  esac
-}
-
-# Structured-JSON AI call against cloud fallback provider (for llama-cpp escalation)
-# Usage: echo "prompt" | _run_ai_direct_cloud ["haiku"|"sonnet"|"opus"]
-function _run_ai_direct_cloud() {
-  local task_type="${1:-sonnet}"
-  local provider=$(_get_cloud_fallback_provider)
-  local model=$(_get_cloud_model "$task_type")
-  local prompt=$(cat)
-
-  local json_prompt="$prompt
-
-CRITICAL INSTRUCTIONS - READ CAREFULLY:
-You MUST respond with ONLY a JSON array. Do not include any text before or after it.
-If there are no issues, respond with exactly: []
-START YOUR RESPONSE NOW WITH [ OR []:"
-
-  case $provider in
-    anthropic | github-copilot)
-      local result
-      result=$(echo "$json_prompt" | timeout 90s opencode run --model "$model" 2>&1)
-      local exit_code=$?
-      _herdr_report_opencode_idle
-      [ $exit_code -eq 124 ] && { echo "Error: cloud timeout" >&2; return 1; }
-      [ $exit_code -ne 0  ] && { echo "Error: cloud call failed" >&2; return 1; }
-      local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
-      echo "$extracted" | jq empty 2>/dev/null && echo "$extracted" && return 0
-      echo "[]"; return 2
-      ;;
-    opencode)
-      # Use OpenCode CLI for all opencode provider requests
-      local result
-      result=$(echo "$json_prompt" | timeout 90s opencode run --model "$model" 2>&1)
-      local exit_code=$?
-      _herdr_report_opencode_idle
-      [ $exit_code -eq 124 ] && { echo "Error: OpenCode timeout" >&2; return 1; }
-      [ $exit_code -ne 0  ] && { echo "Error: OpenCode call failed" >&2; return 1; }
-      local extracted=$(echo "$result" | perl -0777 -pe 's/.*(\[.*?\])\s*$/$1/s' | head -c 50000)
-      echo "$extracted" | jq empty 2>/dev/null && echo "$extracted" && return 0
-      echo "[]"; return 2
-      ;;
-  esac
-}
-
-# Check Claude service status from status.claude.com
-# Returns 0 if operational, 1 if there are issues
-# Prints status information to stdout
-function _check_claude_status() {
-  # Use -L to follow redirects
-  local status_json=$(curl -sL --max-time 5 https://status.claude.com/api/v2/components.json 2>/dev/null)
-  
-  # If curl failed or returned empty, assume services are operational (fail open)
-  if [[ -z "$status_json" ]] || [[ "$status_json" == *"<html"* ]]; then
-    return 0
-  fi
-  
-  # Extract statuses using jq if available, otherwise use grep
-  local claude_code_status=""
-  local claude_ai_status=""
-  local platform_status=""
-  
-  if command -v jq &>/dev/null; then
-    claude_code_status=$(echo "$status_json" | jq -r '.components[] | select(.name=="Claude Code") | .status' 2>/dev/null)
-    claude_ai_status=$(echo "$status_json" | jq -r '.components[] | select(.name=="claude.ai") | .status' 2>/dev/null)
-    platform_status=$(echo "$status_json" | jq -r '.components[] | select(.name | startswith("platform.claude.com")) | .status' 2>/dev/null)
-  else
-    # Fallback to grep/sed if jq not available
-    claude_code_status=$(echo "$status_json" | grep -o '"name":"Claude Code"[^}]*"status":"[^"]*"' | sed -n 's/.*"status":"\([^"]*\)".*/\1/p')
-    claude_ai_status=$(echo "$status_json" | grep -o '"name":"claude.ai"[^}]*"status":"[^"]*"' | sed -n 's/.*"status":"\([^"]*\)".*/\1/p')
-    platform_status=$(echo "$status_json" | grep -o '"name":"platform.claude.com[^}]*"status":"[^"]*"' | sed -n 's/.*"status":"\([^"]*\)".*/\1/p')
-  fi
-  
-  # Check if any service has issues
-  local has_issues=0
-  local RED='\033[0;31m'
-  local YELLOW='\033[1;33m'
-  local NC='\033[0m'
-  
-  if [[ "$claude_code_status" == "partial_outage" ]] || [[ "$claude_code_status" == "major_outage" ]] || [[ "$claude_code_status" == "degraded_performance" ]]; then
-    echo "  ${RED}⚠${NC}  Claude Code: ${YELLOW}${claude_code_status}${NC}"
-    has_issues=1
-  fi
-  
-  if [[ "$claude_ai_status" == "partial_outage" ]] || [[ "$claude_ai_status" == "major_outage" ]] || [[ "$claude_ai_status" == "degraded_performance" ]]; then
-    echo "  ${RED}⚠${NC}  claude.ai: ${YELLOW}${claude_ai_status}${NC}"
-    has_issues=1
-  fi
-  
-  if [[ "$platform_status" == "partial_outage" ]] || [[ "$platform_status" == "major_outage" ]] || [[ "$platform_status" == "degraded_performance" ]]; then
-    echo "  ${RED}⚠${NC}  platform.claude.com: ${YELLOW}${platform_status}${NC}"
-    has_issues=1
-  fi
-  
-  if [[ $has_issues -eq 1 ]]; then
-    echo "  ${YELLOW}ℹ${NC}  Auth may fail due to service issues. Check https://status.claude.com"
+  if ! _validate_claude_code; then
+    echo "Error: Claude Code is not logged in (run: claude auth login)" >&2
     return 1
   fi
-  
-  return 0
-}
-
-# Check GitHub Copilot service status from githubstatus.com
-# Returns 0 if operational, 1 if there are issues
-# Prints status information to stdout
-function _check_github_copilot_status() {
-  local status_json=$(curl -sL --max-time 5 https://www.githubstatus.com/api/v2/components.json 2>/dev/null)
-  
-  # If curl failed or returned empty, assume services are operational (fail open)
-  if [[ -z "$status_json" ]] || [[ "$status_json" == *"<html"* ]]; then
-    return 0
-  fi
-  
-  # Extract statuses using jq if available, otherwise use grep
-  local copilot_status=""
-  local api_status=""
-  
-  if command -v jq &>/dev/null; then
-    copilot_status=$(echo "$status_json" | jq -r '.components[] | select(.name=="Copilot") | .status' 2>/dev/null)
-    api_status=$(echo "$status_json" | jq -r '.components[] | select(.name=="API Requests") | .status' 2>/dev/null)
-  else
-    # Fallback to grep/sed if jq not available
-    copilot_status=$(echo "$status_json" | grep -o '"name":"Copilot"[^}]*"status":"[^"]*"' | sed -n 's/.*"status":"\([^"]*\)".*/\1/p')
-    api_status=$(echo "$status_json" | grep -o '"name":"API Requests"[^}]*"status":"[^"]*"' | sed -n 's/.*"status":"\([^"]*\)".*/\1/p')
-  fi
-  
-  # Check if any service has issues
-  local has_issues=0
-  local RED='\033[0;31m'
-  local YELLOW='\033[1;33m'
-  local NC='\033[0m'
-  
-  if [[ "$copilot_status" == "partial_outage" ]] || [[ "$copilot_status" == "major_outage" ]] || [[ "$copilot_status" == "degraded_performance" ]]; then
-    echo "  ${RED}⚠${NC}  GitHub Copilot: ${YELLOW}${copilot_status}${NC}"
-    has_issues=1
-  fi
-  
-  if [[ "$api_status" == "partial_outage" ]] || [[ "$api_status" == "major_outage" ]] || [[ "$api_status" == "degraded_performance" ]]; then
-    echo "  ${RED}⚠${NC}  GitHub API: ${YELLOW}${api_status}${NC}"
-    has_issues=1
-  fi
-  
-  if [[ $has_issues -eq 1 ]]; then
-    echo "  ${YELLOW}ℹ${NC}  Auth may fail due to service issues. Check https://www.githubstatus.com"
+  local schema='{"type":"object","required":["issues"],"properties":{"issues":{"type":"array","items":{"type":"object",
+"required":["file","severity","issue","recommendation","category","evidence"],"properties":{"file":{"type":"string"},
+"severity":{"type":"string","enum":["Critical","Warning"]},"issue":{"type":"string"},"recommendation":{"type":"string"},
+"category":{"type":"string","enum":["secret-exposure","injection","destructive-command","broken-syntax","auth-bypass","other"]},
+"evidence":{"type":"string"}}}}}}'
+  local result exit_code errf
+  errf=$(mktemp "${TMPDIR:-/tmp}/gpa-claude-err.XXXXXX") || return 1
+  result=$(print -r -- "$prompt" | timeout "${GPA_CLAUDE_TIMEOUT:-180}s" claude -p --model "$model" --effort medium \
+    --tools "" --setting-sources "" --strict-mcp-config --disable-slash-commands --no-session-persistence \
+    --max-budget-usd "${GPA_CLAUDE_BUDGET_USD:-0.5}" --output-format json --json-schema "$schema" 2>"$errf")
+  exit_code=$?
+  local err_text=$(head -c 300 "$errf"); rm -f "$errf"
+  if [ $exit_code -eq 124 ]; then
+    echo "Error: Claude Code timeout after ${GPA_CLAUDE_TIMEOUT:-180}s" >&2
+    return 1
+  elif [ $exit_code -ne 0 ] || [[ "$(jq -r '.is_error' <<<"$result" 2>/dev/null)" != "false" ]]; then
+    # (not `.is_error // true`: jq's // treats false as missing, so it would turn every success into a failure)
+    echo "Error: Claude Code call failed (exit $exit_code): ${err_text:-$(print -r -- "$result" | head -c 200)}" >&2
     return 1
   fi
-  
-  return 0
-}
-
-function aiselect() {
-  local preference_file="$HOME/.ai_provider_preference"
-
-  if [[ "$1" == "--show" ]] || [[ "$1" == "--status" ]]; then
-    local current_provider=$(_get_ai_provider)
-    local opencode_model=$(_get_opencode_model "sonnet")
-    local opencode_haiku_model=$(_get_opencode_model "haiku")
-    
-    echo "═══════════════════════════════════════════════════════════"
-    echo "Current AI Configuration"
-    echo "═══════════════════════════════════════════════════════════"
-    echo "Active Provider: $(_provider_display_name "$current_provider")"
-    echo ""
-    echo "Interactive Sessions (aidev --direct):"
-    echo "  Mode: Full Claude Code agent with tools"
-    if [[ "$current_provider" == "claude-code" ]]; then
-      echo "  → claude (direct, uses Claude.ai subscription)"
-    else
-      echo "  Model: $opencode_model"
-      echo "  → claude (provider: $current_provider)"
-    fi
-    echo ""
-    echo "Direct API Functions (fast, lightweight):"
-    echo "  Haiku tasks  (commit msgs): $opencode_haiku_model"
-    echo "  Sonnet tasks (code review): $opencode_model"
-    echo "  Mode: Direct API calls (no agent overhead)"
-    echo "  Response time: ~5-15 seconds"
-    echo ""
-    echo "Command → Model → Mode:"
-    if [[ "$current_provider" == "claude-code" ]]; then
-      echo "  • aidev                     → planner stack: local research, Claude plan + review, OpenCode build"
-      echo "  • aidev --direct            → claude (direct) → Full Agent"
-      echo "  • gpa                       → $opencode_model → Headless review (never Anthropic directly)"
-    else
-      echo "  • aidev                     → planner stack: local research, Claude plan + review, OpenCode build"
-      echo "  • aidev --direct            → $opencode_model → Full Agent (claude)"
-      echo "  • gpa                       → $opencode_model → Headless review"
-    fi
-    echo "  • gpc (commit messages)     → $opencode_haiku_model → Direct API"
-    echo "  • gpa (code review)         → $opencode_model → Direct API"
-    echo ""
-    if [[ "$current_provider" == "llama-cpp" ]]; then
-      local endpoint="${LLAMA_CPP_HOST:-http://127.0.0.1:8080}"
-      local cloud_provider=$(_get_cloud_fallback_provider)
-      local cloud_model=$(_get_cloud_model "sonnet")
-      echo ""
-      echo "Hybrid Routing (llama.cpp + cloud escalation):"
-      echo "  Local endpoint:   $endpoint"
-      echo "  Local tier:       $(_llamacpp_model_tier)"
-      echo "  Cloud provider:   $cloud_provider"
-      echo "  Cloud model:      $cloud_model"
-      echo ""
-      echo "  gpc  → ⚪ local always  (commit messages)"
-      echo "  gpr  → ⚪ local always  (PR creation)"
-      echo "  gpa  → ⚪ local (small diffs) → 🟢 Haiku (medium) → 🔵 Sonnet (large or critical/security)"
-      echo "  aidev → ⚪ local (claude with llama.cpp, currently: $(_llamacpp_model_short))"
-    fi
-    echo ""
-    echo "Note: Run 'aiselect' to change provider. Changes apply immediately"
-    echo "      to all commands (no restart required)."
-    echo "═══════════════════════════════════════════════════════════"
+  local issues
+  issues=$(jq -c '.structured_output.issues // empty' <<<"$result" 2>/dev/null)
+  if [[ -n "$issues" ]] && jq -e 'type == "array"' <<<"$issues" >/dev/null 2>&1; then
+    print -r -- "$issues"
     return 0
   fi
-  
-  local RED='\033[0;31m'
-  local GREEN='\033[0;32m'
-  local YELLOW='\033[1;33m'
-  local NC='\033[0m'
-  local session_file="/tmp/.ai_provider_session_$(id -u)"
-
-  _aiselect_commit() {
-    local new_provider="$1"
-    echo "$new_provider" > "$preference_file"
-    echo "$new_provider" > "$session_file"
-    
-    # Clear opencode.json model if it doesn't match the new provider
-    # This prevents stale model configs from interfering with provider switching
-    local config_file="$HOME/.config/opencode/opencode.json"
-    if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
-      local current_model=$(jq -r '.model // empty' "$config_file" 2>/dev/null)
-      if [[ -n "$current_model" && "$current_model" != "null" ]]; then
-        # Check if model matches new provider
-        local model_matches=false
-        case "$new_provider" in
-          github-copilot)
-            [[ "$current_model" == github-copilot/* ]] && model_matches=true
-            ;;
-          opencode)
-            [[ "$current_model" == opencode/* ]] && model_matches=true
-            ;;
-          claude-code)
-            # Claude Code doesn't use opencode.json, clear it
-            model_matches=false
-            ;;
-          llama-cpp)
-            [[ "$current_model" == llama.cpp/* || "$current_model" == llama-cpp/* ]] && model_matches=true
-            ;;
-        esac
-        
-        # Clear mismatched model from config
-        if ! $model_matches; then
-          cp "$config_file" "$config_file.backup"
-          jq 'del(.model)' "$config_file" > "$config_file.tmp"
-          mv "$config_file.tmp" "$config_file"
-        fi
-      fi
-    fi
-  }
-
-  echo "═══════════════════════════════════════════════════════════"
-  echo "AI Provider Selection"
-  echo "═══════════════════════════════════════════════════════════"
-  echo ""
-
-  # Offline: inform user about limitations
-  if ! _is_online; then
-    echo "${YELLOW}⚠${NC}  No internet connection detected."
-    echo ""
-    echo "Cloud AI providers require internet. Available options:"
-    echo "  • Wait for internet connection to be restored"
-    if _validate_llamacpp; then
-      echo "  • llama-server is running and can be used for gpc/gpa (limited)"
-      echo ""
-      echo "Note: the local model cannot run full OpenCode sessions (context limit)"
-      echo "      but works for git commit messages and simple code review."
-    else
-      echo "  • Start llama-server for offline git commit message generation"
-      echo ""
-      echo "To start it:"
-      echo "  sudo launchctl kickstart -k system/org.nixos.llama-server-local"
-    fi
-    echo ""
-    echo "═══════════════════════════════════════════════════════════"
-    return 1
-  fi
-
-  # Check availability of all providers
-  local claude_code_status="${RED}✗${NC}"
-  local claude_code_available=false
-  if _validate_claude_code; then
-    claude_code_status="${GREEN}✓${NC}"
-    claude_code_available=true
-  elif command -v claude &>/dev/null; then
-    claude_code_status="${YELLOW}⚠${NC}"
-  fi
-
-  local github_copilot_status="${RED}✗${NC}"
-  local github_copilot_available=false
-  if _validate_github_copilot; then
-    github_copilot_status="${GREEN}✓${NC}"
-    github_copilot_available=true
-  fi
-
-  local opencode_zen_status="${RED}✗${NC}"
-  local opencode_zen_available=false
-  if _validate_opencode_zen; then
-    opencode_zen_status="${GREEN}✓${NC}"
-    opencode_zen_available=true
-  fi
-
-  local llamacpp_status="${RED}✗${NC}"
-  local llamacpp_available=false
-  if _validate_llamacpp; then
-    llamacpp_status="${GREEN}✓${NC}"
-    llamacpp_available=true
-  fi
-
-  # Display menu
-  echo "Select AI Provider:"
-  echo ""
-  echo "  1) $claude_code_status Anthropic"
-  echo "  2) $github_copilot_status GitHub Copilot"
-  echo "  3) $opencode_zen_status OpenCode Zen (API key)"
-  echo "  4) $llamacpp_status llama.cpp (local: $(_llamacpp_model_short)) -- also usable via aidev/opencode"
-  echo ""
-  echo "Note: gpc always prefers llama.cpp when reachable, and gpa does too"
-  echo "      on hosts that default to local (AI_LOCAL_DEFAULT) -- regardless"
-  echo "      of the selection below. That selection only changes which"
-  echo "      provider/model aidev and interactive opencode sessions use."
-  echo ""
-  echo -n "Selection (1-4) [Enter = llama.cpp/Gemma-4, auto-selects in 5s]: "
-  read -t 5 -r choice
-  echo ""
-  local _auto_timeout=false
-  if [[ -z "$choice" ]]; then
-    choice="4"
-    _auto_timeout=true
-  fi
-
-  case "$choice" in
-    1)
-      # Anthropic
-      if $claude_code_available; then
-        _aiselect_commit "claude-code"
-        echo "${GREEN}✓${NC} Using Anthropic"
-        echo "═══════════════════════════════════════════════════════════"
-        return 0
-      elif command -v claude &>/dev/null; then
-        echo "Claude Code installed but not authenticated."
-        
-        # Check Claude service status before attempting login
-        _check_claude_status
-        
-        echo ""
-        echo -n "Login to Claude Code? [y/N]: "
-        read -r confirm
-        if [[ "$confirm" =~ ^[Yy]$ ]]; then
-          echo ""
-          claude auth login
-          echo ""
-          if _validate_claude_code; then
-            echo "${GREEN}✓${NC} Login successful"
-            _aiselect_commit "claude-code"
-            echo "═══════════════════════════════════════════════════════════"
-            return 0
-          else
-            echo "${RED}✗${NC} Login failed or incomplete"
-            return 1
-          fi
-        else
-          echo "Cancelled."
-          return 1
-        fi
-      else
-        echo "${RED}✗${NC} Claude Code not installed"
-        echo "Install with: brew install --cask claude-code"
-        return 1
-      fi
-      ;;
-    
-    2)
-      # GitHub Copilot
-      if $github_copilot_available; then
-        _aiselect_commit "github-copilot"
-        echo "${GREEN}✓${NC} Using GitHub Copilot"
-        echo "═══════════════════════════════════════════════════════════"
-        return 0
-      else
-        echo "GitHub Copilot not authenticated."
-        
-        # Check GitHub Copilot service status
-        _check_github_copilot_status
-        
-        echo ""
-        echo -n "Login to GitHub Copilot? [y/N]: "
-        read -r confirm
-        if [[ "$confirm" =~ ^[Yy]$ ]]; then
-          echo ""
-          if command -v open &>/dev/null; then
-            open "https://github.com/login/device"
-          fi
-          opencode auth login
-          echo ""
-          if _validate_github_copilot; then
-            echo "${GREEN}✓${NC} Login successful"
-            _aiselect_commit "github-copilot"
-            echo "═══════════════════════════════════════════════════════════"
-            return 0
-          else
-            echo "${RED}✗${NC} Login failed or incomplete"
-            return 1
-          fi
-        else
-          echo "Cancelled."
-          return 1
-        fi
-      fi
-      ;;
-    
-    3)
-      # OpenCode Zen
-      if $opencode_zen_available; then
-        _aiselect_commit "opencode"
-        
-        # Interactive model selection for OpenCode Zen
-        echo "═══════════════════════════════════════════════════════════"
-        echo "OpenCode Zen Model Selection"
-        echo "═══════════════════════════════════════════════════════════"
-        echo ""
-        echo "Select model category:"
-        echo "  1) Claude Models (Paid)"
-        echo "  2) Free Models"
-        echo ""
-        echo -n "Selection (1-2): "
-        read -r category_choice
-        
-        local selected_model=""
-        
-        if [[ "$category_choice" == "1" ]]; then
-          echo ""
-          echo "Select Claude model:"
-          echo "  1) Claude Opus 4.7 (Latest, most capable)"
-          echo "  2) Claude Sonnet 4.6 (Latest, balanced)"
-          echo "  3) Claude Haiku 4.5 (Latest, fast)"
-          echo ""
-          echo -n "Selection (1-3): "
-          read -r model_choice
-          
-          case "$model_choice" in
-            1) selected_model="opencode/claude-opus-4-7" ;;
-            2) selected_model="opencode/claude-sonnet-4-6" ;;
-            3) selected_model="opencode/claude-haiku-4-5" ;;
-            *) selected_model="opencode/claude-sonnet-4-6" ;;
-          esac
-        elif [[ "$category_choice" == "2" ]]; then
-          echo ""
-          echo "Select free model:"
-          echo "  1) Big Pickle (Free)"
-          echo "  2) DeepSeek V4 Flash (Free)"
-          echo "  3) MiniMax M2.5 (Free)"
-          echo "  4) Nemotron 3 Super (Free)"
-          echo ""
-          echo -n "Selection (1-4): "
-          read -r model_choice
-          
-          case "$model_choice" in
-            1) selected_model="opencode/big-pickle" ;;
-            2) selected_model="opencode/deepseek-v4-flash-free" ;;
-            3) selected_model="opencode/minimax-m2.5-free" ;;
-            4) selected_model="opencode/nemotron-3-super-free" ;;
-            *) selected_model="opencode/big-pickle" ;;
-          esac
-        else
-          # Default to Sonnet if invalid choice
-          selected_model="opencode/claude-sonnet-4-6"
-        fi
-        
-        # Update OpenCode config with selected model
-        if command -v jq &>/dev/null; then
-          local config_file="$HOME/.config/opencode/opencode.json"
-          if [[ -f "$config_file" ]]; then
-            cp "$config_file" "$config_file.backup"
-            jq --arg model "$selected_model" '.model = $model' "$config_file" > "$config_file.tmp"
-            mv "$config_file.tmp" "$config_file"
-            echo ""
-            echo "${GREEN}✓${NC} Model set to: $selected_model"
-            echo "${GREEN}✓${NC} Config updated: $config_file"
-          fi
-        fi
-        
-        echo ""
-        echo "═══════════════════════════════════════════════════════════"
-        return 0
-      else
-        echo "${RED}✗${NC} OpenCode Zen API key not found"
-        echo ""
-        echo "API key should be automatically injected from Doppler during"
-        echo "system activation. If missing, ensure:"
-        echo "  1. You've run: darwin-rebuild switch"
-        echo "  2. Doppler is authenticated: doppler login"
-        echo "  3. Secret exists in Doppler:"
-        echo "     doppler secrets --project devices-laptops --config macbookprom2pro"
-        echo ""
-        echo "Or manually create ~/.config/opencode/.env with:"
-        echo "  OPENCODE_ZEN_API_KEY=your_api_key_here"
-        return 1
-      fi
-      ;;
-    4)
-      # llama.cpp (local)
-      if $llamacpp_available; then
-        _aiselect_commit "llama-cpp"
-
-        echo ""
-        echo "${GREEN}✓${NC} Using llama.cpp (local: $(_llamacpp_model_short))"
-        echo ""
-        echo "aidev/opencode will now use llama.cpp (currently: $(_llamacpp_model_short))."
-        echo "gpc/gpr always prefer the local LLM when reachable regardless of this"
-        echo "setting; gpa escalates to cloud on larger diffs or critical findings"
-        echo "unless this host defaults gpc/gpa/gpr to local-only (AI_LOCAL_DEFAULT)."
-        echo "═══════════════════════════════════════════════════════════"
-        return 0
-      else
-        echo "${RED}✗${NC} llama-server is not usable at ${LLAMA_CPP_HOST:-http://127.0.0.1:8080} for ${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
-        echo ""
-        echo "Start it: sudo launchctl kickstart -k system/org.nixos.llama-server-local"
-        echo "The model file is ~/models/Qwen3.5-9B-Q4_K_M.gguf and the server must listen on 127.0.0.1 only"
-        echo "(a rebuild downloads the model; see ~/models/download.log). Then re-run aiselect."
-        return 1
-      fi
-      ;;
-
-
-    
-    *)
-      echo "${RED}✗${NC} Invalid selection"
-      return 1
-      ;;
-  esac
+  echo "Error: Claude Code reply had no structured issues" >&2
+  echo "[]"
+  return 2
 }
 
 # Security audit function for AI configuration files
@@ -2375,8 +1084,6 @@ function pi() {
     -u AWS_BEARER_TOKEN_BEDROCK -u TRUENAS_API_KEY -u OPNSENSE_API_SECRET \
     command pi "${session_flags[@]}" "$@"
 }
-
-export AI_PROVIDER=$(_get_ai_provider)
 
 function _ensure_envvars_permissions() {
   [[ -f ~/.zshrc_envvars ]] && chmod 600 ~/.zshrc_envvars 2>/dev/null

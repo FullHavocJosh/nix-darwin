@@ -208,11 +208,10 @@
           fi
         fi
 
-        if command -v gh &>/dev/null; then
-          if ! gh extension list 2>/dev/null | grep -q "gh-copilot"; then
-            echo "Installing GitHub Copilot CLI extension..."
-            gh extension install github/gh-copilot 2>/dev/null || echo "Failed to install gh-copilot extension"
-          fi
+        # GitHub Copilot is retired from this setup: remove the gh-copilot extension older activations installed.
+        if command -v gh &>/dev/null && gh extension list 2>/dev/null | grep -q "gh-copilot"; then
+          echo "Removing retired GitHub Copilot CLI extension..."
+          gh extension remove gh-copilot 2>/dev/null || echo "Failed to remove gh-copilot extension"
         fi
 
         mkdir -p "$HOME/Library/Application Support/neovide"

@@ -9,7 +9,7 @@
 #
 # For sensitive data (API keys, tokens, passwords):
 #   → Use ~/.zshrc_envvars instead (ignored by git)
-#   → Configured automatically via 'aiselect' command
+#   → Injected from Doppler during darwin-rebuild activation
 #   → Stored with 600 permissions (owner read/write only)
 #
 # This file should contain:
