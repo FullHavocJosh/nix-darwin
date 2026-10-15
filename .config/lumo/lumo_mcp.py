@@ -16,6 +16,7 @@ import importlib.util
 import json
 import os
 import sys
+import time
 import urllib.request
 
 AISTACK_DIR = os.environ.get("AISTACK_DIR") or os.path.expanduser("~/.config/aistack")
@@ -25,7 +26,8 @@ REPLY_MAX = int(os.environ.get("LUMO_MCP_REPLY_CHARS", "12000"))
 QUESTION_MAX = 4000
 PROTOCOL = "2024-11-05"
 
-PROMPT = """You are the web-research tool of a coding assistant. Search the web and answer the question below.
+PROMPT = """You are the web-research tool of a coding assistant. Today is {today}. Use your web_search tool before
+answering: do not answer from memory, your training data is older than the question.
 Prefer official documentation, release notes, man pages, registry pages and the project's own GitHub issues. Name the
 product version when it matters.
 
@@ -64,6 +66,7 @@ def lumo_search(a):
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": f"cannot load the Lumo helpers ({type(e).__name__}: {e}); nothing was sent"}
     prompt = PROMPT.format(
+        today=time.strftime("%Y-%m-%d"),
         question=redact(question[:QUESTION_MAX]),
         context=("\nWHAT THE ASSISTANT ALREADY KNOWS:\n" + redact(context[:QUESTION_MAX])) if context else "",
     )
@@ -122,7 +125,9 @@ def handle(req):
     if m == "ping":
         return {}
     if m == "tools/list":
-        return {"tools": [{"name": n, "description": d, "inputSchema": s} for n, (_, d, s) in TOOLS.items()]}
+        # anthropic/alwaysLoad: Claude Code loads the tool upfront instead of behind ToolSearch (one turn fewer)
+        return {"tools": [{"name": n, "description": d, "inputSchema": s, "_meta": {"anthropic/alwaysLoad": True}}
+                          for n, (_, d, s) in TOOLS.items()]}
     if m == "tools/call":
         p = req.get("params", {})
         tool = TOOLS.get(p.get("name"))

@@ -166,8 +166,10 @@ let
     Spend Claude tokens only on what needs Claude; free and local models take the rest:
     - Commits and PRs: gpr / gpa (the local 9B reviews; write the message yourself with -m/-d).
     - Public web research: lumo_search (WebSearch is off). WebFetch only for an exact URL you already have.
-    - Large, mechanical edits (5+ edits, several files, boilerplate): local_edit (on-device coder model) or /delegate,
-      with a test_cmd; review its diff. Small or subtle edits: make them yourself.
+    - Edits touching 3+ files or needing 5+ edits that you can state precisely: local_edit (free on-device coder
+      model) with a test_cmd, then review its diff. Measured: 3 turns/$0.09 vs 18 turns/$0.16 by hand. Pure pattern
+      replacements: one sed or python command; if that is not possible or not allowed, local_edit, not Edit by hand.
+      A single small or subtle edit: make it yourself.
     - A feature planned in this session: /aidev-handoff (free builder, one Claude review).
     - Private sources (GitHub, Terraform, Atlassian and other MCP servers) and judgment calls: yourself.
     """.replace("\n    ", "\n").rstrip() + "\n" + end

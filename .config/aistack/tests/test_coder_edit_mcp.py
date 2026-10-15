@@ -26,7 +26,10 @@ os.makedirs(REPO + "/src")
 os.makedirs(BIN)
 open(REPO + "/src/a.py", "w").write("def old_name():\n    return 1\n")
 open(REPO + "/src/b.py", "w").write("from a import old_name\nprint(old_name())\n")
-subprocess.run(f"cd {REPO} && git init -q && git add . && git -c user.name=t -c user.email=t@t commit -qm init", shell=True)
+MAIN = T + "/main"
+os.rename(REPO, MAIN)
+subprocess.run(f"cd {MAIN} && git init -q && git add . && git -c user.name=t -c user.email=t@t commit -qm init"
+               f" && git worktree add -q -b work {REPO}", shell=True)  # edits are allowed in a linked worktree only
 MODEL = T + "/model.gguf"
 open(MODEL, "w").write("stub")
 
@@ -122,6 +125,9 @@ err, out = s.call({"instruction": "RENAME x y", "files": ["/etc/hosts"]})
 check("files outside the repository are refused", err and "not inside a git repository" in out.get("error", "") or "inside the repository" in out.get("error", ""), out)
 err, out = s.call({"instruction": "RENAME x y", "files": ["src/a.py", "../outside.py"]})
 check("a path escaping the repository is refused", err and "inside the repository" in out.get("error", ""), out)
+
+err, out = s.call({"instruction": "RENAME x y", "files": [MAIN + "/src/a.py"]})
+check("a main checkout is refused (gpr worktrees only)", err and "main checkout" in out.get("error", ""), out)
 
 print("unloading")
 t0 = time.time()

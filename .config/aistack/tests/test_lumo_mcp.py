@@ -55,6 +55,7 @@ print("protocol")
 r = call([{"jsonrpc": "2.0", "id": 1, "method": "initialize"}, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}])
 check("initialize carries the WebSearch instructions", "WebSearch is disabled" in r[0]["result"]["instructions"], r[0])
 check("tools/list offers lumo_search only", [t["name"] for t in r[1]["result"]["tools"]] == ["lumo_search"], r[1])
+check("the tool asks Claude Code to load it upfront", r[1]["result"]["tools"][0].get("_meta", {}).get("anthropic/alwaysLoad") is True, r[1])
 
 print("search")
 secret = "ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"
@@ -67,6 +68,7 @@ sent = SEEN[-1]["body"]["messages"][0]["content"] if SEEN else ""
 check("the tamer key is sent as a bearer token", SEEN and SEEN[-1]["auth"] == "Bearer k1", SEEN[-1:] )
 check("secrets are redacted before the question leaves the machine", secret not in sent and "QUESTION" in sent, sent[:300])
 check("context is passed along", "tried gh auth status" in sent, sent[-200:])
+check("Lumo is told the date and to use web_search", "web_search" in sent and __import__("time").strftime("%Y-%m-%d") in sent, sent[:300])
 
 print("failures")
 r = call([{"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "lumo_search", "arguments": {"question": " "}}}])
