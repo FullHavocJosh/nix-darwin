@@ -839,6 +839,57 @@ function ainfo() {
   )
 }
 
+# aider on the local llama-server: the direct session on hosts without an OpenCode Zen API key (the work machine,
+# where only on-device models and Claude Code are allowed). -p/--print is one headless edit (`aider
+# --message`), otherwise an interactive aider chat. The coder model can differ from the one gpc/gpa use:
+# AIDEV_CODER_MODEL / AIDEV_CODER_HOST (default: LOCAL_LLM_MODEL on LLAMA_CPP_HOST). AIDEV_TEST_CMD, when set, is run
+# after each edit and its failures are fed back to the model (aider --auto-test). Nothing leaves the machine: the
+# host must be loopback, the same rule as _validate_llamacpp.
+function _aidev_aider() {
+  local RED='\033[0;31m' GREEN='\033[0;32m' NC='\033[0m'
+  local endpoint="${AIDEV_CODER_HOST:-${LLAMA_CPP_HOST:-http://127.0.0.1:8080}}"
+  local model="${AIDEV_CODER_MODEL:-${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}}"
+  case "$endpoint" in
+    http://127.0.0.1:*|http://localhost:*|http://\[::1\]:*) ;;
+    *) echo "${RED}✗${NC} AIDEV_CODER_HOST must be a loopback address, got $endpoint" >&2; return 1 ;;
+  esac
+  if ! curl -s --max-time 3 "${endpoint}/v1/models" 2>/dev/null | grep -q "\"${model}\""; then
+    echo "${RED}✗${NC} The local coder model $model is not served at $endpoint." >&2
+    return 1
+  fi
+  local print_mode=false arg
+  local -a rest
+  for arg in "$@"; do
+    if [[ "$arg" == "-p" || "$arg" == "--print" ]]; then print_mode=true; else rest+=("$arg"); fi
+  done
+  local cache="$HOME/.cache/aidev-aider" settings
+  mkdir -p "$cache"
+  settings="$cache/model-settings.yml"
+  # enable_thinking=false: Qwen3.5 otherwise spends max_tokens reasoning (see _run_aider_local); models without a
+  # thinking mode ignore the kwarg.
+  cat > "$settings" <<YAML
+- name: openai/${model}
+  edit_format: diff
+  extra_params:
+    max_tokens: 4096
+    temperature: 0
+    extra_body:
+      chat_template_kwargs:
+        enable_thinking: false
+YAML
+  local -a flags=(--model "openai/$model" --openai-api-base "${endpoint}/v1" --openai-api-key sk-local
+    --model-settings-file "$settings" --no-auto-commits --no-gitignore --no-check-update --no-analytics
+    --no-show-model-warnings --no-detect-urls --input-history-file "$cache/input.history"
+    --chat-history-file "$cache/chat.history.md")
+  [[ -n "${AIDEV_TEST_CMD:-}" ]] && flags+=(--test-cmd "$AIDEV_TEST_CMD" --auto-test)
+  echo "${GREEN}✓${NC} aider on the local model: $model ($endpoint)"
+  if $print_mode; then
+    BROWSER=true aider "${flags[@]}" --yes-always --no-pretty --message "${rest[*]}"
+  else
+    aider "${flags[@]}" ${rest:+--message "${rest[*]}"}
+  fi
+}
+
 # The direct session: OpenCode Zen with the model opencode.json sets (Big Pickle), the stack's coding/editing agent.
 # Used by `aidev --direct`, `aidev -p`, and the gpa/gpc fix helpers, which need a model that edits a file now rather
 # than a planned run.
@@ -847,9 +898,11 @@ function _aidev_direct() {
   local RED='\033[0;31m'
   local NC='\033[0m'
 
-  if ! _validate_opencode_zen; then
-    echo "${RED}✗${NC} OpenCode Zen is not set up on this host (no API key). Run darwin-rebuild switch so Doppler injects it." >&2
-    return 1
+  # No OpenCode Zen API key on this host (the work machine, where only on-device models and Claude Code are allowed):
+  # edit with aider on the local model instead.
+  if ! _validate_opencode_zen 2>/dev/null; then
+    _aidev_aider "$@"
+    return
   fi
 
   # claude-style -p/--print means one headless call: `opencode run` (see _aidev_opencode).
