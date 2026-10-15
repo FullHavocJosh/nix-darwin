@@ -39,24 +39,6 @@
             "command": "if [ -f \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\"; fi"
           }
         ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "claudetui hook pre-edit-churn"
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|MultiEdit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ -f \"$HOME/.claude-global/hooks/token-optimizer/pretooluse-router.mjs\" ]; then node \"$HOME/.claude-global/hooks/token-optimizer/pretooluse-router.mjs\"; fi"
-          }
-        ]
       }
     ],
     "PostToolUse": [
@@ -68,35 +50,9 @@
             "command": "if [ -f \"$HOME/nix-darwin/scripts/herdr-nvim-open-edited.sh\" ]; then \"$HOME/nix-darwin/scripts/herdr-nvim-open-edited.sh\"; fi"
           }
         ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "claudetui hook post-edit-deps"
-          }
-        ]
       }
     ],
     "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "claudetui hook session-heatmap"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ -f \"$HOME/.claude-global/hooks/token-optimizer/session-start.mjs\" ]; then node \"$HOME/.claude-global/hooks/token-optimizer/session-start.mjs\"; fi"
-          }
-        ]
-      },
       {
         "matcher": "^(startup|resume|clear|compact|fork)$",
         "hooks": [
@@ -104,26 +60,6 @@
             "type": "command",
             "command": "if [ -f \"$HOME/.claude/hooks/herdr-agent-state.sh\" ]; then bash \"$HOME/.claude/hooks/herdr-agent-state.sh\" session; fi",
             "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "^(startup|resume|clear|compact|fork)$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash '/Users/jrollet/.claude/hooks/herdr-agent-state.sh' session",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ -f \"$HOME/.claude-global/hooks/token-optimizer/precompact-optimize.mjs\" ]; then node \"$HOME/.claude-global/hooks/token-optimizer/precompact-optimize.mjs\"; fi"
           }
         ]
       }

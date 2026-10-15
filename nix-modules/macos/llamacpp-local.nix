@@ -30,48 +30,70 @@ let
   # one slot (--parallel 1) gets the whole window. Same file the shell helpers source.
   profileFile = pkgs.writeText "llama-profile.sh" (builtins.readFile ../../.config/llama/profile.sh);
 
-  modelDownloader = pkgs.writeShellScript "llama-model-downloader-local" ''
-    #!/usr/bin/env bash
-    set -uo pipefail
+  # The on-demand coder model for local edits (.config/aistack/local_edit_mcp.py, the local-edit MCP server). The daemon
+  # below does not serve it: the MCP server loads it for an edit and unloads it after 2 idle minutes, because at
+  # ~19 GB it cannot stay loaded next to the 9B. Measured 2026-10-15 on the M2 Pro: 267 tok/s prefill and 24.8 tok/s
+  # generation (the 9B: 146 / 10.6), a 10-line edit in 84 s. Downloaded only on hosts with 32 GB or more.
+  coderModel = {
+    hfRepo = "lmstudio-community/Qwen3-Coder-30B-A3B-Instruct-GGUF";
+    file = "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf";
+    sizeBytes = 18632186176;
+    sha256 = "79ad15a5ee3caddc3f4ff0db33a14454a5a3eb503d7fa1c1e35feafc579de486";
+    minRamGb = 32;
+  };
 
-    MODELS_DIR="$HOME/models"
-    LOG="$MODELS_DIR/download.log"
-    LOG_PREFIX="[llama-model-downloader-local]"
-    DEST="$MODELS_DIR/${model.file}"
+  mkDownloader =
+    name: model:
+    pkgs.writeShellScript "llama-model-downloader-${name}" ''
+      #!/usr/bin/env bash
+      set -uo pipefail
 
-    mkdir -p "$MODELS_DIR"
-    log() {
-      local line
-      line="$(date '+%Y-%m-%d %H:%M:%S') $LOG_PREFIX $*"
-      if [ -t 1 ]; then echo "$line" | tee -a "$LOG"; else echo "$line" >> "$LOG"; fi
-    }
+      MODELS_DIR="$HOME/models"
+      LOG="$MODELS_DIR/download.log"
+      LOG_PREFIX="[llama-model-downloader-${name}]"
+      DEST="$MODELS_DIR/${model.file}"
 
-    verify() {
-      [ -f "$DEST" ] && [ "$(/usr/bin/shasum -a 256 "$DEST" | cut -d' ' -f1)" = "${model.sha256}" ]
-    }
+      mkdir -p "$MODELS_DIR"
+      log() {
+        local line
+        line="$(date '+%Y-%m-%d %H:%M:%S') $LOG_PREFIX $*"
+        if [ -t 1 ]; then echo "$line" | tee -a "$LOG"; else echo "$line" >> "$LOG"; fi
+      }
 
-    # Hashing 5.6GB takes a few seconds; only do it when the size already matches.
-    SIZE=$(stat -f %z "$DEST" 2>/dev/null || echo 0)
-    if [ "$SIZE" = "${toString model.sizeBytes}" ] && verify; then
-      log "${model.file}: present and verified -- skipping"
-      exit 0
-    fi
+      verify() {
+        [ -f "$DEST" ] && [ "$(/usr/bin/shasum -a 256 "$DEST" | cut -d' ' -f1)" = "${model.sha256}" ]
+      }
 
-    log "${model.file}: downloading from ${model.hfRepo} (resumes a partial file)"
-    if ! ${pkgs.curl}/bin/curl -fL -C - --retry 5 --retry-delay 10 --retry-max-time 3600 \
-        --connect-timeout 30 -o "$DEST" \
-        "https://huggingface.co/${model.hfRepo}/resolve/main/${model.file}" >> "$LOG" 2>&1; then
-      log "ERROR: download failed -- see $LOG"
-      exit 1
-    fi
-    if verify; then
-      log "${model.file}: download complete, sha256 verified"
-    else
-      log "ERROR: ${model.file}: sha256 mismatch -- removing it"
-      rm -f "$DEST"
-      exit 1
-    fi
-  '';
+      RAM_GB=$(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1073741824 ))
+      if [ "$RAM_GB" -lt ${toString (model.minRamGb or 0)} ]; then
+        log "${model.file}: skipped, this host has $RAM_GB GB (needs ${toString (model.minRamGb or 0)} GB)"
+        exit 0
+      fi
+
+      # Hashing several GB takes a few seconds; only do it when the size already matches.
+      SIZE=$(stat -f %z "$DEST" 2>/dev/null || echo 0)
+      if [ "$SIZE" = "${toString model.sizeBytes}" ] && verify; then
+        log "${model.file}: present and verified -- skipping"
+        exit 0
+      fi
+
+      log "${model.file}: downloading from ${model.hfRepo} (resumes a partial file)"
+      if ! ${pkgs.curl}/bin/curl -fL -C - --retry 5 --retry-delay 10 --retry-max-time 3600 \
+          --connect-timeout 30 -o "$DEST" \
+          "https://huggingface.co/${model.hfRepo}/resolve/main/${model.file}" >> "$LOG" 2>&1; then
+        log "ERROR: download failed -- see $LOG"
+        exit 1
+      fi
+      if verify; then
+        log "${model.file}: download complete, sha256 verified"
+      else
+        log "ERROR: ${model.file}: sha256 mismatch -- removing it"
+        rm -f "$DEST"
+        exit 1
+      fi
+    '';
+  modelDownloader = mkDownloader "local" model;
+  coderDownloader = mkDownloader "coder" coderModel;
 
   serverLauncher = pkgs.writeShellScript "llama-server-local-launcher" ''
     #!/usr/bin/env bash
@@ -128,6 +150,8 @@ in
   environment.variables = {
     LLAMA_CPP_HOST = lib.mkForce "http://${bindHost}:${toString port}";
     LOCAL_LLM_MODEL = modelAlias;
+    # local_edit_mcp.py's coder model (absent on hosts below 32 GB, where the tool reports it is unavailable)
+    LOCAL_EDIT_MODEL_FILE = "/Users/${username}/models/${coderModel.file}";
   };
 
   # Must be `postActivation` (via lib.mkAfter, which merges with the other
@@ -138,7 +162,7 @@ in
   system.activationScripts.postActivation.text = lib.mkAfter ''
     sudo --set-home -u ${username} bash <<'USERSCRIPT'
     mkdir -p "$HOME/models"
-    nohup ${modelDownloader} </dev/null >>"$HOME/models/download.log" 2>&1 &
+    nohup bash -c '${modelDownloader}; ${coderDownloader}' </dev/null >>"$HOME/models/download.log" 2>&1 &
     disown
     echo "[llama-model-downloader-local] Model check running in background -- tail ~/models/download.log"
     USERSCRIPT

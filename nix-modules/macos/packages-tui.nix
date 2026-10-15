@@ -84,47 +84,8 @@ let
         "refreshInterval": 10,
     }
 
-    hooks = settings.get("hooks", {})
-
-    hook_configs = [
-        {
-            "event": "SessionStart",
-            "matcher": "",
-            "command": "claudetui hook session-heatmap",
-        },
-        {
-            "event": "PreToolUse",
-            "matcher": "Edit|Write",
-            "command": "claudetui hook pre-edit-churn",
-        },
-        {
-            "event": "PostToolUse",
-            "matcher": "Edit|Write",
-            "command": "claudetui hook post-edit-deps",
-        },
-    ]
-
-    for cfg in hook_configs:
-        event = cfg["event"]
-        if event not in hooks:
-            hooks[event] = []
-
-        already_exists = False
-        for rule in hooks[event]:
-            for h in rule.get("hooks", []):
-                if h.get("command") == cfg["command"]:
-                    already_exists = True
-                    break
-            if already_exists:
-                break
-
-        if not already_exists:
-            hooks[event].append({
-                "matcher": cfg["matcher"],
-                "hooks": [{"type": "command", "command": cfg["command"]}],
-            })
-
-    settings["hooks"] = hooks
+    # claudetui's hooks (session heatmap, edit churn, edit deps) are not installed: they added ~1.5K tokens to every
+    # session start and notes to most edits, re-read on every later turn, for advice that was rarely acted on.
 
     Path(settings_file).parent.mkdir(parents=True, exist_ok=True)
     tmp = settings_file + ".tmp"
@@ -149,6 +110,78 @@ let
 
         touch "$SETUP_MARKER"
         echo "[claude-tui] Setup completed successfully"
+  '';
+
+  # Keeps ~/.claude/settings.json free of hooks from retired tools and routes web search through Lumo:
+  #   - removes token-optimizer-mcp's hooks and claude-tui's hooks (see tokenOptimizationSetup / claudeTuiSetup)
+  #   - denies the built-in WebSearch; the lumo MCP server (.config/lumo/lumo_mcp.py) answers web questions instead.
+  #     WebFetch stays allowed for reading one exact page.
+  # Silent when already in place.
+  claudeSettingsCleanup = pkgs.writeShellScript "claude-settings-cleanup" ''
+    set -euo pipefail
+    path="$HOME/.claude/settings.json"
+    [ -f "$path" ] || exit 0
+    python3 - "$path" <<'PYEOF'
+    import json, os, sys
+    path = sys.argv[1]
+    with open(path) as f:
+        settings = json.load(f)
+    before = json.dumps(settings, sort_keys=True)
+    def retired(cmd):
+        return "token-optimizer" in cmd or cmd.startswith("claudetui hook")
+    hooks = settings.get("hooks", {})
+    for event in list(hooks):
+        kept = []
+        for rule in hooks[event]:
+            rule["hooks"] = [h for h in rule.get("hooks", []) if not retired(h.get("command", ""))]
+            if rule["hooks"]:
+                kept.append(rule)
+        if kept:
+            hooks[event] = kept
+        else:
+            del hooks[event]
+    deny = settings.setdefault("permissions", {}).setdefault("deny", [])
+    if "WebSearch" not in deny:
+        deny.append("WebSearch")
+    if json.dumps(settings, sort_keys=True) != before:
+        with open(path + ".tmp", "w") as f:
+            json.dump(settings, f, indent=2)
+            f.write("\n")
+        os.replace(path + ".tmp", path)
+        print("[claude] Removed retired hooks / denied WebSearch in settings.json")
+    PYEOF
+  '';
+
+  # The model-routing rules in ~/.claude/CLAUDE.md: which work goes to free and local models instead of Claude. Kept
+  # between markers and rewritten when the text here changes, so an edit replaces the block instead of appending.
+  claudeRoutingRules = pkgs.writeShellScript "claude-routing-rules" ''
+    set -euo pipefail
+    mkdir -p "$HOME/.claude"
+    python3 - "$HOME/.claude/CLAUDE.md" <<'PYEOF'
+    import os, re, sys
+    path = sys.argv[1]
+    begin, end = "<!-- nix-darwin: model routing (begin) -->", "<!-- nix-darwin: model routing (end) -->"
+    block = begin + """
+    ## Model routing
+    Spend Claude tokens only on what needs Claude; free and local models take the rest:
+    - Commits and PRs: gpr / gpa (the local 9B reviews; write the message yourself with -m/-d).
+    - Public web research: lumo_search (WebSearch is off). WebFetch only for an exact URL you already have.
+    - Large, mechanical edits (5+ edits, several files, boilerplate): local_edit (on-device coder model) or /delegate,
+      with a test_cmd; review its diff. Small or subtle edits: make them yourself.
+    - A feature planned in this session: /aidev-handoff (free builder, one Claude review).
+    - Private sources (GitHub, Terraform, Atlassian and other MCP servers) and judgment calls: yourself.
+    """.replace("\n    ", "\n").rstrip() + "\n" + end
+    text = open(path).read() if os.path.exists(path) else ""
+    if begin in text and end in text:
+        new = re.sub(re.escape(begin) + ".*?" + re.escape(end), lambda m: block, text, flags=re.S)
+    else:
+        new = text.rstrip("\n") + ("\n\n" if text.strip() else "") + block + "\n"
+    if new != text:
+        with open(path + ".tmp", "w") as f:
+            f.write(new)
+        os.replace(path + ".tmp", path)
+        print("[claude] Updated the model-routing rules in CLAUDE.md")
+    PYEOF
   '';
 
   # No agent attribution in commits or PR descriptions, on every machine and
@@ -189,11 +222,9 @@ let
     fi
   '';
 
-  # Vetted 2026-09-16: all four are real, actively maintained OSS projects
-  # (see PR description for the per-tool footprint writeup). token-savior is
-  # registered as an MCP server via claude-desktop-mcp.json; this script only
-  # does the parts that json sync can't (venv creation, npm global install,
-  # the caveman plugin, and the CLAUDE.md rules drop-in).
+  # AI tool installs that the MCP json sync can't do: pi and ralph-tui (aidev), the caveman plugin, and the
+  # uninstall of retired token-optimizer-mcp. token-savior and the claude-token-efficient CLAUDE.md rules were
+  # dropped on 2026-10-15 (token-savior was never called in 60 days; ~/bench/venv-tokensavior can be deleted).
   tokenOptimizationSetup = pkgs.writeShellScript "token-optimization-setup" ''
         #!/usr/bin/env bash
         set -uo pipefail
@@ -201,53 +232,12 @@ let
         MARKER_DIR="$HOME/.claude/.token-optimization"
         mkdir -p "$MARKER_DIR"
 
-        # --- token-savior: symbol-navigation MCP server, isolated venv ---
-        if [ ! -x "$HOME/bench/venv-tokensavior/bin/token-savior" ]; then
-          echo "[token-optimization] Installing token-savior..."
-          if python3 -m venv "$HOME/bench/venv-tokensavior" && \
-             "$HOME/bench/venv-tokensavior/bin/pip" install --quiet 'token-savior-recall[mcp]'; then
-            echo "[token-optimization] token-savior installed."
-          else
-            echo "WARNING: token-savior install failed" >&2
-          fi
-        fi
-
-        # --- claude-token-efficient: terseness rules dropped into global CLAUDE.md ---
-        CLAUDE_MD="$HOME/.claude/CLAUDE.md"
-        RULES_MARKER="<!-- claude-token-efficient rules (github.com/drona23/claude-token-efficient) -->"
-        mkdir -p "$(dirname "$CLAUDE_MD")"
-        if [ ! -f "$CLAUDE_MD" ] || ! grep -qF "$RULES_MARKER" "$CLAUDE_MD"; then
-          echo "[token-optimization] Adding claude-token-efficient rules to CLAUDE.md..."
-          RULES=$(curl -fsSL https://raw.githubusercontent.com/drona23/claude-token-efficient/main/CLAUDE.md 2>/dev/null)
-          if [ -n "$RULES" ]; then
-            {
-              echo ""
-              echo "$RULES_MARKER"
-              echo "$RULES"
-            } >> "$CLAUDE_MD"
-            echo "[token-optimization] CLAUDE.md updated."
-          else
-            echo "WARNING: could not fetch claude-token-efficient rules" >&2
-          fi
-        fi
-
-        # --- token-optimizer-mcp: caching MCP + hooks, global npm install ---
-        if ! npm ls -g @ooples/token-optimizer-mcp &>/dev/null; then
-          echo "[token-optimization] Installing token-optimizer-mcp..."
-          npm install -g @ooples/token-optimizer-mcp 2>&1 || echo "WARNING: token-optimizer-mcp install failed" >&2
-        fi
-        if [ ! -f "$MARKER_DIR/token-optimizer-hooks-installed" ]; then
-          NPM_PREFIX=$(npm config get prefix 2>/dev/null || echo "/opt/homebrew")
-          HOOKS_SCRIPT="$NPM_PREFIX/lib/node_modules/@ooples/token-optimizer-mcp/install-hooks.sh"
-          if [ -f "$HOOKS_SCRIPT" ]; then
-            echo "[token-optimization] Installing token-optimizer-mcp hooks..."
-            if bash "$HOOKS_SCRIPT" --skip-mcp-check 2>&1; then
-              touch "$MARKER_DIR/token-optimizer-hooks-installed"
-              echo "[token-optimization] token-optimizer-mcp hooks installed."
-            else
-              echo "WARNING: token-optimizer-mcp hooks install failed" >&2
-            fi
-          fi
+        # token-optimizer-mcp is retired (2026-10-15): over 60 days its hooks forced 119 retried tool calls, its
+        # smart_edit results were ~14x the size of a built-in Edit result, and it injected text into every tool call.
+        # Uninstall the package; claudeSettingsCleanup removes its hooks from ~/.claude/settings.json.
+        if npm ls -g @ooples/token-optimizer-mcp &>/dev/null; then
+          echo "[token-optimization] Uninstalling retired token-optimizer-mcp..."
+          npm uninstall -g @ooples/token-optimizer-mcp 2>&1 || echo "WARNING: token-optimizer-mcp uninstall failed" >&2
         fi
 
         # --- pi: tier 1 of aistack, global npm install ---
@@ -476,11 +466,6 @@ in
           ${pkgs.gnused}/bin/sed -i "s|__HOME__|$HOME|g" "$HOME/.config/opencode/opencode.json"
         fi
 
-        if ! command -v claude-dashboard &>/dev/null; then
-          echo "Installing claude-dashboard..."
-          brew install seunggabi/tap/claude-dashboard 2>&1 || true
-        fi
-
         (
           ${claudeTuiSetup}
         ) || echo "WARNING: claude-tui setup failed — continuing activation" >&2
@@ -488,6 +473,24 @@ in
         (
           ${claudeNoAttributionSetup}
         ) || echo "WARNING: claude attribution setup failed — continuing activation" >&2
+
+        (
+          ${claudeSettingsCleanup}
+        ) || echo "WARNING: claude settings cleanup failed — continuing activation" >&2
+
+        (
+          ${claudeRoutingRules}
+        ) || echo "WARNING: claude routing rules failed — continuing activation" >&2
+
+        # Claude Code commands that move work to aidev's free model (see AIDEV.md):
+        #   /aidev-handoff  write an aidev plan in the session and start the run
+        #   /delegate       hand one large mechanical edit to `aidev -p` and only review it
+        mkdir -p "$HOME/.claude/commands"
+        for CMD_FILE in aidev-handoff.md delegate.md; do
+          if [ -f "$HOME/.config/aistack/$CMD_FILE" ]; then
+            ln -sfn "$HOME/.config/aistack/$CMD_FILE" "$HOME/.claude/commands/$CMD_FILE"
+          fi
+        done
 
         (
           if command -v claudetui &>/dev/null; then
@@ -510,34 +513,6 @@ in
           ${tokenOptimizationSetup}
         ) || echo "WARNING: token-optimization setup failed — continuing activation" >&2
 
-        (
-          OPCODE_APP="/Applications/opcode.app"
-          if [ ! -d "$OPCODE_APP" ]; then
-            echo "Installing Opcode desktop app..."
-            # Pinned version — update OPCODE_PINNED_VERSION and OPCODE_PINNED_SHA256 together when upgrading.
-            # Recompute checksum with: curl -fsSL <dmg-url> | shasum -a 256
-            OPCODE_PINNED_VERSION="v0.2.0"
-            OPCODE_PINNED_SHA256="9868d20b46fa3fba134049e931ef745571805b0e1919e7bad807ca454f5932f8"
-            OPCODE_DMG_URL="https://github.com/winfunc/opcode/releases/download/$OPCODE_PINNED_VERSION/opcode_''${OPCODE_PINNED_VERSION}_macos_universal.dmg"
-            echo "Downloading Opcode $OPCODE_PINNED_VERSION..."
-            OPCODE_TMPDIR=$(mktemp -d)
-            curl -fsSL "$OPCODE_DMG_URL" -o "$OPCODE_TMPDIR/opcode.dmg"
-            OPCODE_ACTUAL=$(shasum -a 256 "$OPCODE_TMPDIR/opcode.dmg" | awk '{print $1}')
-            if [ "$OPCODE_ACTUAL" != "$OPCODE_PINNED_SHA256" ]; then
-              echo "ERROR: Opcode DMG checksum mismatch — aborting install" >&2
-              rm -rf "$OPCODE_TMPDIR"
-              exit 1
-            fi
-            MOUNT="$OPCODE_TMPDIR/mnt"
-            mkdir -p "$MOUNT"
-            hdiutil attach "$OPCODE_TMPDIR/opcode.dmg" -nobrowse -mountpoint "$MOUNT" || { echo "ERROR: Failed to mount Opcode DMG" >&2; rm -rf "$OPCODE_TMPDIR"; exit 1; }
-            [ -d "$MOUNT/opcode.app" ] || { echo "ERROR: opcode.app not found in mounted DMG at $MOUNT" >&2; hdiutil detach "$MOUNT" -quiet; rm -rf "$OPCODE_TMPDIR"; exit 1; }
-            cp -R "$MOUNT/opcode.app" /Applications/
-            hdiutil detach "$MOUNT" -quiet
-            rm -rf "$OPCODE_TMPDIR"
-            echo "Opcode desktop app installed."
-          fi
-        ) || echo "WARNING: Opcode install failed — continuing activation" >&2
     USERSCRIPT
   '';
 

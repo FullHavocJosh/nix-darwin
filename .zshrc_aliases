@@ -509,7 +509,7 @@ _herdr_devlayout_new() {
 #
 # Each command runs via `zsh -ic` on the remote side: a plain ssh remote command
 # is non-interactive, so .zshrc (and its homebrew PATH setup) never sources and
-# tools like nvim/aiselect come back "command not found".
+# tools like nvim/aidev come back "command not found".
 _herdr_remote_space() {
   local name="$1" host="$2" remote_dir="$3"
   local ssh="ssh -t -i ~/.ssh/id_ed25519 $host"
@@ -620,7 +620,7 @@ alias gpr='gpr_func'
 alias gpa-clear-cache='_gpa_clear_cache'
 alias gp='git pull && git submodule update --init --recursive'
 
-alias aishow='aiselect --show'
+
 alias aistack='aidev'   # the two stacks were merged; aidev is the command
 alias lumoreauth='zsh ~/.config/lumo/reauth.sh'
 alias lumoauth='zsh ~/.config/lumo/reauth.sh --local'

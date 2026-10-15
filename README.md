@@ -237,22 +237,14 @@ Single profile focused on personal development and desktop environment.
 
 This repository includes powerful shell functions for AI-assisted development.
 
-### AI Provider Selection
+### AI Stack
 
-Configure which AI provider to use:
+Each role has one fixed tool; there is no provider picker:
 
-```bash
-aiselect              # Interactive menu
-aiselect --show       # Show current provider
-```
-
-**Supported providers:**
-
-- **Claude Code** - Anthropic Claude via Claude Code subscription
-- **GitHub Copilot** - Requires `gh auth login`
-- **OpenCode** - Requires `OPENCODE_API_KEY` in `~/.zshrc_envvars`
-- **OpenRouter** - Requires `OPENROUTER_API_KEY` in `~/.zshrc_envvars`
-- **llama.cpp** - Local inference via the managed llama-server daemon on 127.0.0.1:8080 (no API key required)
+- **gpa / gpc / gpr** - llama.cpp (local llama-server on 127.0.0.1:8080) through aider
+- **aidev / ainfo** - the local llama.cpp model in pi
+- **Coding and editing** - OpenCode Zen with Big Pickle (`aidev --direct`, `aidev -p`)
+- **Review and approval** - Claude Code with Sonnet/Opus (gpa `--tier=<model>` and critical-finding escalation)
 
 ### Key Git Functions
 

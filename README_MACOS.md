@@ -115,20 +115,14 @@ darwin-rebuild switch --flake ~/nix-darwin#macos_laptop
 
 This repository includes powerful shell functions for AI-assisted development workflows.
 
-### AI Provider Selection
+### AI Stack
 
-**`aiselect`** - Configure which AI provider to use for shell functions:
+Each role has one fixed tool; there is no provider picker:
 
-```bash
-aiselect              # Interactive menu to select provider
-aiselect --show       # Display current configuration
-```
-
-Supported providers:
-
-- **GitHub Copilot** (default) - Requires `gh auth login`
-- **OpenCode Zen** - Requires `OPENCODE_API_KEY` in `~/.zshrc_envvars`
-- **OpenRouter** - Requires `OPENROUTER_API_KEY` in `~/.zshrc_envvars`
+- **gpa / gpc / gpr** - llama.cpp (local llama-server) through aider
+- **aidev / ainfo** - the local llama.cpp model in pi
+- **Coding and editing** - OpenCode Zen with Big Pickle (`aidev --direct`, `aidev -p`)
+- **Review and approval** - Claude Code with Sonnet/Opus (gpa `--tier=<model>` and critical-finding escalation)
 
 ### Git Workflow Commands
 

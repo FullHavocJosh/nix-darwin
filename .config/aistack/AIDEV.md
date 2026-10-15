@@ -135,6 +135,40 @@ writes a report whose first line is `Verdict: PASS` or `Verdict: FAIL`. `AISTACK
 **one** review call covers the whole run. `each` reviews one task per call; `off` skips review. If a review fails the
 run pauses for the user to rework (re-run the task with the findings) or accept it as is.
 
+## Handoff from an interactive Claude Code session
+
+When a build was worked out in a normal Claude Code session, that session already holds the context, so pi's research
+and the billed `ralph_plan` call add nothing. `/aidev-handoff` (`.config/aistack/aidev-handoff.md`, linked into
+`~/.claude/commands` by activation) has Claude write `prd.json` and `verify.json` with the same rules as `PLAN_PROMPT`,
+show them to the user, and run `aidev --handoff <dir>`:
+
+- The launcher does its usual setup (tier 1 choice, Ralph config, worktree mode) but skips the local model and Lumo,
+  then calls `ralph_mcp.py --handoff <project> <dir>`.
+- `--handoff` refuses while a run of the project is active, validates the plan (same `problems` as `ralph_validate_plan`),
+  writes it to the plan dir, records it in `plan-review.json` with `source: claude-code-session`, and starts the run
+  exactly like `ralph_run` (worktree and draft PR through `gpr` in a main checkout). It prints one JSON object.
+- With no free tier-1 model it refuses unless `AISTACK_ASSUME_YES=1`: it usually runs from Claude Code's shell, where
+  nobody answers the billing question.
+- The session then stops; `aidev` in the project follows the run through pi like any other.
+
+### Delegating one edit: `local_edit`
+
+`local_edit` (`.config/aistack/local_edit_mcp.py`, an MCP server for Claude Code) is the small version of the handoff:
+for one large, mechanical, cheaply verified edit, Claude passes the exact instruction, the files and a test command;
+aider applies it with Qwen3-Coder-30B-A3B on a loopback llama-server, and Claude reviews the returned `changed`,
+`test` and capped `diff`. `/delegate` (`.config/aistack/delegate.md`) tells Claude when and how.
+
+- The 30B (~19 GB) cannot stay loaded next to the always-on 9B, so the MCP server starts it on port 8082 for an
+  edit (~16-25 s) and stops it after `LOCAL_EDIT_IDLE_S` (120 s) without use, or when the Claude session ends. A
+  server another session started is reused (`~/.cache/local-edit/server.pid`), one edit runs at a time across
+  sessions (`edit.lock`), and nobody stops the server while an edit holds the lock.
+- Only hosts with 32 GB or more download the model (`llamacpp-local.nix`, `coderModel`); elsewhere the tool says it
+  is unavailable and `/delegate` falls back to `aidev -p` (Big Pickle with a Zen key, otherwise aider on the 9B).
+- Measured 2026-10-15 on the M2 Pro for a 10-line edit: 30B 84 s (100 s with the load), 9B through aider 134-152 s,
+  Big Pickle 83 s. The 30B reads prompts at 267 tok/s and writes at 24.8 tok/s (9B: 146 / 10.6). Both local models
+  got the logic right and also changed text they were told to keep, so the review stays.
+- The 9B stays the model for gpa/gpc/gpr, aidev's pi and ainfo.
+
 ## Cost model
 
 - A **normal run has exactly two billed Claude calls**: the plan (`ralph_plan`) and the final review. Everything the
