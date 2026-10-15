@@ -152,6 +152,38 @@ let
     PYEOF
   '';
 
+  # The model-routing rules in ~/.claude/CLAUDE.md: which work goes to free and local models instead of Claude. Kept
+  # between markers and rewritten when the text here changes, so an edit replaces the block instead of appending.
+  claudeRoutingRules = pkgs.writeShellScript "claude-routing-rules" ''
+    set -euo pipefail
+    mkdir -p "$HOME/.claude"
+    python3 - "$HOME/.claude/CLAUDE.md" <<'PYEOF'
+    import os, re, sys
+    path = sys.argv[1]
+    begin, end = "<!-- nix-darwin: model routing (begin) -->", "<!-- nix-darwin: model routing (end) -->"
+    block = begin + """
+    ## Model routing
+    Spend Claude tokens only on what needs Claude; free and local models take the rest:
+    - Commits and PRs: gpr / gpa (the local 9B reviews; write the message yourself with -m/-d).
+    - Public web research: lumo_search (WebSearch is off). WebFetch only for an exact URL you already have.
+    - Large, mechanical edits (5+ edits, several files, boilerplate): local_edit (on-device coder model) or /delegate,
+      with a test_cmd; review its diff. Small or subtle edits: make them yourself.
+    - A feature planned in this session: /aidev-handoff (free builder, one Claude review).
+    - Private sources (GitHub, Terraform, Atlassian and other MCP servers) and judgment calls: yourself.
+    """.replace("\n    ", "\n").rstrip() + "\n" + end
+    text = open(path).read() if os.path.exists(path) else ""
+    if begin in text and end in text:
+        new = re.sub(re.escape(begin) + ".*?" + re.escape(end), lambda m: block, text, flags=re.S)
+    else:
+        new = text.rstrip("\n") + ("\n\n" if text.strip() else "") + block + "\n"
+    if new != text:
+        with open(path + ".tmp", "w") as f:
+            f.write(new)
+        os.replace(path + ".tmp", path)
+        print("[claude] Updated the model-routing rules in CLAUDE.md")
+    PYEOF
+  '';
+
   # No agent attribution in commits or PR descriptions, on every machine and
   # account. The attribution setting stops Claude Code adding its trailer and
   # PR footer; the CLAUDE.md rule covers text Claude writes itself (gpa -m/-d,
@@ -445,6 +477,10 @@ in
         (
           ${claudeSettingsCleanup}
         ) || echo "WARNING: claude settings cleanup failed — continuing activation" >&2
+
+        (
+          ${claudeRoutingRules}
+        ) || echo "WARNING: claude routing rules failed — continuing activation" >&2
 
         # Claude Code commands that move work to aidev's free model (see AIDEV.md):
         #   /aidev-handoff  write an aidev plan in the session and start the run

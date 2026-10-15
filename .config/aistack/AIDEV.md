@@ -151,13 +151,23 @@ show them to the user, and run `aidev --handoff <dir>`:
   nobody answers the billing question.
 - The session then stops; `aidev` in the project follows the run through pi like any other.
 
-### Delegating one edit
+### Delegating one edit: `local_edit`
 
-`/delegate` (`.config/aistack/delegate.md`) is the small version of the handoff: for one large, mechanical, cheaply
-verified edit, Claude writes a spec, runs `aidev -p` (OpenCode Zen, `opencode run --auto`), and reviews only the
-verify result and `git diff --stat`. Small or subtle edits stay with Claude: dispatch plus review costs about as many
-turns as making a small edit directly. Local Qwen is not used for this: on the same 10-line edit it took 152 s and
-missed part of the spec, where Big Pickle took 83 s and matched it.
+`local_edit` (`.config/aistack/local_edit_mcp.py`, an MCP server for Claude Code) is the small version of the handoff:
+for one large, mechanical, cheaply verified edit, Claude passes the exact instruction, the files and a test command;
+aider applies it with Qwen3-Coder-30B-A3B on a loopback llama-server, and Claude reviews the returned `changed`,
+`test` and capped `diff`. `/delegate` (`.config/aistack/delegate.md`) tells Claude when and how.
+
+- The 30B (~19 GB) cannot stay loaded next to the always-on 9B, so the MCP server starts it on port 8082 for an
+  edit (~16-25 s) and stops it after `LOCAL_EDIT_IDLE_S` (120 s) without use, or when the Claude session ends. A
+  server another session started is reused (`~/.cache/local-edit/server.pid`), one edit runs at a time across
+  sessions (`edit.lock`), and nobody stops the server while an edit holds the lock.
+- Only hosts with 32 GB or more download the model (`llamacpp-local.nix`, `coderModel`); elsewhere the tool says it
+  is unavailable and `/delegate` falls back to `aidev -p` (Big Pickle with a Zen key, otherwise aider on the 9B).
+- Measured 2026-10-15 on the M2 Pro for a 10-line edit: 30B 84 s (100 s with the load), 9B through aider 134-152 s,
+  Big Pickle 83 s. The 30B reads prompts at 267 tok/s and writes at 24.8 tok/s (9B: 146 / 10.6). Both local models
+  got the logic right and also changed text they were told to keep, so the review stays.
+- The 9B stays the model for gpa/gpc/gpr, aidev's pi and ainfo.
 
 ## Cost model
 
