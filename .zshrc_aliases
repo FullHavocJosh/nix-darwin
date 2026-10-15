@@ -568,9 +568,6 @@ _herdr_dev() {
     repo="${repo%/}"
     base="$(basename "$repo")"
     [ -e "$repo/.git" ] || continue
-    case "$base" in
-      claude-howto|codebase-to-course) continue ;;
-    esac
     _herdr_devlayout "$base" "$repo"
   done
   # ~/pscloudops (work laptop only) holds its repos one level down, which the scan above never reaches.

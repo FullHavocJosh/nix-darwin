@@ -1,23 +1,5 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "provider": {
-    "llamacpp": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "llama.cpp",
-      "options": {
-        "baseURL": "{env:LLAMA_CPP_HOST}/v1"
-      },
-      "models": {
-        "qwen/qwen3.5-9b": {
-          "name": "Qwen3.5 9B (llama.cpp)",
-          "limit": {
-            "context": 32768,
-            "output": 8192
-          }
-        }
-      }
-    }
-  },
   "tools": {
     "read": true,
     "grep": true,
@@ -122,8 +104,6 @@
     "webfetch": "allow",
     "doom_loop": "ask",
     "external_directory": {
-      "~/codebase-to-course": "allow",
-      "~/claude-howto": "allow",
       "*": "ask"
     }
   },
@@ -241,11 +221,20 @@
   "mcp": {
     "context-guardian-perfectserve": {
       "type": "local",
-      "command": ["node", "{env:HOME}/mcp-context-guardian-perfectserve/dist/index.js"]
+      "command": [
+        "node",
+        "{env:HOME}/mcp-context-guardian-perfectserve/dist/index.js"
+      ]
     },
     "mcp-stack-fullhavoc": {
       "type": "local",
-      "command": ["uv", "run", "--project", "{env:HOME}/mcp-stack-fullhavoc", "mcp-stack-fullhavoc"],
+      "command": [
+        "uv",
+        "run",
+        "--project",
+        "{env:HOME}/mcp-stack-fullhavoc",
+        "mcp-stack-fullhavoc"
+      ],
       "environment": {
         "VG_THRESHOLDS": "comment_ratio=0.4,pr_words=350,ticket_words=500,similarity=0.75,fixme_chatter=5"
       }
