@@ -10,7 +10,7 @@ Why a driver instead of one `ralph-tui run` over the whole PRD:
   * Escalation (worker -> fallback agent), a read-only review pass, and "wait for the user" all live here.
 
 Everything is file based under <state>/runs/<run_id>/ so the MCP bridge (and a restarted chat session) can read
-state, and write control messages, without talking to this process. <state> is ~/.aistack/<project key> (never the
+state, and write control messages, without talking to this process. <state> is ~/.ai/aidev/<project key> (never the
 repository): plan files, runs, questions, reviews, progress, Ralph's own .ralph-tui and its iteration logs all live
 there. Only the agents' code changes land in the work dir (the git worktree, or the project itself).
 """

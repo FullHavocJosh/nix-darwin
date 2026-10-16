@@ -64,6 +64,9 @@ check("Write and NotebookEdit too", decision("Write", {"file_path": "/Users/x/re
 check("~/.claude/settings.json is not Claude's own file", decision("Edit", {"file_path": HOME + "/.claude/settings.json"}) == "deny")
 check("the scratchpad, memory and plans stay writable", all(decision("Write", {"file_path": p}) is None for p in (
     f"/private/tmp/claude-{UID}/proj/sess/scratchpad/x.py", HOME + "/.claude/projects/p/memory/m.md", HOME + "/.claude/plans/p.md")))
+check("~/.ai is writable (RFC 0003), ~/.ai/guard is not", all(decision("Write", {"file_path": p}, env={"AI_HOME": T + "/ai"}) is None for p in (
+    T + "/ai/rfcs/2026-10-16-x.md", T + "/ai/aidev/p/plan/PLAN.txt")) and all(decision("Write", {"file_path": p}, env={"AI_HOME": T + "/ai"}) == "deny" for p in (
+    T + "/ai/guard/advisor/s1.off", T + "/ai/guard", T + "/ai-other/x.md")))
 d = run("Bash", {"command": "rm -rf build"})
 check("a changing command is refused, asking for the command and an explanation", d and d["permissionDecision"] == "deny"
       and "! <command>" in d["permissionDecisionReason"] and "undo" in d["permissionDecisionReason"], d)

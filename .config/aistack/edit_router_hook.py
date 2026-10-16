@@ -30,7 +30,7 @@ EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 DELEGATES = {"mcp__local-edit__local_edit", "mcp__oczen__oczen_edit"}
 MAX_HAND_FILES = int(os.environ.get("CLAUDE_EDIT_ROUTER_FILES", "3"))
 HOME = os.path.expanduser("~")
-STATE_DIR = os.environ.get("CLAUDE_EDIT_ROUTER_STATE") or os.path.join(HOME, ".cache", "edit-router")
+STATE_DIR = os.environ.get("CLAUDE_EDIT_ROUTER_STATE") or os.path.join(os.environ.get("AI_HOME") or os.path.join(HOME, ".ai"), "guard", "edit-router")
 CODER_MODEL = os.environ.get("LOCAL_EDIT_MODEL_FILE") or os.path.join(HOME, "models", "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf")
 
 

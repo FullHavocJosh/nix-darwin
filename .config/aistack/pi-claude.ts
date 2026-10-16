@@ -6,7 +6,7 @@
 //
 //   - One Claude Code session per pi session: the first message starts it with --session-id <uuid>, later ones
 //     --resume it. pi writes no session file when its own model never answers, so the last Claude session of each
-//     directory is kept in ~/.cache/aistack-pi-ai/claude-sessions.json, and `ai -c` continues it.
+//     directory is kept in ~/.ai/ai/claude-sessions.json, and `ai -c` continues it.
 //   - Commands the user runs with pi's `!cmd` are passed to Claude, with their output, ahead of the next message.
 //   - /advisor on|off|status switches Claude Code's advisor mode for this conversation (advisor_hook.py keys its
 //     switch by the Claude session id, which pi's own shell does not have).
@@ -27,7 +27,7 @@ const CLAUDE = process.env.AI_CLAUDE_BIN || "claude";
 const ADVISOR = path.join(homedir(), ".config", "aistack", "advisor_hook.py");
 const STATE = path.join(
   process.env.PI_CODING_AGENT_DIR ||
-    path.join(homedir(), ".cache", "aistack-pi-ai"),
+    path.join(process.env.AI_HOME || path.join(homedir(), ".ai"), "ai"),
   "claude-sessions.json",
 );
 const CONTINUE = process.argv.some((a) => a === "-c" || a === "--continue");

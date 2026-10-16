@@ -100,12 +100,18 @@
       ":(){ :|:& };:": "deny",
       "*": "ask"
     },
-    "edit": "ask",
+    "edit": {
+      "*": "ask",
+      "~/.ai/**": "allow",
+      "~/.ai/guard/**": "deny"
+    },
     "webfetch": "allow",
     "websearch": "deny",
     "doom_loop": "ask",
     "external_directory": {
-      "*": "ask"
+      "*": "ask",
+      "~/.ai/**": "allow",
+      "~/.ai/guard/**": "deny"
     }
   },
   "lsp": {
@@ -185,7 +191,11 @@
       "mode": "primary",
       "description": "Advisor mode (default): investigates and reviews; you run every change. Tab to build to let it edit.",
       "permission": {
-        "edit": "deny"
+        "edit": {
+          "*": "deny",
+          "~/.ai/**": "allow",
+          "~/.ai/guard/**": "deny"
+        }
       }
     },
     "build": {
@@ -201,8 +211,16 @@
         "webfetch": true
       },
       "permission": {
-        "edit": "ask",
-        "write": "ask",
+        "edit": {
+          "*": "ask",
+          "~/.ai/**": "allow",
+          "~/.ai/guard/**": "deny"
+        },
+        "write": {
+          "*": "ask",
+          "~/.ai/**": "allow",
+          "~/.ai/guard/**": "deny"
+        },
         "bash": {
           "rm -rf /": "deny",
           "rm -rf /*": "deny",

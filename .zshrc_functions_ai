@@ -367,12 +367,12 @@ function _aistack_repo_private() {
 #   build      a free OpenCode Zen model, one task at a time (Claude only when there is none)     free
 #   review     Claude Code, once for the whole run; it builds a task only if it keeps failing     BILLED
 #
-# The run itself is ~/.config/aistack/ralph_driver.py (detached, state under ~/.aistack/<project>/runs/): one task at
+# The run itself is ~/.config/aistack/ralph_driver.py (detached, state under ~/.ai/aidev/<project>/runs/): one task at
 # a time through `ralph-tui run`, a task only counts as done when its verify commands exit 0, retry then escalate,
 # agents can ask you questions, and a failed review pauses for your decision. pi reaches it through ralph_mcp.py.
 #
 # Nothing is written into the repository while planning: plan files, runs, reviews and Ralph's own state live in
-# ~/.aistack/<project>-<hash> (AISTACK_HOME overrides). In the main checkout of a git repo a gpr worktree + draft PR is
+# ~/.ai/aidev/<project>-<hash> (AISTACK_HOME overrides). In the main checkout of a git repo a gpr worktree + draft PR is
 # created when you confirm the plan, and the agents work there. Nothing is committed: use gpc/gpa when you are happy.
 #
 # The AISTACK_* names of the settings and ~/.config/aistack are kept from before the two commands were merged.
@@ -380,7 +380,7 @@ function _aistack_repo_private() {
 function _aidev_stack() {
   local task="$*"
   local adir="${AISTACK_DIR:-$HOME/.config/aistack}"
-  local cache_dir="$HOME/.cache/nix-darwin-ai"
+  local cache_dir="${AI_HOME:-$HOME/.ai}/cache"
   local endpoint="${LLAMA_CPP_HOST:-http://127.0.0.1:8080}"
   local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
   local f reply
@@ -388,7 +388,7 @@ function _aidev_stack() {
   # (one request, up to 300 s), then one Claude call (AISTACK_PLAN_TIMEOUT_S, 280 s): 480 + 300 + 280 = 1060.
   local stack_name="aidev" mcp_timeout=1200
   local -a need_files
-  need_files=(ralph_mcp.py ralph_driver.py coder_pi.py local_edit_mcp.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh claude-plan.sh claude-fetch.sh zen_models.py zen-policy.json)
+  need_files=(ralph_mcp.py ai_home.py ralph_driver.py coder_pi.py local_edit_mcp.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh claude-plan.sh claude-fetch.sh zen_models.py zen-policy.json)
 
   # ---- preflight ---------------------------------------------------------------------------------------------
   for f in $need_files; do
@@ -428,7 +428,7 @@ function _aidev_stack() {
 
   # ---- project and state ---------------------------------------------------------------------------------------
   # Nothing aistack-related is ever written into the repository: plan files, runs, questions, reviews and Ralph's
-  # own state live in ~/.aistack/<project key> (AISTACK_HOME overrides ~/.aistack). Planning only reads the project.
+  # own state live in ~/.ai/aidev/<project key> (AISTACK_HOME overrides ~/.ai/aidev). Planning only reads the project.
   # In a main checkout the agents' worktree + draft PR is created by ralph_run once you have confirmed the plan.
   local project repo_root wt_mode="none"
   repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
@@ -440,7 +440,7 @@ function _aidev_stack() {
   else
     project="$PWD"
   fi
-  local aihome="${AISTACK_HOME:-$HOME/.aistack}" aihome_real
+  local aihome="${AISTACK_HOME:-${AI_HOME:-$HOME/.ai}/aidev}" aihome_real
   mkdir -p "$aihome" 2>/dev/null
   aihome_real=$(cd "$aihome" 2>/dev/null && pwd -P)
   if [[ -z "$aihome_real" ]] || git -C "$aihome_real" rev-parse --show-toplevel >/dev/null 2>&1; then
@@ -657,7 +657,7 @@ TOML
   #   ralph_plan                          hands the research to Lumo and Claude Code; it never plans or answers itself
   #   ralph_update_task                   the one way to change a plan; it can only touch the plan files
   # pi's --tools is an allowlist, so anything not named here does not exist for the model.
-  local tools="mcp__ralph__repo_tree,mcp__ralph__repo_read,mcp__ralph__repo_grep,mcp__ralph__ralph_validate_plan,mcp__ralph__ralph_plan,mcp__ralph__ralph_update_task,mcp__ralph__ralph_run,mcp__ralph__ralph_status,mcp__ralph__ralph_respond,mcp__ralph__ralph_cancel,mcp__ralph__ralph_runs,$github_tools"
+  local tools="mcp__ralph__repo_tree,mcp__ralph__repo_read,mcp__ralph__repo_grep,mcp__ralph__ralph_validate_plan,mcp__ralph__ralph_plan,mcp__ralph__ralph_update_task,mcp__ralph__ralph_run,mcp__ralph__ralph_status,mcp__ralph__ralph_respond,mcp__ralph__ralph_cancel,mcp__ralph__ralph_runs,mcp__ralph__ralph_save_rfc,$github_tools"
   local builder="${zen_model:-claude}"; [[ "$worker" == "coder-30b" ]] && builder="30b${escalate:+, then $zen_model}"
   local session_name="aidev: research local, plan claude, build $builder, review claude"
   # A small model weighs the last thing it read most, so the request itself carries the rules.
@@ -724,6 +724,7 @@ function _aidev_opencode() {
 #                                AIDEV_TEST_CMD goes on to Big Pickle when there is a Zen key (any flag means --direct)
 #   aidev --handoff DIR          run a plan an interactive Claude Code session wrote (DIR/prd.json, DIR/verify.json;
 #                                the /aidev-handoff command writes them): no pi, no billed planning call
+#   aidev --rfc FILE [words...]  plan from an RFC any tool saved (RFC 0003; a bare name is looked up in ~/.ai/rfcs)
 #
 # Who does what:  the local model in pi talks to you, finds the code and follows the run (free);  Lumo adds a draft
 # with online research when MacMiniM1 is reachable (free);  Claude Code writes the plan in ONE call from that research
@@ -731,11 +732,12 @@ function _aidev_opencode() {
 # Claude, billed);  Claude Code reviews once at the end. The relay runs with thinking off (AISTACK_RELAY_THINKING).
 # The stack itself is _aidev_stack above. `aistack` is an alias for this command.
 function aidev() {
-  local direct=false handoff=""
+  local direct=false handoff="" rfc=""
   local -a rest
   while (( $# )); do
     case "$1" in
       --handoff) handoff="$2"; shift 2; continue ;;
+      --rfc) rfc="$2"; shift 2; continue ;;
       --direct) direct=true ;;
       -*) direct=true; rest+=("$1") ;;
       *) rest+=("$1") ;;
@@ -748,6 +750,24 @@ function aidev() {
       return 1
     fi
     AIDEV_HANDOFF_DIR="${handoff:A}" _aidev_stack
+    return
+  fi
+  if [[ -n "$rfc" ]]; then
+    local rdir="${AI_HOME:-$HOME/.ai}/rfcs" rfile="" f
+    for f in "$rfc" "$rdir/$rfc" "$rdir/$rfc.md"; do
+      [[ -f "$f" ]] && { rfile="${f:A}"; break; }
+    done
+    if [[ -z "$rfile" ]]; then
+      echo "✗ aidev --rfc: no RFC '$rfc' (a path, or a name in $rdir)." >&2
+      return 1
+    fi
+    if (( $(wc -c <"$rfile") > 40000 )); then
+      echo "✗ aidev --rfc: $rfile is over 40000 bytes; trim it first." >&2
+      return 1
+    fi
+    _aidev_stack "Carry out the RFC saved at $rfile (another session wrote it; plan from it, and check its claims against the project).${rest:+ Also: ${rest[*]}}
+
+$(<"$rfile")"
     return
   fi
   if $direct; then
@@ -767,7 +787,7 @@ function aidev() {
 # Run commands yourself with pi's `!cmd`; Claude sees them and their output with your next message.
 # AI_CLAUDE_MODEL (default sonnet) picks the model; AI_CLAUDE_ARGS adds claude flags. ainfo and aidev are separate.
 function ai() {
-  local sdir="${AISTACK_DIR:-$HOME/.config/aistack}" pi_dir="${XDG_CACHE_HOME:-$HOME/.cache}/aistack-pi-ai"
+  local sdir="${AISTACK_DIR:-$HOME/.config/aistack}" pi_dir="${AI_HOME:-$HOME/.ai}/ai"
   local model="${AI_CLAUDE_MODEL:-sonnet}"
   if ! command -v claude &>/dev/null; then
     echo "✗ ai needs Claude Code (claude) on PATH" >&2
@@ -795,7 +815,7 @@ function ai() {
 #
 # Read-only is enforced outside Claude Code: ~/.config/ainfo/ainfo_guard.py is a default-deny PreToolUse hook passed with
 # --settings (a plain `claude` run never loads it), Claude runs under a sandbox profile that refuses file writes, and
-# the writing built-in tools are disallowed. AWS: the aws CLI with *-ro (OpsReadOnly) profiles and read operations only. Transcripts and state: ~/.ainfo/<project>-<hash> (never inside a repository).
+# the writing built-in tools are disallowed. AWS: the aws CLI with *-ro (OpsReadOnly) profiles and read operations only. Transcripts and state: ~/.ai/ainfo/<project>-<hash> (never inside a repository).
 # AINFO_DIR overrides ~/.config/ainfo; AINFO_MAX_CLAUDE_CALLS (3) and AINFO_MAX_LUMO_CALLS (2) cap one question;
 # AINFO_CLAUDE_BUDGET_USD (2.0) caps one Claude call; AINFO_SANDBOX=off drops the sandbox profile.
 function ainfo() {
@@ -821,7 +841,9 @@ function ainfo() {
   for f in ainfo_mcp.py ainfo_guard.py ainfo-prompt.md claude-system.md lumo-prompt.md; do
     [[ -e "$adir/$f" ]] || { echo "✗ $adir/$f is missing -- run darwin-rebuild so the ainfo files are stowed." >&2; return 1; }
   done
-  [[ -e "$sdir/ralph_mcp.py" ]] || { echo "✗ $sdir/ralph_mcp.py is missing (ainfo reuses its Lumo endpoint lookup)." >&2; return 1; }
+  for f in ralph_mcp.py ai_home.py; do
+    [[ -e "$sdir/$f" ]] || { echo "✗ $sdir/$f is missing (ainfo reuses its Lumo endpoint lookup and RFC writer)." >&2; return 1; }
+  done
   command -v pi >/dev/null || { echo "✗ pi is not installed." >&2; return 1; }
   command -v python3 >/dev/null || { echo "✗ python3 is not installed." >&2; return 1; }
   command -v jq >/dev/null || { echo "✗ jq is not installed." >&2; return 1; }
@@ -837,7 +859,7 @@ function ainfo() {
   local project repo_root
   repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
   project="${repo_root:-$PWD}"
-  local aihome="${AINFO_HOME:-$HOME/.ainfo}" aihome_real
+  local aihome="${AINFO_HOME:-${AI_HOME:-$HOME/.ai}/ainfo}" aihome_real
   mkdir -p "$aihome" 2>/dev/null
   aihome_real=$(cd "$aihome" 2>/dev/null && pwd -P)
   if [[ -z "$aihome_real" ]] || git -C "$aihome_real" rev-parse --show-toplevel >/dev/null 2>&1; then
@@ -880,7 +902,7 @@ function ainfo() {
   echo "AWS:      aws CLI with *-ro (OpsReadOnly) profiles and read operations only; expired SSO: Claude runs aws sso login, approve it in the browser"
   echo ""
 
-  local tools="mcp__ainfo__ainfo_investigate,mcp__ainfo__ainfo_ask_claude,mcp__ainfo__ainfo_ask_lumo,mcp__ainfo__ainfo_wait,mcp__ainfo__ainfo_cancel"
+  local tools="mcp__ainfo__ainfo_investigate,mcp__ainfo__ainfo_ask_claude,mcp__ainfo__ainfo_ask_lumo,mcp__ainfo__ainfo_rfc,mcp__ainfo__ainfo_wait,mcp__ainfo__ainfo_cancel"
   local -a flags extra
   flags=(--provider llamacpp --model "$lms_model" --name "ainfo" --no-skills --thinking "${AISTACK_RELAY_THINKING:-off}"
     --append-system-prompt "$prompt" --tools "$tools")
@@ -924,7 +946,7 @@ function _aidev_aider() {
   for arg in "$@"; do
     if [[ "$arg" == "-p" || "$arg" == "--print" ]]; then print_mode=true; else rest+=("$arg"); fi
   done
-  local cache="$HOME/.cache/aidev-aider" settings
+  local cache="${AI_HOME:-$HOME/.ai}/cache/aidev-aider" settings
   mkdir -p "$cache"
   settings="$cache/model-settings.yml"
   # enable_thinking=false: Qwen3.5 otherwise spends max_tokens reasoning (see _run_aider_local); models without a

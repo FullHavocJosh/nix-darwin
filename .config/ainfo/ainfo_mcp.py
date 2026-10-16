@@ -11,7 +11,7 @@ pi (Qwen) has exactly these tools and no file, shell or edit tools of its own:
 Read-only is enforced here, not in prompts: Claude runs with ainfo_guard.py as a PreToolUse hook (`--settings`),
 `--disallowedTools` for every writing built-in, and inside a macOS sandbox that refuses file writes outside a few
 cache directories. Lumo has no tools at all. State (Claude session id, Lumo history, event log, advice files) lives in
-AINFO_STATE_DIR (~/.ainfo/<project key>), never in a repository, so a crashed pi session can be resumed.
+AINFO_STATE_DIR (~/.ai/ainfo/<project key>), never in a repository, so a crashed pi session can be resumed.
 """
 
 import importlib.util
@@ -28,7 +28,7 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.realpath(os.environ.get("AINFO_PROJECT") or os.getcwd())
-STATE_DIR = os.environ.get("AINFO_STATE_DIR") or os.path.expanduser("~/.ainfo/default")
+STATE_DIR = os.environ.get("AINFO_STATE_DIR") or os.path.join(os.environ.get("AI_HOME") or os.path.expanduser("~/.ai"), "ainfo", "default")
 AISTACK_DIR = os.environ.get("AINFO_AISTACK_DIR") or os.path.expanduser(
     "~/.config/aistack"
 )
@@ -165,6 +165,7 @@ DISALLOWED = [
 
 def sandbox_profile():
     h = os.path.expanduser("~")
+    ai = os.environ.get("AI_HOME") or f"{h}/.ai"  # RFC 0003: all AI tool state; guard/ is the hooks' own state
     # Seatbelt matches resolved paths: ~/.claude is a symlink into the dotfiles repo, and without its target Claude
     # cannot save the session transcript, so every --resume fails with error_during_execution.
     sub = lambda p: " ".join(
@@ -181,7 +182,7 @@ def sandbox_profile():
             f"{h}/.cache",
             f"{h}/.npm",
             f"{h}/.local",
-            f"{h}/.ainfo",
+            ai,
             f"{h}/.bun",
             f"{h}/.token-optimizer",
             f"{h}/Library/Caches",
@@ -201,6 +202,7 @@ def sandbox_profile():
         '(allow file-write* (literal "/dev/null") (literal "/dev/tty") (literal "/dev/dtracehelper") (regex #"^/dev/(tty|pty|fd/)"))\n'
         f"(allow file-write* {' '.join(allow + extra)})\n"
         f'(allow file-write* (regex #"^{re.escape(h)}/\\.claude\\.json"))\n'
+        f"(deny file-write* {sub(os.path.join(ai, 'guard'))})\n"
     )
     path = os.path.join(STATE_DIR, "sandbox.sb")
     os.makedirs(STATE_DIR, exist_ok=True)
@@ -633,6 +635,40 @@ def single_lumo(job, question):
     )
 
 
+RFC_PROMPT = """THE USER WANTS AN RFC: a plan saved for later, which another model or tool will pick up and carry out.
+Base it on this conversation and your research so far; research more (read-only) only where the RFC would otherwise
+guess. What it should cover: {request}
+
+Reply with the RFC only, as markdown in the format of this template: its frontmatter (set title, touches and
+status: draft; leave date, source and repo out, they are filled in), then its sections, without the guidance text.
+No JSON block at the end.
+
+{template}"""
+
+
+def load_ai_home():
+    spec = importlib.util.spec_from_file_location("ai_home", os.path.join(AISTACK_DIR, "ai_home.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def write_rfc(job, request):
+    """One Claude call (resuming the session, so it has the research) writes the RFC; the bridge saves it in ~/.ai."""
+    ah = load_ai_home()
+    st = load_state()
+    r = run_claude(job, RFC_PROMPT.format(request=request, template=ah.template()), st)
+    st["claude_session"], st["cost_usd"] = r["session"], round(st.get("cost_usd", 0) + r["cost"], 4)
+    save_state(st)
+    if r["error"]:
+        return {"ok": False, "problem": r["error"]}
+    text, _ = split_contract(r["text"])
+    path = ah.write_rfc(redact(text), source=f"ainfo/claude-{CLAUDE_MODEL}", repo=PROJECT)
+    log_event(job, "stack", f"RFC saved to {path}")
+    return {"ok": True, "saved_to": path, "cost_usd": round(r["cost"], 3),
+            "next": f"tell the user the path; any tool can start from it, e.g. aidev --rfc {path}"}
+
+
 # ---- jobs -------------------------------------------------------------------------------------------------------
 def start_job(kind, fn, *args):
     jid = f"{kind}-{int(time.time())}"
@@ -699,6 +735,13 @@ def tool_ask_lumo(a):
     )
 
 
+def tool_rfc(a):
+    q = str(a.get("request") or "").strip()
+    if not q:
+        return {"ok": False, "problem": "request is empty: say what the RFC should cover"}
+    return {"ok": True, "job_id": start_job("rfc", write_rfc, q)["id"], "next": "call ainfo_wait"}
+
+
 def tool_wait(a):
     job = JOBS.get(str(a.get("job_id") or ""))
     if not job:
@@ -754,6 +797,11 @@ TOOLS = {
         tool_ask_lumo,
         "Relay one question to Lumo only (online documentation and best-practice search). Returns a job_id: call ainfo_wait.",
         S({"question": STR}, ["question"]),
+    ),
+    "ainfo_rfc": (
+        tool_rfc,
+        "When the user asks for an RFC (a plan saved for later, for another model or tool): Claude writes it from this conversation and the bridge saves it in ~/.ai/rfcs. Returns a job_id: call ainfo_wait, then tell the user the saved_to path.",
+        S({"request": STR}, ["request"]),
     ),
     "ainfo_wait": (
         tool_wait,

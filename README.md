@@ -147,7 +147,7 @@ Defined in `flake.nix`:
 `aistack` and `aidev` are one stack now, and `aidev` is the command; `aistack` is an alias for it. The older flow, in
 which the local model wrote the plan and Claude Code reviewed it, is gone: Claude writes the plan. See
 [`aidev`](#aidev---planner-stack-that-spends-as-little-on-claude-code-as-possible) below. Settings keep their
-`AISTACK_*` names and state stays in `~/.aistack/<project>-<hash>/`.
+`AISTACK_*` names and state stays in `~/.ai/aidev/<project>-<hash>/`.
 
 Lumo is reached through lumo-tamer, tried in this order, each only when the one before does not answer:
 
@@ -337,7 +337,7 @@ aidev -p "prompt"                               # one headless call to the selec
 ```
 
 `aidev` is `aistack` with one difference: Claude Code writes the plan instead of reviewing one. Same run driver,
-verify gates, worktree + draft PR and state directory (`~/.aistack/<project>-<hash>/`). Who does what:
+verify gates, worktree + draft PR and state directory (`~/.ai/aidev/<project>-<hash>/`). Who does what:
 
 - research and coordination: the local `qwen/qwen3.5-9b` in pi talks to you, finds the code, and follows the run (free).
   When MacMiniM1 is reachable, Lumo adds a draft that includes what it found online (free)

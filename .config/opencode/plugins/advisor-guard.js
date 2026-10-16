@@ -10,7 +10,7 @@
 //
 // Off for a session: switch to the `build` agent (Tab). Scripted `opencode run` calls pass `--agent build`.
 // Fails closed: a subagent whose parent is unknown counts as advisor, and a broken check refuses the call.
-// ADVISOR_DEBUG=1 logs every tool call it sees to ~/.cache/advisor/opencode-tools.jsonl.
+// ADVISOR_DEBUG=1 logs every tool call it sees to ~/.ai/guard/advisor/opencode-tools.jsonl.
 
 import { spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
@@ -26,7 +26,11 @@ const CONFIG =
   process.env.ADVISOR_OPENCODE_CONFIG || path.join(HERE, "..", "opencode.json");
 const DEBUG_LOG = path.join(
   process.env.CLAUDE_ADVISOR_STATE ||
-    path.join(os.homedir(), ".cache", "advisor"),
+    path.join(
+      process.env.AI_HOME || path.join(os.homedir(), ".ai"),
+      "guard",
+      "advisor",
+    ),
   "opencode-tools.jsonl",
 );
 const ADVISOR = "advisor";
