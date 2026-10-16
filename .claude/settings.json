@@ -52,6 +52,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.config/aistack/advisor_hook.py\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -166,5 +176,6 @@
     {
       "serverName": "claude.ai Microsoft 365"
     }
-  ]
+  ],
+  "outputStyle": "Advisor"
 }
