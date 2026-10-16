@@ -30,11 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f \"$HOME/mcp-stack-fullhavoc/hooks/pretooluse_gate.py\" ] && [ -x \"$HOME/mcp-stack-fullhavoc/.venv/bin/python\" ]; then \"$HOME/mcp-stack-fullhavoc/.venv/bin/python\" \"$HOME/mcp-stack-fullhavoc/hooks/pretooluse_gate.py\"; fi"
-          },
-          {
-            "type": "command",
-            "command": "if [ -f \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\"; fi"
+            "command": "if [ -f \"$HOME/mcp-stack-fullhavoc/hooks/pretooluse_gate.py\" ] && [ -x \"$HOME/mcp-stack-fullhavoc/.venv/bin/python\" ]; then \"$HOME/mcp-stack-fullhavoc/.venv/bin/python\" \"$HOME/mcp-stack-fullhavoc/hooks/pretooluse_gate.py\"; elif [ -f \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\"; fi"
           }
         ]
       },
@@ -43,11 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f \"$HOME/mcp-stack-fullhavoc/hooks/pretooluse_gate.py\" ] && [ -x \"$HOME/mcp-stack-fullhavoc/.venv/bin/python\" ]; then \"$HOME/mcp-stack-fullhavoc/.venv/bin/python\" \"$HOME/mcp-stack-fullhavoc/hooks/pretooluse_gate.py\"; fi"
-          },
-          {
-            "type": "command",
-            "command": "if [ -f \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\"; fi"
+            "command": "if [ -f \"$HOME/mcp-stack-fullhavoc/hooks/pretooluse_gate.py\" ] && [ -x \"$HOME/mcp-stack-fullhavoc/.venv/bin/python\" ]; then \"$HOME/mcp-stack-fullhavoc/.venv/bin/python\" \"$HOME/mcp-stack-fullhavoc/hooks/pretooluse_gate.py\"; elif [ -f \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\"; fi"
           }
         ]
       },
@@ -127,5 +119,52 @@
   "preferredNotifChannel": "auto",
   "inputNeededNotifEnabled": true,
   "agentPushNotifEnabled": true,
-  "useAutoModeDuringPlan": true
+  "useAutoModeDuringPlan": true,
+  "deniedMcpServers": [
+    {
+      "serverName": "claude.ai Lattice"
+    },
+    {
+      "serverName": "claude.ai Railway"
+    },
+    {
+      "serverName": "claude.ai NetSuite"
+    },
+    {
+      "serverName": "claude.ai Greenhouse"
+    },
+    {
+      "serverName": "claude.ai Figma"
+    },
+    {
+      "serverName": "claude.ai Salesforce"
+    },
+    {
+      "serverName": "claude.ai Lucid"
+    },
+    {
+      "serverName": "claude.ai Fathom"
+    },
+    {
+      "serverName": "claude.ai Asana"
+    },
+    {
+      "serverName": "claude.ai Smartsheet"
+    },
+    {
+      "serverName": "claude.ai Postman"
+    },
+    {
+      "serverName": "claude.ai Pendo"
+    },
+    {
+      "serverName": "claude.ai ZoomInfo"
+    },
+    {
+      "serverName": "claude.ai Clay"
+    },
+    {
+      "serverName": "claude.ai Microsoft 365"
+    }
+  ]
 }

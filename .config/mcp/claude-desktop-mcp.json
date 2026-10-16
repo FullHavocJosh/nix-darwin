@@ -1,9 +1,5 @@
 {
   "mcpServers": {
-    "github": {
-      "command": "npx",
-      "args": ["@edjl/github-mcp"]
-    },
     "terraform": {
       "command": "npx",
       "args": ["terraform-mcp-server"]
@@ -11,42 +7,6 @@
     "context7": {
       "command": "npx",
       "args": ["-y", "@upstash/context7-mcp"]
-    },
-    "aws-terraform-mcp": {
-      "command": "uvx",
-      "args": ["--with", "mcp<2", "awslabs.terraform-mcp-server@1.0.18"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      }
-    },
-    "aws-pricing-mcp-server": {
-      "command": "uvx",
-      "args": ["awslabs.aws-pricing-mcp-server@latest"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR",
-        "AWS_PROFILE": "services"
-      }
-    },
-    "terraform-cloud": {
-      "command": "uvx",
-      "args": ["terraform-cloud-mcp"],
-      "env": {
-        "TFC_TOKEN": "${TFC_TOKEN}"
-      }
-    },
-    "terraform-hcp": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "-e",
-        "TFE_TOKEN",
-        "hashicorp/terraform-mcp-server:latest"
-      ],
-      "env": {
-        "TFE_TOKEN": "${TFE_TOKEN}"
-      }
     },
     "hetzner": {
       "command": "npx",

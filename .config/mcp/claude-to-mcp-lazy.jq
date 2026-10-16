@@ -2,8 +2,8 @@
 # ~/.mcp-lazy/servers.json, which OpenCode loads lazily through one proxy entry instead of starting every server.
 #
 # $home        the real home directory (replaces the __HOME__ placeholder).
-# $superseded  JSON array of server names OpenCode must not get here: the ones mcp-stack-fullhavoc replaces, and
-#              lumo and local-edit, which opencode.json loads directly (small, and wanted in every session).
+# $superseded  JSON array of server names OpenCode must not get here: lumo, local-edit and oczen, which
+#              opencode.json loads directly (small, and wanted in every session).
 #
 # mcp-lazy starts each upstream server with { ...process.env, ...config.env } and does not expand ${VAR}, so
 # credentials are left out of env entirely: the upstream process inherits them from the environment OpenCode was

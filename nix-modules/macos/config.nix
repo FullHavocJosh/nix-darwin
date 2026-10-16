@@ -125,17 +125,19 @@
             fi
           done
         }
-        for existing_link in "$HOME/.claude/skills"/*/; do
-          [ -L "''${existing_link%/}" ] || continue
-          link_name=$(basename "''${existing_link%/}")
+        # Loop over `*`, not `*/`: a dangling symlink does not match `*/`, so the stale links this loop exists to
+        # remove were skipped.
+        for existing_link in "$HOME/.claude/skills"/*; do
+          [ -L "$existing_link" ] || continue
+          link_name=$(basename "$existing_link")
           # Whole-repo convenience symlinks (below) have no SKILL.md of their own -- don't
           # treat them as stale skill links.
           case "$link_name" in
             model-skills-fullhavoc|model-skills-perfectserve) continue ;;
           esac
-          if [ ! -f "''${existing_link}SKILL.md" ]; then
+          if [ ! -f "$existing_link/SKILL.md" ]; then
             echo "Removing stale Claude skill symlink: $link_name"
-            rm "''${existing_link%/}"
+            rm "$existing_link"
           fi
         done
         _link_skills_from_repo "$HOME/model-skills-fullhavoc"
@@ -379,7 +381,7 @@
         HOSTNAME_LOCAL=$(scutil --get LocalHostName 2>/dev/null)
         case "$HOSTNAME_LOCAL" in
           MacBookM2Pro*|MacMiniM1*)
-            MCP_EXCLUDE_SERVERS="atlassian terraform-cloud terraform-hcp aws-terraform-mcp aws-pricing-mcp-server mcp-context-guardian-perfectserve"
+            MCP_EXCLUDE_SERVERS="atlassian mcp-context-guardian-perfectserve"
             ;;
           MacBookM3Pro*)
             MCP_EXCLUDE_SERVERS="hetzner opnsense truenas awx doppler oczen"
@@ -389,11 +391,13 @@
             ;;
         esac
 
-        # MCP servers retired from claude-desktop-mcp.json on 2026-10-15: none was called more than a handful of times
-        # in 60 days of transcripts (token-optimizer-mcp was called, but only because its hooks forced it, and its
-        # results were larger than the built-in tools'). The sync below only adds, so unregister them on every host.
+        # MCP servers retired from claude-desktop-mcp.json: none was called more than a handful of times in 60-90 days of
+        # transcripts (token-optimizer-mcp was called, but only because its hooks forced it, and its results were larger
+        # than the built-in tools'), or the package is gone (aws-core, aws-terraform, terraform-cloud, terraform-hcp, and
+        # the context-guardian / verbosity-guardian servers mcp-stack-fullhavoc replaced). The sync below only adds, so
+        # unregister them on every host.
         if command -v claude &>/dev/null; then
-          for SERVER_NAME in token-optimizer-mcp token-savior context-mode mcp-server-chart memory sequential-thinking prettier bigpickle; do
+          for SERVER_NAME in token-optimizer-mcp token-savior context-mode mcp-server-chart memory sequential-thinking prettier bigpickle github aws-pricing-mcp-server aws-core-mcp-server aws-terraform-mcp terraform-cloud terraform-hcp mcp-context-guardian-fullhavoc context-guardian verbosity-guardian; do
             if jq -e --arg s "$SERVER_NAME" '.mcpServers[$s]' "$HOME/.claude.json" >/dev/null 2>&1; then
               claude mcp remove --scope user "$SERVER_NAME" >/dev/null 2>&1 && \
                 echo "Removed retired MCP server $SERVER_NAME from Claude Code." || \
@@ -527,13 +531,13 @@
             # repo's opencode.json (mcp-stack-fullhavoc, plus context-guardian-perfectserve on the work profile), and one
             # mcp-lazy proxy that exposes two tools and starts each upstream server only when one of its tools is first
             # used. The proxy's server list, ~/.mcp-lazy/servers.json, is rebuilt on every rebuild from the servers Claude
-            # Code has registered (profile exclusions already applied) minus the ones mcp-stack-fullhavoc replaces, so
+            # Code has registered (profile exclusions already applied) minus the ones opencode.json loads directly, so
             # both tools offer the same servers. mcp-lazy starts upstream servers with its own environment plus the env in
             # servers.json and does not expand ''${VAR}: credentials are left out of servers.json and are handed to the
             # proxy by name through its `environment` below ({env:NAME}, resolved by OpenCode at launch from the exports
             # in ~/.zshrc_personal). The tool index is cached by mcp-lazy; the first session after a change is slower.
             MCP_LAZY_JQ="$HOME/nix-darwin/.config/mcp/claude-to-mcp-lazy.jq"
-            MCP_LAZY_SUPERSEDED='["mcp-context-guardian-fullhavoc","context-guardian","verbosity-guardian","lumo","local-edit","oczen"]'
+            MCP_LAZY_SUPERSEDED='["lumo","local-edit","oczen"]'
             if [ -f "$HOME/.claude.json" ] && [ -f "$MCP_LAZY_JQ" ]; then
               if LAZY=$(jq --arg home "$HOME" --argjson superseded "$MCP_LAZY_SUPERSEDED" -f "$MCP_LAZY_JQ" "$HOME/.claude.json" 2>/dev/null) && [ -n "$LAZY" ] && [ "$LAZY" != "{}" ]; then
                 mkdir -p "$HOME/.mcp-lazy"
