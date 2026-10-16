@@ -592,8 +592,6 @@ alias himmdev='_herdr_remote_space macmini-home-infrastructure havoc@macminim1.r
 
 alias clear="clear ; clear ; clear"
 alias eza="eza -la"
-alias ls="eza"
-alias tree="find . -print | sed -e 's;[^/]*/;|____;g;s;____|; |;g'"
 alias pip="pip3"
 alias python="/usr/bin/python3"
 alias spf="spf -c ~/.config/superfile/config.toml"
