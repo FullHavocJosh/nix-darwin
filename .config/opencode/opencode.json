@@ -226,6 +226,14 @@
         "{env:HOME}/mcp-context-guardian-perfectserve/dist/index.js"
       ]
     },
+    "lumo": {
+      "type": "local",
+      "command": ["python3", "{env:HOME}/.config/lumo/lumo_mcp.py"]
+    },
+    "local-edit": {
+      "type": "local",
+      "command": ["python3", "{env:HOME}/.config/aistack/local_edit_mcp.py"]
+    },
     "mcp-stack-fullhavoc": {
       "type": "local",
       "command": [

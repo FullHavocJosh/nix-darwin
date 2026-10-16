@@ -533,7 +533,7 @@
             # proxy by name through its `environment` below ({env:NAME}, resolved by OpenCode at launch from the exports
             # in ~/.zshrc_personal). The tool index is cached by mcp-lazy; the first session after a change is slower.
             MCP_LAZY_JQ="$HOME/nix-darwin/.config/mcp/claude-to-mcp-lazy.jq"
-            MCP_LAZY_SUPERSEDED='["mcp-context-guardian-fullhavoc","context-guardian","verbosity-guardian"]'
+            MCP_LAZY_SUPERSEDED='["mcp-context-guardian-fullhavoc","context-guardian","verbosity-guardian","lumo","local-edit"]'
             if [ -f "$HOME/.claude.json" ] && [ -f "$MCP_LAZY_JQ" ]; then
               if LAZY=$(jq --arg home "$HOME" --argjson superseded "$MCP_LAZY_SUPERSEDED" -f "$MCP_LAZY_JQ" "$HOME/.claude.json" 2>/dev/null) && [ -n "$LAZY" ] && [ "$LAZY" != "{}" ]; then
                 mkdir -p "$HOME/.mcp-lazy"

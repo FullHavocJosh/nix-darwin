@@ -44,11 +44,13 @@ BASE = f"http://127.0.0.1:{PORT}"
 PROTOCOL = "2024-11-05"
 
 INSTRUCTIONS = (
-    "local_edit hands a file edit to the on-device coder model (free, nothing leaves the machine). Use it for large, "
-    "mechanical, fully specified edits: roughly 5+ edits, several files, renames or migrations, boilerplate, a new "
-    "file from an exact spec. Make small or subtle edits yourself: a local edit takes 1-5 minutes. Name every file it "
-    "may change, give exact instructions ending with 'Change nothing else.', and pass test_cmd when a check exists. "
-    "Review the returned diff; fix small deviations yourself, or revert and do the edit yourself if it went wrong."
+    "Use local_edit instead of your own Edit/Write whenever a change touches 3+ files or needs 5+ edits and you can "
+    "state it precisely: it runs on a free on-device model, so you write one instruction instead of every edit. "
+    "Measured: 7 edits in 6 files took 3 turns and $0.09 through local_edit, 18 turns and $0.16 by hand. A purely "
+    "pattern-based replacement is cheaper still as one sed or python command; if that is not possible or not "
+    "allowed, use local_edit rather than editing by hand. Make single small or subtle edits "
+    "yourself. Name every file it may change, end the instruction with 'Change nothing else.', pass test_cmd when a "
+    "check exists, and review the returned diff. It needs a gpr worktree, not a main checkout."
 )
 
 _mutex = threading.Lock()
@@ -165,6 +167,15 @@ def repo_root(path):
     return os.path.realpath(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
 
 
+def main_checkout(root):
+    """True when root is a repository's main checkout rather than a linked worktree. The context-guardian hook blocks
+    Edit/Write there (work goes through gpr worktrees); it never sees this MCP tool, so the tool applies the rule."""
+    def rp(arg):
+        r = subprocess.run(["git", "-C", root, "rev-parse", "--path-format=absolute", arg], capture_output=True, text=True)
+        return os.path.realpath(r.stdout.strip())
+    return rp("--git-dir") == rp("--git-common-dir")
+
+
 def resolve(files, base):
     out = []
     for f in files:
@@ -195,6 +206,9 @@ def local_edit(a):
     outside = [p for p in paths + readonly if not (p == root or p.startswith(root + os.sep))]
     if outside:
         return {"ok": False, "error": f"files must be inside the repository {root}: {outside}"}
+    if main_checkout(root) and os.environ.get("LOCAL_EDIT_ALLOW_MAIN") != "1":
+        return {"ok": False, "error": f"{root} is a main checkout: edits go in a gpr worktree (run gpr first, then pass "
+                "the worktree's files), the same rule the context-guardian hook applies to Edit and Write"}
     test_cmd = str(a.get("test_cmd") or "").strip()
 
     os.makedirs(STATE, exist_ok=True)
@@ -272,8 +286,11 @@ def local_edit(a):
 TOOLS = {
     "local_edit": (
         local_edit,
-        "Edit files with the free on-device coder model (Qwen3-Coder-30B via aider). For large, mechanical, fully "
-        "specified edits only; returns changed files, the diff and the test result.",
+        (
+            "Make a multi-file edit (3+ files or 5+ edits) with the free on-device coder model instead of your own "
+            "Edit/Write: one precise instruction, the files, a test_cmd; returns changed files, the diff and the "
+            "test result. Far fewer turns than editing by hand."
+        ),
         {
             "type": "object",
             "properties": {
@@ -296,7 +313,9 @@ def handle(req):
     if m == "ping":
         return {}
     if m == "tools/list":
-        return {"tools": [{"name": n, "description": d, "inputSchema": s} for n, (_, d, s) in TOOLS.items()]}
+        # anthropic/alwaysLoad: Claude Code loads the tool upfront instead of behind ToolSearch (one turn fewer)
+        return {"tools": [{"name": n, "description": d, "inputSchema": s, "_meta": {"anthropic/alwaysLoad": True}}
+                          for n, (_, d, s) in TOOLS.items()]}
     if m == "tools/call":
         p = req.get("params", {})
         tool = TOOLS.get(p.get("name"))

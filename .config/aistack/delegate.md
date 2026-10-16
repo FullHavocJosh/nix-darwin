@@ -12,7 +12,9 @@ right, but it also changed text the spec said to keep. So it pays only for big e
 
 Delegate only when ALL of these hold; otherwise make the edit yourself:
 
-- It is big: roughly 5+ edits, several files, or a new file of 100+ lines.
+- It is big enough: 3+ files or 5+ edits, or a new file of 100+ lines. (Measured: 7 edits in 6 files took 3
+  turns and $0.09 through local_edit, 18 turns and $0.16 by hand.) A purely pattern-based replacement is cheaper
+  still as one sed or python command.
 - It is mechanical or fully specified: a rename or migration across files, repetitive changes, boilerplate, a new
   file from an exact spec. Not subtle logic, security-sensitive code, or anything you must read closely anyway.
 - You can verify it cheaply: a test, linter, build or check command.
