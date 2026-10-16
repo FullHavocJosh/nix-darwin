@@ -9,7 +9,13 @@
 
 import { execFile } from "node:child_process";
 
-const EDIT_TOOLS = new Set(["edit", "write", "patch"]);
+const EDIT_TOOLS = new Set([
+  "edit",
+  "write",
+  "patch",
+  "apply_patch",
+  "multiedit",
+]);
 
 function run(cmd, args) {
   return new Promise((resolve) => {
@@ -41,20 +47,23 @@ function escapeVimString(path) {
   return path.replace(/'/g, "''");
 }
 
-export default async () => {
-  if (
-    process.env.HERDR_ENV !== "1" ||
-    !process.env.HERDR_WORKSPACE_ID ||
-    !process.env.HERDR_TAB_ID
-  ) {
-    return {};
-  }
+// OpenCode V2 plugin format: a default export { id, setup(ctx) }; tool.execute.after became
+// ctx.tool.hook("execute.after"), with the arguments in event.input.
+export default {
+  id: "fullhavoc.herdr-nvim-open-edited",
+  async setup(ctx) {
+    if (
+      process.env.HERDR_ENV !== "1" ||
+      !process.env.HERDR_WORKSPACE_ID ||
+      !process.env.HERDR_TAB_ID
+    ) {
+      return;
+    }
 
-  return {
-    "tool.execute.after": async (input) => {
-      if (!EDIT_TOOLS.has(input.tool)) return;
+    await ctx.tool.hook("execute.after", async (event) => {
+      if (!EDIT_TOOLS.has(event.tool) || event.status !== "completed") return;
 
-      const filePath = input.args?.filePath;
+      const filePath = event.input?.filePath ?? event.input?.path;
       if (!filePath) return;
 
       const paneId = await findNvimPane(
@@ -72,6 +81,6 @@ export default async () => {
         `:execute 'edit ' . fnameescape('${escaped}')`,
       ]);
       await run("herdr", ["pane", "send-keys", paneId, "enter"]);
-    },
-  };
+    });
+  },
 };
