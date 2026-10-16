@@ -56,18 +56,26 @@ return {
       if staged and staged ~= "" then
         table.insert(lines, "  Staged:")
         for _, line in ipairs(vim.split(staged, "\n")) do
-          if line ~= "" then table.insert(lines, "   " .. line) end
+          if line ~= "" then
+            table.insert(lines, "   " .. line)
+          end
         end
       end
       local unstaged = vim.fn.system("git diff --stat 2>/dev/null")
       if unstaged and unstaged ~= "" then
-        if #lines > 0 then table.insert(lines, "") end
+        if #lines > 0 then
+          table.insert(lines, "")
+        end
         table.insert(lines, "  Unstaged:")
         for _, line in ipairs(vim.split(unstaged, "\n")) do
-          if line ~= "" then table.insert(lines, "   " .. line) end
+          if line ~= "" then
+            table.insert(lines, "   " .. line)
+          end
         end
       end
-      if #lines == 0 then return "" end
+      if #lines == 0 then
+        return ""
+      end
       return "\n" .. table.concat(lines, "\n")
     end
 
@@ -116,12 +124,6 @@ return {
               key = "c",
               desc = "Config",
               action = ":lua Snacks.dashboard.pick('files', {cwd = vim.fn.stdpath('config')})",
-            },
-            {
-              icon = icons.aidev,
-              key = "a",
-              desc = "Claude Code",
-              action = ":ClaudeCode",
             },
             { icon = icons.session, key = "s", desc = "Restore Session", section = "session" },
             { icon = icons.lazy, key = "l", desc = "Lazy", action = ":Lazy", enabled = package.loaded.lazy ~= nil },
