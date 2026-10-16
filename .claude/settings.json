@@ -7,7 +7,13 @@
       "Bash(gh pr comment:*)",
       "Bash(gh issue comment:*)",
       "Bash(gh pr review:*)",
-      "Bash(gh pr merge:*)"
+      "Bash(gh pr merge:*)",
+      "WebSearch"
+    ],
+    "allow": [
+      "mcp__lumo__lumo_search",
+      "mcp__local-edit__local_edit",
+      "mcp__bigpickle__bigpickle_edit"
     ]
   },
   "model": "opus",
@@ -37,6 +43,16 @@
           {
             "type": "command",
             "command": "if [ -f \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\" ]; then node \"$HOME/mcp-context-guardian-perfectserve/dist/hook.js\"; fi"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.config/aistack/edit_router_hook.py\"",
+            "timeout": 10
           }
         ]
       }
