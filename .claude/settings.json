@@ -1,6 +1,15 @@
 {
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
   "permissions": {
-    "defaultMode": "default",
+    "allow": [
+      "mcp__lumo__lumo_search",
+      "mcp__local-edit__local_edit",
+      "mcp__oczen__oczen_edit"
+    ],
     "deny": [
       "Bash(git commit:*)",
       "Bash(gpc:*)",
@@ -10,11 +19,7 @@
       "Bash(gh pr merge:*)",
       "WebSearch"
     ],
-    "allow": [
-      "mcp__lumo__lumo_search",
-      "mcp__local-edit__local_edit",
-      "mcp__oczen__oczen_edit"
-    ]
+    "defaultMode": "default"
   },
   "model": "opus",
   "enableAllProjectMcpServers": true,
@@ -81,6 +86,9 @@
       }
     ]
   },
+  "worktree": {
+    "baseRef": "fresh"
+  },
   "statusLine": {
     "type": "command",
     "command": "claudetui statusline --compact",
@@ -98,16 +106,26 @@
       }
     }
   },
-  "disableAutoMode": "disable",
-  "useAutoModeDuringPlan": false,
   "modelSettings": {
     "claude-opus-5-5": {
       "effortLevel": "high"
     }
   },
-  "attribution": {
-    "commit": "",
-    "pr": "",
-    "sessionUrl": false
-  }
+  "fastMode": true,
+  "awaySummaryEnabled": false,
+  "pluginConfigs": {
+    "cc-plugin-agents-md@builtin": {
+      "options": {
+        "instructionFiles": "claude-md-and-agents-md"
+      }
+    }
+  },
+  "timeFormat": "12-hour",
+  "disableAutoMode": "disable",
+  "theme": "auto",
+  "editorMode": "vim",
+  "preferredNotifChannel": "auto",
+  "inputNeededNotifEnabled": true,
+  "agentPushNotifEnabled": true,
+  "useAutoModeDuringPlan": true
 }
