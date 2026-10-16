@@ -41,12 +41,10 @@ Fetch all open pull requests pending your review, cross-reference against #plat-
 
 4. Display a numbered list of the remaining PRs (those actively posted in #plat-code-review) with: number, repo, title, author, and age in days. Ask the user which PR(s) they want to review — they can say a number, a list like `1,3`, or `all`.
 
-5. For each selected PR, use the GitHub MCP tools to gather in parallel:
-   - `github_pr_details` — status, reviewers, CI checks
-   - `github_pr_changes` with format `patch` — the actual diff
-   - `github_pr_comments_get` — existing review comments and discussions
-
-   (Tool names are exposed with the `github_github_*` prefix in opencode; use whichever GitHub MCP tools are actually available in this session.)
+5. For each selected PR, run these `gh` commands in parallel (read-only):
+   - `gh pr view <number> --repo <owner/repo> --json state,isDraft,reviewDecision,reviewRequests,statusCheckRollup,additions,deletions,changedFiles` for status, reviewers and CI checks
+   - `gh pr diff <number> --repo <owner/repo> --patch` for the diff
+   - `gh pr view <number> --repo <owner/repo> --comments` and `gh api repos/<owner>/<repo>/pulls/<number>/comments --paginate --jq '.[] | {path, line, user: .user.login, body}'` for discussion and inline review comments
 
 6. Analyze the gathered data and produce a structured review for each PR using this format:
 

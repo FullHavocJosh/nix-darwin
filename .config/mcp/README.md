@@ -8,33 +8,26 @@ environment variable name, the Doppler project and config it belongs in, and a d
 
 ### `FullHavocJosh` project · `root_opnsense` config
 
-| Environment Variable  | MCP Server | Description                                                |
-| --------------------- | ---------- | ---------------------------------------------------------- |
-| `OPNSENSE_URL`        | `opnsense` | OPNsense firewall URL, e.g. `https://192.168.1.1`          |
-| `OPNSENSE_API_KEY`    | `opnsense` | OPNsense API key — System → Access → Users → API Keys      |
-| `OPNSENSE_API_SECRET` | `opnsense` | OPNsense API secret (paired with `OPNSENSE_API_KEY`)       |
+| Environment Variable  | MCP Server | Description                                           |
+| --------------------- | ---------- | ----------------------------------------------------- |
+| `OPNSENSE_URL`        | `opnsense` | OPNsense firewall URL, e.g. `https://192.168.1.1`     |
+| `OPNSENSE_API_KEY`    | `opnsense` | OPNsense API key — System → Access → Users → API Keys |
+| `OPNSENSE_API_SECRET` | `opnsense` | OPNsense API secret (paired with `OPNSENSE_API_KEY`)  |
 
 ### `FullHavocJosh` project · `root_truenas` config
 
-| Environment Variable  | MCP Server | Description                                                |
-| --------------------- | ---------- | ---------------------------------------------------------- |
-| `TRUENAS_URL`         | `truenas`  | TrueNAS base URL, e.g. `https://truenas.local`             |
-| `TRUENAS_API_KEY`     | `truenas`  | TrueNAS API key — Credentials → API Keys                   |
+| Environment Variable | MCP Server | Description                                    |
+| -------------------- | ---------- | ---------------------------------------------- |
+| `TRUENAS_URL`        | `truenas`  | TrueNAS base URL, e.g. `https://truenas.local` |
+| `TRUENAS_API_KEY`    | `truenas`  | TrueNAS API key — Credentials → API Keys       |
 
 ### `FullHavocJosh` project · `root_macmini` / `root_macbook` config
 
-| Environment Variable  | MCP Server | Description                                                 |
-| --------------------- | ---------- | ----------------------------------------------------------- |
-| `HETZNER_API_TOKEN`   | `hetzner`  | Hetzner Cloud API token — Console → Security → API Tokens   |
-| `AWX_BASE_URL`        | `awx`      | AWX/AAP/Ansible Tower base URL, e.g. `https://awx.homelab`  |
-| `AWX_TOKEN`           | `awx`      | AWX personal access token — User → Tokens                   |
-
-### `FullHavocJosh` project · `root` config
-
-| Environment Variable | MCP Server        | Description                                                    |
-| -------------------- | ----------------- | -------------------------------------------------------------- |
-| `TFC_TOKEN`          | `terraform-cloud` | HCP Terraform / Terraform Cloud user or team API token         |
-| `TFE_TOKEN`          | `terraform-hcp`   | Same token as `TFC_TOKEN` — used by the HashiCorp Docker image |
+| Environment Variable | MCP Server | Description                                                |
+| -------------------- | ---------- | ---------------------------------------------------------- |
+| `HETZNER_API_TOKEN`  | `hetzner`  | Hetzner Cloud API token — Console → Security → API Tokens  |
+| `AWX_BASE_URL`       | `awx`      | AWX/AAP/Ansible Tower base URL, e.g. `https://awx.homelab` |
+| `AWX_TOKEN`          | `awx`      | AWX personal access token — User → Tokens                  |
 
 ### Notes
 

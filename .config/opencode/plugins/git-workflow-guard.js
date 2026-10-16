@@ -1,5 +1,5 @@
 // Ported from the Claude Code PreToolUse hook at
-// ~/mcp-context-guardian-fullhavoc/src/hook.ts + src/policies.ts.
+// ~/mcp-stack-fullhavoc/hooks/pretooluse_gate.py + src/mcp_stack_fullhavoc/policies.py.
 //
 // Claude Code enforces the gpr/gpa/gpc git-worktree-pr-workflow (see the
 // git-worktree-pr-workflow skill) via a PreToolUse hook. opencode has no
@@ -94,13 +94,19 @@ function checkCommandSafety(command) {
   if (GIT_MAIN_PUSH_RE.test(command)) {
     return {
       safe: false,
-      reason: "Direct push to main is forbidden. Use a feature branch and open a PR.",
+      reason:
+        "Direct push to main is forbidden. Use a feature branch and open a PR.",
     };
   }
   for (const p of FORBIDDEN_PATTERNS) {
-    if (command.includes(p)) return { safe: false, reason: `Forbidden pattern: ${p}` };
+    if (command.includes(p))
+      return { safe: false, reason: `Forbidden pattern: ${p}` };
   }
-  if (GIT_COMMIT_RE.test(command) && !invokes(command, "gpc") && !invokes(command, "gpa")) {
+  if (
+    GIT_COMMIT_RE.test(command) &&
+    !invokes(command, "gpc") &&
+    !invokes(command, "gpa")
+  ) {
     return {
       safe: false,
       reason:
@@ -110,28 +116,40 @@ function checkCommandSafety(command) {
   if (GH_PR_CREATE_RE.test(command) && !invokes(command, "gpr")) {
     return {
       safe: false,
-      reason: "Use 'gpr <feat|fix> <branch-name>' instead of raw 'gh pr create'.",
+      reason:
+        "Use 'gpr <feat|fix> <branch-name>' instead of raw 'gh pr create'.",
     };
   }
   if (GH_PR_COMMENT_RE.test(command)) {
-    return { safe: false, reason: "Posting PR comments from an agent session is forbidden." };
+    return {
+      safe: false,
+      reason: "Posting PR comments from an agent session is forbidden.",
+    };
   }
   if (GH_PR_REVIEW_RE.test(command)) {
-    return { safe: false, reason: "Submitting PR reviews from an agent session is forbidden." };
+    return {
+      safe: false,
+      reason: "Submitting PR reviews from an agent session is forbidden.",
+    };
   }
   if (GH_PR_MERGE_RE.test(command)) {
-    return { safe: false, reason: "Merging PRs from an agent session is forbidden." };
+    return {
+      safe: false,
+      reason: "Merging PRs from an agent session is forbidden.",
+    };
   }
   if (GIT_CHECKOUT_B_RE.test(command) && !invokes(command, "gpr")) {
     return {
       safe: false,
-      reason: "Use 'gpr <feat|fix> <branch-name>' to create feature branches, not raw 'git checkout -b'.",
+      reason:
+        "Use 'gpr <feat|fix> <branch-name>' to create feature branches, not raw 'git checkout -b'.",
     };
   }
   if (GIT_WORKTREE_ADD_RE.test(command) && !invokes(command, "gpr")) {
     return {
       safe: false,
-      reason: "Use 'gpr <feat|fix> <branch-name>' instead of raw 'git worktree add'.",
+      reason:
+        "Use 'gpr <feat|fix> <branch-name>' instead of raw 'git worktree add'.",
     };
   }
   return { safe: true };
@@ -147,7 +165,8 @@ export default async () => ({
     if (tool === "bash") {
       const command = typeof args.command === "string" ? args.command : "";
       const result = checkCommandSafety(command);
-      if (!result.safe) throw new Error(`[git-workflow-guard] ${result.reason}`);
+      if (!result.safe)
+        throw new Error(`[git-workflow-guard] ${result.reason}`);
       return;
     }
 

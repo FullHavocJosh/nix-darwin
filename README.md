@@ -377,19 +377,19 @@ All automatically installed via nix-darwin/package managers:
 
 ### MCP Servers (`.config/mcp/claude-desktop-mcp.json`)
 
-| Server                   | Description                                                                                                                                                       |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mcp-stack-fullhavoc`    | Custom local MCP server (`~/mcp-stack-fullhavoc`) — infrastructure context, command policy and verbosity checks; replaces context-guardian and verbosity-guardian |
-| `memory`                 | `@modelcontextprotocol/server-memory` — persistent entity graph                                                                                                   |
-| `sequential-thinking`    | `@modelcontextprotocol/server-sequential-thinking`                                                                                                                |
-| `github`                 | `@edjl/github-mcp` — GitHub PR/issue integration                                                                                                                  |
-| `terraform`              | `terraform-mcp-server` — Terraform registry docs                                                                                                                  |
-| `context7`               | `@upstash/context7-mcp` — up-to-date library documentation                                                                                                        |
-| `aws-core-mcp-server`    | `awslabs.core-mcp-server` — AWS service proxy/orchestration                                                                                                       |
-| `aws-terraform-mcp`      | `awslabs.terraform-mcp-server` — AWS Terraform provider docs                                                                                                      |
-| `aws-pricing-mcp-server` | `awslabs.aws-pricing-mcp-server` — AWS pricing API                                                                                                                |
-| `mcp-server-chart`       | `@antv/mcp-server-chart` — chart/diagram generation                                                                                                               |
-| `slack`                  | `@modelcontextprotocol/server-slack` — Slack integration                                                                                                          |
+| Server                | Description                                                                                          |
+| --------------------- | ---------------------------------------------------------------------------------------------------- |
+| `mcp-stack-fullhavoc` | Custom local MCP server (`~/mcp-stack-fullhavoc`): infrastructure context, command policy, verbosity |
+| `terraform`           | `terraform-mcp-server`: Terraform registry docs                                                      |
+| `context7`            | `@upstash/context7-mcp`: up-to-date library documentation                                            |
+| `lumo`                | Lumo web search (`~/.config/lumo/lumo_mcp.py`)                                                       |
+| `local-edit`          | On-device coder model for multi-file edits (`~/.config/aistack/local_edit_mcp.py`)                   |
+| `oczen`               | OpenCode Zen edits, personal hosts (`~/.config/aistack/oczen_mcp.py`)                                |
+| `hetzner`             | `@lazyants/hetzner-mcp-server`: Hetzner Cloud, personal hosts                                        |
+| `opnsense`            | `@richard-stovall/opnsense-mcp-server`: OPNsense firewall, personal hosts                            |
+| `truenas`             | `truenas-mcp-server`: TrueNAS, personal hosts                                                        |
+| `awx`                 | `awx-mcp-server`: AWX jobs, personal hosts                                                           |
+| `doppler`             | `@dopplerhq/mcp-server`: Doppler secrets, personal hosts                                             |
 
 ### Neovim Claude Code Plugin
 
