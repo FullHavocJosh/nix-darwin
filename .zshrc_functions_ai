@@ -757,6 +757,31 @@ function aidev() {
   _aidev_stack "${rest[@]}"
 }
 
+# ai -- pi as the front end, Claude Code as the brain (.config/aistack/pi-claude.ts).
+#
+#   ai [message words...]     interactive; every message goes to Claude Code (`claude -p`, resuming one session)
+#   ai -c                     continue the last conversation in this directory (the same Claude session)
+#   ai -p "question"          one-shot: print Claude's answer and exit
+#
+# Claude Code runs as itself: your login, CLAUDE.md, MCP servers, hooks and advisor mode (in pi: /advisor on|off).
+# Run commands yourself with pi's `!cmd`; Claude sees them and their output with your next message.
+# AI_CLAUDE_MODEL (default sonnet) picks the model; AI_CLAUDE_ARGS adds claude flags. ainfo and aidev are separate.
+function ai() {
+  local sdir="${AISTACK_DIR:-$HOME/.config/aistack}" pi_dir="${XDG_CACHE_HOME:-$HOME/.cache}/aistack-pi-ai"
+  local model="${AI_CLAUDE_MODEL:-sonnet}"
+  if ! command -v claude &>/dev/null; then
+    echo "✗ ai needs Claude Code (claude) on PATH" >&2
+    return 1
+  fi
+  mkdir -p "$pi_dir"
+  # pi needs a model to start. The extension answers every message, so this one is never called; it is named so
+  # pi's footer shows what actually answers. Own agent dir: plain pi's extensions (lumo-first) do not load here.
+  jq -n --arg id "$model" '{providers: {"claude-code": {baseUrl: "http://127.0.0.1:9/v1", api: "openai-completions",
+    apiKey: "unused", models: [{id: $id, reasoning: false}]}}}' > "$pi_dir/models.json"
+  PI_CODING_AGENT_DIR="$pi_dir" AI_CLAUDE_MODEL="$model" pi -e "$sdir/pi-claude.ts" --provider claude-code \
+    --model "$model" --no-tools --no-skills --name ai "$@"
+}
+
 # ainfo -- the read-only advisor: it researches and advises, it never changes anything. The user is the hands and the brain.
 #
 #   ainfo [question words...]       interactive: answers the question first, then stays open for follow-ups
