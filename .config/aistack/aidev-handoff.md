@@ -10,8 +10,9 @@ whole result once. No billed planning call. Works the same from Claude Code, Ope
 
 What to build: $ARGUMENTS (if empty, the change agreed in this conversation).
 
-1. Write the plan as two files in a new directory under your scratchpad (or `mktemp -d`). In advisor mode you cannot
-   write them or run aidev: show the user both files and the command instead.
+1. Write the plan as two files in a new directory `~/.ai/handoffs/YYYY-MM-DD-<slug>/` (any model may write there,
+   advisor mode included). In advisor mode you cannot run aidev: give the user the command in step 4 instead. When the
+   work comes from an RFC in `~/.ai/rfcs/`, name it in `description` and set that RFC's `status:` to `in-progress`.
    - `prd.json`: `{"name": "short-slug", "title": "...", "description": "...", "userStories": [{"id": "T1", "title": "...",
 "description": "...", "acceptanceCriteria": ["..."], "priority": 1, "passes": false, "dependsOn": []}]}`
    - `verify.json`: `{"T1": ["command"]}`

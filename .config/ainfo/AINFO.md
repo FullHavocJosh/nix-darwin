@@ -33,6 +33,13 @@ Change the policy in `ainfo_guard.py` and run `python3 -m unittest tests.test_gu
 
 Claude lists what it wants documented as `lumo_lookups`; the bridge sends them to Lumo (credentials redacted first) and hands the answer back. Every URL in the final advice is checked: a link that neither Lumo nor a tool returned is reported as UNVERIFIED.
 
+## RFCs
+
+Ask for an RFC ("write an RFC for this") and the relay calls `ainfo_rfc`: one Claude call, resuming the session so
+it has the research, writes the RFC as text, and the bridge (not Claude, which still cannot write) redacts it and
+saves it in `~/.ai/rfcs/YYYY-MM-DD-slug.md` (RFC 0003, `.config/ai/README.md`). Start from it in any tool, for
+example `aidev --rfc <name>`.
+
 ## Files
 
-State and transcripts live in `~/.ainfo/<project>-<hash>/` (never inside a repository): `state.json` (Claude session id, Lumo history, cost), `events.jsonl` (hand-offs), `advice-NNN.md`, and `pi/` (pi's own session files, used by `ainfo -c`).
+State and transcripts live in `~/.ai/ainfo/<project>-<hash>/` (never inside a repository): `state.json` (Claude session id, Lumo history, cost), `events.jsonl` (hand-offs), `advice-NNN.md`, and `pi/` (pi's own session files, used by `ainfo -c`).

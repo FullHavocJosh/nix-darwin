@@ -10,7 +10,8 @@ shell commands with argument checks (git, gh, kubectl, terraform, aws with a *-r
 remote command that passes the same check, and MCP tools judged by the words in their names. On top of it, advisor
 mode allows:
   - more built-in tools (WebFetch, Agent, Skill, AskUserQuestion, plan mode, tasks, artifacts)
-  - Edit/Write only in Claude's own files: the session scratchpad, ~/.claude/projects/*/memory, ~/.claude/plans
+  - Edit/Write only in Claude's own files: the session scratchpad, ~/.claude/projects/*/memory, ~/.claude/plans,
+    and the shared ~/.ai (RFC 0003) except ~/.ai/guard, where this hook keeps its on/off flags
   - `aws ssm send-command --document-name AWS-RunShellScript` with any profile when every command in it passes the
     read-only check, and reading the results (get-command-invocation, list-command-invocations, list-commands,
     describe-instance-information) with any profile
@@ -32,7 +33,7 @@ import time
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 HOME = os.path.expanduser("~")
-STATE_DIR = os.environ.get("CLAUDE_ADVISOR_STATE") or os.path.join(HOME, ".cache", "advisor")
+STATE_DIR = os.environ.get("CLAUDE_ADVISOR_STATE") or os.path.join(os.environ.get("AI_HOME") or os.path.join(HOME, ".ai"), "guard", "advisor")
 GUARD = os.environ.get("CLAUDE_ADVISOR_GUARD") or os.path.join(os.path.dirname(HERE), "ainfo", "ainfo_guard.py")
 
 READ_TOOLS = {
@@ -60,13 +61,17 @@ def load_guard():
 
 
 def own_file(path):
-    """Claude's own files: the session scratchpad, its memory and its plans."""
+    """Claude's own files: the session scratchpad, its memory and plans, and ~/.ai except ~/.ai/guard (RFC 0003)."""
     p = os.path.realpath(os.path.expanduser(str(path)))
     uid = os.getuid()
-    roots = [f"/private/tmp/claude-{uid}/", f"/tmp/claude-{uid}/", os.path.join(HOME, ".claude", "plans") + "/"]
+    claude = os.path.realpath(os.path.join(HOME, ".claude"))  # ~/.claude may be a symlink into a dotfiles repo
+    roots = [f"/private/tmp/claude-{uid}/", f"/tmp/claude-{uid}/", os.path.join(claude, "plans") + "/"]
     if any(p.startswith(r) for r in roots):
         return True
-    return bool(re.match(re.escape(os.path.join(HOME, ".claude", "projects")) + r"/[^/]+/memory/", p))
+    ai = os.path.realpath(os.environ.get("AI_HOME") or os.path.join(HOME, ".ai"))
+    if p.startswith(ai + "/") and not (p + "/").startswith(os.path.join(ai, "guard") + "/"):
+        return True  # the shared AI directory; guard/ holds this hook's own on/off flags
+    return bool(re.match(re.escape(os.path.join(claude, "projects")) + r"/[^/]+/memory/", p))
 
 
 def ssm_commands(raw):

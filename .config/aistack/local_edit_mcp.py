@@ -43,7 +43,7 @@ WHOLE_MAX_LINES = int(os.environ.get("LOCAL_EDIT_WHOLE_LINES", "200"))  # larger
 RANGE_MAX_LINES = int(os.environ.get("LOCAL_EDIT_RANGE_LINES", "250"))
 CONTEXT_LINES = int(os.environ.get("LOCAL_EDIT_CONTEXT_LINES", "5"))  # read-only lines shown around the region
 MAX_OUT_TOKENS = int(os.environ.get("LOCAL_EDIT_MAX_TOKENS", "6144"))
-STATE = os.path.join(os.environ.get("LOCAL_EDIT_STATE_DIR") or os.path.join(HOME, ".cache", "local-edit"))
+STATE = os.path.join(os.environ.get("LOCAL_EDIT_STATE_DIR") or os.path.join(os.environ.get("AI_HOME") or os.path.join(HOME, ".ai"), "cache", "local-edit"))
 LOCK = os.path.join(STATE, "edit.lock")  # held while an edit runs, by whichever session runs it
 LAST = os.path.join(STATE, "last-used")  # mtime = last time any session used the model
 PIDFILE = os.path.join(STATE, "server.pid")  # the running server, whichever session started it

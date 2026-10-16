@@ -21,7 +21,7 @@ files in `.config/aistack/` show: `ralph_mcp.py` (the MCP bridge and tools used 
   commands, failures are retried and then escalated, and a read-only reviewer checks the result. The local model
   follows the run with `ralph_status` and relays events.
 - Nothing aistack-related is written into the repository. Plans, runs, questions, reviews and Ralph's own state live
-  in the **state dir** (`AISTACK_STATE_DIR`, default `~/.aistack/<project key>`). Only the agents' code changes land
+  in the **state dir** (`AISTACK_STATE_DIR`, default `~/.ai/aidev/<project key>`). Only the agents' code changes land
   in the work dir (a git worktree, or the project itself).
 - Safety: the bridge only works inside `RALPH_MCP_ROOTS` (colon-separated). Agent names come from the environment the
   launcher sets, never from tool arguments.
@@ -139,6 +139,17 @@ writes a report whose first line is `Verdict: PASS` or `Verdict: FAIL`. `AISTACK
 **one** review call covers the whole run. `each` reviews one task per call; `off` skips review. If a review fails the
 run pauses for the user to rework (re-run the task with the findings) or accept it as is.
 
+## RFCs across tools (`~/.ai/rfcs`)
+
+Every tool writes under `~/.ai` (RFC 0003; layout in `.config/ai/README.md`). Any session can save work for later
+as an RFC in `~/.ai/rfcs/YYYY-MM-DD-slug.md` (format `.config/ai/rfc-template.md`), and any tool can start from one.
+
+- In aidev, ask for an RFC: the local model calls `ralph_save_rfc` (title, body); the bridge attaches the current
+  `plan/PLAN.txt` and saves it through `ai_home.write_rfc()`. No model call.
+- `aidev --rfc FILE [words...]` starts the planner with the RFC as the request (a bare name is looked up in
+  `~/.ai/rfcs`; at most 40000 bytes). The relay passes the full text to `ralph_plan`.
+- ainfo has `ainfo_rfc`; ai, Claude Code and OpenCode write the file with their own tools.
+
 ## Handoff from an interactive Claude Code session
 
 When a build was worked out in a normal Claude Code session, that session already holds the context, so pi's research
@@ -170,7 +181,7 @@ region, and Claude reviews the returned `changed`, `test` and capped `diff`. `/d
 
 - The 30B (~19 GB) cannot stay loaded next to the always-on 9B, so the MCP server starts it on port 8082 for an
   edit (~16-25 s) and stops it after `LOCAL_EDIT_IDLE_S` (120 s) without use, or when the Claude session ends. A
-  server another session started is reused (`~/.cache/local-edit/server.pid`), one edit runs at a time across
+  server another session started is reused (`~/.ai/cache/local-edit/server.pid`), one edit runs at a time across
   sessions (`edit.lock`), and nobody stops the server while an edit holds the lock.
 - Only hosts with 32 GB or more download the model (`llamacpp-local.nix`, `coderModel`); elsewhere the tool says it
   is unavailable and `/delegate` falls back to `aidev -p` (Big Pickle with a Zen key, otherwise aider on the 9B).
@@ -230,7 +241,7 @@ Plain `aidev` (the interactive planner) and `aidev --direct` stay with the user.
 `ai` is pi as the front end with Claude Code as the brain (`pi-claude.ts`, loaded only by `ai`).
 
 - Each message goes to `claude -p`, resuming one Claude session per conversation (`--session-id`, then `--resume`;
-  the last session per directory is kept in `~/.cache/aistack-pi-ai/claude-sessions.json` for `ai -c`). Claude runs
+  the last session per directory is kept in `~/.ai/ai/claude-sessions.json` for `ai -c`). Claude runs
   as itself, with your login, CLAUDE.md, MCP servers, hooks and advisor mode.
 - pi shows Claude's replies and tool calls.
 - Commands you run with pi's `!cmd` reach Claude, with their output, ahead of your next message.
@@ -248,15 +259,16 @@ On by default in every Claude Code session: Claude investigates and reviews, and
   a `*-ro` profile, except SSM: `aws ssm send-command --document-name AWS-RunShellScript` runs with any profile
   when every command in its `commands` passes the same read-only check, and the SSM result reads
   (`get-command-invocation`, `list-command-invocations`, `list-commands`, `describe-instance-information`) do too.
-  Edit/Write only in Claude's own files (session scratchpad, `~/.claude/projects/*/memory`, `~/.claude/plans`).
+  Edit/Write only in Claude's own files (session scratchpad, `~/.claude/projects/*/memory`, `~/.claude/plans`)
+  and in `~/.ai` (RFC 0003), except `~/.ai/guard`, which holds this hook's own flags.
 - Refused: every other edit, shell command, MCP call or tool, including local_edit and oczen_edit. The refusal tells
   Claude to give the exact command (or a diff) with what each part does, why, what it changes, and how to verify and
   undo it; the user runs it as `! <command>` so the output comes back for review. Refusals are logged to
-  `~/.cache/advisor/denied.jsonl` for tuning the read-only lists.
+  `~/.ai/guard/advisor/denied.jsonl` for tuning the read-only lists.
 - Off for one session: `! advisor off` (`! advisor on`, `! advisor status`); `~/.local/bin/advisor` links to the
-  hook, which keys a flag file in `~/.cache/advisor` by `CLAUDE_CODE_SESSION_ID`. Off at launch:
+  hook, which keys a flag file in `~/.ai/guard/advisor` by `CLAUDE_CODE_SESSION_ID`. Off at launch:
   `CLAUDE_ADVISOR=off claude`. Claude cannot switch it off: `advisor` is not a read-only command and the state
-  directory is outside the paths it may write.
+  directory (`~/.ai/guard`) is outside the paths it may write.
 - Fails closed: if the guard cannot load, the call is refused with a pointer to `! advisor off`.
 - Set up by `claudeAdvisorSetup` (`nix-modules/macos/packages-tui.nix`): hook registration, the output-style link
   (`outputStyle` set to `Advisor` when no style is set) and the `advisor` link.
@@ -271,7 +283,7 @@ without a permission prompt (permission `evaluate` hook), and `advisor-prompt.md
 (session `context` hook). Off for a session: switch to the `build` agent (Tab). Scripted runs (`oczen_mcp.py`,
 `aidev -p`, `opencode-auto.sh`) pass `--agent build`. A subagent whose parent is unknown counts as advisor, and a
 broken check refuses the call. `ADVISOR_DEBUG=1` logs every tool call the plugin sees to
-`~/.cache/advisor/opencode-tools.jsonl`. Tests: `node .config/aistack/tests/test_advisor_guard.mjs`.
+`~/.ai/guard/advisor/opencode-tools.jsonl`. Tests: `node .config/aistack/tests/test_advisor_guard.mjs`.
 
 OpenCode 2.x loads only V2 plugins: a default export `{ id, setup(ctx) }` that registers hooks with
 `ctx.tool.hook`, `ctx.permission.hook`, `ctx.session.hook` and `ctx.event.subscribe`. Older function exports fail
@@ -299,8 +311,8 @@ Files are sent to Lumo and Claude as **excerpts**, not by the local model copyin
 
 ## State dir
 
-The state dir is `AISTACK_STATE_DIR` when set, else `~/.aistack/<basename(project)>-<sha1(project)[:10]>` (with
-`AISTACK_HOME` defaulting to `~/.aistack`). It is outside the repository and holds everything (`plan_dir` is
+The state dir is `AISTACK_STATE_DIR` when set, else `~/.ai/aidev/<basename(project)>-<sha1(project)[:10]>` (with
+`AISTACK_HOME` defaulting to `~/.ai/aidev`). It is outside the repository and holds everything (`plan_dir` is
 `<state>/plan`, `runs_dir` is `<state>/runs`):
 
 - **`plan/prd.json`** — the plan: `name`, optional `title` (the PR title), optional `type` (`feat`/`fix`),
@@ -336,8 +348,8 @@ All are optional unless noted; the default is the code's fallback. Every name be
 | Variable                                 | Default                                                         | Meaning                                                                                     |
 | ---------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `RALPH_MCP_ROOTS`                        | _(none; required)_                                              | Colon-separated roots the bridge may run in. Without it the bridge refuses to run anywhere. |
-| `AISTACK_STATE_DIR`                      | `~/.aistack/<project>-<hash>`                                   | Where all aistack state lives.                                                              |
-| `AISTACK_HOME`                           | `~/.aistack`                                                    | Parent of the default state dir.                                                            |
+| `AISTACK_STATE_DIR`                      | `~/.ai/aidev/<project>-<hash>`                                  | Where all aistack state lives.                                                              |
+| `AISTACK_HOME`                           | `~/.ai/aidev`                                                   | Parent of the default state dir.                                                            |
 | `AISTACK_RESEARCH_CALLS`                 | `16`                                                            | Research budget for `repo_tree` / `repo_read` / `repo_grep`.                                |
 | `AISTACK_TIER0`                          | _(unset)_                                                       | `lumo` lets `ralph_plan` consult Lumo; `local` skips it because Lumo was unreachable.       |
 | `AISTACK_TIERS`                          | _(unset)_                                                       | Free text about tiers put in the draft PR body.                                             |

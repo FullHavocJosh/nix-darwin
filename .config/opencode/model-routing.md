@@ -11,3 +11,7 @@
   self-contained edit a check can verify: `AIDEV_TEST_CMD="<check>" aidev -p "<exact change. Change nothing else.>"
 <files>`, then review the diff. Plain `aidev` is the user's interactive planner: never run it yourself. In advisor
   mode, give the user the aidev command instead of running it.
+- Shared AI directory `~/.ai` (layout in `~/.ai/README.md`). When the user asks for an RFC, a plan or notes to pick
+  up later or in another tool, write `~/.ai/rfcs/YYYY-MM-DD-slug.md` in the format of `~/.ai/rfc-template.md`. Any
+  model may write anywhere in `~/.ai` except `~/.ai/guard/`. When the user points you at an RFC, read it first and
+  move its `status:` as the work moves (`ready`, `in-progress`, `done`). `aidev --rfc <name>` plans from one.

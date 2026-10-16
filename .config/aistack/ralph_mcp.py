@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """MCP bridge (stdio, JSON-RPC 2.0) between a chat agent (pi) and the aistack run driver.
 
-Tools: ralph_validate_plan, ralph_plan (Claude writes the plan), ralph_update_task, repo_tree / repo_read / repo_grep (aidev: budgeted research), ralph_run, ralph_status, ralph_respond, ralph_cancel, ralph_runs, lumo_consult (tier 0).
+Tools: ralph_validate_plan, ralph_plan (Claude writes the plan), ralph_update_task, repo_tree / repo_read / repo_grep (aidev: budgeted research), ralph_run, ralph_status, ralph_respond, ralph_cancel, ralph_runs, ralph_save_rfc (~/.ai/rfcs), lumo_consult (tier 0).
 Runs are detached processes (ralph_driver.py); tool calls return quickly, and ralph_status can wait up to
 45s for news so the chat agent can follow a run without a tight loop (MCP clients time out near 60s).
 
 Nothing aistack-related is written into the repository: plan files, runs, questions, reviews and Ralph's own
-state live in the state dir (AISTACK_STATE_DIR, ~/.aistack/<project key>). When the launcher found a main
+state live in the state dir (AISTACK_STATE_DIR, ~/.ai/aidev/<project key>). When the launcher found a main
 checkout (AISTACK_WORKTREE_MODE=create), the git worktree + draft PR is created by ralph_run, after the user has
 confirmed the plan; the agents then work there.
 
@@ -72,7 +72,7 @@ def state_dir(project):
     d = os.environ.get("AISTACK_STATE_DIR")
     if d:
         return os.path.realpath(os.path.expanduser(d))
-    home = os.environ.get("AISTACK_HOME") or os.path.expanduser("~/.aistack")
+    home = os.environ.get("AISTACK_HOME") or os.path.join(os.environ.get("AI_HOME") or os.path.expanduser("~/.ai"), "aidev")
     return os.path.join(
         home,
         f"{os.path.basename(project)}-{hashlib.sha1(project.encode()).hexdigest()[:10]}",
@@ -1563,6 +1563,24 @@ def tool_runs(a):
     return {"runs": out}
 
 
+def tool_save_rfc(a):
+    """Save an RFC in ~/.ai/rfcs (RFC 0003) for another model or tool to start from; the current plan goes with it."""
+    project = project_of(a)
+    title, body = str(a.get("title") or "").strip(), str(a.get("body") or "").strip()
+    if not title or not body:
+        return {"ok": False, "problem": "title and body are both required"}
+    try:
+        with open(os.path.join(plan_dir(project), "PLAN.txt")) as f:
+            body += "\n\n## Current aidev plan\n\n```\n" + f.read().strip() + "\n```\n"
+    except OSError:
+        pass
+    sys.path.insert(0, HERE)
+    import ai_home
+
+    path = ai_home.write_rfc(body, title=title, source="aidev/" + os.environ.get("LOCAL_LLM_MODEL", "local"), repo=project)
+    return {"ok": True, "saved_to": path, "next": f"tell the user the path; any tool can start from it (aidev --rfc {path})"}
+
+
 # ---- tier 0: Lumo (Proton's cloud assistant) as a tool-less drafting consultant -------------------------
 # Lumo cannot call tools, and the planner proxy (nix-modules/macos/lumo.nix) serves the Mini's own checkout,
 # not this project, so everything Lumo needs is sent inline. Only files the caller lists are sent, and never
@@ -2026,6 +2044,11 @@ TOOLS = {
         tool_runs,
         "List runs in this project (use after restarting the chat to find an unfinished run).",
         S({"project_dir": STR}, ["project_dir"]),
+    ),
+    "ralph_save_rfc": (
+        tool_save_rfc,
+        "When the user asks for an RFC (a plan saved for later, for another model or tool): saves it in ~/.ai/rfcs with the current plan attached. body: markdown with the request, what you found and the files that matter.",
+        S({"project_dir": STR, "title": STR, "body": STR}, ["project_dir", "title", "body"]),
     ),
     "lumo_consult": (
         tool_lumo_consult,
