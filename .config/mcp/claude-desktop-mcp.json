@@ -109,6 +109,10 @@
       "command": "python3",
       "args": ["__HOME__/.config/lumo/lumo_mcp.py"]
     },
+    "bigpickle": {
+      "command": "python3",
+      "args": ["__HOME__/.config/aistack/bigpickle_mcp.py"]
+    },
     "local-edit": {
       "command": "python3",
       "args": ["__HOME__/.config/aistack/local_edit_mcp.py"]

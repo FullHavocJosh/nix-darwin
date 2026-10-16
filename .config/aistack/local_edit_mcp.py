@@ -50,7 +50,8 @@ INSTRUCTIONS = (
     "pattern-based replacement is cheaper still as one sed or python command; if that is not possible or not "
     "allowed, use local_edit rather than editing by hand. Make single small or subtle edits "
     "yourself. Name every file it may change, end the instruction with 'Change nothing else.', pass test_cmd when a "
-    "check exists, and review the returned diff. It needs a gpr worktree, not a main checkout."
+    "check exists, and review the returned diff. It needs a gpr worktree, not a main checkout. If it is "
+    "unavailable or fails, bigpickle_edit (OpenCode Zen Big Pickle) takes the same request."
 )
 
 _mutex = threading.Lock()
@@ -192,25 +193,70 @@ def read(p):
         return None
 
 
-def local_edit(a):
+def check_request(a, allow_main_env="LOCAL_EDIT_ALLOW_MAIN"):
+    """Validates an edit request. Returns (request, None) or (None, error result). Shared with bigpickle_mcp.py."""
     instruction = str(a.get("instruction") or "").strip()
     files = [str(x) for x in (a.get("files") or []) if str(x).strip()]
     if not instruction or not files:
-        return {"ok": False, "error": "instruction and files are required"}
+        return None, {"ok": False, "error": "instruction and files are required"}
     base = os.getcwd()
     paths = resolve(files, base)
     readonly = resolve([str(x) for x in (a.get("read_only_files") or [])], base)
     root = repo_root(paths[0]) or (os.path.realpath(base) if repo_root(os.path.join(base, "x")) else None)
     if not root:
-        return {"ok": False, "error": f"{paths[0]} is not inside a git repository"}
+        return None, {"ok": False, "error": f"{paths[0]} is not inside a git repository"}
     outside = [p for p in paths + readonly if not (p == root or p.startswith(root + os.sep))]
     if outside:
-        return {"ok": False, "error": f"files must be inside the repository {root}: {outside}"}
-    if main_checkout(root) and os.environ.get("LOCAL_EDIT_ALLOW_MAIN") != "1":
-        return {"ok": False, "error": f"{root} is a main checkout: edits go in a gpr worktree (run gpr first, then pass "
-                "the worktree's files), the same rule the context-guardian hook applies to Edit and Write"}
-    test_cmd = str(a.get("test_cmd") or "").strip()
+        return None, {"ok": False, "error": f"files must be inside the repository {root}: {outside}"}
+    if main_checkout(root) and os.environ.get(allow_main_env) != "1":
+        return None, {"ok": False, "error": f"{root} is a main checkout: edits go in a gpr worktree (run gpr first, "
+                      "then pass the worktree's files), the same rule the context-guardian hook applies to Edit and "
+                      "Write"}
+    req = {"instruction": instruction, "paths": paths, "readonly": readonly, "root": root,
+           "test_cmd": str(a.get("test_cmd") or "").strip()}
+    return req, None
 
+
+def summarize(req, before, rc, log, secs, model, noise=()):
+    """The result both edit tools return: changed files with counts, a capped diff, the test result, and the tail of
+    the model's output when nothing changed or it failed."""
+    root, test_cmd = req["root"], req["test_cmd"]
+    changed, diff_lines = [], []
+    for path in req["paths"]:
+        old, new = before[path], read(path)
+        if old == new:
+            continue
+        rel = os.path.relpath(path, root)
+        d = list(difflib.unified_diff((old or "").splitlines(), (new or "").splitlines(), rel, rel, lineterm="", n=2))
+        plus = sum(1 for x in d if x.startswith("+") and not x.startswith("+++"))
+        minus = sum(1 for x in d if x.startswith("-") and not x.startswith("---"))
+        changed.append({"file": rel, "added": plus, "removed": minus, "created": old is None})
+        diff_lines += d
+    out = {"ok": rc == 0 and bool(changed), "seconds": secs, "model": model, "changed": changed}
+    if len(diff_lines) > DIFF_MAX_LINES:
+        out["diff"] = "\n".join(diff_lines[:DIFF_MAX_LINES]) + f"\n[diff cut at {DIFF_MAX_LINES} lines; git diff for the rest]"
+    else:
+        out["diff"] = "\n".join(diff_lines)
+    if test_cmd:
+        try:
+            t = subprocess.run(test_cmd, shell=True, cwd=root, capture_output=True, text=True, timeout=TEST_TIMEOUT_S)
+            out["test"] = {"cmd": test_cmd, "passed": t.returncode == 0,
+                           "tail": ((t.stdout or "") + (t.stderr or ""))[-1500:]}
+        except subprocess.TimeoutExpired:
+            out["test"] = {"cmd": test_cmd, "passed": False, "tail": f"timed out after {TEST_TIMEOUT_S} s"}
+        out["ok"] = out["ok"] and out["test"]["passed"]
+    if rc != 0 or not changed:
+        out["log"] = "\n".join([x for x in log.splitlines() if x.strip() and not x.startswith(noise)][-15:])
+        if not changed:
+            out["error"] = "the model changed none of the files; make the edit yourself"
+    return out
+
+
+def local_edit(a):
+    req, err = check_request(a)
+    if err:
+        return err
+    root, paths = req["root"], req["paths"]
     os.makedirs(STATE, exist_ok=True)
     with open(LOCK, "a") as lf:
         fcntl.flock(lf, fcntl.LOCK_EX)  # one edit at a time, across sessions
@@ -231,55 +277,26 @@ def local_edit(a):
                     "--yes-always", "--no-pretty", "--map-tokens", "0",
                     "--input-history-file", os.path.join(STATE, "input.history"),
                     "--chat-history-file", os.path.join(STATE, "chat.history.md")]
-            for r in readonly:
+            for r in req["readonly"]:
                 argv += ["--read", r]
-            if test_cmd:
-                argv += ["--test-cmd", test_cmd, "--auto-test"]
-            argv += ["--message", instruction] + paths
+            if req["test_cmd"]:
+                argv += ["--test-cmd", req["test_cmd"], "--auto-test"]
+            argv += ["--message", req["instruction"]] + paths
             t0 = time.time()
             try:
                 p = subprocess.run(argv, cwd=root, capture_output=True, text=True, timeout=EDIT_TIMEOUT_S,
                                    stdin=subprocess.DEVNULL, env={**os.environ, "BROWSER": "true"})
-                aider_out, aider_rc = (p.stdout or "") + (p.stderr or ""), p.returncode
+                log, rc = (p.stdout or "") + (p.stderr or ""), p.returncode
             except subprocess.TimeoutExpired:
-                aider_out, aider_rc = f"timed out after {EDIT_TIMEOUT_S} s", 124
+                log, rc = f"timed out after {EDIT_TIMEOUT_S} s", 124
             secs = round(time.time() - t0)
             touch_last()
         finally:
             fcntl.flock(lf, fcntl.LOCK_UN)
-
-    changed, diff_lines = [], []
-    for path in paths:
-        old, new = before[path], read(path)
-        if old == new:
-            continue
-        d = list(difflib.unified_diff((old or "").splitlines(), (new or "").splitlines(),
-                                      os.path.relpath(path, root), os.path.relpath(path, root), lineterm="", n=2))
-        plus = sum(1 for l in d if l.startswith("+") and not l.startswith("+++"))
-        minus = sum(1 for l in d if l.startswith("-") and not l.startswith("---"))
-        changed.append({"file": os.path.relpath(path, root), "added": plus, "removed": minus,
-                        "created": old is None})
-        diff_lines += d
-    out = {"ok": aider_rc == 0 and bool(changed), "seconds": secs, "model": ALIAS, "changed": changed}
-    if len(diff_lines) > DIFF_MAX_LINES:
-        out["diff"] = "\n".join(diff_lines[:DIFF_MAX_LINES]) + f"\n[diff cut at {DIFF_MAX_LINES} lines; git diff for the rest]"
-    else:
-        out["diff"] = "\n".join(diff_lines)
-    if test_cmd:
-        try:
-            t = subprocess.run(test_cmd, shell=True, cwd=root, capture_output=True, text=True, timeout=TEST_TIMEOUT_S)
-            out["test"] = {"cmd": test_cmd, "passed": t.returncode == 0, "tail": ((t.stdout or "") + (t.stderr or ""))[-1500:]}
-        except subprocess.TimeoutExpired:
-            out["test"] = {"cmd": test_cmd, "passed": False, "tail": f"timed out after {TEST_TIMEOUT_S} s"}
-        out["ok"] = out["ok"] and out["test"]["passed"]
-    if aider_rc != 0 or not changed:
-        noise = ("Tokens:", "Aider v", "Model:", "Git repo:", "Repo-map:", "Added ", "https://aider.chat")
-        tail = [l for l in aider_out.splitlines() if l.strip() and not l.startswith(noise)][-15:]
-        out["aider"] = "\n".join(tail)
-        if not changed:
-            out["error"] = "the model changed none of the files; make the edit yourself"
-        if "has hit a token limit" in aider_out:
-            out["error"] = "the model hit its output limit; split the edit into smaller ones or make it yourself"
+    out = summarize(req, before, rc, log, secs, ALIAS,
+                    noise=("Tokens:", "Aider v", "Model:", "Git repo:", "Repo-map:", "Added ", "https://aider.chat"))
+    if "has hit a token limit" in log:
+        out["error"] = "the model hit its output limit; split the edit into smaller ones or make it yourself"
     return out
 
 

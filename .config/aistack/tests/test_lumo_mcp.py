@@ -28,7 +28,12 @@ class Tamer(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         SEEN.append({"auth": self.headers.get("Authorization"), "body": body})
-        out = json.dumps({"choices": [{"message": {"content": "- Answer: yes\n- Links: https://example.org/doc"}}]}).encode()
+        msgs = body["messages"]
+        if "MEMORY" in msgs[0]["content"] and (len(msgs) == 1 or "ALWAYS" in msgs[0]["content"]):
+            content = "Answer: As of my last update the version was 1.0. No source found."
+        else:
+            content = "- Answer: yes\n- Links: https://example.org/doc"
+        out = json.dumps({"choices": [{"message": {"content": content}}]}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
@@ -69,6 +74,24 @@ check("the tamer key is sent as a bearer token", SEEN and SEEN[-1]["auth"] == "B
 check("secrets are redacted before the question leaves the machine", secret not in sent and "QUESTION" in sent, sent[:300])
 check("context is passed along", "tried gh auth status" in sent, sent[-200:])
 check("Lumo is told the date and to use web_search", "web_search" in sent and __import__("time").strftime("%Y-%m-%d") in sent, sent[:300])
+
+print("retry")
+n = len(SEEN)
+r = call([{"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "lumo_search", "arguments": {"question": "MEMORY test"}}}],
+         AISTACK_TAMER_URL=url, AISTACK_TAMER_KEY="k1")
+txt = r[0]["result"]["content"][0]["text"]
+check("an answer from memory is retried once and the searched answer kept",
+      len(SEEN) - n == 2 and "example.org/doc" in txt and "after one retry" in txt and "WARNING" not in txt, txt)
+check("the retry insists on web_search", "web_search" in SEEN[-1]["body"]["messages"][-1]["content"], SEEN[-1])
+n = len(SEEN)
+r = call([{"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "lumo_search", "arguments": {"question": "MEMORY ALWAYS"}}}],
+         AISTACK_TAMER_URL=url, AISTACK_TAMER_KEY="k1")
+txt = r[0]["result"]["content"][0]["text"]
+check("still from memory after the retry: a warning to check with WebFetch", len(SEEN) - n == 2 and "WARNING" in txt and "WebFetch" in txt, txt)
+n = len(SEEN)
+call([{"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": "lumo_search", "arguments": {"question": "normal"}}}],
+     AISTACK_TAMER_URL=url, AISTACK_TAMER_KEY="k1")
+check("a searched answer is not retried", len(SEEN) - n == 1)
 
 print("failures")
 r = call([{"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "lumo_search", "arguments": {"question": " "}}}])
