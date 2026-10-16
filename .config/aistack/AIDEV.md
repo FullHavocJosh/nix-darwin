@@ -42,11 +42,15 @@ The models that take part, from `planner-prompt.md` and the code:
 - **Claude Code (plan and review, billed).** `claude-plan.sh` writes the plan in **one** billed call (`ralph_plan`)
   and `claude-review.sh` reviews the whole result **once** at the end. `claude-work.sh` is the billed fallback agent
   used when a task keeps failing.
-- **Worker (builder, free).** Builds one task per agent session. The default is `opencode-pickle`
-  (`AISTACK_WORKER_AGENT`), the free OpenCode Zen model; `opencode-auto.sh` runs `opencode run --auto` for it, and
-  `zen_models.py` picks the free Zen model (tier 1).
-- **Fallback (`claude-work`, billed).** Used after the worker's attempts are exhausted, when a task keeps failing
-  verification (`AISTACK_FALLBACK_AGENT`).
+- **Worker (builder, free).** Builds one task per agent session (`AISTACK_WORKER_AGENT`, two attempts). On hosts
+  with the on-device Qwen3-Coder-30B (32 GB or more) it is `coder-30b`: pi on the 30B through `coder_pi.py`, which
+  shares local_edit's server, lock (one 30B job at a time) and 2-minute idle unload (RFC 0002). Elsewhere it is
+  `opencode-pickle`, the free OpenCode Zen model (`opencode-auto.sh` runs `opencode run --auto --agent build`;
+  `zen_models.py` picks the model).
+- **Escalation (`opencode-pickle`, free).** With the 30B as worker and a Zen key on the host, a task the 30B could not
+  get through verification goes to Big Pickle once (`AISTACK_ESCALATE_AGENT`, `AISTACK_ESCALATE_ATTEMPTS`).
+- **Fallback (`claude-work`, billed).** Used after the worker's (and escalation's) attempts are exhausted, when a task
+  keeps failing verification (`AISTACK_FALLBACK_AGENT`).
 - **Harness.** The `ralph_driver.py` loop decides a task is done: a task counts as `verified` only when its verify
   commands exit 0. Ralph's own completion marker alone never counts.
 

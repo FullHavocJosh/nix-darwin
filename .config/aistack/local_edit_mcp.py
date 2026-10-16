@@ -447,5 +447,22 @@ def main():
         stop_if_unused(0)
 
 
+def watch_until_stopped():
+    """`--stop-when-idle`: started detached by coder_pi.py (aidev's 30B builder), which has no MCP session to run
+    idle_watch. Stops the server after IDLE_S without use, then exits; one watcher at a time."""
+    os.makedirs(STATE, exist_ok=True)
+    with open(os.path.join(STATE, "watcher.lock"), "a") as lf:
+        try:
+            fcntl.flock(lf, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return  # another watcher is on it
+        while server_pid():
+            time.sleep(min(10, max(1, IDLE_S // 4)))
+            stop_if_unused(IDLE_S)
+
+
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:] == ["--stop-when-idle"]:
+        watch_until_stopped()
+    else:
+        main()

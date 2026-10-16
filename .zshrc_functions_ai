@@ -388,7 +388,7 @@ function _aidev_stack() {
   # (one request, up to 300 s), then one Claude call (AISTACK_PLAN_TIMEOUT_S, 280 s): 480 + 300 + 280 = 1060.
   local stack_name="aidev" mcp_timeout=1200
   local -a need_files
-  need_files=(ralph_mcp.py ralph_driver.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh claude-plan.sh claude-fetch.sh zen_models.py zen-policy.json)
+  need_files=(ralph_mcp.py ralph_driver.py coder_pi.py local_edit_mcp.py task-template.hbs review-template.hbs planner-prompt.md planner-tier0-lumo.md planner-tier0-local.md opencode-auto.sh claude-review.sh claude-work.sh claude-plan.sh claude-fetch.sh zen_models.py zen-policy.json)
 
   # ---- preflight ---------------------------------------------------------------------------------------------
   for f in $need_files; do
@@ -482,7 +482,16 @@ function _aidev_stack() {
   else
     echo "⚠ tier 1: OpenCode Zen is not set up on this host (no API key)."
   fi
-  if [[ -z "$zen_model" ]]; then
+  # RFC 0002: the on-device Qwen3-Coder-30B builds first where it is downloaded (hosts with 32 GB or more), in pi
+  # (coder_pi.py); the free Zen model takes over a task the 30B could not get through verification, and Claude
+  # (billed) only after that. Claude still plans and reviews; Lumo still does the web research.
+  local escalate="" coder_file="${LOCAL_EDIT_MODEL_FILE:-$HOME/models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf}"
+  if [[ -f "$coder_file" ]]; then
+    [[ -n "$zen_model" ]] && escalate="opencode-pickle"
+    worker="coder-30b"; fallback_attempts=1
+    worker_label="on-device Qwen3-Coder-30B (free)${escalate:+, then OpenCode $zen_model (free)}, then $claude_label (billed)"
+  fi
+  if [[ -z "$zen_model" && "$worker" != "coder-30b" ]]; then
     echo "⚠ Tier 1 has no free model, so $claude_label (billed) would build the tasks as well as review them."
     # A handoff usually runs from Claude Code's shell, where `read` gets no answer: never bill without a yes.
     if [[ -n "$handoff_dir" && "${AISTACK_ASSUME_YES:-}" != "1" ]]; then
@@ -532,6 +541,18 @@ timeout = 900000
   [agents.options]
   model = "$claude_model"
 TOML
+    if [[ "$worker" == "coder-30b" ]]; then
+      cat <<TOML
+
+[[agents]]
+name = "coder-30b"
+plugin = "pi"
+command = "$adir/coder_pi.py"
+timeout = 1500000
+  [agents.options]
+  model = "coder/qwen3-coder-30b"
+TOML
+    fi
     if [[ -n "$zen_model" ]]; then
       cat <<TOML
 
@@ -551,7 +572,7 @@ TOML
   if [[ -n "$handoff_dir" ]]; then
     local out
     out=$(cd "$project" && RALPH_MCP_ROOTS="$project" AISTACK_WORKER_AGENT="$worker" AISTACK_FALLBACK_AGENT="$fallback" \
-      AISTACK_REVIEW_AGENT="$reviewer" AISTACK_FALLBACK_ATTEMPTS="$fallback_attempts" RALPH_TUI_BIN="$ralph_bin" \
+      AISTACK_ESCALATE_AGENT="$escalate" AISTACK_REVIEW_AGENT="$reviewer" AISTACK_FALLBACK_ATTEMPTS="$fallback_attempts" RALPH_TUI_BIN="$ralph_bin" \
       AISTACK_TIER0="$tier0" AISTACK_STATE_DIR="$state_dir" AISTACK_WORKTREE_MODE="$wt_mode" \
       AISTACK_REVIEW_MODE="${AISTACK_REVIEW_MODE:-batch}" \
       AISTACK_TIERS="plan Claude Code session (handed off); build ${worker_label}; review $claude_label (billed)" \
@@ -577,15 +598,19 @@ TOML
   # pi: isolated agent dir (models.json for llama-server, mcp.json for the bridge), regenerated every run.
   local pi_dir="$cache_dir/aistack-pi/$(echo -n "$project" | shasum | cut -c1-10)"
   mkdir -p "$pi_dir"
+  # thinkingFormat qwen-chat-template: pi's --thinking reaches Qwen3.5 as chat_template_kwargs.enable_thinking (it
+  # ignores reasoning_effort). The relay runs with thinking off (AISTACK_RELAY_THINKING, default off): measured
+  # 2026-10-16, ainfo answers took half the time (39 -> 21 s, 88 -> 41 s) and aidev research 17% less, same tool calls.
   jq -n --arg url "${endpoint}/v1" --arg id "$lms_model" \
-    '{providers: {llamacpp: {baseUrl: $url, api: "openai-completions", apiKey: "sk-local", models: [{id: $id, reasoning: true}]}}}' \
+    '{providers: {llamacpp: {baseUrl: $url, api: "openai-completions", apiKey: "sk-local", models: [{id: $id, reasoning: true, compat: {thinkingFormat: "qwen-chat-template"}}]}}}' \
     > "$pi_dir/models.json"
   local tiers_text="research local $lms_model; plan $claude_label (billed); build ${worker_label}; review $claude_label (billed)"
   jq -n --arg py "$(command -v python3)" --arg bridge "$adir/ralph_mcp.py" --arg root "$project" \
-    --arg worker "$worker" --arg fallback "$fallback" --arg reviewer "$reviewer" --arg fa "$fallback_attempts" \
+    --arg worker "$worker" --arg escalate "$escalate" --arg fallback "$fallback" --arg reviewer "$reviewer" --arg fa "$fallback_attempts" \
     --arg ralph "$ralph_bin" --arg tier0 "$tier0" --arg state "$state_dir" --arg wtmode "$wt_mode" --arg reviewmode "${AISTACK_REVIEW_MODE:-batch}" --arg tiers "$tiers_text" --arg to "$mcp_timeout" --arg urls "$req_urls" \
     '{mcpServers: {ralph: {command: $py, args: [$bridge],
-       env: {RALPH_MCP_ROOTS: $root, AISTACK_WORKER_AGENT: $worker, AISTACK_FALLBACK_AGENT: $fallback,
+       env: {RALPH_MCP_ROOTS: $root, AISTACK_WORKER_AGENT: $worker, AISTACK_ESCALATE_AGENT: $escalate,
+             AISTACK_FALLBACK_AGENT: $fallback,
              AISTACK_REVIEW_AGENT: $reviewer, AISTACK_FALLBACK_ATTEMPTS: $fa, RALPH_TUI_BIN: $ralph,
              AISTACK_TIER0: $tier0, AISTACK_STATE_DIR: $state, AISTACK_WORKTREE_MODE: $wtmode,
              AISTACK_REVIEW_MODE: $reviewmode, AISTACK_TIERS: $tiers, AISTACK_REQUEST_URLS: $urls},
@@ -633,7 +658,8 @@ TOML
   #   ralph_update_task                   the one way to change a plan; it can only touch the plan files
   # pi's --tools is an allowlist, so anything not named here does not exist for the model.
   local tools="mcp__ralph__repo_tree,mcp__ralph__repo_read,mcp__ralph__repo_grep,mcp__ralph__ralph_validate_plan,mcp__ralph__ralph_plan,mcp__ralph__ralph_update_task,mcp__ralph__ralph_run,mcp__ralph__ralph_status,mcp__ralph__ralph_respond,mcp__ralph__ralph_cancel,mcp__ralph__ralph_runs,$github_tools"
-  local session_name="aidev: research local, plan claude, build ${zen_model:-claude}, review claude"
+  local builder="${zen_model:-claude}"; [[ "$worker" == "coder-30b" ]] && builder="30b${escalate:+, then $zen_model}"
+  local session_name="aidev: research local, plan claude, build $builder, review claude"
   # A small model weighs the last thing it read most, so the request itself carries the rules.
   [[ -n "$task" ]] && task="REQUEST FROM THE USER: $task
 
@@ -646,7 +672,7 @@ CONTENT OF THE URLS IN THE REQUEST (fetched by Claude Code at start; ralph_plan 
   (
     cd "$project" || exit 1
     PI_CODING_AGENT_DIR="$pi_dir" pi --provider llamacpp --model "$lms_model" --name "$session_name" --no-skills \
-      --append-system-prompt "$prompt" --tools "$tools" "${extra[@]}" ${task:+"$task"}
+      --thinking "${AISTACK_RELAY_THINKING:-off}" --append-system-prompt "$prompt" --tools "$tools" "${extra[@]}" ${task:+"$task"}
   )
   local rc=$?
 
@@ -692,14 +718,17 @@ function _aidev_opencode() {
 #
 #   aidev [task words...]        e.g.  aidev add a --json flag to the report command
 #   aidev                        then describe the work as pi's first message
-#   aidev --direct [args...]     a plain interactive OpenCode Zen session (Big Pickle)
-#   aidev -p "prompt"            one headless OpenCode Zen call (any flag means --direct)
+#   aidev --direct [args...]     an interactive edit session: aider on the on-device 30B where it exists, else
+#                                OpenCode Zen (Big Pickle), else aider on the 9B
+#   aidev -p "prompt"            one headless edit, same order; a 30B edit that changes nothing or fails
+#                                AIDEV_TEST_CMD goes on to Big Pickle when there is a Zen key (any flag means --direct)
 #   aidev --handoff DIR          run a plan an interactive Claude Code session wrote (DIR/prd.json, DIR/verify.json;
 #                                the /aidev-handoff command writes them): no pi, no billed planning call
 #
 # Who does what:  the local model in pi talks to you, finds the code and follows the run (free);  Lumo adds a draft
 # with online research when MacMiniM1 is reachable (free);  Claude Code writes the plan in ONE call from that research
-# (ralph_plan + claude-plan.sh);  OpenCode's free model builds;  Claude Code reviews once at the end.
+# (ralph_plan + claude-plan.sh);  the on-device 30B builds (Big Pickle when it fails and a Zen key exists, then
+# Claude, billed);  Claude Code reviews once at the end. The relay runs with thinking off (AISTACK_RELAY_THINKING).
 # The stack itself is _aidev_stack above. `aistack` is an alias for this command.
 function aidev() {
   local direct=false handoff=""
@@ -800,8 +829,11 @@ function ainfo() {
   [[ "$tier0" == "lumo" ]] || lumo_note="Lumo NOT reachable: advice will carry no online documentation (run lumoreauth, or check lumo-tamer)"
   local claude_model="${AINFO_CLAUDE_MODEL:-${AISTACK_CLAUDE_MODEL:-sonnet}}"
 
+  # thinkingFormat qwen-chat-template: pi's --thinking reaches Qwen3.5 as chat_template_kwargs.enable_thinking (it
+  # ignores reasoning_effort). The relay runs with thinking off (AISTACK_RELAY_THINKING, default off): measured
+  # 2026-10-16, ainfo answers took half the time (39 -> 21 s, 88 -> 41 s) and aidev research 17% less, same tool calls.
   jq -n --arg url "${endpoint}/v1" --arg id "$lms_model" \
-    '{providers: {llamacpp: {baseUrl: $url, api: "openai-completions", apiKey: "sk-local", models: [{id: $id, reasoning: true}]}}}' \
+    '{providers: {llamacpp: {baseUrl: $url, api: "openai-completions", apiKey: "sk-local", models: [{id: $id, reasoning: true, compat: {thinkingFormat: "qwen-chat-template"}}]}}}' \
     > "$pi_dir/models.json"
   jq -n --arg py "$(command -v python3)" --arg bridge "$adir/ainfo_mcp.py" --arg root "$project" --arg state "$state_dir" --arg sdir "$sdir" \
     '{mcpServers: {ainfo: {command: $py, args: [$bridge],
@@ -825,7 +857,8 @@ function ainfo() {
 
   local tools="mcp__ainfo__ainfo_investigate,mcp__ainfo__ainfo_ask_claude,mcp__ainfo__ainfo_ask_lumo,mcp__ainfo__ainfo_wait,mcp__ainfo__ainfo_cancel"
   local -a flags extra
-  flags=(--provider llamacpp --model "$lms_model" --name "ainfo" --no-skills --append-system-prompt "$prompt" --tools "$tools")
+  flags=(--provider llamacpp --model "$lms_model" --name "ainfo" --no-skills --thinking "${AISTACK_RELAY_THINKING:-off}"
+    --append-system-prompt "$prompt" --tools "$tools")
   $cont && flags+=(-c)
   $print_mode && flags+=(-p)
   extra=(${=AINFO_PI_EXTRA})
@@ -853,7 +886,11 @@ function _aidev_aider() {
     http://127.0.0.1:*|http://localhost:*|http://\[::1\]:*) ;;
     *) echo "${RED}✗${NC} AIDEV_CODER_HOST must be a loopback address, got $endpoint" >&2; return 1 ;;
   esac
-  if ! curl -s --max-time 3 "${endpoint}/v1/models" 2>/dev/null | grep -q "\"${model}\""; then
+  # AIDEV_CODER_HOLD=1: the on-device 30B, which coder_pi.py loads on demand and holds for this one job (RFC 0002)
+  local -a wrap
+  if [[ "${AIDEV_CODER_HOLD:-}" == "1" ]]; then
+    wrap=(python3 "${AISTACK_DIR:-$HOME/.config/aistack}/coder_pi.py" --hold --)
+  elif ! curl -s --max-time 3 "${endpoint}/v1/models" 2>/dev/null | grep -q "\"${model}\""; then
     echo "${RED}✗${NC} The local coder model $model is not served at $endpoint." >&2
     return 1
   fi
@@ -884,26 +921,19 @@ YAML
   [[ -n "${AIDEV_TEST_CMD:-}" ]] && flags+=(--test-cmd "$AIDEV_TEST_CMD" --auto-test)
   echo "${GREEN}✓${NC} aider on the local model: $model ($endpoint)"
   if $print_mode; then
-    BROWSER=true aider "${flags[@]}" --yes-always --no-pretty --message "${rest[*]}"
+    BROWSER=true "${wrap[@]}" aider "${flags[@]}" --yes-always --no-pretty --message "${rest[*]}"
   else
-    aider "${flags[@]}" ${rest:+--message "${rest[*]}"}
+    "${wrap[@]}" aider "${flags[@]}" ${rest:+--message "${rest[*]}"}
   fi
 }
 
-# The direct session: OpenCode Zen with the model opencode.json sets (Big Pickle), the stack's coding/editing agent.
+# The direct session: the on-device 30B (aider), then OpenCode Zen with the model opencode.json sets (Big Pickle).
 # Used by `aidev --direct`, `aidev -p`, and the gpa/gpc fix helpers, which need a model that edits a file now rather
 # than a planned run.
 function _aidev_direct() {
   local GREEN='\033[0;32m'
   local RED='\033[0;31m'
   local NC='\033[0m'
-
-  # No OpenCode Zen API key on this host (the work machine, where only on-device models and Claude Code are allowed):
-  # edit with aider on the local model instead.
-  if ! _validate_opencode_zen 2>/dev/null; then
-    _aidev_aider "$@"
-    return
-  fi
 
   # claude-style -p/--print means one headless call: `opencode run` (see _aidev_opencode).
   local print_mode=false
@@ -915,6 +945,35 @@ function _aidev_direct() {
       filtered_args+=("$arg")
     fi
   done
+
+  # RFC 0002: the on-device Qwen3-Coder-30B edits first where it is downloaded (aider on it; one 30B job at a time,
+  # shared with local_edit). A headless edit it leaves unchanged, or whose AIDEV_TEST_CMD still fails, goes on to
+  # OpenCode Zen (Big Pickle) when this host has a Zen key.
+  local coder_file="${LOCAL_EDIT_MODEL_FILE:-$HOME/models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf}"
+  if [[ -f "$coder_file" ]]; then
+    local before after rc
+    before=$({ git status --porcelain=v1 -uall; git diff; } 2>/dev/null | shasum)
+    AIDEV_CODER_HOST="http://127.0.0.1:${LOCAL_EDIT_PORT:-8082}" AIDEV_CODER_MODEL="${LOCAL_EDIT_ALIAS:-qwen3-coder-30b}" \
+      AIDEV_CODER_HOLD=1 _aidev_aider "$@"
+    rc=$?
+    $print_mode || return $rc
+    after=$({ git status --porcelain=v1 -uall; git diff; } 2>/dev/null | shasum)
+    local why=""
+    if (( rc != 0 )); then why="aider exited $rc"
+    elif [[ "$before" == "$after" ]]; then why="it changed nothing"
+    elif [[ -n "${AIDEV_TEST_CMD:-}" ]] && ! (eval "$AIDEV_TEST_CMD") >/dev/null 2>&1; then why="AIDEV_TEST_CMD still fails"
+    fi
+    [[ -z "$why" ]] && return 0
+    if ! _validate_opencode_zen 2>/dev/null; then
+      echo "${RED}✗${NC} The on-device 30B did not finish the edit ($why), and this host has no OpenCode Zen key to escalate to." >&2
+      return 1
+    fi
+    echo "↗ The on-device 30B did not finish the edit ($why); escalating to OpenCode Zen."
+  elif ! _validate_opencode_zen 2>/dev/null; then
+    # No 30B and no OpenCode Zen API key on this host: edit with aider on the always-on 9B instead.
+    _aidev_aider "$@"
+    return
+  fi
 
   local model=""
   local config_file="$HOME/.config/opencode/opencode.json"

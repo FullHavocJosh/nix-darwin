@@ -272,7 +272,10 @@ class Run:
     def work_task(self, tid):
         story = self.story(tid)
         t = self.tasks[tid]
+        # worker attempts, then the escalation agent (RFC 0002: Big Pickle after the on-device 30B), then the fallback
+        escalate = self.cfg.get("escalate_agent") or ""
         plan = ([self.cfg["worker_agent"]] * int(self.cfg.get("worker_attempts", 2)) +
+                ([escalate] * int(self.cfg.get("escalate_attempts", 1)) if escalate else []) +
                 [self.cfg["fallback_agent"]] * int(self.cfg.get("fallback_attempts", 1)))
         i = 0
         while i < len(plan):
@@ -424,7 +427,8 @@ class Run:
         self.load_plan()
         self.save(state="running")
         self.event("run_started", None, f"{len(self.tasks)} tasks; worker={self.cfg['worker_agent']} "
-                   f"fallback={self.cfg['fallback_agent']} reviewer={self.cfg['reviewer_agent']}")
+                   + (f"escalate={self.cfg['escalate_agent']} " if self.cfg.get("escalate_agent") else "")
+                   + f"fallback={self.cfg['fallback_agent']} reviewer={self.cfg['reviewer_agent']}")
         while True:
             # ---- work phase
             while True:
