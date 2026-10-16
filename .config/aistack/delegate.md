@@ -23,17 +23,21 @@ Steps:
 
 1. `git status --short`: the files to edit should have no uncommitted changes of yours, so you can tell its work
    apart. Commit through gpa first if needed.
-2. Call `local_edit` with:
-   - `instruction`: the exact change, file by file, with names, signatures and edge cases, ending with
+2. Call `local_edit` once per file (one edit at a time keeps the model's context small), with:
+   - `instruction`: the exact change in that region, with names, signatures and edge cases, ending with
      "Change nothing else."
-   - `files`: every file it may change or create; `read_only_files`: files it should only read.
-   - `test_cmd`: a command that exits 0 when the edit is right. Failures go back to the model before it answers.
-3. Review what it returns: `changed`, `test`, and `diff` (capped; `git diff` for the rest). Read only what you need.
-4. Fix small deviations yourself. If it went wrong, `git checkout -- <files>` and make the edit yourself; do not
+   - `file`: the one file to change or create.
+   - `start_line` / `end_line`: the lines to rewrite (1-based, inclusive). The model sees only those lines plus 5
+     numbered lines of context on each side. Required for files over 200 lines; at most 250 lines per call. Omit
+     both for a small whole file or a new file.
+   - `test_cmd`: a command that exits 0 when the edit is right. A failure goes back to the model once.
+3. Review what it returns: `changed` (file and lines), `test`, and `diff` (capped; `git diff` for the rest).
+4. Fix small deviations yourself. If it went wrong, `git checkout -- <file>` and make the edit yourself; do not
    delegate the same thing twice.
 
 If `local_edit` is unavailable (the model is not on hosts below 32 GB) or fails, send the same request to
-`bigpickle_edit` (OpenCode Zen Big Pickle, where a Zen key exists). With neither, use `aidev -p "<spec>" <files>` from
+`oczen_edit` (OpenCode Zen Big Pickle, where a Zen key exists; changes outside the range are reverted). With
+neither, use `aidev -p "<spec>" <files>` from
 the work directory (aider on the 9B), output redirected to a file. Same rules, same review.
 
 A PreToolUse hook (`edit_router_hook.py`) enforces this: the third different file edited by hand in one request is

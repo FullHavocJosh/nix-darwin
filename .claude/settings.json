@@ -13,7 +13,7 @@
     "allow": [
       "mcp__lumo__lumo_search",
       "mcp__local-edit__local_edit",
-      "mcp__bigpickle__bigpickle_edit"
+      "mcp__oczen__oczen_edit"
     ]
   },
   "model": "opus",

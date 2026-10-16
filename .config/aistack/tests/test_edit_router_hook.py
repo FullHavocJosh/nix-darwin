@@ -1,4 +1,4 @@
-"""Tests for edit_router_hook.py (third hand-edited file in one request goes to local_edit / bigpickle_edit).
+"""Tests for edit_router_hook.py (third hand-edited file in one request goes to local_edit / oczen_edit).
 Fake transcripts, a scratch repo with a linked worktree, a temporary HOME; no Claude, no model.
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_edit_router_hook.py
 """
@@ -89,7 +89,7 @@ check("another session has its own record", run(prompt, f"{WT}/p9.py", state=st,
 print("exceptions")
 check("allowed when no delegate exists (no 30B, no Zen key)", run([entry_user("go")] + edits("a.py", "b.py"), f"{WT}/c.py", model=False) is None)
 d = run([entry_user("go")] + edits("a.py", "b.py"), f"{WT}/c.py", model=False, key=True)
-check("only Big Pickle available: refused, pointing to bigpickle_edit only", d and "bigpickle_edit" in d["permissionDecisionReason"] and "local_edit instead" not in d["permissionDecisionReason"].split("Prefer")[0], d)
+check("only Big Pickle available: refused, pointing to oczen_edit only", d and "oczen_edit" in d["permissionDecisionReason"] and "local_edit instead" not in d["permissionDecisionReason"].split("Prefer")[0], d)
 check("allowed outside a linked worktree (main checkout)", run([entry_user("go")] + edits("a.py", "b.py"), f"{MAIN}/c.py") is None)
 failed = [entry_tool("mcp__local-edit__local_edit", {"instruction": "x", "files": ["c.py"]}, "d1"), entry_result("d1", error=True)]
 check("allowed after a failed delegation in this request", run([entry_user("go")] + edits("a.py", "b.py") + failed, f"{WT}/c.py") is None)
@@ -99,6 +99,8 @@ check("a successful delegation does not unlock other files", (run([entry_user("g
 check("fixing up a delegated file (absolute or relative path) is allowed",
       run([entry_user("go")] + edits("a.py", "b.py") + [entry_tool("mcp__local-edit__local_edit", {"instruction": "x", "files": [f"{WT}/d.py", "e.py"]}, "d3"), entry_result("d3")], f"{WT}/d.py") is None
       and run([entry_user("go")] + edits("a.py", "b.py") + [entry_tool("mcp__local-edit__local_edit", {"instruction": "x", "files": [f"{WT}/d.py", "e.py"]}, "d4"), entry_result("d4")], f"{WT}/e.py") is None)
+single = [entry_tool("mcp__local-edit__local_edit", {"instruction": "x", "file": "f.py", "start_line": 1, "end_line": 2}, "d5"), entry_result("d5")]
+check("fixing up the single file a delegation edited is allowed", run([entry_user("go")] + edits("a.py", "b.py") + single, f"{WT}/f.py") is None)
 check("CLAUDE_EDIT_ROUTER=off disables it", run([entry_user("go")] + edits("a.py", "b.py"), f"{WT}/c.py", env={"CLAUDE_EDIT_ROUTER": "off"}) is None)
 check("a broken transcript fails open", run([], f"{WT}/c.py") is None)
 

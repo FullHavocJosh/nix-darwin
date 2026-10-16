@@ -146,10 +146,12 @@ let
         deny.append("WebSearch")
     # The free tools that take work from Claude run without a permission prompt.
     allow = settings["permissions"].setdefault("allow", [])
-    for tool in ("mcp__lumo__lumo_search", "mcp__local-edit__local_edit", "mcp__bigpickle__bigpickle_edit"):
+    if "mcp__bigpickle__bigpickle_edit" in allow:  # renamed to oczen_edit
+        allow.remove("mcp__bigpickle__bigpickle_edit")
+    for tool in ("mcp__lumo__lumo_search", "mcp__local-edit__local_edit", "mcp__oczen__oczen_edit"):
         if tool not in allow:
             allow.append(tool)
-    # edit_router_hook.py: the third file edited by hand in one request goes to local_edit / bigpickle_edit.
+    # edit_router_hook.py: the third file edited by hand in one request goes to local_edit / oczen_edit.
     router = "python3 \"$HOME/.config/aistack/edit_router_hook.py\""
     if not any(h.get("command") == router for r in hooks.get("PreToolUse", []) for h in r.get("hooks", [])):
         hooks.setdefault("PreToolUse", []).append(
@@ -179,10 +181,11 @@ let
     - Commits and PRs: gpr / gpa (the local 9B reviews; write the message yourself with -m/-d).
     - Public web research: lumo_search (WebSearch is off). WebFetch only for an exact URL you already have.
     - Edits touching 3+ files or needing 5+ edits that you can state precisely: local_edit (free on-device coder
-      model) with a test_cmd, then review its diff; bigpickle_edit (OpenCode Zen, free, cloud) when local_edit is
-      unavailable or failed. Measured: 3 turns/$0.09 vs 18 turns/$0.16 by hand. Pure pattern replacements: one sed or
-      python command; if that is not possible or not allowed, local_edit, not Edit by hand. A single small or subtle
-      edit: make it yourself. Enforced: a hook refuses the third file edited by hand in one request.
+      model), one call per file with start_line/end_line where you can and a test_cmd, then review its diff;
+      oczen_edit (OpenCode Zen, free, cloud, same request) when local_edit is unavailable or failed. Measured: 3
+      turns/$0.09 vs 18 turns/$0.16 by hand. Pure pattern replacements: one sed or python command; if that is not
+      possible or not allowed, local_edit, not Edit by hand. A single small or subtle edit: make it yourself.
+      Enforced: a hook refuses the third file edited by hand in one request.
     - A feature planned in this session: /aidev-handoff (free builder, one Claude review).
     - Private sources (GitHub, Terraform, Atlassian and other MCP servers) and judgment calls: yourself.
     """.replace("\n    ", "\n").rstrip() + "\n" + end
