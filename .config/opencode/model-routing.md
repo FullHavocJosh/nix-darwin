@@ -6,3 +6,8 @@
 - Library and framework documentation: the context7 tools (through mcp-lazy).
 - Edits: make them yourself. `local_edit` (the on-device coder model) is there for a large mechanical edit the user
   wants kept on this machine.
+- aidev (free builders: the on-device 30B, then Big Pickle; one Claude review). To hand off a feature you planned
+  with the user, use the `/aidev-handoff` command: you write the plan and `aidev --handoff <dir>` builds it. For one
+  self-contained edit a check can verify: `AIDEV_TEST_CMD="<check>" aidev -p "<exact change. Change nothing else.>"
+<files>`, then review the diff. Plain `aidev` is the user's interactive planner: never run it yourself. In advisor
+  mode, give the user the aidev command instead of running it.

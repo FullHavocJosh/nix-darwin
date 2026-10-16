@@ -1,15 +1,17 @@
 ---
-description: Hand the build of the work discussed in this session to aidev (free OpenCode worker, one Claude review)
+description: Hand the build of the work discussed in this session to aidev (free builders, one Claude review)
 argument-hint: "[what to build, if not obvious from the conversation]"
 ---
 
 Hand off the build to aidev instead of building it in this session. This session already holds the context, so it
-writes the plan once; aidev's free worker (OpenCode Zen, Big Pickle) builds it task by task, a task counts as done only
-when its verify commands exit 0, and Claude Code reviews the whole result once. No billed planning call.
+writes the plan once; aidev's free builders (the on-device 30B where it exists, Big Pickle when it fails or there is
+no 30B) build it task by task, a task counts as done only when its verify commands exit 0, and Claude Code reviews the
+whole result once. No billed planning call. Works the same from Claude Code, OpenCode and pi.
 
 What to build: $ARGUMENTS (if empty, the change agreed in this conversation).
 
-1. Write the plan as two files in a new directory under your scratchpad (or `mktemp -d`):
+1. Write the plan as two files in a new directory under your scratchpad (or `mktemp -d`). In advisor mode you cannot
+   write them or run aidev: show the user both files and the command instead.
    - `prd.json`: `{"name": "short-slug", "title": "...", "description": "...", "userStories": [{"id": "T1", "title": "...",
 "description": "...", "acceptanceCriteria": ["..."], "priority": 1, "passes": false, "dependsOn": []}]}`
    - `verify.json`: `{"T1": ["command"]}`
@@ -26,7 +28,7 @@ What to build: $ARGUMENTS (if empty, the change agreed in this conversation).
    - At most 6 tasks. Only plan what you have checked in the code during this session.
 3. Show the user the tasks and verify commands, and wait for a clear yes. Nothing starts before that.
 4. From the repository's main checkout (or the directory the agents should work in), run:
-   `zsh -i -c 'aidev --handoff <plan dir>'`
+   `aidev --handoff <plan dir>`
    In a main checkout this creates a git worktree and a draft PR through `gpr`, then starts the run in the
    background. It prints one JSON object: `started`, `run_id`, `work_dir`, `pr_url`, `events`, or `problems` /
    `problem` when it refused. On `problems`, fix the plan files and run it again.

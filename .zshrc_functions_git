@@ -165,6 +165,8 @@ function _run_linters() {
   local recheck="${2:-false}"   # true on the pass after auto-fix: issues that remain are final, never fix again (no recursion)
   local files=()
   while IFS= read -r file; do
+    # a symlink is linted at its target; prettier refuses symlinks ("is a symbolic link") and the check never passes
+    [[ -L "$file" ]] && continue
     files+=("$file")
   done < <(git diff --cached --name-only)
   

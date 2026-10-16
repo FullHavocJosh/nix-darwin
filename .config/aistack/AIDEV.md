@@ -205,6 +205,35 @@ region, and Claude reviews the returned `changed`, `test` and capped `diff`. `/d
   (default 1.5 USD), `AISTACK_CLAUDE_BUDGET_REVIEW` (1.5), `AISTACK_CLAUDE_BUDGET_WORK` (3),
   `AISTACK_CLAUDE_MODEL` (default `sonnet`) and `AISTACK_CLAUDE_EFFORT` (default `medium`).
 
+## aidev from other agents, and `ai`
+
+Every agent session knows aidev and can use its two headless forms:
+
+- `AIDEV_TEST_CMD="<check>" aidev -p "<exact change>" <files>`: one edit, the on-device 30B, then Big Pickle;
+- `aidev --handoff <dir>`: a plan the agent wrote (the `/aidev-handoff` command), built by the free builders, one
+  Claude review.
+
+Plain `aidev` (the interactive planner) and `aidev --direct` stay with the user.
+
+- Instructions: the CLAUDE.md routing block (`claudeRoutingRules`), OpenCode's `model-routing.md`, pi's
+  `.pi/agent/AGENTS.md`.
+- `/aidev-handoff`: one file, `aidev-handoff.md`, linked into Claude Code's, OpenCode's and pi's command directories.
+- Shells: aidev is a zsh function, so OpenCode, pi and scripts reach it through `~/.local/bin/aidev` (`aidev-cli`).
+  It runs the function in an interactive zsh, allows only `-p` and `--handoff`, and refuses inside an aidev run
+  (`AISTACK_STATE_DIR` set).
+- In advisor mode the agent gives the user the aidev command instead of running it.
+
+`ai` is pi as the front end with Claude Code as the brain (`pi-claude.ts`, loaded only by `ai`).
+
+- Each message goes to `claude -p`, resuming one Claude session per conversation (`--session-id`, then `--resume`;
+  the last session per directory is kept in `~/.cache/aistack-pi-ai/claude-sessions.json` for `ai -c`). Claude runs
+  as itself, with your login, CLAUDE.md, MCP servers, hooks and advisor mode.
+- pi shows Claude's replies and tool calls.
+- Commands you run with pi's `!cmd` reach Claude, with their output, ahead of your next message.
+- `/advisor on|off|status` switches advisor mode for the conversation.
+- `AI_CLAUDE_MODEL` (default sonnet) and `AI_CLAUDE_ARGS` adjust the call.
+- ainfo and aidev are unchanged.
+
 ## Advisor mode (Claude Code)
 
 On by default in every Claude Code session: Claude investigates and reviews, and the user makes every change.
