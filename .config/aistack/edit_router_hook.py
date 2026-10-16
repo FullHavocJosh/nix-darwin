@@ -3,14 +3,16 @@
 
 Hand edits are billed output that stays in the conversation. When Claude starts on the third different file by hand
 within one user request, this hook refuses that edit and points to local_edit (on-device Qwen3-Coder-30B) or
-bigpickle_edit (OpenCode Zen Big Pickle). Measured: 7 edits in 6 files took 3 turns and $0.09 through local_edit, 18
+oczen_edit (OpenCode Zen Big Pickle). Measured: 7 edits in 6 files took 3 turns and $0.09 through local_edit, 18
 turns and $0.16 by hand. Editing a file already edited in this request, by hand or by a delegation (fixing up
-its result), is always allowed.
+its result), is always allowed. Write is exempt and not counted: it carries the whole file Claude wrote, so a
+delegate would only copy that text back (a 900 s timeout in practice). Editing a file Written in this request is
+allowed too.
 
 The edit goes through when delegating cannot help:
   - neither delegate exists on this host (no 30B model file, no OpenCode Zen key)
   - the file is not in a linked gpr worktree (both tools refuse main checkouts and paths outside a repository)
-  - a local_edit or bigpickle_edit call already failed in this request
+  - a local_edit or oczen_edit call already failed in this request
   - CLAUDE_EDIT_ROUTER=off
 Registered in ~/.claude/settings.json by claudeSettingsCleanup (nix-modules/macos/packages-tui.nix). Stdlib only;
 fails open (allows) on any error of its own.
@@ -25,7 +27,7 @@ import sys
 import time
 
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
-DELEGATES = {"mcp__local-edit__local_edit", "mcp__bigpickle__bigpickle_edit"}
+DELEGATES = {"mcp__local-edit__local_edit", "mcp__oczen__oczen_edit"}
 MAX_HAND_FILES = int(os.environ.get("CLAUDE_EDIT_ROUTER_FILES", "3"))
 HOME = os.path.expanduser("~")
 STATE_DIR = os.environ.get("CLAUDE_EDIT_ROUTER_STATE") or os.path.join(HOME, ".cache", "edit-router")
@@ -72,8 +74,7 @@ def reverse_lines(path, block=1 << 16):
             chunk = f.read(step) + rest
             lines = chunk.split(b"\n")
             rest = lines[0]
-            for line in reversed(lines[1:]):
-                yield line
+            yield from reversed(lines[1:])
         if rest:
             yield rest
 
@@ -103,7 +104,8 @@ def last_prompt_key(transcript):
 
 
 def this_turn(transcript, current_id, cwd):
-    """Since the last user request: files edited by hand, files a delegation covered, whether a delegation failed."""
+    """Since the last user request: files edited by hand, files a delegation covered or Write wrote, whether a
+    delegation failed."""
     files, delegate_ids, delegated = set(), set(), set()
     results = {}
     for raw in reverse_lines(transcript):
@@ -126,10 +128,10 @@ def this_turn(transcript, current_id, cwd):
                 if name in EDIT_TOOLS:
                     p = inp.get("file_path") or inp.get("notebook_path")
                     if p:
-                        files.add(os.path.realpath(p))
+                        (delegated if name == "Write" else files).add(os.path.realpath(p))
                 elif name in DELEGATES:
                     delegate_ids.add(c.get("id"))
-                    for f in inp.get("files") or []:
+                    for f in ([inp["file"]] if inp.get("file") else []) + list(inp.get("files") or []):
                         delegated.add(os.path.realpath(os.path.join(cwd, os.path.expanduser(str(f)))))
     failed = any(results.get(i) for i in delegate_ids)
     return files, delegated, failed
@@ -147,7 +149,8 @@ def cleanup_old_state(max_age_s=86400):
 
 def main():
     inp = json.load(sys.stdin)
-    if os.environ.get("CLAUDE_EDIT_ROUTER") == "off" or inp.get("tool_name") not in EDIT_TOOLS:
+    # Write: the whole file is already in the call, so delegating it saves nothing
+    if os.environ.get("CLAUDE_EDIT_ROUTER") == "off" or inp.get("tool_name") not in EDIT_TOOLS - {"Write"}:
         return
     ti = inp.get("tool_input") or {}
     path = ti.get("file_path") or ti.get("notebook_path")
@@ -175,7 +178,7 @@ def main():
         if state.get("turn") != turn:
             state = {"turn": turn, "files": []}
         files |= set(state["files"])
-        # fixing up a file a delegation already edited is the review step, not a new hand edit
+        # fixing up a file a delegation edited (or Write wrote) is the review step, not a new hand edit
         allow = failed or path in files or path in delegated or len(files | {path}) < MAX_HAND_FILES
         if allow:
             if path not in state["files"]:
@@ -186,10 +189,10 @@ def main():
     cleanup_old_state()
     if allow:
         return
-    tools = " or ".join(t for t, ok in (("local_edit", local_ok), ("bigpickle_edit", pickle_ok)) if ok)
+    tools = " or ".join(t for t, ok in (("local_edit", local_ok), ("oczen_edit", pickle_ok)) if ok)
     reason = (f"This would be file {len(files) + 1} edited by hand in this request. Hand the remaining changes to "
-              f"{tools} instead: one exact instruction ending with 'Change nothing else.', every file it may change "
-              "(including this one), and a test_cmd; then review the diff it returns. Prefer local_edit (on-device). "
+              f"{tools} instead, one call per file: the file, ideally start_line/end_line for the part to change, an exact "
+              "instruction ending with 'Change nothing else.', and a test_cmd; then review the diff it returns. Prefer local_edit (on-device). "
               "Pure pattern replacements can be one sed or python command. If the delegate fails, hand edits are "
               "allowed again for the rest of this request.")
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",

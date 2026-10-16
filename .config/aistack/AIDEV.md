@@ -154,9 +154,15 @@ show them to the user, and run `aidev --handoff <dir>`:
 ### Delegating one edit: `local_edit`
 
 `local_edit` (`.config/aistack/local_edit_mcp.py`, an MCP server for Claude Code) is the small version of the handoff:
-for one large, mechanical, cheaply verified edit, Claude passes the exact instruction, the files and a test command;
-aider applies it with Qwen3-Coder-30B-A3B on a loopback llama-server, and Claude reviews the returned `changed`,
-`test` and capped `diff`. `/delegate` (`.config/aistack/delegate.md`) tells Claude when and how.
+for one mechanical, cheaply verified edit, Claude passes the exact instruction, one file, ideally a line range
+(`start_line` / `end_line`) and a test command; Qwen3-Coder-30B-A3B on a loopback llama-server rewrites only that
+region, and Claude reviews the returned `changed`, `test` and capped `diff`. `/delegate`
+(`.config/aistack/delegate.md`) tells Claude when and how.
+
+- One file per call, so the model gets as small a context as possible: the server sends the region (at most 250
+  lines, `RANGE_MAX_LINES`) plus 5 numbered context lines on each side straight to `/v1/chat/completions` (no
+  aider, no repo map), sizes `max_tokens` to the region and writes the reply back over exactly those lines. A file
+  over 200 lines (`WHOLE_MAX_LINES`) needs a range. A failing `test_cmd` gets one fix attempt with its output.
 
 - The 30B (~19 GB) cannot stay loaded next to the always-on 9B, so the MCP server starts it on port 8082 for an
   edit (~16-25 s) and stops it after `LOCAL_EDIT_IDLE_S` (120 s) without use, or when the Claude session ends. A
@@ -168,16 +174,17 @@ aider applies it with Qwen3-Coder-30B-A3B on a loopback llama-server, and Claude
   Big Pickle 83 s. The 30B reads prompts at 267 tok/s and writes at 24.8 tok/s (9B: 146 / 10.6). Both local models
   got the logic right and also changed text they were told to keep, so the review stays.
 - The 9B stays the model for gpa/gpc/gpr, aidev's pi and ainfo.
-- `bigpickle_edit` (`.config/aistack/bigpickle_mcp.py`) takes the same request through OpenCode Zen Big Pickle
-  (`opencode run --auto`) when `local_edit` is unavailable or failed. It needs a Zen key, is not registered on the
-  work laptop, and is not given to OpenCode itself. Both tools share `check_request` / `summarize`.
+- `oczen_edit` (`.config/aistack/oczen_mcp.py`) takes the same request through OpenCode Zen Big Pickle
+  (`opencode run --standalone --auto`, formatter off) when `local_edit` is unavailable or failed. A change outside
+  the line range puts the file back, and other files it touched are restored or removed. It needs a Zen key, is not
+  registered on the work laptop, and is not given to OpenCode itself. Both tools share `check_request` / `summarize`.
 - Enforcement in Claude Code (`edit_router_hook.py`, a PreToolUse hook on Edit/Write/MultiEdit/NotebookEdit): the
-  third different file edited by hand in one user request is refused with a pointer to `local_edit` /
-  `bigpickle_edit`. It allows the edit when neither tool exists on the host, the file is not in a linked gpr
-  worktree, a delegation failed earlier in the request, or a delegation already covered the file (fixing up its
-  result); `CLAUDE_EDIT_ROUTER=off` turns it off for a session. WebSearch is denied (Lumo instead), and the Lumo and
-  edit tools are pre-approved. In OpenCode, the built-in websearch is denied and `model-routing.md` points it to
-  `lumo_search`.
+  third different file edited by hand in one user request is refused with a pointer to `local_edit` / `oczen_edit`.
+  Write is exempt: the whole file is already in the call, so a delegate would only copy it back. It allows the
+  edit when neither tool exists on the host, the file is not in a linked gpr worktree, a delegation failed earlier
+  in the request, or a delegation already covered the file (fixing up its result); `CLAUDE_EDIT_ROUTER=off` turns
+  it off for a session. WebSearch is denied (Lumo instead), and the Lumo and edit tools are pre-approved. In
+  OpenCode, the built-in websearch is denied and `model-routing.md` points it to `lumo_search`.
 - `lumo_search` retries once when Lumo's answer looks like it came from training data (no URL, "No source found",
   "knowledge cutoff"...), insisting on web_search, and warns when the retry did not help.
 

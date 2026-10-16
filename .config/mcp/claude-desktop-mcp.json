@@ -109,9 +109,9 @@
       "command": "python3",
       "args": ["__HOME__/.config/lumo/lumo_mcp.py"]
     },
-    "bigpickle": {
+    "oczen": {
       "command": "python3",
-      "args": ["__HOME__/.config/aistack/bigpickle_mcp.py"]
+      "args": ["__HOME__/.config/aistack/oczen_mcp.py"]
     },
     "local-edit": {
       "command": "python3",

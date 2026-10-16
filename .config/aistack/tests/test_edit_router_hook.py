@@ -1,4 +1,4 @@
-"""Tests for edit_router_hook.py (third hand-edited file in one request goes to local_edit / bigpickle_edit).
+"""Tests for edit_router_hook.py (third hand-edited file in one request goes to local_edit / oczen_edit).
 Fake transcripts, a scratch repo with a linked worktree, a temporary HOME; no Claude, no model.
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_edit_router_hook.py
 """
@@ -71,7 +71,11 @@ d = run([entry_user("go")] + edits("a.py", "b.py"), f"{WT}/c.py")
 check("the third file is refused, pointing to local_edit", d and d["permissionDecision"] == "deny" and "local_edit" in d["permissionDecisionReason"], d)
 check("more edits to a file already edited stay allowed", run([entry_user("go")] + edits("a.py", "b.py"), f"{WT}/a.py") is None)
 check("a new user request starts a new count", run([entry_user("one")] + edits("a.py", "b.py") + [entry_user("two")], f"{WT}/c.py") is None)
-check("Write counts like Edit", (run([entry_user("go")] + edits("a.py", "b.py"), f"{WT}/new.py", tool="Write") or {}).get("permissionDecision") == "deny")
+check("Write is exempt (the whole file is already in the call)", run([entry_user("go")] + edits("a.py", "b.py"), f"{WT}/new.py", tool="Write") is None)
+writes = [entry_tool("Write", {"file_path": f"{WT}/w{i}.py"}, f"w{i}") for i in range(3)] + [entry_result(f"w{i}") for i in range(3)]
+check("earlier Writes do not count toward the limit", run([entry_user("go")] + writes + edits("a.py"), f"{WT}/b.py") is None)
+check("editing a file Written in this request is allowed", run([entry_user("go")] + writes + edits("a.py", "b.py"), f"{WT}/w1.py") is None)
+check("Edit still counts after Writes", (run([entry_user("go")] + writes + edits("a.py", "b.py"), f"{WT}/c.py") or {}).get("permissionDecision") == "deny")
 check("the current call itself is not counted twice",
       run([entry_user("go")] + edits("a.py") + [entry_tool("Edit", {"file_path": f"{WT}/b.py"}, "now")], f"{WT}/b.py") is None)
 
@@ -89,7 +93,7 @@ check("another session has its own record", run(prompt, f"{WT}/p9.py", state=st,
 print("exceptions")
 check("allowed when no delegate exists (no 30B, no Zen key)", run([entry_user("go")] + edits("a.py", "b.py"), f"{WT}/c.py", model=False) is None)
 d = run([entry_user("go")] + edits("a.py", "b.py"), f"{WT}/c.py", model=False, key=True)
-check("only Big Pickle available: refused, pointing to bigpickle_edit only", d and "bigpickle_edit" in d["permissionDecisionReason"] and "local_edit instead" not in d["permissionDecisionReason"].split("Prefer")[0], d)
+check("only Big Pickle available: refused, pointing to oczen_edit only", d and "oczen_edit" in d["permissionDecisionReason"] and "local_edit instead" not in d["permissionDecisionReason"].split("Prefer")[0], d)
 check("allowed outside a linked worktree (main checkout)", run([entry_user("go")] + edits("a.py", "b.py"), f"{MAIN}/c.py") is None)
 failed = [entry_tool("mcp__local-edit__local_edit", {"instruction": "x", "files": ["c.py"]}, "d1"), entry_result("d1", error=True)]
 check("allowed after a failed delegation in this request", run([entry_user("go")] + edits("a.py", "b.py") + failed, f"{WT}/c.py") is None)
@@ -99,6 +103,8 @@ check("a successful delegation does not unlock other files", (run([entry_user("g
 check("fixing up a delegated file (absolute or relative path) is allowed",
       run([entry_user("go")] + edits("a.py", "b.py") + [entry_tool("mcp__local-edit__local_edit", {"instruction": "x", "files": [f"{WT}/d.py", "e.py"]}, "d3"), entry_result("d3")], f"{WT}/d.py") is None
       and run([entry_user("go")] + edits("a.py", "b.py") + [entry_tool("mcp__local-edit__local_edit", {"instruction": "x", "files": [f"{WT}/d.py", "e.py"]}, "d4"), entry_result("d4")], f"{WT}/e.py") is None)
+single = [entry_tool("mcp__local-edit__local_edit", {"instruction": "x", "file": "f.py", "start_line": 1, "end_line": 2}, "d5"), entry_result("d5")]
+check("fixing up the single file a delegation edited is allowed", run([entry_user("go")] + edits("a.py", "b.py") + single, f"{WT}/f.py") is None)
 check("CLAUDE_EDIT_ROUTER=off disables it", run([entry_user("go")] + edits("a.py", "b.py"), f"{WT}/c.py", env={"CLAUDE_EDIT_ROUTER": "off"}) is None)
 check("a broken transcript fails open", run([], f"{WT}/c.py") is None)
 

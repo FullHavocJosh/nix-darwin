@@ -382,7 +382,7 @@
             MCP_EXCLUDE_SERVERS="atlassian terraform-cloud terraform-hcp aws-terraform-mcp aws-pricing-mcp-server mcp-context-guardian-perfectserve"
             ;;
           MacBookM3Pro*)
-            MCP_EXCLUDE_SERVERS="hetzner opnsense truenas awx doppler bigpickle"
+            MCP_EXCLUDE_SERVERS="hetzner opnsense truenas awx doppler oczen"
             ;;
           *)
             MCP_EXCLUDE_SERVERS=""
@@ -393,7 +393,7 @@
         # in 60 days of transcripts (token-optimizer-mcp was called, but only because its hooks forced it, and its
         # results were larger than the built-in tools'). The sync below only adds, so unregister them on every host.
         if command -v claude &>/dev/null; then
-          for SERVER_NAME in token-optimizer-mcp token-savior context-mode mcp-server-chart memory sequential-thinking prettier; do
+          for SERVER_NAME in token-optimizer-mcp token-savior context-mode mcp-server-chart memory sequential-thinking prettier bigpickle; do
             if jq -e --arg s "$SERVER_NAME" '.mcpServers[$s]' "$HOME/.claude.json" >/dev/null 2>&1; then
               claude mcp remove --scope user "$SERVER_NAME" >/dev/null 2>&1 && \
                 echo "Removed retired MCP server $SERVER_NAME from Claude Code." || \
@@ -533,7 +533,7 @@
             # proxy by name through its `environment` below ({env:NAME}, resolved by OpenCode at launch from the exports
             # in ~/.zshrc_personal). The tool index is cached by mcp-lazy; the first session after a change is slower.
             MCP_LAZY_JQ="$HOME/nix-darwin/.config/mcp/claude-to-mcp-lazy.jq"
-            MCP_LAZY_SUPERSEDED='["mcp-context-guardian-fullhavoc","context-guardian","verbosity-guardian","lumo","local-edit","bigpickle"]'
+            MCP_LAZY_SUPERSEDED='["mcp-context-guardian-fullhavoc","context-guardian","verbosity-guardian","lumo","local-edit","oczen"]'
             if [ -f "$HOME/.claude.json" ] && [ -f "$MCP_LAZY_JQ" ]; then
               if LAZY=$(jq --arg home "$HOME" --argjson superseded "$MCP_LAZY_SUPERSEDED" -f "$MCP_LAZY_JQ" "$HOME/.claude.json" 2>/dev/null) && [ -n "$LAZY" ] && [ "$LAZY" != "{}" ]; then
                 mkdir -p "$HOME/.mcp-lazy"
