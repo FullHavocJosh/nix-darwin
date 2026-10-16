@@ -8,7 +8,8 @@
     "allow": [
       "mcp__lumo__lumo_search",
       "mcp__local-edit__local_edit",
-      "mcp__oczen__oczen_edit"
+      "mcp__oczen__oczen_edit",
+      "Edit(~/.ai/**)"
     ],
     "deny": [
       "Bash(git commit:*)",
@@ -17,9 +18,11 @@
       "Bash(gh issue comment:*)",
       "Bash(gh pr review:*)",
       "Bash(gh pr merge:*)",
-      "WebSearch"
+      "WebSearch",
+      "Edit(~/.ai/guard/**)"
     ],
-    "defaultMode": "default"
+    "defaultMode": "default",
+    "additionalDirectories": ["~/.ai"]
   },
   "model": "opus",
   "enableAllProjectMcpServers": true,
