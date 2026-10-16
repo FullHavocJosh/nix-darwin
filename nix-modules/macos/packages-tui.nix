@@ -380,6 +380,7 @@ in
       "terraformer"
       "tflint"
       "typescript"
+      "tree"
       "tree-sitter"
       "typescript-language-server"
       "uv"
