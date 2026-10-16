@@ -1380,6 +1380,9 @@ def tool_run(a):
         "state_dir": state_dir(project),
         "worker_agent": env.get("AISTACK_WORKER_AGENT", "opencode-pickle"),
         "fallback_agent": env.get("AISTACK_FALLBACK_AGENT", "claude-work"),
+        # RFC 0002: tried after the worker's attempts and before the fallback (Big Pickle after the on-device 30B)
+        "escalate_agent": env.get("AISTACK_ESCALATE_AGENT", ""),
+        "escalate_attempts": int(env.get("AISTACK_ESCALATE_ATTEMPTS", "1")),
         "reviewer_agent": env.get("AISTACK_REVIEW_AGENT", "claude-review"),
         "work_template": env.get(
             "AISTACK_WORK_TEMPLATE", os.path.join(HERE, "task-template.hbs")
@@ -1397,11 +1400,11 @@ def tool_run(a):
         ),
     }
     # agents whose calls cost money (Claude Code); AISTACK_BILLED_AGENTS (comma list) overrides
-    named = [cfg["worker_agent"], cfg["fallback_agent"], cfg["reviewer_agent"]]
+    named = [cfg["worker_agent"], cfg["escalate_agent"], cfg["fallback_agent"], cfg["reviewer_agent"]]
     cfg["billed_agents"] = (
         [x for x in env["AISTACK_BILLED_AGENTS"].split(",") if x]
         if "AISTACK_BILLED_AGENTS" in env
-        else sorted({x for x in named if x.startswith("claude")})
+        else sorted({x for x in named if x and x.startswith("claude")})
     )
     json.dump(cfg, open(os.path.join(d, "config.json"), "w"), indent=2)
     driver = env.get("AISTACK_DRIVER", os.path.join(HERE, "ralph_driver.py"))
@@ -1432,6 +1435,7 @@ def tool_run(a):
             "pr_url"
         ),
         "worker": cfg["worker_agent"],
+        "escalate": cfg["escalate_agent"] or None,
         "fallback": cfg["fallback_agent"],
         "reviewer": cfg["reviewer_agent"],
         "next": "Call ralph_status with wait_s=40 repeatedly and relay each batch of new events to the user.",

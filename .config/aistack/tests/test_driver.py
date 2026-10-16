@@ -80,6 +80,20 @@ check("escalation event", "escalating" in types(evs))
 check("quoted completion marker is NOT trusted (2 verify_failed)", types(evs).count("verify_failed") == 2, types(evs))
 check("failure output reached the next attempt's notes", any("failed verification" in e.get("message", "") or True for e in evs))
 
+print("B2: an escalation agent (RFC 0002) sits between the worker and the fallback")
+os.environ["AISTACK_ESCALATE_AGENT"] = "escalate"
+p, m = make_project({"work": {"T1": ["fail", "fail", "fail", "ok"]}}, tasks=("T1",))
+rid = start(m, p); s, evs = pump(m, p, rid, ("done", "failed", "lost"))
+del os.environ["AISTACK_ESCALATE_AGENT"]
+started = [e for e in evs if e["type"] == "task_started"]
+check("run done", s["state"] == "done", s["state"])
+check("agent sequence worker,worker,escalate,fallback", [e["agent"] for e in started] == ["worker", "worker", "escalate", "fallback"], [e.get("agent") for e in started])
+check("each step is announced", [e["message"].split(" to ")[-1] for e in evs if e["type"] == "escalating"] == ["escalate", "fallback"], [e["message"] for e in evs if e["type"] == "escalating"])
+check("run_started names the escalation agent", any(e["type"] == "run_started" and "escalate=escalate" in e["message"] for e in evs))
+p, m = make_project({"work": {"T1": ["fail", "quote", "ok"]}}, tasks=("T1",))
+rid = start(m, p); s, evs = pump(m, p, rid, ("done", "failed", "lost"))
+check("without one, the worker goes straight to the fallback", [e["agent"] for e in evs if e["type"] == "task_started"] == ["worker", "worker", "fallback"])
+
 print("C: agent asks a question, pi relays the answer")
 p, m = make_project({"work": {"T1": ["question", "ok"]}}, tasks=("T1",))
 rid = start(m, p); s, evs = pump(m, p, rid, ("waiting_user", "done", "failed"))
