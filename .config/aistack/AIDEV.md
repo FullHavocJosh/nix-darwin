@@ -230,13 +230,20 @@ On by default in every Claude Code session: Claude investigates and reviews, and
 
 OpenCode gets the same policy. Sessions start in the `advisor` agent (`default_agent` in `opencode.json`; its edit
 tools are off), and `.config/opencode/plugins/advisor-guard.js` translates each tool call of an advisor session
-(and of every subagent it starts) to the Claude Code form and runs `advisor_hook.py` on it: `bash` to Bash, `edit`
-/ `write` / `patch` to Edit, `<server>_<tool>` MCP names to `mcp__<server>__<tool>`, and mcp-lazy's
-`mcp_execute_tool` to the tool it proxies. A refusal is thrown as the tool error. Read-only bash runs without a
-permission prompt (`permission.ask`), and `advisor-prompt.md` adds the answer format to the system prompt. Off for a
-session: switch to the `build` agent (Tab). Scripted runs (`oczen_mcp.py`, `aidev -p`, `opencode-auto.sh`) pass
-`--agent build`. A session the plugin has not seen counts as advisor, and a broken check refuses the call. Tests:
-`node .config/aistack/tests/test_advisor_guard.mjs`.
+(and of every subagent it starts) to the Claude Code form and runs `advisor_hook.py` on it: `shell` (V1: `bash`)
+to Bash, `edit` / `write` / `apply_patch` to Edit, `<server>_<tool>` MCP names to `mcp__<server>__<tool>`, and
+mcp-lazy's `mcp_execute_tool` to the tool it proxies. Code Mode's `execute` goes through: each tool its code calls
+reaches the hook again under its own name. A refusal is thrown as the tool error. Read-only shell commands run
+without a permission prompt (permission `evaluate` hook), and `advisor-prompt.md` is added to the system prompt
+(session `context` hook). Off for a session: switch to the `build` agent (Tab). Scripted runs (`oczen_mcp.py`,
+`aidev -p`, `opencode-auto.sh`) pass `--agent build`. A subagent whose parent is unknown counts as advisor, and a
+broken check refuses the call. `ADVISOR_DEBUG=1` logs every tool call the plugin sees to
+`~/.cache/advisor/opencode-tools.jsonl`. Tests: `node .config/aistack/tests/test_advisor_guard.mjs`.
+
+OpenCode 2.x loads only V2 plugins: a default export `{ id, setup(ctx) }` that registers hooks with
+`ctx.tool.hook`, `ctx.permission.hook`, `ctx.session.hook` and `ctx.event.subscribe`. Older function exports fail
+with "Plugin must export a default definition with an id and an effect or setup function" in
+`~/.local/share/opencode/log/opencode.log`, and the plugin silently does nothing.
 
 ## File rules for `ralph_plan`
 

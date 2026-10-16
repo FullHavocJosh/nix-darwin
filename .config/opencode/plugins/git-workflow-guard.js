@@ -4,7 +4,7 @@
 // Claude Code enforces the gpr/gpa/gpc git-worktree-pr-workflow (see the
 // git-worktree-pr-workflow skill) via a PreToolUse hook. opencode has no
 // hook equivalent — this plugin closes that gap using opencode's
-// tool.execute.before interception instead, with the same rules.
+// execute.before tool hook instead, with the same rules.
 
 import { execFile } from "node:child_process";
 import path from "node:path";
@@ -155,45 +155,62 @@ function checkCommandSafety(command) {
   return { safe: true };
 }
 
-const EDIT_TOOLS = new Set(["edit", "write", "patch"]);
+const EDIT_TOOLS = new Set([
+  "edit",
+  "write",
+  "patch",
+  "apply_patch",
+  "multiedit",
+]);
+const SHELL_TOOLS = new Set(["shell", "bash"]); // V2 calls it shell
 
-export default async () => ({
-  "tool.execute.before": async (input, output) => {
-    const tool = input?.tool;
-    const args = output?.args ?? input?.args ?? {};
+// OpenCode V2 plugin format: a default export { id, setup(ctx) }; tool.execute.before became
+// ctx.tool.hook("execute.before"), with the arguments in event.input.
+export default {
+  id: "fullhavoc.git-workflow-guard",
+  async setup(ctx) {
+    await ctx.tool.hook("execute.before", async (event) => {
+      const tool = event?.tool;
+      const args = event?.input ?? {};
 
-    if (tool === "bash") {
-      const command = typeof args.command === "string" ? args.command : "";
-      const result = checkCommandSafety(command);
-      if (!result.safe)
-        throw new Error(`[git-workflow-guard] ${result.reason}`);
-      return;
-    }
-
-    if (EDIT_TOOLS.has(tool)) {
-      const filePath = typeof args.filePath === "string" ? args.filePath : "";
-      if (!filePath) return;
-
-      const found = await findGitRoot(filePath);
-      if (found.error) {
-        throw new Error(
-          `[git-workflow-guard] ${found.error} — refusing to edit until this is resolved.`,
-        );
+      if (SHELL_TOOLS.has(tool)) {
+        const command = typeof args.command === "string" ? args.command : "";
+        const result = checkCommandSafety(command);
+        if (!result.safe)
+          throw new Error(`[git-workflow-guard] ${result.reason}`);
+        return;
       }
-      if (!found.root) return; // not inside a git repo — nothing to enforce
 
-      const mainCheck = await isMainWorktree(found.root);
-      if (mainCheck.error) {
-        throw new Error(
-          `[git-workflow-guard] ${mainCheck.error} — refusing to edit until this is resolved.`,
-        );
+      if (EDIT_TOOLS.has(tool)) {
+        const filePath =
+          typeof args.filePath === "string"
+            ? args.filePath
+            : typeof args.path === "string"
+              ? args.path
+              : "";
+        if (!filePath) return;
+
+        const found = await findGitRoot(filePath);
+        if (found.error) {
+          throw new Error(
+            `[git-workflow-guard] ${found.error} — refusing to edit until this is resolved.`,
+          );
+        }
+        if (!found.root) return; // not inside a git repo — nothing to enforce
+
+        const mainCheck = await isMainWorktree(found.root);
+        if (mainCheck.error) {
+          throw new Error(
+            `[git-workflow-guard] ${mainCheck.error} — refusing to edit until this is resolved.`,
+          );
+        }
+        if (mainCheck.isMain) {
+          throw new Error(
+            `[git-workflow-guard] Editing directly in the primary repo checkout (${found.root}) is not allowed — it must stay on main. ` +
+              `Run 'gpr' to create a worktree for this work, then edit there.`,
+          );
+        }
       }
-      if (mainCheck.isMain) {
-        throw new Error(
-          `[git-workflow-guard] Editing directly in the primary repo checkout (${found.root}) is not allowed — it must stay on main. ` +
-            `Run 'gpr' to create a worktree for this work, then edit there.`,
-        );
-      }
-    }
+    });
   },
-});
+};
