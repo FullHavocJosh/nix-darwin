@@ -55,6 +55,28 @@ def load(name, directory):
     return mod
 
 
+# Signs that Lumo answered from its training data instead of a web search.
+MEMORY_SIGNS = ("no source found", "training data", "knowledge cutoff", "as of my last", "my last update",
+                "without a live search", "cannot confirm", "real-time", "i don't have access", "i do not have access")
+RETRY = ("That answer did not come from a web search. Run your web_search tool now for the question above and answer "
+         "only from what it returns, with the exact URLs. If the search finds nothing, say \"No source found\".")
+
+
+def from_memory(reply):
+    low = reply.lower()
+    return "http" not in low or any(s in low for s in MEMORY_SIGNS)
+
+
+def ask(base, key, messages):
+    req = urllib.request.Request(
+        base.rstrip("/") + "/chat/completions",
+        data=json.dumps({"model": os.environ.get("LUMO_MCP_MODEL", "lumo"), "messages": messages}).encode(),
+        headers={"Content-Type": "application/json", **({"Authorization": f"Bearer {key}"} if key else {})},
+    )
+    with urllib.request.urlopen(req, timeout=TIMEOUT_S) as r:
+        return json.load(r)["choices"][0]["message"].get("content") or ""
+
+
 def lumo_search(a):
     question = str(a.get("question") or "").strip()
     if not question:
@@ -72,24 +94,30 @@ def lumo_search(a):
     )
     errors = []
     for base, key in endpoints:
-        req = urllib.request.Request(
-            base.rstrip("/") + "/chat/completions",
-            data=json.dumps(
-                {"model": os.environ.get("LUMO_MCP_MODEL", "lumo"), "messages": [{"role": "user", "content": prompt}]}
-            ).encode(),
-            headers={"Content-Type": "application/json", **({"Authorization": f"Bearer {key}"} if key else {})},
-        )
+        messages = [{"role": "user", "content": prompt}]
         try:
-            with urllib.request.urlopen(req, timeout=TIMEOUT_S) as r:
-                reply = json.load(r)["choices"][0]["message"].get("content") or ""
+            reply = ask(base, key, messages)
         except Exception as e:  # noqa: BLE001
             errors.append(f"{base}: {type(e).__name__}: {e}")
             if "timed out" in str(e).lower():
                 break  # a slow Lumo is slow on every endpoint; do not wait for each one
             continue
+        retried = False
+        if from_memory(reply):
+            # Lumo decides per request whether to search, and sometimes answers from training data. One retry that
+            # insists on web_search; its answer replaces the first one.
+            retried = True
+            try:
+                reply = ask(base, key, messages + [{"role": "assistant", "content": reply},
+                                                   {"role": "user", "content": RETRY}])
+            except Exception:  # noqa: BLE001
+                pass  # keep the first answer
         if len(reply) > REPLY_MAX:
             reply = reply[:REPLY_MAX] + "\n[reply cut at LUMO_MCP_REPLY_CHARS]"
-        return {"ok": True, "via": base, "answer": reply}
+        out = {"ok": True, "via": base, "answer": reply, "retried": retried}
+        if from_memory(reply):
+            out["warning"] = "Lumo did not answer from a web search; check the official source with WebFetch"
+        return out
     return {
         "ok": False,
         "error": "; ".join(errors) or "no Lumo (lumo-tamer) answered",
@@ -134,7 +162,8 @@ def handle(req):
         if not tool:
             return {"content": [{"type": "text", "text": f"unknown tool {p.get('name')}"}], "isError": True}
         out = tool[0](p.get("arguments") or {})
-        text = out["answer"] + f"\n\n(via {out['via']})" if out.get("ok") else json.dumps(out, indent=1)
+        text = (out["answer"] + f"\n\n(via {out['via']}" + (", after one retry" if out.get("retried") else "") + ")"
+                + (f"\nWARNING: {out['warning']}" if out.get("warning") else "")) if out.get("ok") else json.dumps(out, indent=1)
         return {"content": [{"type": "text", "text": text}], "isError": not out.get("ok")}
     return None
 

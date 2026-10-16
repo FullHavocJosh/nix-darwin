@@ -112,7 +112,8 @@ let
         echo "[claude-tui] Setup completed successfully"
   '';
 
-  # Keeps ~/.claude/settings.json free of hooks from retired tools and routes web search through Lumo:
+  # Keeps ~/.claude/settings.json free of hooks from retired tools, routes web search through Lumo, and enforces the
+  # edit routing (edit_router_hook.py; CLAUDE_EDIT_ROUTER=off turns it off for a session):
   #   - removes token-optimizer-mcp's hooks and claude-tui's hooks (see tokenOptimizationSetup / claudeTuiSetup)
   #   - denies the built-in WebSearch; the lumo MCP server (.config/lumo/lumo_mcp.py) answers web questions instead.
   #     WebFetch stays allowed for reading one exact page.
@@ -143,12 +144,23 @@ let
     deny = settings.setdefault("permissions", {}).setdefault("deny", [])
     if "WebSearch" not in deny:
         deny.append("WebSearch")
+    # The free tools that take work from Claude run without a permission prompt.
+    allow = settings["permissions"].setdefault("allow", [])
+    for tool in ("mcp__lumo__lumo_search", "mcp__local-edit__local_edit", "mcp__bigpickle__bigpickle_edit"):
+        if tool not in allow:
+            allow.append(tool)
+    # edit_router_hook.py: the third file edited by hand in one request goes to local_edit / bigpickle_edit.
+    router = "python3 \"$HOME/.config/aistack/edit_router_hook.py\""
+    if not any(h.get("command") == router for r in hooks.get("PreToolUse", []) for h in r.get("hooks", [])):
+        hooks.setdefault("PreToolUse", []).append(
+            {"matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": router, "timeout": 10}]})
+        settings["hooks"] = hooks
     if json.dumps(settings, sort_keys=True) != before:
         with open(path + ".tmp", "w") as f:
             json.dump(settings, f, indent=2)
             f.write("\n")
         os.replace(path + ".tmp", path)
-        print("[claude] Removed retired hooks / denied WebSearch in settings.json")
+        print("[claude] Updated settings.json: retired hooks removed, WebSearch denied, edit routing enforced")
     PYEOF
   '';
 
@@ -167,9 +179,10 @@ let
     - Commits and PRs: gpr / gpa (the local 9B reviews; write the message yourself with -m/-d).
     - Public web research: lumo_search (WebSearch is off). WebFetch only for an exact URL you already have.
     - Edits touching 3+ files or needing 5+ edits that you can state precisely: local_edit (free on-device coder
-      model) with a test_cmd, then review its diff. Measured: 3 turns/$0.09 vs 18 turns/$0.16 by hand. Pure pattern
-      replacements: one sed or python command; if that is not possible or not allowed, local_edit, not Edit by hand.
-      A single small or subtle edit: make it yourself.
+      model) with a test_cmd, then review its diff; bigpickle_edit (OpenCode Zen, free, cloud) when local_edit is
+      unavailable or failed. Measured: 3 turns/$0.09 vs 18 turns/$0.16 by hand. Pure pattern replacements: one sed or
+      python command; if that is not possible or not allowed, local_edit, not Edit by hand. A single small or subtle
+      edit: make it yourself. Enforced: a hook refuses the third file edited by hand in one request.
     - A feature planned in this session: /aidev-handoff (free builder, one Claude review).
     - Private sources (GitHub, Terraform, Atlassian and other MCP servers) and judgment calls: yourself.
     """.replace("\n    ", "\n").rstrip() + "\n" + end

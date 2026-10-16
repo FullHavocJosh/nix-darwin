@@ -32,6 +32,10 @@ Steps:
 4. Fix small deviations yourself. If it went wrong, `git checkout -- <files>` and make the edit yourself; do not
    delegate the same thing twice.
 
-If `local_edit` reports the model is not on this machine (hosts below 32 GB), use `aidev -p "<spec>" <files>` from
-the work directory instead, with its output redirected to a file: OpenCode Zen (Big Pickle) where a Zen key exists,
-otherwise aider on the 9B. Same rules, same review.
+If `local_edit` is unavailable (the model is not on hosts below 32 GB) or fails, send the same request to
+`bigpickle_edit` (OpenCode Zen Big Pickle, where a Zen key exists). With neither, use `aidev -p "<spec>" <files>` from
+the work directory (aider on the 9B), output redirected to a file. Same rules, same review.
+
+A PreToolUse hook (`edit_router_hook.py`) enforces this: the third different file edited by hand in one request is
+refused with a pointer to these tools, unless neither exists, the file is not in a gpr worktree, a delegation
+already failed in this request, or the file is one a delegation already covered (fixing up its result).

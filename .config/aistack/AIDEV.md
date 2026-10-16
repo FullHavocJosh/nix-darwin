@@ -168,6 +168,18 @@ aider applies it with Qwen3-Coder-30B-A3B on a loopback llama-server, and Claude
   Big Pickle 83 s. The 30B reads prompts at 267 tok/s and writes at 24.8 tok/s (9B: 146 / 10.6). Both local models
   got the logic right and also changed text they were told to keep, so the review stays.
 - The 9B stays the model for gpa/gpc/gpr, aidev's pi and ainfo.
+- `bigpickle_edit` (`.config/aistack/bigpickle_mcp.py`) takes the same request through OpenCode Zen Big Pickle
+  (`opencode run --auto`) when `local_edit` is unavailable or failed. It needs a Zen key, is not registered on the
+  work laptop, and is not given to OpenCode itself. Both tools share `check_request` / `summarize`.
+- Enforcement in Claude Code (`edit_router_hook.py`, a PreToolUse hook on Edit/Write/MultiEdit/NotebookEdit): the
+  third different file edited by hand in one user request is refused with a pointer to `local_edit` /
+  `bigpickle_edit`. It allows the edit when neither tool exists on the host, the file is not in a linked gpr
+  worktree, a delegation failed earlier in the request, or a delegation already covered the file (fixing up its
+  result); `CLAUDE_EDIT_ROUTER=off` turns it off for a session. WebSearch is denied (Lumo instead), and the Lumo and
+  edit tools are pre-approved. In OpenCode, the built-in websearch is denied and `model-routing.md` points it to
+  `lumo_search`.
+- `lumo_search` retries once when Lumo's answer looks like it came from training data (no URL, "No source found",
+  "knowledge cutoff"...), insisting on web_search, and warns when the retry did not help.
 
 ## Cost model
 

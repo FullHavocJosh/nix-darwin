@@ -102,6 +102,7 @@
     },
     "edit": "ask",
     "webfetch": "allow",
+    "websearch": "deny",
     "doom_loop": "ask",
     "external_directory": {
       "*": "ask"
@@ -258,7 +259,10 @@
   },
   "plugin": ["@zenobius/opencode-skillful"],
   "model": "opencode/big-pickle",
-  "instructions": ["{env:HOME}/.config/opencode/verbosity-guardian-rule.md"],
+  "instructions": [
+    "{env:HOME}/.config/opencode/verbosity-guardian-rule.md",
+    "{env:HOME}/.config/opencode/model-routing.md"
+  ],
   "skills": {
     "paths": []
   }
