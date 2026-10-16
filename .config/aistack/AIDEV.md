@@ -228,6 +228,16 @@ On by default in every Claude Code session: Claude investigates and reviews, and
 - Set up by `claudeAdvisorSetup` (`nix-modules/macos/packages-tui.nix`): hook registration, the output-style link
   (`outputStyle` set to `Advisor` when no style is set) and the `advisor` link.
 
+OpenCode gets the same policy. Sessions start in the `advisor` agent (`default_agent` in `opencode.json`; its edit
+tools are off), and `.config/opencode/plugins/advisor-guard.js` translates each tool call of an advisor session
+(and of every subagent it starts) to the Claude Code form and runs `advisor_hook.py` on it: `bash` to Bash, `edit`
+/ `write` / `patch` to Edit, `<server>_<tool>` MCP names to `mcp__<server>__<tool>`, and mcp-lazy's
+`mcp_execute_tool` to the tool it proxies. A refusal is thrown as the tool error. Read-only bash runs without a
+permission prompt (`permission.ask`), and `advisor-prompt.md` adds the answer format to the system prompt. Off for a
+session: switch to the `build` agent (Tab). Scripted runs (`oczen_mcp.py`, `aidev -p`, `opencode-auto.sh`) pass
+`--agent build`. A session the plugin has not seen counts as advisor, and a broken check refuses the call. Tests:
+`node .config/aistack/tests/test_advisor_guard.mjs`.
+
 ## File rules for `ralph_plan`
 
 Files are sent to Lumo and Claude as **excerpts**, not by the local model copying code. `ralph_plan` accepts:

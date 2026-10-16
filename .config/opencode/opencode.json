@@ -181,6 +181,13 @@
     }
   },
   "agent": {
+    "advisor": {
+      "mode": "primary",
+      "description": "Advisor mode (default): investigates and reviews; you run every change. Tab to build to let it edit.",
+      "permission": {
+        "edit": "deny"
+      }
+    },
     "build": {
       "mode": "primary",
       "tools": {
@@ -259,6 +266,7 @@
   },
   "plugin": ["@zenobius/opencode-skillful"],
   "model": "opencode/big-pickle",
+  "default_agent": "advisor",
   "instructions": [
     "{env:HOME}/.config/opencode/verbosity-guardian-rule.md",
     "{env:HOME}/.config/opencode/model-routing.md"
