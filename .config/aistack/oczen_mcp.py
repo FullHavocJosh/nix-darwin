@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""bigpickle MCP server: file edits by OpenCode Zen's free Big Pickle model (`opencode run --auto`), for Claude Code.
-Registered from .config/mcp/claude-desktop-mcp.json; not on the work laptop (no Zen key there, and the server is
-excluded for that host) and not given to OpenCode itself.
+"""oczen MCP server: one targeted file edit by OpenCode Zen's free Big Pickle model, for Claude Code. Registered from
+.config/mcp/claude-desktop-mcp.json; not on the work laptop (no Zen key there, and the server is excluded for that
+host) and not given to OpenCode itself.
 
 One tool:
-  bigpickle_edit(instruction, files, test_cmd, read_only_files)   same request and result as local_edit
+  oczen_edit(instruction, file, start_line, end_line, test_cmd)   same request and result as local_edit
 
-local_edit (on-device, nothing leaves the machine) stays the first choice. bigpickle_edit is for when local_edit is
-unavailable (the 30B is not on this host) or failed, or the change needs more than the local model managed. Big
-Pickle runs in the cloud on OpenCode Zen, is faster and was more exact in testing (a 10-line edit in 83 s, spec-exact),
-and OpenCode auto-formats every file it edits, so an unformatted file can show format-only hunks. It uses the same
-request checks and result format as local_edit (local_edit_mcp.py): git repository, linked gpr worktree only, named
-files only. Stdlib only.
+local_edit (on-device, nothing leaves the machine) stays the first choice; oczen_edit is for when local_edit is
+unavailable (the 30B is not on this host) or failed. It runs `opencode run --standalone --auto` (a private server, so
+no shared background service with someone else's environment) with OpenCode's formatter turned off, and tells Big
+Pickle to change only the given lines of the given file. Afterwards it checks that: a change outside the line range
+puts the file back, and any other file it touched is restored or removed. It uses local_edit's request checks and
+result format (local_edit_mcp.py): one file, a linked gpr worktree, optional line range. Stdlib only.
 """
 
 import importlib.util
@@ -26,7 +26,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 HOME = os.path.expanduser("~")
 MODEL = "opencode/big-pickle"
 OPENCODE = os.environ.get("OPENCODE_BIN") or shutil.which("opencode") or "/opt/homebrew/bin/opencode"
-TIMEOUT_S = int(os.environ.get("BIGPICKLE_TIMEOUT_S", "900"))
+TIMEOUT_S = int(os.environ.get("OCZEN_TIMEOUT_S", "900"))
 PROTOCOL = "2024-11-05"
 
 _spec = importlib.util.spec_from_file_location("local_edit_mcp", os.path.join(HERE, "local_edit_mcp.py"))
@@ -34,10 +34,10 @@ le = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(le)
 
 INSTRUCTIONS = (
-    "bigpickle_edit hands a multi-file edit to OpenCode Zen's free Big Pickle model (cloud). Prefer local_edit (on "
-    "this machine); use bigpickle_edit when local_edit is unavailable or failed, or the change needs more than the "
-    "local model managed. Same request as local_edit: exact instruction ending with 'Change nothing else.', every "
-    "file it may change, a test_cmd; review the returned diff. It needs a gpr worktree, not a main checkout."
+    "oczen_edit hands one file edit to OpenCode Zen's free Big Pickle model (cloud). Prefer local_edit (on this "
+    "machine); use oczen_edit when local_edit is unavailable or failed. Same request as local_edit: one file per "
+    "call, ideally start_line/end_line, an exact instruction ending with 'Change nothing else.', a test_cmd; changes "
+    "outside the range are reverted. Review the returned diff. It needs a gpr worktree, not a main checkout."
 )
 
 
@@ -58,55 +58,107 @@ def zen_key_present():
         return False
 
 
-def bigpickle_edit(a):
+def git_status(root):
+    r = subprocess.run(["git", "-C", root, "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+                       capture_output=True, text=True)
+    out = {}
+    for entry in r.stdout.split("\0"):
+        if len(entry) > 3:
+            out[entry[3:]] = entry[:2]
+    return out
+
+
+def undo_other_files(root, rel, before):
+    """Restores tracked files and removes untracked ones that OpenCode changed besides the target file."""
+    undone = []
+    for path, code in git_status(root).items():
+        if path == rel or before.get(path) == code:
+            continue
+        full = os.path.join(root, path)
+        if code == "??":
+            try:
+                os.remove(full)
+            except OSError:
+                continue
+        else:
+            subprocess.run(["git", "-C", root, "checkout", "--", path], capture_output=True)
+        undone.append(path)
+    return undone
+
+
+def outside_range(req):
+    """True when the file now differs from its old content outside the requested line range."""
+    old, new = req["lines"], (le.read(req["path"]) or "").splitlines(keepends=True)
+    s, e = req["start"], req["end"]
+    head, tail = old[:s - 1], old[e:]
+    return new[:len(head)] != head or (tail and new[len(new) - len(tail):] != tail) or len(new) < len(head) + len(tail)
+
+
+def oczen_edit(a):
     if not zen_key_present():
         return {"ok": False, "error": "no OpenCode Zen API key on this host; use local_edit or make the edit yourself"}
-    req, err = le.check_request(a, allow_main_env="BIGPICKLE_ALLOW_MAIN")
+    req, err = le.check_request(a, allow_main_env="OCZEN_ALLOW_MAIN")
     if err:
         return err
-    root = req["root"]
-    rel = [os.path.relpath(p, root) for p in req["paths"]]
-    ro = [os.path.relpath(p, root) for p in req["readonly"]]
-    prompt = (f"Edit only these files in this repository (create them if missing): {', '.join(rel)}.\n"
-              + (f"You may read, but not change: {', '.join(ro)}.\n" if ro else "")
-              + f"\n{req['instruction']}\n\n"
-              + (f"When done, run `{req['test_cmd']}` and fix the files above until it passes.\n" if req["test_cmd"] else "")
+    root, rel, s, e = req["root"], req["rel"], req["start"], req["end"]
+    if req["text"] is None:
+        scope = f"Create the file {rel}."
+    elif (s, e) == (1, len(req["lines"])):
+        scope = f"Edit only the file {rel}."
+    else:
+        region = "".join(req["lines"][s - 1:e])
+        scope = (f"Edit only lines {s}-{e} of {rel}; every other line of the file must stay exactly as it is. "
+                 f"Those lines are currently:\n{region}")
+    prompt = (f"{scope}\n\n{req['instruction']}\n\n"
+              + (f"When done, run `{req['test_cmd']}` and fix the region until it passes.\n" if req["test_cmd"] else "")
               + "Do not change any other file, do not commit, and do not ask questions.")
-    before = {p: le.read(p) for p in req["paths"]}
-    # Keep OpenCode's herdr plugin away from the Claude pane this MCP server runs in.
+    status_before = git_status(root)
+    # Keep OpenCode's herdr plugin away from the Claude pane this server runs in, and its formatter off: a reformat
+    # of the whole file would break the line-range rule.
     env = {k: v for k, v in os.environ.items() if not k.startswith("HERDR_")}
+    env["OPENCODE_CONFIG_CONTENT"] = json.dumps({"formatter": False})
     t0 = time.time()
     try:
-        p = subprocess.run([OPENCODE, "run", "--auto", "--model", MODEL, prompt], cwd=root, capture_output=True,
-                           text=True, timeout=TIMEOUT_S, stdin=subprocess.DEVNULL, env=env)
+        p = subprocess.run([OPENCODE, "run", "--standalone", "--auto", "--model", MODEL, prompt], cwd=root,
+                           capture_output=True, text=True, timeout=TIMEOUT_S, stdin=subprocess.DEVNULL, env=env)
         log, rc = (p.stdout or "") + (p.stderr or ""), p.returncode
     except subprocess.TimeoutExpired:
         log, rc = f"timed out after {TIMEOUT_S} s", 124
-    except OSError as e:
-        return {"ok": False, "error": f"cannot run opencode ({OPENCODE}): {e}"}
-    out = le.summarize(req, before, rc, log, round(time.time() - t0), MODEL)
-    if out["changed"]:
-        out["note"] = "OpenCode auto-formats edited files; format-only hunks are expected in unformatted files"
+    except OSError as exc:
+        return {"ok": False, "error": f"cannot run opencode ({OPENCODE}): {exc}"}
+    undone = undo_other_files(root, rel, status_before)
+    reverted = req["text"] is not None and outside_range(req)
+    if reverted:
+        with open(req["path"], "w") as fh:
+            fh.write(req["text"])
+    out = le.summarize(req, rc == 0 and not reverted, round(time.time() - t0), MODEL, log=log)
+    if undone:
+        out["undone"] = undone
+        out["note"] = "it also changed other files; those changes were undone"
+    if reverted:
+        out["ok"] = False
+        out["error"] = f"it changed lines outside {s}-{e}; the file was put back. Give a wider range or edit it yourself"
     return out
 
 
 TOOLS = {
-    "bigpickle_edit": (
-        bigpickle_edit,
+    "oczen_edit": (
+        oczen_edit,
         (
-            "Make a multi-file edit with OpenCode Zen's free Big Pickle model (cloud) when local_edit is unavailable "
-            "or failed: one precise instruction, the files, a test_cmd; returns changed files, the diff and the test "
-            "result."
+            "Edit one file with OpenCode Zen's free Big Pickle model (cloud) when local_edit is unavailable or failed: "
+            "an exact instruction and, ideally, start_line/end_line; changes outside the range are reverted. Returns "
+            "the diff and the test result."
         ),
         {
             "type": "object",
             "properties": {
-                "instruction": {"type": "string", "description": "Exact change: what to do in which file, names, signatures, edge cases. End with 'Change nothing else.'"},
-                "files": {"type": "array", "items": {"type": "string"}, "description": "Every file it may change or create, inside one git repository (a gpr worktree)."},
+                "instruction": {"type": "string", "description": "Exactly what to change in the region. End with 'Change nothing else.'"},
+                "file": {"type": "string", "description": "The one file to edit or create, in a gpr worktree."},
+                "start_line": {"type": "integer", "description": "First line of the region (1-based). Omit both for a small whole file or a new file."},
+                "end_line": {"type": "integer", "description": "Last line of the region (inclusive)."},
                 "test_cmd": {"type": "string", "description": "Optional shell command that exits 0 when the edit is right."},
-                "read_only_files": {"type": "array", "items": {"type": "string"}, "description": "Optional files it may read but not change."},
             },
-            "required": ["instruction", "files"],
+            "required": ["instruction", "file"],
         },
     ),
 }
@@ -116,7 +168,7 @@ def handle(req):
     m = req.get("method")
     if m == "initialize":
         return {"protocolVersion": PROTOCOL, "capabilities": {"tools": {}},
-                "serverInfo": {"name": "bigpickle", "version": "0.1.0"}, "instructions": INSTRUCTIONS}
+                "serverInfo": {"name": "oczen", "version": "0.2.0"}, "instructions": INSTRUCTIONS}
     if m == "ping":
         return {}
     if m == "tools/list":
@@ -148,8 +200,8 @@ def main():
             res = handle(req)
             msg = ({"jsonrpc": "2.0", "id": req["id"], "result": res} if res is not None else
                    {"jsonrpc": "2.0", "id": req["id"], "error": {"code": -32601, "message": "method not found"}})
-        except Exception as e:
-            msg = {"jsonrpc": "2.0", "id": req["id"], "error": {"code": -32603, "message": str(e)}}
+        except Exception as exc:
+            msg = {"jsonrpc": "2.0", "id": req["id"], "error": {"code": -32603, "message": str(exc)}}
         sys.stdout.write(json.dumps(msg) + "\n")
         sys.stdout.flush()
 

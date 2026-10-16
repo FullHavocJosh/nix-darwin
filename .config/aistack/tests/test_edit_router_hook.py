@@ -71,7 +71,11 @@ d = run([entry_user("go")] + edits("a.py", "b.py"), f"{WT}/c.py")
 check("the third file is refused, pointing to local_edit", d and d["permissionDecision"] == "deny" and "local_edit" in d["permissionDecisionReason"], d)
 check("more edits to a file already edited stay allowed", run([entry_user("go")] + edits("a.py", "b.py"), f"{WT}/a.py") is None)
 check("a new user request starts a new count", run([entry_user("one")] + edits("a.py", "b.py") + [entry_user("two")], f"{WT}/c.py") is None)
-check("Write counts like Edit", (run([entry_user("go")] + edits("a.py", "b.py"), f"{WT}/new.py", tool="Write") or {}).get("permissionDecision") == "deny")
+check("Write is exempt (the whole file is already in the call)", run([entry_user("go")] + edits("a.py", "b.py"), f"{WT}/new.py", tool="Write") is None)
+writes = [entry_tool("Write", {"file_path": f"{WT}/w{i}.py"}, f"w{i}") for i in range(3)] + [entry_result(f"w{i}") for i in range(3)]
+check("earlier Writes do not count toward the limit", run([entry_user("go")] + writes + edits("a.py"), f"{WT}/b.py") is None)
+check("editing a file Written in this request is allowed", run([entry_user("go")] + writes + edits("a.py", "b.py"), f"{WT}/w1.py") is None)
+check("Edit still counts after Writes", (run([entry_user("go")] + writes + edits("a.py", "b.py"), f"{WT}/c.py") or {}).get("permissionDecision") == "deny")
 check("the current call itself is not counted twice",
       run([entry_user("go")] + edits("a.py") + [entry_tool("Edit", {"file_path": f"{WT}/b.py"}, "now")], f"{WT}/b.py") is None)
 

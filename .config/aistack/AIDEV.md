@@ -179,12 +179,12 @@ region, and Claude reviews the returned `changed`, `test` and capped `diff`. `/d
   the line range puts the file back, and other files it touched are restored or removed. It needs a Zen key, is not
   registered on the work laptop, and is not given to OpenCode itself. Both tools share `check_request` / `summarize`.
 - Enforcement in Claude Code (`edit_router_hook.py`, a PreToolUse hook on Edit/Write/MultiEdit/NotebookEdit): the
-  third different file edited by hand in one user request is refused with a pointer to `local_edit` /
-  `oczen_edit`. It allows the edit when neither tool exists on the host, the file is not in a linked gpr
-  worktree, a delegation failed earlier in the request, or a delegation already covered the file (fixing up its
-  result); `CLAUDE_EDIT_ROUTER=off` turns it off for a session. WebSearch is denied (Lumo instead), and the Lumo and
-  edit tools are pre-approved. In OpenCode, the built-in websearch is denied and `model-routing.md` points it to
-  `lumo_search`.
+  third different file edited by hand in one user request is refused with a pointer to `local_edit` / `oczen_edit`.
+  Write is exempt: the whole file is already in the call, so a delegate would only copy it back. It allows the
+  edit when neither tool exists on the host, the file is not in a linked gpr worktree, a delegation failed earlier
+  in the request, or a delegation already covered the file (fixing up its result); `CLAUDE_EDIT_ROUTER=off` turns
+  it off for a session. WebSearch is denied (Lumo instead), and the Lumo and edit tools are pre-approved. In
+  OpenCode, the built-in websearch is denied and `model-routing.md` points it to `lumo_search`.
 - `lumo_search` retries once when Lumo's answer looks like it came from training data (no URL, "No source found",
   "knowledge cutoff"...), insisting on web_search, and warns when the retry did not help.
 
