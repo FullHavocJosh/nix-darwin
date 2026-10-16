@@ -76,8 +76,8 @@ err, out = call({"instruction": "INSIDE", "file": "src/a.py", "start_line": 8, "
 check("an edit inside the range succeeds", not err and out["ok"] and "+v10 = 100" in out["diff"] and out["test"]["passed"], out)
 check("the result names the file and the lines", out["changed"][0]["file"] == "src/a.py" and out["changed"][0]["lines"] == "8-12", out)
 rec = json.loads(open(LOG).read().splitlines()[-1])
-check("runs opencode run --standalone --auto with Big Pickle in the worktree",
-      rec["argv"][:5] == ["run", "--standalone", "--auto", "--model", "opencode/big-pickle"] and os.path.realpath(rec["cwd"]) == WT, rec)
+check("runs opencode run --standalone --auto --agent build with Big Pickle in the worktree",
+      rec["argv"][:7] == ["run", "--standalone", "--auto", "--agent", "build", "--model", "opencode/big-pickle"] and os.path.realpath(rec["cwd"]) == WT, rec)
 check("OpenCode's formatter is off", json.loads(rec["config"] or "{}").get("formatter") is False, rec["config"])
 check("the prompt names the range, the file and the current lines", "lines 8-12 of src/a.py" in rec["argv"][-1] and "v8 = 8" in rec["argv"][-1], rec["argv"][-1])
 check("the prompt carries the test command", "grep -q 'v10 = 100' src/a.py" in rec["argv"][-1], rec["argv"][-1])

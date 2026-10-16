@@ -119,8 +119,10 @@ def oczen_edit(a):
     env["OPENCODE_CONFIG_CONTENT"] = json.dumps({"formatter": False})
     t0 = time.time()
     try:
-        p = subprocess.run([OPENCODE, "run", "--standalone", "--auto", "--model", MODEL, prompt], cwd=root,
-                           capture_output=True, text=True, timeout=TIMEOUT_S, stdin=subprocess.DEVNULL, env=env)
+        # --agent build: the default agent is advisor (read-only); this is a builder run
+        argv = [OPENCODE, "run", "--standalone", "--auto", "--agent", "build", "--model", MODEL, prompt]
+        p = subprocess.run(argv, cwd=root, capture_output=True, text=True, timeout=TIMEOUT_S,
+                           stdin=subprocess.DEVNULL, env=env)
         log, rc = (p.stdout or "") + (p.stderr or ""), p.returncode
     except subprocess.TimeoutExpired:
         log, rc = f"timed out after {TIMEOUT_S} s", 124

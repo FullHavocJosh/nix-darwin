@@ -677,7 +677,7 @@ function _aidev_opencode() {
   local model="$1" print_mode="$2"
   shift 2
   if $print_mode; then
-    opencode run --auto --model "$model" "$@"
+    opencode run --auto --agent build --model "$model" "$@"
     local rc=$?
     _herdr_report_opencode_idle
     return $rc
