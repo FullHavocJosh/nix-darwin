@@ -271,6 +271,7 @@ def run_claude(job, prompt, st):
     if SANDBOX and shutil.which("sandbox-exec"):
         cmd = ["sandbox-exec", "-f", sandbox_profile()] + cmd
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    env["CLAUDE_ADVISOR"] = "off"  # advisor_hook.py comes from user settings; ainfo_guard.py is stricter
     p = subprocess.Popen(
         cmd,
         cwd=PROJECT,

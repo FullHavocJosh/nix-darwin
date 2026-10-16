@@ -205,6 +205,29 @@ region, and Claude reviews the returned `changed`, `test` and capped `diff`. `/d
   (default 1.5 USD), `AISTACK_CLAUDE_BUDGET_REVIEW` (1.5), `AISTACK_CLAUDE_BUDGET_WORK` (3),
   `AISTACK_CLAUDE_MODEL` (default `sonnet`) and `AISTACK_CLAUDE_EFFORT` (default `medium`).
 
+## Advisor mode (Claude Code)
+
+On by default in every Claude Code session: Claude investigates and reviews, and the user makes every change.
+`advisor_hook.py` is a PreToolUse hook on every tool; `advisor-style.md` is the Advisor output style.
+
+- Allowed: reads of any kind. Files and search, WebFetch, subagents, skills, plan mode; shell commands, ssh remote
+  commands, AWS calls and MCP tools that ainfo's guard (`.config/ainfo/ainfo_guard.py`) judges read-only. AWS needs
+  a `*-ro` profile, except SSM: `aws ssm send-command --document-name AWS-RunShellScript` runs with any profile
+  when every command in its `commands` passes the same read-only check, and the SSM result reads
+  (`get-command-invocation`, `list-command-invocations`, `list-commands`, `describe-instance-information`) do too.
+  Edit/Write only in Claude's own files (session scratchpad, `~/.claude/projects/*/memory`, `~/.claude/plans`).
+- Refused: every other edit, shell command, MCP call or tool, including local_edit and oczen_edit. The refusal tells
+  Claude to give the exact command (or a diff) with what each part does, why, what it changes, and how to verify and
+  undo it; the user runs it as `! <command>` so the output comes back for review. Refusals are logged to
+  `~/.cache/advisor/denied.jsonl` for tuning the read-only lists.
+- Off for one session: `! advisor off` (`! advisor on`, `! advisor status`); `~/.local/bin/advisor` links to the
+  hook, which keys a flag file in `~/.cache/advisor` by `CLAUDE_CODE_SESSION_ID`. Off at launch:
+  `CLAUDE_ADVISOR=off claude`. Claude cannot switch it off: `advisor` is not a read-only command and the state
+  directory is outside the paths it may write.
+- Fails closed: if the guard cannot load, the call is refused with a pointer to `! advisor off`.
+- Set up by `claudeAdvisorSetup` (`nix-modules/macos/packages-tui.nix`): hook registration, the output-style link
+  (`outputStyle` set to `Advisor` when no style is set) and the `advisor` link.
+
 ## File rules for `ralph_plan`
 
 Files are sent to Lumo and Claude as **excerpts**, not by the local model copying code. `ralph_plan` accepts:

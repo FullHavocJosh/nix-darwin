@@ -166,6 +166,39 @@ let
     PYEOF
   '';
 
+  # Advisor mode (.config/aistack/advisor_hook.py, on by default in every session): Claude reads, searches and reviews,
+  # and hands the user every change as a command or diff with an explanation, to run themselves as `! <command>`.
+  #   - registers advisor_hook.py as a PreToolUse hook on every tool
+  #   - links the Advisor output style (.config/aistack/advisor-style.md) and selects it when no style is set
+  #   - links ~/.local/bin/advisor, the per-session switch: `! advisor off|on|status`
+  # CLAUDE_ADVISOR=off claude starts a session without it. Silent when already in place.
+  claudeAdvisorSetup = pkgs.writeShellScript "claude-advisor-setup" ''
+    set -euo pipefail
+    mkdir -p "$HOME/.claude/output-styles" "$HOME/.local/bin"
+    ln -sfn "$HOME/.config/aistack/advisor-style.md" "$HOME/.claude/output-styles/advisor.md"
+    ln -sfn "$HOME/.config/aistack/advisor_hook.py" "$HOME/.local/bin/advisor"
+    path="$HOME/.claude/settings.json"
+    [ -f "$path" ] || exit 0
+    python3 - "$path" <<'PYEOF'
+    import json, os, sys
+    path = sys.argv[1]
+    with open(path) as f:
+        settings = json.load(f)
+    before = json.dumps(settings, sort_keys=True)
+    hook = "python3 \"$HOME/.config/aistack/advisor_hook.py\""
+    pre = settings.setdefault("hooks", {}).setdefault("PreToolUse", [])
+    if not any(h.get("command") == hook for r in pre for h in r.get("hooks", [])):
+        pre.append({"matcher": ".*", "hooks": [{"type": "command", "command": hook, "timeout": 10}]})
+    settings.setdefault("outputStyle", "Advisor")
+    if json.dumps(settings, sort_keys=True) != before:
+        with open(path + ".tmp", "w") as f:
+            json.dump(settings, f, indent=2)
+            f.write("\n")
+        os.replace(path + ".tmp", path)
+        print("[claude] Updated settings.json: advisor mode on (hook and output style)")
+    PYEOF
+  '';
+
   # The model-routing rules in ~/.claude/CLAUDE.md: which work goes to free and local models instead of Claude. Kept
   # between markers and rewritten when the text here changes, so an edit replaces the block instead of appending.
   claudeRoutingRules = pkgs.writeShellScript "claude-routing-rules" ''
@@ -500,6 +533,10 @@ in
         (
           ${claudeRoutingRules}
         ) || echo "WARNING: claude routing rules failed — continuing activation" >&2
+
+        (
+          ${claudeAdvisorSetup}
+        ) || echo "WARNING: claude advisor setup failed — continuing activation" >&2
 
         # Claude Code commands that move work to aidev's free model (see AIDEV.md):
         #   /aidev-handoff  write an aidev plan in the session and start the run
