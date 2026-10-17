@@ -25,7 +25,7 @@ KEY_ORDER = ("title", "status", "date", "author", "source", "repo", "touches")
 
 
 def home():
-    return os.environ.get("AI_HOME") or os.path.join(os.path.expanduser("~"), ".ai")
+    return os.path.expanduser(os.environ.get("AI_HOME") or os.path.join(os.path.expanduser("~"), ".ai"))
 
 
 def path(*parts):
@@ -68,6 +68,9 @@ def write_rfc(text, title="", source="", repo=""):
 
     text may carry its own frontmatter; title, status, date, source and repo are filled in where missing (title from
     the argument, else the first '# ' heading). A name that is taken gets -2, -3, ...: nothing is overwritten.
+
+    Refuses with PermissionError, before creating anything, when rfcs/ resolves outside AI_HOME or into guard/
+    in any letter case (a symlinked rfcs/ is followed).
     """
     fm, body = split_frontmatter(text.strip() + "\n")
     if not fm.get("title"):
@@ -84,6 +87,12 @@ def write_rfc(text, title="", source="", repo=""):
     keys = [k for k in KEY_ORDER if fm.get(k)] + [k for k in fm if k not in KEY_ORDER and fm[k]]
     out = "---\n" + "".join(f"{k}: {fm[k]}\n" for k in keys) + "---\n\n" + body.rstrip() + "\n"
     d = path("rfcs")
+    real_home = os.path.realpath(home())
+    real_d = os.path.realpath(d)
+    if real_d == real_home or not (real_d + "/").startswith(real_home + "/"):
+        raise PermissionError(f"rfcs dir {real_d} is outside {real_home}")
+    if (real_d + "/").lower().startswith((os.path.join(real_home, "guard") + "/").lower()):
+        raise PermissionError(f"rfcs dir {real_d} is inside guard/")
     os.makedirs(d, exist_ok=True)
     base = f"{today}-{slug(fm['title'])}"
     for n in range(1, 1000):
@@ -104,7 +113,11 @@ def main(argv):
         return 2
     opts = dict(zip(argv[2::2], argv[3::2]))
     text = sys.stdin.read() if argv[1] == "-" else open(argv[1], encoding="utf-8").read()
-    print(write_rfc(text, source=opts.get("--source", ""), repo=opts.get("--repo", "")))
+    try:
+        print(write_rfc(text, source=opts.get("--source", ""), repo=opts.get("--repo", "")))
+    except PermissionError as e:
+        print(f"ai_home: {e}", file=sys.stderr)
+        return 1
     return 0
 
 
