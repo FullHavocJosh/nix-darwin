@@ -28,7 +28,9 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.realpath(os.environ.get("AINFO_PROJECT") or os.getcwd())
-STATE_DIR = os.environ.get("AINFO_STATE_DIR") or os.path.join(os.environ.get("AI_HOME") or os.path.expanduser("~/.ai"), "ainfo", "default")
+STATE_DIR = os.environ.get("AINFO_STATE_DIR") or os.path.join(
+    os.path.expanduser(os.environ.get("AI_HOME") or "~/.ai"), "ainfo", "default"
+)
 AISTACK_DIR = os.environ.get("AINFO_AISTACK_DIR") or os.path.expanduser(
     "~/.config/aistack"
 )
@@ -165,7 +167,10 @@ DISALLOWED = [
 
 def sandbox_profile():
     h = os.path.expanduser("~")
-    ai = os.environ.get("AI_HOME") or f"{h}/.ai"  # RFC 0003: all AI tool state; guard/ is the hooks' own state
+    ai = (
+        os.environ.get("AI_HOME") or f"{h}/.ai"
+    )  # RFC 0003: all AI tool state; guard/ is the hooks' own state
+    ai = os.path.expanduser(ai)
     # Seatbelt matches resolved paths: ~/.claude is a symlink into the dotfiles repo, and without its target Claude
     # cannot save the session transcript, so every --resume fails with error_during_execution.
     sub = lambda p: " ".join(
@@ -273,7 +278,9 @@ def run_claude(job, prompt, st):
     if SANDBOX and shutil.which("sandbox-exec"):
         cmd = ["sandbox-exec", "-f", sandbox_profile()] + cmd
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
-    env["CLAUDE_ADVISOR"] = "off"  # advisor_hook.py comes from user settings; ainfo_guard.py is stricter
+    env["CLAUDE_ADVISOR"] = (
+        "off"  # advisor_hook.py comes from user settings; ainfo_guard.py is stricter
+    )
     p = subprocess.Popen(
         cmd,
         cwd=PROJECT,
@@ -647,7 +654,9 @@ No JSON block at the end.
 
 
 def load_ai_home():
-    spec = importlib.util.spec_from_file_location("ai_home", os.path.join(AISTACK_DIR, "ai_home.py"))
+    spec = importlib.util.spec_from_file_location(
+        "ai_home", os.path.join(AISTACK_DIR, "ai_home.py")
+    )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -658,15 +667,24 @@ def write_rfc(job, request):
     ah = load_ai_home()
     st = load_state()
     r = run_claude(job, RFC_PROMPT.format(request=request, template=ah.template()), st)
-    st["claude_session"], st["cost_usd"] = r["session"], round(st.get("cost_usd", 0) + r["cost"], 4)
+    st["claude_session"], st["cost_usd"] = (
+        r["session"],
+        round(st.get("cost_usd", 0) + r["cost"], 4),
+    )
     save_state(st)
     if r["error"]:
         return {"ok": False, "problem": r["error"]}
     text, _ = split_contract(r["text"])
-    path = ah.write_rfc(redact(text), source=f"ainfo/claude-{CLAUDE_MODEL}", repo=PROJECT)
+    path = ah.write_rfc(
+        redact(text), source=f"ainfo/claude-{CLAUDE_MODEL}", repo=PROJECT
+    )
     log_event(job, "stack", f"RFC saved to {path}")
-    return {"ok": True, "saved_to": path, "cost_usd": round(r["cost"], 3),
-            "next": f"tell the user the path; any tool can start from it, e.g. aidev --rfc {path}"}
+    return {
+        "ok": True,
+        "saved_to": path,
+        "cost_usd": round(r["cost"], 3),
+        "next": f"tell the user the path; any tool can start from it, e.g. aidev --rfc {path}",
+    }
 
 
 # ---- jobs -------------------------------------------------------------------------------------------------------
@@ -738,8 +756,15 @@ def tool_ask_lumo(a):
 def tool_rfc(a):
     q = str(a.get("request") or "").strip()
     if not q:
-        return {"ok": False, "problem": "request is empty: say what the RFC should cover"}
-    return {"ok": True, "job_id": start_job("rfc", write_rfc, q)["id"], "next": "call ainfo_wait"}
+        return {
+            "ok": False,
+            "problem": "request is empty: say what the RFC should cover",
+        }
+    return {
+        "ok": True,
+        "job_id": start_job("rfc", write_rfc, q)["id"],
+        "next": "call ainfo_wait",
+    }
 
 
 def tool_wait(a):
