@@ -73,7 +73,9 @@ in
       else
         echo "Using Doppler config: $DOPPLER_CONFIG_NAME for hostname: $HOSTNAME"
         
-        DOPPLER_API_KEY=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get OPENCODE_ZEN_API_KEY --project FullHavocJosh --config "$DOPPLER_CONFIG_NAME" --plain 2>/dev/null)
+        DOPPLER_API_KEY=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get OPENCODEZEN_API_KEY --project FullHavocJosh --config "$DOPPLER_CONFIG_NAME" --plain 2>/dev/null)
+        # OpenRouter is read as a plain env var by ai_status and OpenRouter scripts, unlike the Zen key (auth.json)
+        OPENROUTER_API_KEY_VAL=$(sudo -u havoc HOME="$USER_HOME" "$DOPPLER_BIN" secrets get OPENROUTER_API_KEY --project FullHavocJosh --config "$DOPPLER_CONFIG_NAME" --plain 2>/dev/null)
 
         if [ -n "$DOPPLER_API_KEY" ]; then
           if [ -f "$OPENCODE_AUTH_FILE" ]; then
@@ -91,7 +93,7 @@ in
           chmod 600 "$OPENCODE_AUTH_FILE"
           echo "OpenCode Zen API key successfully injected to $OPENCODE_AUTH_FILE"
         else
-          echo "Warning: Failed to fetch OPENCODE_ZEN_API_KEY from Doppler."
+          echo "Warning: Failed to fetch OPENCODEZEN_API_KEY from Doppler."
           echo "Make sure you're authenticated with: doppler login"
           echo "And verify the secret exists in project 'FullHavocJosh', config '$DOPPLER_CONFIG_NAME'"
         fi
@@ -129,6 +131,7 @@ in
           [ -n "$HETZNER_API_TOKEN_VAL" ] && printf 'export HETZNER_API_TOKEN=%q\n' "$HETZNER_API_TOKEN_VAL"
           [ -n "$AWX_TOKEN_VAL" ] && printf 'export AWX_BASE_URL=%q\n' "https://awx.rollet.family"
           [ -n "$AWX_TOKEN_VAL" ] && printf 'export AWX_TOKEN=%q\n' "$AWX_TOKEN_VAL"
+          [ -n "$OPENROUTER_API_KEY_VAL" ] && printf 'export OPENROUTER_API_KEY=%q\n' "$OPENROUTER_API_KEY_VAL"
         } >> "$ZSHRC_PERSONAL"
         chown havoc:staff "$ZSHRC_PERSONAL"
         chmod 600 "$ZSHRC_PERSONAL"

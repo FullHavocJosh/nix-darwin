@@ -55,7 +55,7 @@ show_agent_labels_on_pane_borders = true
 right_click_passthrough_modifier = "ctrl"
 
 agent_panel_sort = "spaces"
-status_indicators = "dots"
+status_indicators = "symbols"
 [theme]
 name = "terminal"
 auto_switch = false

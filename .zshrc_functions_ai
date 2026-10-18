@@ -1037,6 +1037,7 @@ function _aidev_direct() {
 # Validation Functions for AI Providers
 
 function _validate_opencode_zen() {
+  _ai_provider_enabled opencode || return 1
   [[ -n "$OPENCODE_ZEN_API_KEY" ]] && return 0
   [[ -f ~/.zshrc_envvars ]] && grep -q "OPENCODE_ZEN_API_KEY" ~/.zshrc_envvars && return 0
   [[ -f ~/.zshrc_envvars_insecure ]] && grep -q "OPENCODE_ZEN_API_KEY" ~/.zshrc_envvars_insecure && return 0
@@ -1108,7 +1109,35 @@ function _validate_llamacpp() {
   curl -s --max-time 3 "${endpoint}/v1/models" 2>/dev/null | grep -q "\"${lms_model}\""
 }
 
+function _ai_provider_enabled() {
+  local name="$1"
+  
+  # Check if the environment variable is set
+  local var_name="AI_${name}_ENABLED"
+  if [[ -n "${(P)var_name}" ]]; then
+    # If the env var is set to off, false, no, or 0 (case-insensitive), return 1 (disabled)
+    case "${(P)var_name}" in
+      [oO][fF][fF]|[fF][aA][lL][sS][eE]|[nN][oO]|[0O])
+        return 1
+        ;;
+      *)
+        return 0
+        ;;
+    esac
+  fi
+  
+  # If env var is not set, check for .off file
+  local switches_dir="${AI_HOME:-$HOME/.ai}/switches"
+  if [[ -f "${switches_dir}/${name}.off" ]]; then
+    return 1  # Provider disabled by file
+  fi
+  
+  # Default is enabled
+  return 0
+}
+
 function _validate_claude_code() {
+  _ai_provider_enabled claude || return 1
   command -v claude &>/dev/null || return 1
   # API key auth
   [[ -n "$ANTHROPIC_API_KEY" ]] && return 0
