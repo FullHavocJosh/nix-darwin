@@ -43,6 +43,17 @@ previous_workspace = "ctrl+shift+k"
 toggle_sidebar = "ctrl+shift+h"
 workspace_picker = "ctrl+shift+p"
 
+# herdr-gitview (herdr plugin install ChmaraX/herdr-gitview). toggle-tab opens
+# one gitview tab per repo and jumps to it if already open; prefix+g keeps it in
+# the ctrl+ scheme. For an in-tab sidebar instead, swap in
+# command = "chmarax.gitview.toggle" on prefix+G. Commit still goes through gpa,
+# not gitview's inline `c`.
+[[keys.command]]
+key = "prefix+g"
+type = "plugin_action"
+command = "chmarax.gitview.toggle-tab"
+description = "git view tab"
+
 [ui.toast]
 delivery = "system"
 
