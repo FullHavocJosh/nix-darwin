@@ -33,14 +33,8 @@ import time
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 HOME = os.path.expanduser("~")
-STATE_DIR = os.environ.get("CLAUDE_ADVISOR_STATE") or os.path.join(
-    os.path.expanduser(os.environ.get("AI_HOME") or os.path.join(HOME, ".ai")),
-    "guard",
-    "advisor",
-)
-GUARD = os.environ.get("CLAUDE_ADVISOR_GUARD") or os.path.join(
-    os.path.dirname(HERE), "ainfo", "ainfo_guard.py"
-)
+STATE_DIR = os.environ.get("CLAUDE_ADVISOR_STATE") or os.path.join(os.path.expanduser(os.environ.get("AI_HOME") or os.path.join(HOME, ".ai")), "guard", "advisor")
+GUARD = os.environ.get("CLAUDE_ADVISOR_GUARD") or os.path.join(os.path.dirname(HERE), "ainfo", "ainfo_guard.py")
 
 READ_TOOLS = {
     "Read", "Grep", "Glob", "LS", "LSP", "ToolSearch", "WebFetch", "Agent", "Task", "Skill", "AskUserQuestion",
@@ -52,12 +46,7 @@ READ_TOOLS = {
 PATH_TOOLS = {"Read": "file_path", "Grep": "path", "Glob": "path", "LS": "path"}
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
-SSM_READS = {
-    "get-command-invocation",
-    "list-command-invocations",
-    "list-commands",
-    "describe-instance-information",
-}
+SSM_READS = {"get-command-invocation", "list-command-invocations", "list-commands", "describe-instance-information"}
 SSM_SEND_FLAGS = {"--instance-ids", "--targets", "--document-name", "--parameters", "--comment", "--timeout-seconds",
                   "--max-concurrency", "--max-errors", "--profile", "--region", "--output", "--query"}  # fmt: skip
 SSM_BOOL_FLAGS = {"--no-cli-pager", "--no-paginate"}
@@ -75,27 +64,15 @@ def own_file(path):
     """Claude's own files: the session scratchpad, its memory and plans, and ~/.ai except ~/.ai/guard (RFC 0003)."""
     p = os.path.realpath(os.path.expanduser(str(path)))
     uid = os.getuid()
-    claude = os.path.realpath(
-        os.path.join(HOME, ".claude")
-    )  # ~/.claude may be a symlink into a dotfiles repo
-    roots = [
-        f"/private/tmp/claude-{uid}/",
-        f"/tmp/claude-{uid}/",
-        os.path.join(claude, "plans") + "/",
-    ]
+    claude = os.path.realpath(os.path.join(HOME, ".claude"))  # ~/.claude may be a symlink into a dotfiles repo
+    roots = [f"/private/tmp/claude-{uid}/", f"/tmp/claude-{uid}/", os.path.join(claude, "plans") + "/"]
     if any(p.startswith(r) for r in roots):
         return True
-    ai = os.path.realpath(
-        os.path.expanduser(os.environ.get("AI_HOME") or os.path.join(HOME, ".ai"))
-    )
-    guard = os.path.join(ai, "guard") + "/"
+    ai = os.path.realpath(os.path.expanduser(os.environ.get("AI_HOME") or os.path.join(HOME, ".ai")))
+    guard = os.path.join(ai, "guard") + "/"  # APFS is case-insensitive: ~/.ai/GUARD is the same directory
     if p.startswith(ai + "/") and not (p + "/").lower().startswith(guard.lower()):
-        return (
-            True  # the shared AI directory; guard/ holds this hook's own on/off flags
-        )
-    return bool(
-        re.match(re.escape(os.path.join(claude, "projects")) + r"/[^/]+/memory/", p)
-    )
+        return True  # the shared AI directory; guard/ holds this hook's own on/off flags
+    return bool(re.match(re.escape(os.path.join(claude, "projects")) + r"/[^/]+/memory/", p))
 
 
 def ssm_commands(raw):
@@ -113,11 +90,7 @@ def ssm_commands(raw):
         raise ValueError("only commands, workingDirectory and executionTimeout")
     cmds = obj["commands"]
     cmds = [cmds] if isinstance(cmds, str) else cmds
-    if (
-        not isinstance(cmds, list)
-        or not cmds
-        or not all(isinstance(c, str) for c in cmds)
-    ):
+    if not isinstance(cmds, list) or not cmds or not all(isinstance(c, str) for c in cmds):
         raise ValueError("commands must be a list of strings")
     return cmds
 
@@ -139,32 +112,22 @@ def make_aws_check(g):
             else:
                 pos.append(a)
             i += 1
-        if (
-            pos[:1] != ["ssm"]
-            or len(pos) < 2
-            or pos[1] not in SSM_READS | {"send-command"}
-        ):
+        if pos[:1] != ["ssm"] or len(pos) < 2 or pos[1] not in SSM_READS | {"send-command"}:
             return g.aws_check(args)
         bad = next((f for f in flags if f in g.AWS_BAD_GLOBALS), None)
         if bad:
             return f"aws {bad} is not allowed"
         if pos[1] in SSM_READS:
             return None
-        other = next(
-            (f for f in flags if f not in SSM_SEND_FLAGS | SSM_BOOL_FLAGS), None
-        )
+        other = next((f for f in flags if f not in SSM_SEND_FLAGS | SSM_BOOL_FLAGS), None)
         if other:
             return f"aws ssm send-command {other} is not allowed"
         if flags.get("--document-name") != "AWS-RunShellScript":
-            return (
-                "aws ssm send-command may only run --document-name AWS-RunShellScript"
-            )
+            return "aws ssm send-command may only run --document-name AWS-RunShellScript"
         try:
             cmds = ssm_commands(flags.get("--parameters", ""))
         except ValueError as e:
-            return (
-                f"cannot read the SSM --parameters ({e}); pass commands as a JSON list"
-            )
+            return f"cannot read the SSM --parameters ({e}); pass commands as a JSON list"
         for c in cmds:
             why = g.check_shell(c)
             if why:
@@ -180,10 +143,7 @@ def decide(ev, g):
     if tool in READ_TOOLS:
         key = PATH_TOOLS.get(tool)
         if key and tin.get(key) and g.secret_path(tin[key]):
-            return (
-                "deny",
-                f"{tin[key]} looks like a credential file; ask the user for what you need from it",
-            )
+            return "deny", f"{tin[key]} looks like a credential file; ask the user for what you need from it"
         return None, ""
     if tool in EDIT_TOOLS:
         path = tin.get("file_path") or tin.get("notebook_path") or ""
@@ -192,8 +152,7 @@ def decide(ev, g):
         return "deny", (
             f"Advisor mode: the user makes changes to {path or 'files'}. Do not retry or work around this. Show the "
             "change as a unified diff with file:line (or the exact new text for a new file), explain what it changes "
-            "and why, and how to check it. Then wait, and re-read the file to review it once they say it is done."
-        )
+            "and why, and how to check it. Then wait, and re-read the file to review it once they say it is done.")
     if tool in ("Bash", "Monitor"):
         cmd = str(tin.get("command") or "")
         if tool == "Monitor" and not cmd:
@@ -204,20 +163,16 @@ def decide(ev, g):
         return "deny", (
             f"Advisor mode: {why}. Do not run it or work around it. Give the user the exact command in a code block, "
             "to run as `! <command>`, and explain what each part does, what it changes, how to verify it and how to "
-            "undo it. Then review the output they get. If it only reads and was refused wrongly, say so."
-        )
+            "undo it. Then review the output they get. If it only reads and was refused wrongly, say so.")
     if tool.startswith("mcp__"):
         why = g.mcp_decision(tool, tin)
         if why is None:
             return "allow", ""
         return "deny", (
             f"Advisor mode: {why}. Do not call it or work around it. Tell the user the exact call (tool and "
-            "arguments) or the equivalent steps or CLI command, what it changes, and how to verify it; they decide."
-        )
-    return "deny", (
-        f"Advisor mode: {tool} is not on the advisor list. Do not work around it; tell the user what you "
-        "wanted to do and why, as a command or steps they can run."
-    )
+            "arguments) or the equivalent steps or CLI command, what it changes, and how to verify it; they decide.")
+    return "deny", (f"Advisor mode: {tool} is not on the advisor list. Do not work around it; tell the user what you "
+                    "wanted to do and why, as a command or steps they can run.")
 
 
 def session_off(session):
@@ -231,17 +186,8 @@ def log_denial(ev, reason):
         if os.path.exists(p) and os.path.getsize(p) > 1 << 20:
             os.replace(p, p + ".1")
         with open(p, "a") as f:
-            f.write(
-                json.dumps(
-                    {
-                        "ts": int(time.time()),
-                        "tool": ev.get("tool_name"),
-                        "input": ev.get("tool_input"),
-                        "reason": reason[:300],
-                    }
-                )
-                + "\n"
-            )
+            f.write(json.dumps({"ts": int(time.time()), "tool": ev.get("tool_name"), "input": ev.get("tool_input"),
+                                "reason": reason[:300]}) + "\n")
     except OSError:
         pass
 
@@ -252,30 +198,16 @@ def hook():
         return
     try:
         g = load_guard()
-        g.READ_ONLY_WORDS["aws"] = make_aws_check(
-            g
-        )  # this module's copy only; ainfo loads its own
+        g.READ_ONLY_WORDS["aws"] = make_aws_check(g)  # this module's copy only; ainfo loads its own
         decision, reason = decide(ev, g)
     except Exception as e:
-        decision, reason = (
-            "deny",
-            f"advisor hook error ({e}); the user can run `! advisor off` to get past it",
-        )
+        decision, reason = "deny", f"advisor hook error ({e}); the user can run `! advisor off` to get past it"
     if decision is None:
         return
     if decision == "deny":
         log_denial(ev, reason)
-    print(
-        json.dumps(
-            {
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": decision,
-                    "permissionDecisionReason": reason or "advisor: read-only",
-                }
-            }
-        )
-    )
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": decision,
+                                             "permissionDecisionReason": reason or "advisor: read-only"}}))
 
 
 def cli(args):
@@ -283,17 +215,11 @@ def cli(args):
     session = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
     cmd = args[0] if args else "status"
     if cmd not in ("on", "off", "status"):
-        print(
-            "usage: advisor on|off|status   (inside Claude Code: ! advisor off)",
-            file=sys.stderr,
-        )
+        print("usage: advisor on|off|status   (inside Claude Code: ! advisor off)", file=sys.stderr)
         return 2
     if not session:
-        print(
-            "advisor: no CLAUDE_CODE_SESSION_ID; run it inside Claude Code as `! advisor off`, or start Claude with "
-            "CLAUDE_ADVISOR=off",
-            file=sys.stderr,
-        )
+        print("advisor: no CLAUDE_CODE_SESSION_ID; run it inside Claude Code as `! advisor off`, or start Claude with "
+              "CLAUDE_ADVISOR=off", file=sys.stderr)
         return 1
     flag = os.path.join(STATE_DIR, f"{session}.off")
     if cmd == "off":
@@ -306,14 +232,8 @@ def cli(args):
     elif cmd == "on" and os.path.exists(flag):
         os.remove(flag)
     off = os.environ.get("CLAUDE_ADVISOR") == "off" or os.path.exists(flag)
-    print(
-        f"advisor mode is {'off' if off else 'on'} for this session"
-        + (
-            " (CLAUDE_ADVISOR=off at launch)"
-            if os.environ.get("CLAUDE_ADVISOR") == "off"
-            else ""
-        )
-    )
+    print(f"advisor mode is {'off' if off else 'on'} for this session"
+          + (" (CLAUDE_ADVISOR=off at launch)" if os.environ.get("CLAUDE_ADVISOR") == "off" else ""))
     return 0
 
 
@@ -324,14 +244,5 @@ if __name__ == "__main__":
     try:
         hook()
     except Exception as e:
-        print(
-            json.dumps(
-                {
-                    "hookSpecificOutput": {
-                        "hookEventName": "PreToolUse",
-                        "permissionDecision": "deny",
-                        "permissionDecisionReason": f"advisor hook error ({e})",
-                    }
-                }
-            )
-        )
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                                 "permissionDecisionReason": f"advisor hook error ({e})"}}))
