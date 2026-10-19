@@ -27,7 +27,10 @@ const CONFIG =
 const DEBUG_LOG = path.join(
   process.env.CLAUDE_ADVISOR_STATE ||
     path.join(
-      process.env.AI_HOME || path.join(os.homedir(), ".ai"),
+      (process.env.AI_HOME || path.join(os.homedir(), ".ai")).replace(
+        /^~(?=$|\/)/,
+        os.homedir(),
+      ),
       "guard",
       "advisor",
     ),
