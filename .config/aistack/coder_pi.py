@@ -28,7 +28,7 @@ import threading
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 PI = os.environ.get("CODER_PI_BIN") or shutil.which("pi") or "pi"
-AGENT_DIR = os.environ.get("CODER_PI_AGENT_DIR") or os.path.join(os.environ.get("AI_HOME") or os.path.expanduser("~/.ai"), "cache", "aistack-pi-coder")
+AGENT_DIR = os.environ.get("CODER_PI_AGENT_DIR") or os.path.join(os.path.expanduser(os.environ.get("AI_HOME") or "~/.ai"), "cache", "aistack-pi-coder")
 
 _spec = importlib.util.spec_from_file_location("local_edit_mcp", os.path.join(HERE, "local_edit_mcp.py"))
 le = importlib.util.module_from_spec(_spec)

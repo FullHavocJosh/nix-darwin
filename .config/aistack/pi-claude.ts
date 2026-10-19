@@ -27,7 +27,13 @@ const CLAUDE = process.env.AI_CLAUDE_BIN || "claude";
 const ADVISOR = path.join(homedir(), ".config", "aistack", "advisor_hook.py");
 const STATE = path.join(
   process.env.PI_CODING_AGENT_DIR ||
-    path.join(process.env.AI_HOME || path.join(homedir(), ".ai"), "ai"),
+    path.join(
+      (process.env.AI_HOME || path.join(homedir(), ".ai")).replace(
+        /^~(?=$|\/)/,
+        homedir(),
+      ),
+      "ai",
+    ),
   "claude-sessions.json",
 );
 const CONTINUE = process.argv.some((a) => a === "-c" || a === "--continue");

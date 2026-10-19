@@ -33,7 +33,7 @@ import time
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 HOME = os.path.expanduser("~")
-STATE_DIR = os.environ.get("CLAUDE_ADVISOR_STATE") or os.path.join(os.environ.get("AI_HOME") or os.path.join(HOME, ".ai"), "guard", "advisor")
+STATE_DIR = os.environ.get("CLAUDE_ADVISOR_STATE") or os.path.join(os.path.expanduser(os.environ.get("AI_HOME") or os.path.join(HOME, ".ai")), "guard", "advisor")
 GUARD = os.environ.get("CLAUDE_ADVISOR_GUARD") or os.path.join(os.path.dirname(HERE), "ainfo", "ainfo_guard.py")
 
 READ_TOOLS = {
@@ -68,8 +68,9 @@ def own_file(path):
     roots = [f"/private/tmp/claude-{uid}/", f"/tmp/claude-{uid}/", os.path.join(claude, "plans") + "/"]
     if any(p.startswith(r) for r in roots):
         return True
-    ai = os.path.realpath(os.environ.get("AI_HOME") or os.path.join(HOME, ".ai"))
-    if p.startswith(ai + "/") and not (p + "/").startswith(os.path.join(ai, "guard") + "/"):
+    ai = os.path.realpath(os.path.expanduser(os.environ.get("AI_HOME") or os.path.join(HOME, ".ai")))
+    guard = os.path.join(ai, "guard") + "/"  # APFS is case-insensitive: ~/.ai/GUARD is the same directory
+    if p.startswith(ai + "/") and not (p + "/").lower().startswith(guard.lower()):
         return True  # the shared AI directory; guard/ holds this hook's own on/off flags
     return bool(re.match(re.escape(os.path.join(claude, "projects")) + r"/[^/]+/memory/", p))
 

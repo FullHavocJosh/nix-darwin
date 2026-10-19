@@ -380,7 +380,7 @@ function _aistack_repo_private() {
 function _aidev_stack() {
   local task="$*"
   local adir="${AISTACK_DIR:-$HOME/.config/aistack}"
-  local cache_dir="${AI_HOME:-$HOME/.ai}/cache"
+  local cache_dir="${${AI_HOME/#\~/$HOME}:-$HOME/.ai}/cache"
   local endpoint="${LLAMA_CPP_HOST:-http://127.0.0.1:8080}"
   local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
   local f reply
@@ -440,7 +440,7 @@ function _aidev_stack() {
   else
     project="$PWD"
   fi
-  local aihome="${AISTACK_HOME:-${AI_HOME:-$HOME/.ai}/aidev}" aihome_real
+  local aihome="${AISTACK_HOME:-${${AI_HOME/#\~/$HOME}:-$HOME/.ai}/aidev}" aihome_real
   mkdir -p "$aihome" 2>/dev/null
   aihome_real=$(cd "$aihome" 2>/dev/null && pwd -P)
   if [[ -z "$aihome_real" ]] || git -C "$aihome_real" rev-parse --show-toplevel >/dev/null 2>&1; then
@@ -753,7 +753,7 @@ function aidev() {
     return
   fi
   if [[ -n "$rfc" ]]; then
-    local rdir="${AI_HOME:-$HOME/.ai}/rfcs" rfile="" f
+    local rdir="${${AI_HOME/#\~/$HOME}:-$HOME/.ai}/rfcs" rfile="" f
     for f in "$rfc" "$rdir/$rfc" "$rdir/$rfc.md"; do
       [[ -f "$f" ]] && { rfile="${f:A}"; break; }
     done
@@ -787,7 +787,7 @@ $(<"$rfile")"
 # Run commands yourself with pi's `!cmd`; Claude sees them and their output with your next message.
 # AI_CLAUDE_MODEL (default sonnet) picks the model; AI_CLAUDE_ARGS adds claude flags. ainfo and aidev are separate.
 function ai() {
-  local sdir="${AISTACK_DIR:-$HOME/.config/aistack}" pi_dir="${AI_HOME:-$HOME/.ai}/ai"
+  local sdir="${AISTACK_DIR:-$HOME/.config/aistack}" pi_dir="${${AI_HOME/#\~/$HOME}:-$HOME/.ai}/ai"
   local model="${AI_CLAUDE_MODEL:-sonnet}"
   if ! command -v claude &>/dev/null; then
     echo "✗ ai needs Claude Code (claude) on PATH" >&2
@@ -859,7 +859,7 @@ function ainfo() {
   local project repo_root
   repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
   project="${repo_root:-$PWD}"
-  local aihome="${AINFO_HOME:-${AI_HOME:-$HOME/.ai}/ainfo}" aihome_real
+  local aihome="${AINFO_HOME:-${${AI_HOME/#\~/$HOME}:-$HOME/.ai}/ainfo}" aihome_real
   mkdir -p "$aihome" 2>/dev/null
   aihome_real=$(cd "$aihome" 2>/dev/null && pwd -P)
   if [[ -z "$aihome_real" ]] || git -C "$aihome_real" rev-parse --show-toplevel >/dev/null 2>&1; then
@@ -946,7 +946,7 @@ function _aidev_aider() {
   for arg in "$@"; do
     if [[ "$arg" == "-p" || "$arg" == "--print" ]]; then print_mode=true; else rest+=("$arg"); fi
   done
-  local cache="${AI_HOME:-$HOME/.ai}/cache/aidev-aider" settings
+  local cache="${${AI_HOME/#\~/$HOME}:-$HOME/.ai}/cache/aidev-aider" settings
   mkdir -p "$cache"
   settings="$cache/model-settings.yml"
   # enable_thinking=false: Qwen3.5 otherwise spends max_tokens reasoning (see _run_aider_local); models without a
@@ -1127,7 +1127,7 @@ function _ai_provider_enabled() {
   fi
   
   # If env var is not set, check for .off file
-  local switches_dir="${AI_HOME:-$HOME/.ai}/switches"
+  local switches_dir="${${AI_HOME/#\~/$HOME}:-$HOME/.ai}/switches"
   if [[ -f "${switches_dir}/${name}.off" ]]; then
     return 1  # Provider disabled by file
   fi

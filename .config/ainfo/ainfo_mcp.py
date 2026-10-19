@@ -28,7 +28,7 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.realpath(os.environ.get("AINFO_PROJECT") or os.getcwd())
-STATE_DIR = os.environ.get("AINFO_STATE_DIR") or os.path.join(os.environ.get("AI_HOME") or os.path.expanduser("~/.ai"), "ainfo", "default")
+STATE_DIR = os.environ.get("AINFO_STATE_DIR") or os.path.join(os.path.expanduser(os.environ.get("AI_HOME") or "~/.ai"), "ainfo", "default")
 AISTACK_DIR = os.environ.get("AINFO_AISTACK_DIR") or os.path.expanduser(
     "~/.config/aistack"
 )
@@ -165,7 +165,7 @@ DISALLOWED = [
 
 def sandbox_profile():
     h = os.path.expanduser("~")
-    ai = os.environ.get("AI_HOME") or f"{h}/.ai"  # RFC 0003: all AI tool state; guard/ is the hooks' own state
+    ai = os.path.expanduser(os.environ.get("AI_HOME") or f"{h}/.ai")  # RFC 0003: all AI tool state; guard/ is the hooks' own state
     # Seatbelt matches resolved paths: ~/.claude is a symlink into the dotfiles repo, and without its target Claude
     # cannot save the session transcript, so every --resume fails with error_during_execution.
     sub = lambda p: " ".join(

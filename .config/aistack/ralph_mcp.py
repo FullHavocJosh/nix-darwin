@@ -72,7 +72,7 @@ def state_dir(project):
     d = os.environ.get("AISTACK_STATE_DIR")
     if d:
         return os.path.realpath(os.path.expanduser(d))
-    home = os.environ.get("AISTACK_HOME") or os.path.join(os.environ.get("AI_HOME") or os.path.expanduser("~/.ai"), "aidev")
+    home = os.environ.get("AISTACK_HOME") or os.path.join(os.path.expanduser(os.environ.get("AI_HOME") or "~/.ai"), "aidev")
     return os.path.join(
         home,
         f"{os.path.basename(project)}-{hashlib.sha1(project.encode()).hexdigest()[:10]}",
