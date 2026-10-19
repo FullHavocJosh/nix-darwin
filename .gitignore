@@ -174,6 +174,9 @@ stow-uninstall-local-ignore
 /.config/herdr/sessions/
 /.config/herdr/release-notes.json
 /.config/herdr/.version-before-rebuild
+# Plugin install cache (nested git checkouts, lock files): herdr rebuilds it
+/.config/herdr/plugins/
+/.config/herdr/.plugins.lock
 
 # Ignore AWS VPN configs
 /.config/AWS VPN Client*
