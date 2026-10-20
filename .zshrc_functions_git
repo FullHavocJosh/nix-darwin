@@ -176,6 +176,7 @@ function _run_linters() {
   
   local linting_issues=false
   local lint_report=""
+  local oxfmt_rc
   local files_with_issues=()
   
   # Check for available linters and verify they work
@@ -255,18 +256,35 @@ function _run_linters() {
           fi
         fi
         
-        if _repo_uses_other_formatter "$file"; then
-          : # this repo formats with its own tool; prettier would rewrite the file against the wrong style
-        elif $has_prettier; then
-          if ! prettier --check "$file" 2>/dev/null; then
-            lint_report="${lint_report}🟡 $file: prettier formatting issues\n"
-            linting_issues=true
-            file_has_issues=true
-          fi
-        else
-          missing_linters_report="${missing_linters_report}⚠️  $file: prettier not installed\n"
-          missing_linters=true
-        fi
+        case "$(_repo_formatter "$file")" in
+          oxfmt)
+            _oxfmt_file check "$file"
+            oxfmt_rc=$?
+            if [[ $oxfmt_rc -eq 127 ]]; then
+              missing_linters_report="${missing_linters_report}⚠️  $file: oxfmt not installed (install the repo's dependencies)\n"
+              missing_linters=true
+            elif [[ $oxfmt_rc -ne 0 ]]; then
+              lint_report="${lint_report}🟡 $file: oxfmt formatting issues\n"
+              linting_issues=true
+              file_has_issues=true
+            fi
+            ;;
+          biome|dprint)
+            : # this repo formats with its own tool; prettier would rewrite the file against the wrong style
+            ;;
+          *)
+            if $has_prettier; then
+              if ! prettier --check "$file" 2>/dev/null; then
+                lint_report="${lint_report}🟡 $file: prettier formatting issues\n"
+                linting_issues=true
+                file_has_issues=true
+              fi
+            else
+              missing_linters_report="${missing_linters_report}⚠️  $file: prettier not installed\n"
+              missing_linters=true
+            fi
+            ;;
+        esac
         ;;
       *.py)
         if $has_ruff; then
@@ -449,17 +467,35 @@ function _run_linters() {
                 fi
               fi
               
-              if _repo_uses_other_formatter "$file"; then
-                echo "  ⊳ Skipping prettier for $file: the repo formats with its own tool"
-              elif $has_prettier; then
-                echo "  Formatting $file with prettier..."
-                if prettier --write "$file" 2>&1; then
-                  echo "  ✓ Formatted: $file"
-                  git add "$file"
-                else
-                  echo "  ✗ Failed to format: $file"
-                fi
-              fi
+              case "$(_repo_formatter "$file")" in
+                oxfmt)
+                  echo "  Formatting $file with oxfmt..."
+                  _oxfmt_file write "$file"
+                  oxfmt_rc=$?
+                  if [[ $oxfmt_rc -eq 0 ]]; then
+                    echo "  ✓ Formatted: $file"
+                    git add "$file"
+                  elif [[ $oxfmt_rc -eq 127 ]]; then
+                    echo "  ⊳ Skipping $file: oxfmt is not installed (install the repo's dependencies)"
+                  else
+                    echo "  ✗ Failed to format: $file"
+                  fi
+                  ;;
+                biome|dprint)
+                  echo "  ⊳ Skipping prettier for $file: the repo formats with its own tool"
+                  ;;
+                *)
+                  if $has_prettier; then
+                    echo "  Formatting $file with prettier..."
+                    if prettier --write "$file" 2>&1; then
+                      echo "  ✓ Formatted: $file"
+                      git add "$file"
+                    else
+                      echo "  ✗ Failed to format: $file"
+                    fi
+                  fi
+                  ;;
+              esac
               ;;
             *.py)
               # EXE001: ruff never changes file modes, so make shebang files executable here
@@ -2977,24 +3013,84 @@ function _is_main_worktree() {
   [[ "$git_dir" == "$common_dir" ]]
 }
 
-# True when the repo that holds $1 declares a formatter other than prettier (oxfmt, biome or dprint) and has no prettier
-# config. prettier would rewrite such files against its own 80 column default, which buries the real change and fails the
-# repo's own format check, so gpa leaves their formatting to the repo.
-function _repo_uses_other_formatter() {
+# Prints the formatter the repo that holds $1 calls for: "prettier", "oxfmt", "biome" or "dprint". A prettier config (a
+# .prettierrc*, a prettier.config.*, or a "prettier" key in package.json) wins; otherwise an oxfmt, biome or dprint config
+# names its tool; a repo that declares none gets "prettier", as before. prettier run on an oxfmt repo rewrites files
+# against its own 80 column default, which buries the real change and fails the repo's own format check.
+function _repo_formatter() {
   local dir root f
   dir=$(dirname "$1")
-  root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || return 1
+  root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || { echo prettier; return 0; }
   for f in .prettierrc .prettierrc.json .prettierrc.yml .prettierrc.yaml .prettierrc.js .prettierrc.cjs .prettierrc.mjs \
     .prettierrc.toml prettier.config.js prettier.config.cjs prettier.config.mjs; do
-    [[ -e "$root/$f" ]] && return 1
+    [[ -e "$root/$f" ]] && { echo prettier; return 0; }
   done
   if [[ -f "$root/package.json" ]] && grep -q '"prettier"[[:space:]]*:' "$root/package.json" 2>/dev/null; then
-    return 1
+    echo prettier
+    return 0
   fi
-  for f in .oxfmtrc.json .oxfmtrc.jsonc biome.json biome.jsonc dprint.json .dprint.json; do
-    [[ -e "$root/$f" ]] && return 0
+  for f in .oxfmtrc.json .oxfmtrc.jsonc; do
+    [[ -e "$root/$f" ]] && { echo oxfmt; return 0; }
   done
-  return 1
+  for f in biome.json biome.jsonc; do
+    [[ -e "$root/$f" ]] && { echo biome; return 0; }
+  done
+  for f in dprint.json .dprint.json; do
+    [[ -e "$root/$f" ]] && { echo dprint; return 0; }
+  done
+  echo prettier
+}
+
+# True when the repo that holds $1 declares a formatter other than prettier (see _repo_formatter).
+function _repo_uses_other_formatter() {
+  [[ "$(_repo_formatter "$1")" != prettier ]]
+}
+
+# Prints the oxfmt binary for the repo that holds $1: the repo's own node_modules, then the main checkout's (a linked
+# worktree has no install of its own), then PATH. Returns 1 when there is none.
+function _find_oxfmt() {
+  local dir root common cand
+  dir=$(dirname "$1")
+  root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || return 1
+  common=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+  for cand in "$root/node_modules/.bin/oxfmt" "${common%/.git}/node_modules/.bin/oxfmt"; do
+    if [[ -x "$cand" ]]; then
+      echo "$cand"
+      return 0
+    fi
+  done
+  command -v oxfmt
+}
+
+# Runs oxfmt on the file $2: mode $1 is "check" (exit 0 when formatted) or "write" (formats in place). Exit 127 when no
+# oxfmt binary is found. oxfmt ignores every file under a .worktrees path, which is where gpa works, so the file is
+# formatted in a scratch copy together with the repo's oxfmt config, and "write" copies the result back. A file that the
+# config ignores, or a type oxfmt does not handle, counts as formatted. Only the config at the repo root is used.
+function _oxfmt_file() {
+  local mode="$1" file="$2" bin root abs rel tmp cfg out rc
+  bin=$(_find_oxfmt "$file") || return 127
+  root=$(git -C "$(dirname "$file")" rev-parse --show-toplevel 2>/dev/null) || return 1
+  abs="$(cd "$(dirname "$file")" && pwd)/$(basename "$file")"
+  rel="${abs#$root/}"
+  tmp=$(mktemp -d) || return 1
+  mkdir -p "$tmp/$(dirname "$rel")"
+  cp "$abs" "$tmp/$rel"
+  for cfg in .oxfmtrc.json .oxfmtrc.jsonc; do
+    [[ -f "$root/$cfg" ]] && cp "$root/$cfg" "$tmp/$cfg"
+  done
+  if [[ "$mode" == check ]]; then
+    out=$(cd "$tmp" && "$bin" --check "$rel" 2>&1)
+  else
+    out=$(cd "$tmp" && "$bin" "$rel" 2>&1)
+  fi
+  rc=$?
+  if [[ $rc -ne 0 && "$out" == *"Expected at least one target file"* ]]; then
+    rc=0
+  elif [[ $rc -eq 0 && "$mode" == write ]]; then
+    cp "$tmp/$rel" "$abs"
+  fi
+  rm -rf "$tmp"
+  return $rc
 }
 
 # Prints the owner/name of the GitHub repo that `origin` points at, or nothing when

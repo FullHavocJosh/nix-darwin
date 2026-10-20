@@ -136,6 +136,55 @@ except Exception: j = {}
 check("gpa commits and pushes", j.get("ok") is True and j.get("pushed") is True, (r.stdout[-300:], r.stderr[-300:]))
 check("the file is committed as written, not rewrapped by prettier", open(repo + "/a.ts").read() == src and git(repo, "show", "HEAD:a.ts") == src.strip())
 
+print("gpa runs the formatter the repo calls for")
+t, repo, env = make_world()
+def formatter(path): return sh(functions(f"_repo_formatter {path}"), repo, env).stdout.strip()
+open(repo + "/a.ts", "w").write("x\n")
+check("no formatter config: prettier", formatter(repo + "/a.ts") == "prettier")
+open(repo + "/.oxfmtrc.jsonc", "w").write("{}\n")
+check("an oxfmt config: oxfmt", formatter(repo + "/a.ts") == "oxfmt")
+open(repo + "/.prettierrc", "w").write("{}\n")
+check("a prettier config wins over an oxfmt config", formatter(repo + "/a.ts") == "prettier")
+os.remove(repo + "/.prettierrc"); os.remove(repo + "/.oxfmtrc.jsonc")
+open(repo + "/biome.json", "w").write("{}\n")
+check("a biome config: biome", formatter(repo + "/a.ts") == "biome")
+os.remove(repo + "/biome.json")
+
+def stub(path, body):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    open(path, "w").write("#!/bin/sh\n" + body); os.chmod(path, 0o755)
+
+def gpa_json(repo, env, msg):
+    r = sh(functions(f'gpa --auto -m "{msg}" --no-review --json'), repo, env, timeout=180)
+    lines = [l for l in r.stdout.splitlines() if l.strip()]
+    try: j = json.loads(lines[-1])
+    except Exception: j = {}
+    return j, r
+
+# an oxfmt repo with a stub oxfmt in its node_modules: --check fails on BAD, writing replaces BAD with good
+t, repo, env = make_world()
+open(repo + "/.gitignore", "w").write("node_modules\n")
+open(repo + "/.oxfmtrc.jsonc", "w").write("{}\n")
+stub(repo + "/node_modules/.bin/oxfmt", 'cfg=$(ls .oxfmtrc.json* 2>/dev/null | head -1); [ -n "$cfg" ] || { echo no config >&2; exit 2; }\n'
+     'if [ "$1" = "--check" ]; then grep -q BAD "$2" && exit 1; exit 0; fi\n'
+     'sed "s/BAD/good/" "$1" > "$1.tmp" && mv "$1.tmp" "$1"\n')
+stub(t + "/bin/prettier", '[ "$1" = "--version" ] && { echo 3.0.0; exit 0; }\necho "$@" >> ' + t + '/prettier.calls\nexit 0\n')
+open(repo + "/b.ts", "w").write("const BAD = 1;\n")
+j, r = gpa_json(repo, env, "Add b.ts")
+check("an oxfmt repo: gpa commits and pushes", j.get("ok") is True and j.get("pushed") is True, (r.stdout[-300:], r.stderr[-300:]))
+check("an oxfmt repo: the file is formatted by oxfmt from its config", git(repo, "show", "HEAD:b.ts") == "const good = 1;", git(repo, "show", "HEAD:b.ts"))
+check("an oxfmt repo: the working copy has the formatted file", open(repo + "/b.ts").read() == "const good = 1;\n")
+check("an oxfmt repo: prettier is not run", not os.path.exists(t + "/prettier.calls"))
+
+# a repo without a formatter config falls back to prettier
+t, repo, env = make_world()
+stub(t + "/bin/prettier", 'if [ "$1" = "--version" ]; then echo 3.0.0; exit 0; fi\n'
+     'if [ "$1" = "--check" ]; then grep -q BAD "$2" && exit 1; exit 0; fi\n'
+     'sed "s/BAD/pretty/" "$2" > "$2.tmp" && mv "$2.tmp" "$2"\n')
+open(repo + "/c.ts", "w").write("const BAD = 1;\n")
+j, r = gpa_json(repo, env, "Add c.ts")
+check("a repo with no formatter config: prettier formats the file", j.get("ok") is True and git(repo, "show", "HEAD:c.ts") == "const pretty = 1;", (git(repo, "show", "HEAD:c.ts"), r.stdout[-300:]))
+
 print("gpc -m")
 t, repo, env = make_world(); open(repo + "/new.txt", "w").write("x\n"); git(repo, "add", "new.txt")
 r = sh(functions('gpc -m "Add new.txt" -d "Because we need it."'), repo, env)
