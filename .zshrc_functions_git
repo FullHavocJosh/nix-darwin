@@ -2973,9 +2973,53 @@ function _is_main_worktree() {
   [[ "$git_dir" == "$common_dir" ]]
 }
 
+# Prints the owner/name of the GitHub repo that `origin` points at, or nothing when
+# origin is not a GitHub URL (a local path, another host). Reads the raw configured URL,
+# not `git remote get-url`, so an insteadOf rewrite cannot hide the GitHub identity.
+# gh must be told this repo explicitly: in a fork clone gh resolves its default repo to the
+# upstream parent (`gh repo fork` makes `upstream` the base), and a bare `gh pr create`
+# would then open the PR against the parent instead of the fork.
+function _gpr_origin_repo() {
+  local url
+  url=$(git -C "${1:-.}" config --get remote.origin.url 2>/dev/null) || return 1
+  url=${url%.git}
+  case "$url" in
+    git@github.com:*|ssh://git@github.com/*|https://github.com/*|http://github.com/*) ;;
+    *) return 1 ;;
+  esac
+  url=${url#git@github.com:}
+  url=${url#*://}
+  url=${url#git@}
+  url=${url#github.com/}
+  [[ "$url" == */* ]] && echo "$url"
+}
+
+# Prints the default branch of this repo's own `origin`, ignoring any `upstream` remote.
+# Order: origin/HEAD (set at clone), then GitHub's answer for origin's own owner/name,
+# then a local main or master. Prints nothing when none of them exists.
+function _gpr_default_branch() {
+  local repo="$1" branch slug b
+  branch=$(git -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)
+  branch=${branch#origin/}
+  if [[ -z "$branch" ]] && slug=$(_gpr_origin_repo "$repo"); then
+    branch=$(gh repo view "$slug" --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null)
+  fi
+  if [[ -z "$branch" ]]; then
+    for b in main master; do
+      if git -C "$repo" rev-parse --verify --quiet "refs/heads/$b" >/dev/null; then
+        branch=$b
+        break
+      fi
+    done
+  fi
+  [[ -n "$branch" ]] && echo "$branch"
+  return 0
+}
+
 # Worktree + PR hygiene: run before creating a new worktree so we don't
 # accumulate stale checkouts, and so whoever is about to start new work can
-# see what's already in flight first.
+# see what's already in flight first. $2, when given, is origin's owner/name: the PR
+# lookups then target that repo, never the upstream parent of a fork.
 #   - A worktree whose PR is MERGED/CLOSED is stale (the work is done or
 #     dead) -> automatically removed, its local branch deleted.
 #   - A worktree with an OPEN PR, or no PR at all (not pushed yet), is left
@@ -2986,6 +3030,8 @@ function _gpr_prune_stale_worktrees() {
   local repo_root="$1"
   local pruned_any=false
   local -a open_worktree_branches=()
+  local -a gh_repo=()
+  [[ -n "$2" ]] && gh_repo=(--repo "$2")
 
   echo "ℹ Checking existing worktrees and PRs..."
 
@@ -3003,7 +3049,11 @@ function _gpr_prune_stale_worktrees() {
             # already-local var with no assignment (as happens each loop
             # iteration here) prints "name=value" instead of no-op'ing.
             local pr_json="" pr_state=""
-            pr_json=$(cd "$wt_path" && gh pr view --json state,url 2>/dev/null)
+            if [[ ${#gh_repo[@]} -gt 0 ]]; then
+              pr_json=$(cd "$wt_path" && gh pr view "${gh_repo[@]}" "$wt_branch" --json state,url 2>/dev/null)
+            else
+              pr_json=$(cd "$wt_path" && gh pr view --json state,url 2>/dev/null)
+            fi
             if [[ -n "$pr_json" ]]; then
               pr_state=$(echo "$pr_json" | jq -r '.state')
               if [[ "$pr_state" == "MERGED" || "$pr_state" == "CLOSED" ]]; then
@@ -3031,7 +3081,7 @@ function _gpr_prune_stale_worktrees() {
 
   # Report open PRs with no local worktree — informational only, never touched.
   local open_prs
-  open_prs=$(cd "$repo_root" && gh pr list --state open --json headRefName,url 2>/dev/null)
+  open_prs=$(cd "$repo_root" && gh pr list "${gh_repo[@]}" --state open --json headRefName,url 2>/dev/null)
   if [[ -n "$open_prs" ]]; then
     echo "$open_prs" | jq -c '.[]' | while IFS= read -r pr; do
       local head_ref=$(echo "$pr" | jq -r '.headRefName')
@@ -3266,12 +3316,23 @@ function _gpr_impl() {
     return 1
   fi
 
+  # The repo's own origin and default branch, never those of an upstream parent: in a
+  # fork clone gh's default repo is the parent, and the fork's default branch need not be main.
+  local origin_repo base_branch
+  origin_repo=$(_gpr_origin_repo "$repo_root")
+  base_branch=$(_gpr_default_branch "$repo_root")
+  if [[ -z "$base_branch" ]]; then
+    echo "✗ Cannot find origin's default branch (origin/HEAD, GitHub, local main or master)"
+    return 1
+  fi
+
   # gpr never calls an AI provider — branch naming and PR creation are
   # templated operations that don't benefit from cloud quality.
   echo "🏠 Creating PR locally (no AI provider needed)..."
+  echo "ℹ Base: ${origin_repo:-origin} @ $base_branch"
   echo ""
 
-  _gpr_prune_stale_worktrees "$repo_root"
+  _gpr_prune_stale_worktrees "$repo_root" "$origin_repo"
 
   # Stash any uncommitted changes
   echo "Stashing uncommitted changes..."
@@ -3332,7 +3393,7 @@ function _gpr_impl() {
   fi
   mkdir -p "$repo_root/.worktrees"
 
-  git worktree add -b "$branch_name" "$worktree_dir" main || return 1
+  git worktree add -b "$branch_name" "$worktree_dir" "$base_branch" || return 1
 
   # Deliberately NOT cd'ing the caller's shell into the worktree. aidev is often
   # working through a whole run of PRs/worktrees in one sitting (create worktree,
@@ -3352,11 +3413,15 @@ $type_prefix: $branch_name
 $type_prefix: $branch_name"
   fi
   local pr_url pr_rc
+  # --repo/--base/--head pin the PR to origin's own repo and default branch; without them a fork
+  # clone opens the PR against the upstream parent.
+  local -a pr_target=(--base "$base_branch" --head "$branch_name")
+  [[ -n "$origin_repo" ]] && pr_target=(--repo "$origin_repo" "${pr_target[@]}")
   pr_url=$(
     cd "$worktree_dir" || exit 1
     git commit --allow-empty -m "${GPR_TITLE:-$branch_name}" >&2 &&
       git push -u origin "$branch_name" >&2 &&
-      gh pr create --draft --title "$pr_title" --body "$pr_body"
+      gh pr create --draft "${pr_target[@]}" --title "$pr_title" --body "$pr_body"
   )
   pr_rc=$?
   [ -n "$pr_url" ] && echo "$pr_url"

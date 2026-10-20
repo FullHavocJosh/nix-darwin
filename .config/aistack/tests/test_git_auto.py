@@ -80,6 +80,43 @@ r = sh(functions("gpr_func --auto fix from-file --body-file " + t + "/body.md --
 args = open(t + "/gh-create.args").read().splitlines()
 check("--body-file supplies the body", any("from a file" in a for a in args), args)
 
+print("gpr in a fork clone: origin's own repo and default branch, never the upstream parent's")
+t, repo, env = make_world()
+for url, want in [("https://github.com/me/fork.git", "me/fork"), ("git@github.com:me/fork.git", "me/fork"),
+                  ("ssh://git@github.com/me/fork", "me/fork"), ("https://gitlab.com/me/fork.git", ""), ("/tmp/some/local.git", "")]:
+    git(repo, "config", "remote.origin.url", url)
+    r = sh(functions(f"_gpr_origin_repo {repo}"), repo, env)
+    check(f"_gpr_origin_repo({url}) = {want!r}", r.stdout.strip() == want, r.stdout)
+t = tempfile.mkdtemp(prefix="gitfork-"); bare = t + "/fork.git"; upstream = t + "/upstream.git"; repo = t + "/repo"; bin_ = t + "/bin"
+subprocess.run(["git", "init", "-q", "--bare", bare]); subprocess.run(["git", "init", "-q", "--bare", upstream])
+subprocess.run(["git", "clone", "-q", bare, repo], capture_output=True)
+git(repo, "checkout", "-q", "-b", "develop"); open(repo + "/README.md", "w").write("fork\n")
+git(repo, "add", "-A"); git(repo, "commit", "-q", "-m", "init"); git(repo, "push", "-q", "-u", "origin", "develop")
+git(repo, "remote", "set-head", "origin", "develop")
+git(repo, "remote", "add", "upstream", upstream)
+git(repo, "config", f"url.{bare}.insteadOf", "https://github.com/me/fork.git")
+git(repo, "config", "remote.origin.url", "https://github.com/me/fork.git")
+os.makedirs(bin_)
+open(bin_ + "/gh", "w").write(f"""#!/bin/sh
+case "$1 $2" in
+  "pr view") exit 1 ;;
+  "pr list") echo "[]" ;;
+  "pr create") printf '%s\\n' "$@" > {t}/gh-create.args; echo "https://github.com/me/fork/pull/3" ;;
+esac
+""")
+os.chmod(bin_ + "/gh", 0o755)
+env = {"PATH": bin_ + ":" + os.environ["PATH"]}
+r = sh(functions('gpr_func --auto feat fork-br --title "feat: x" --description "y"'), repo, env)
+try: j = json.loads([l for l in r.stdout.splitlines() if l.strip()][-1])
+except Exception: j = {}
+check("gpr succeeds with develop as the only default branch", j.get("ok") is True, (r.stdout[-300:], r.stderr[-400:]))
+args = open(t + "/gh-create.args").read().splitlines() if os.path.exists(t + "/gh-create.args") else []
+def flag(name): return args[args.index(name) + 1] if name in args else None
+check("the PR is pinned to the fork repo", flag("--repo") == "me/fork", args)
+check("the PR targets the fork's default branch", flag("--base") == "develop", args)
+check("the PR head is the new branch", flag("--head") == "fork-br", args)
+check("the worktree branch starts from develop", git(repo + "/.worktrees/fork-br", "merge-base", "HEAD", "develop") == git(repo, "rev-parse", "develop"))
+
 print("gpc -m")
 t, repo, env = make_world(); open(repo + "/new.txt", "w").write("x\n"); git(repo, "add", "new.txt")
 r = sh(functions('gpc -m "Add new.txt" -d "Because we need it."'), repo, env)
