@@ -503,6 +503,10 @@ in
       "warrensbox/tap/tfswitch"
       "claude-code"
       "font-hack-nerd-font"
+      "android-commandlinetools"
+      "android-platform-tools"
+      "android-studio"
+      "rwmuein"
     ];
     masApps = { };
     onActivation.cleanup = "none";
