@@ -117,6 +117,25 @@ check("the PR targets the fork's default branch", flag("--base") == "develop", a
 check("the PR head is the new branch", flag("--head") == "fork-br", args)
 check("the worktree branch starts from develop", git(repo + "/.worktrees/fork-br", "merge-base", "HEAD", "develop") == git(repo, "rev-parse", "develop"))
 
+print("gpa leaves formatting to a repo that has its own formatter")
+t, repo, env = make_world()
+open(repo + "/a.ts", "w").write("x\n")
+def uses_other(path): return sh(functions(f"_repo_uses_other_formatter {path}; echo $?"), repo, env).stdout.strip()
+check("no formatter config: prettier applies", uses_other(repo + "/a.ts") == "1")
+open(repo + "/.oxfmtrc.jsonc", "w").write("{}\n")
+check("an oxfmt config: prettier is skipped", uses_other(repo + "/a.ts") == "0")
+open(repo + "/.prettierrc", "w").write("{}\n")
+check("an oxfmt config and a prettier config: prettier applies", uses_other(repo + "/a.ts") == "1")
+os.remove(repo + "/.prettierrc")
+src = 'import { aaaaaaaaaa, bbbbbbbbbb, cccccccccc, dddddddddd, eeeeeeeeee, ffffffffff } from "some-package";\n'
+open(repo + "/a.ts", "w").write(src)
+r = sh(functions('gpa --auto -m "Add a.ts" --no-review --json'), repo, env, timeout=180)
+lines = [l for l in r.stdout.splitlines() if l.strip()]
+try: j = json.loads(lines[-1])
+except Exception: j = {}
+check("gpa commits and pushes", j.get("ok") is True and j.get("pushed") is True, (r.stdout[-300:], r.stderr[-300:]))
+check("the file is committed as written, not rewrapped by prettier", open(repo + "/a.ts").read() == src and git(repo, "show", "HEAD:a.ts") == src.strip())
+
 print("gpc -m")
 t, repo, env = make_world(); open(repo + "/new.txt", "w").write("x\n"); git(repo, "add", "new.txt")
 r = sh(functions('gpc -m "Add new.txt" -d "Because we need it."'), repo, env)

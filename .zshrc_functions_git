@@ -255,7 +255,9 @@ function _run_linters() {
           fi
         fi
         
-        if $has_prettier; then
+        if _repo_uses_other_formatter "$file"; then
+          : # this repo formats with its own tool; prettier would rewrite the file against the wrong style
+        elif $has_prettier; then
           if ! prettier --check "$file" 2>/dev/null; then
             lint_report="${lint_report}🟡 $file: prettier formatting issues\n"
             linting_issues=true
@@ -447,7 +449,9 @@ function _run_linters() {
                 fi
               fi
               
-              if $has_prettier; then
+              if _repo_uses_other_formatter "$file"; then
+                echo "  ⊳ Skipping prettier for $file: the repo formats with its own tool"
+              elif $has_prettier; then
                 echo "  Formatting $file with prettier..."
                 if prettier --write "$file" 2>&1; then
                   echo "  ✓ Formatted: $file"
@@ -2971,6 +2975,26 @@ function _is_main_worktree() {
   git_dir=$(git -C "$dir" rev-parse --path-format=absolute --git-dir 2>/dev/null) || return 1
   common_dir=$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
   [[ "$git_dir" == "$common_dir" ]]
+}
+
+# True when the repo that holds $1 declares a formatter other than prettier (oxfmt, biome or dprint) and has no prettier
+# config. prettier would rewrite such files against its own 80 column default, which buries the real change and fails the
+# repo's own format check, so gpa leaves their formatting to the repo.
+function _repo_uses_other_formatter() {
+  local dir root f
+  dir=$(dirname "$1")
+  root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || return 1
+  for f in .prettierrc .prettierrc.json .prettierrc.yml .prettierrc.yaml .prettierrc.js .prettierrc.cjs .prettierrc.mjs \
+    .prettierrc.toml prettier.config.js prettier.config.cjs prettier.config.mjs; do
+    [[ -e "$root/$f" ]] && return 1
+  done
+  if [[ -f "$root/package.json" ]] && grep -q '"prettier"[[:space:]]*:' "$root/package.json" 2>/dev/null; then
+    return 1
+  fi
+  for f in .oxfmtrc.json .oxfmtrc.jsonc biome.json biome.jsonc dprint.json .dprint.json; do
+    [[ -e "$root/$f" ]] && return 0
+  done
+  return 1
 }
 
 # Prints the owner/name of the GitHub repo that `origin` points at, or nothing when
