@@ -506,6 +506,7 @@ in
       "android-commandlinetools"
       "android-platform-tools"
       "android-studio"
+      "rwmuein"
     ];
     masApps = { };
     onActivation.cleanup = "none";
