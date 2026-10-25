@@ -21,6 +21,9 @@ if [[ "$(uname)" == "Darwin" ]]; then
   export PATH=$PATH:"$HOME/opt/homebrew/bin/tfswitch"
   export K9S_CONFIG_DIR="$HOME/.config/k9s"
   export PATH=$PATH:"$HOME/.bun/bin"
+  # One Android SDK for Studio and the CLI: the root Homebrew's sdkmanager installs into
+  export ANDROID_HOME="/opt/homebrew/share/android-commandlinetools"
+  export PATH=$PATH:"$ANDROID_HOME/emulator"
 
   # Ansible venv - activate manually with 'ansible-venv-activate' when needed
   # This prevents the old Python 3.9 from taking precedence over system Python
