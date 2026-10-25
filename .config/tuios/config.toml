@@ -4,8 +4,10 @@
 # On macOS tuios reads ~/Library/Application Support/tuios/config.toml unless XDG_CONFIG_HOME is set. Every _test
 # function sets it (to ~/.config), so a daemon they start reads this file. Check with `tuios config files`.
 #
-# Keys: the defaults (prefix ctrl+b). aerospace owns alt globally, so tuios's opt+1..9 workspace keys never reach
-# it; use ctrl+b 1..9 instead (ctrl+b w lists workspaces, ctrl+b s sessions, ctrl+b i the agents and the Inbox).
+# Keys: the defaults (prefix ctrl+b) has been reboud to (ctrl+t) to match the 't'in tuios. aerospace owns alt globally, so tuios's opt+1..9 workspace keys never reach
+# it; use ctrl+t 1..9 instead (ctrl+b w lists workspaces, ctrl+t s sessions, ctrl+t i the agents and the Inbox).
+[keybindings]
+leader_key = "ctrl+t"
 
 [agents]
 # off: tuios panes get no HERDR_* variables, so herdr-era code (gpr's _herdr_sync_dev_panes, the herdr Claude and
