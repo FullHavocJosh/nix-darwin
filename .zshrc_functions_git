@@ -3151,7 +3151,7 @@ function _gpr_prune_stale_worktrees() {
   local pruned_any=false
   local -a open_worktree_branches=()
   local -a gh_repo=()
-  [[ -n "$2" ]] && gh_repo=(--repo "$2")
+  [[ -n "${2:-}" ]] && gh_repo=(--repo "$2")
 
   echo "ℹ Checking existing worktrees and PRs..."
 
