@@ -46,7 +46,7 @@
 # does not have gets its default back the next time tuios starts; an action
 # set to [] stays empty.
 [keybindings]
-leader_key = ["ctrl+t"]
+leader_key = "ctrl+t"
 
 # You do not have to edit this by hand. In tuios, open the keybind manager
 # (leader then k, or the command palette) and press ctrl+d on a binding to
