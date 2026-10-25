@@ -45,7 +45,9 @@
 # An empty list and a missing line are not the same thing. A line this file
 # does not have gets its default back the next time tuios starts; an action
 # set to [] stays empty.
-#
+[keybindings]
+leader_key = ["ctrl+t"]
+
 # You do not have to edit this by hand. In tuios, open the keybind manager
 # (leader then k, or the command palette) and press ctrl+d on a binding to
 # remove it, or ctrl+x to take its key off every action. From a shell:
