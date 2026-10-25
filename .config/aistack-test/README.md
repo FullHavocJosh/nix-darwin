@@ -9,7 +9,7 @@ those stay on herdr and are unchanged.
 | `dev_test`                        | one tuios session per repo under `~` (`dev_test-<repo>`): workspace 1 nvim and tuicr, workspace 2 zsh |
 | `devim_test [name]`               | that layout for the current directory, always a new session                                           |
 | `nxvim_test`                      | the nix-darwin session only                                                                           |
-| `aidev_test [task]`               | aidev with interactive layers, session `aidev_test-<repo>`                                            |
+| `aidev_test [task]`               | aidev with interactive layers, in the current tuios session (else session `aidev_test-<repo>`)        |
 | `aidev_test --no-research [task]` | skip the local research layer and brief Claude in the plan pane yourself                              |
 | `aidev_test --resume`             | rebuild the panes of an unfinished run after a daemon restart, conversations included                 |
 | `aidev_test_status`               | the latest run's phase and tasks                                                                      |
@@ -21,7 +21,10 @@ arrive, because aerospace owns alt.
 
 ## aidev_test
 
-One tuios session per project, one workspace per layer. Type into any pane at any time.
+One workspace per layer. Type into any pane at any time. Started inside tuios, the layers open in the session you
+are in, on its lowest free workspaces (six are needed), beside your own windows. Outside tuios, or with
+`AIDEV_TEST_OWN_SESSION=1`, they get session `aidev_test-<repo>` with the workspace numbers below. The run keeps
+its session and workspaces in `state.json`, so the driver and `--resume` use the same ones. One run per session.
 
 | Workspace  | Pane                               | Model                                                                 | Grants             |
 | ---------- | ---------------------------------- | --------------------------------------------------------------------- | ------------------ |

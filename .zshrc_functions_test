@@ -5,7 +5,8 @@
 #   dev_test            one tuios session per repo under ~ (dev_test-<repo>: nvim | tuicr, then zsh), attach
 #   devim_test [name]   the same layout for the current directory, always a new session
 #   nxvim_test          the nix-darwin session only
-#   aidev_test [task]   aidev with every layer an interactive pane (.config/aistack-test/aidev_test.py)
+#   aidev_test [task]   aidev with every layer an interactive pane, as extra workspaces of the current tuios
+#                       session (outside tuios: session aidev_test-<repo>; .config/aistack-test/aidev_test.py)
 #   aidev_test --resume / --no-research, aidev_test_status
 #   ai_test [-c] [msg]  one Claude Code pane in session ai_test-<dir>
 #

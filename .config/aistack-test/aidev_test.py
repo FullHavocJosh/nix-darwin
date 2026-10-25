@@ -2,12 +2,14 @@
 """aidev_test: aidev rebuilt on tuios, with every layer a live, interactive model pane (RFC
 ~/.ai/rfcs/2026-10-25-aidev-tuios-test.md). A test copy: it shares no names, state or config with aidev.
 
-    aidev_test.py start [--resume] [--no-research] [task words...]   create or attach session aidev_test-<repo>
+    aidev_test.py start [--resume] [--no-research] [task words...]   open the layers in this tuios session, or
+                                                                      create or attach session aidev_test-<repo>
     aidev_test.py driver <project>                                    the driver loop (in the session's driver pane)
     aidev_test.py ai [-c] [message words...]                          ai_test: one Claude pane in session ai_test-<dir>
     aidev_test.py status [<project>]                                  print the latest run's state
 
-One tuios session per project, one workspace per layer:
+One workspace per layer. Started inside tuios, the layers open in that session on its lowest free workspaces, beside
+your own windows; outside tuios (or with AIDEV_TEST_OWN_SESSION=1) in session aidev_test-<repo>, numbered:
 
     1 research   pi on the local 9B: budgeted repo_* research, then `handoff` writes plan/brief.md
     2 plan       interactive Claude (advisor mode): writes plan/prd.json and plan/verify.json
@@ -62,7 +64,13 @@ VERIFY_TIMEOUT_S = int(os.environ.get("AISTACK_VERIFY_TIMEOUT_S", "300"))
 ASK_TIMEOUT_MS = 3_600_000  # the most ask-human waits; the driver asks again after that
 AT_REST = ("idle", "done", "errored")
 
-WS = {"research": 1, "plan": 2, "build": 3, "build-pickle": 3, "build-claude": 3, "review": 4, "dev": 5, "driver": 9}
+# Each layer's workspace. A session of its own uses these numbers; a run started inside tuios opens in that session
+# on its free workspaces instead (assign_workspaces). The map is kept in the run's state.json as "ws", so the driver
+# and --resume use the same one.
+WS_OWN = {"research": 1, "plan": 2, "build": 3, "build-pickle": 3, "build-claude": 3, "review": 4, "dev": 5,
+          "driver": 9}
+WS = dict(WS_OWN)
+LAYERS = ("research", "plan", "build", "review", "dev", "driver")
 
 
 # ---- the real stack, read-only --------------------------------------------------------------------------------
@@ -205,7 +213,8 @@ def attach(session):
         print(session)
         return 0
     if os.environ.get("TUIOS_ENV"):
-        tuios("switch-session", session)
+        if session != os.environ.get("TUIOS_SESSION"):
+            tuios("switch-session", session)
         return 0
     os.execvpe("tuios", ["tuios", "attach", session], TENV)
 
@@ -250,6 +259,35 @@ def safe_name(text):
 
 def session_name(project):
     return "aidev_test-" + safe_name(os.path.basename(project))
+
+
+def start_session(project):
+    """The session a new run lives in: the tuios session aidev_test was started from, so the layers open as more
+    workspaces beside your own windows, else aidev_test-<repo>. AIDEV_TEST_OWN_SESSION=1 always takes the latter."""
+    here = os.environ.get("TUIOS_SESSION")
+    if os.environ.get("TUIOS_ENV") and here and os.environ.get("AIDEV_TEST_OWN_SESSION") != "1":
+        return here
+    return session_name(project)
+
+
+def assign_workspaces(run, session, own):
+    """Fill WS for this run and keep it in the run. A session of its own uses WS_OWN. In a shared session each layer
+    takes the lowest workspace with no window on it, so no layer lands beside your nvim or tuicr. Returns an error
+    text when too few workspaces are free."""
+    ws = run.data.get("ws")
+    if not ws and own:
+        ws = dict(WS_OWN)
+    elif not ws:
+        used = {w.get("workspace") for w in windows(session)}
+        free = [n for n in range(1, 10) if n not in used]
+        if len(free) < len(LAYERS):
+            return (f"{session} has {len(free)} free workspaces and aidev_test needs {len(LAYERS)}. Close some, or "
+                    "run with AIDEV_TEST_OWN_SESSION=1 for a session of its own.")
+        ws = dict(zip(LAYERS, free))
+        ws["build-pickle"] = ws["build-claude"] = ws["build"]
+    run.data["ws"] = ws
+    WS.update(ws)
+    return None
 
 
 def rj(path, default=None):
@@ -745,7 +783,7 @@ def phase_build(run, session, cfg, ralph):
             ans = ask_human(session, f"aidev_test: {tid} failed its checks {t['attempts']}x in {builder}. Next?",
                             escalation_options(run, builder),
                             detail=f"Last check output: {out}. To steer the builder, type into the {builder} pane "
-                            "(workspace 3) first, then answer retry.")
+                            f"(workspace {WS[builder]}) first, then answer retry.")
             run.event("decision", task=tid, answer=ans)
             if ans == "retry":
                 t["attempts"] = 0
@@ -830,9 +868,10 @@ def driver(project):
     run = Run(project)
     os.makedirs(run.dir, exist_ok=True)
     LOG_PATH = os.path.join(run.dir, "driver.log")
-    session = session_name(project)
+    session = run.data.get("session") or session_name(project)
+    WS.update(run.data.get("ws") or {})
     cfg = pane_configs(project)
-    log(f"aidev_test driver: run {run.id}, phase {run.data['phase']}, state {run.state}")
+    log(f"aidev_test driver: run {run.id}, session {session}, phase {run.data['phase']}, state {run.state}")
     if run.data.get("work_dir"):
         start_dev_workspace(run, session)
     while True:
@@ -891,12 +930,19 @@ def cmd_start(argv):
               file=sys.stderr)
         return 1
     project = project_root(os.getcwd())
-    session = session_name(project)
-    running = session_exists(session)
+    # --resume goes back to the session the run was started in; a new run opens in this one (start_session)
+    session = (Run(project).data.get("session") if resume else None) or start_session(project)
+    own = session == session_name(project)
+    driver_w = None if own else window_named(session, "driver")
+    if driver_w and os.path.realpath(driver_w.get("cwd") or "") != project:
+        print(f"aidev_test: {session} already holds a run for {driver_w.get('cwd')}; one run per session. Use "
+              "AIDEV_TEST_OWN_SESSION=1 for a session of its own.", file=sys.stderr)
+        return 1
+    running = session_exists(session) if own else bool(driver_w)
     if running and not resume:
         if task:
-            print(f"aidev_test: {session} is already running; attaching. Type the task into the research or plan "
-                  "pane.", file=sys.stderr)
+            print(f"aidev_test: a run is already open in {session}. Type the task into the research or plan pane.",
+                  file=sys.stderr)
         return attach(session)
     problems = preflight(need_local=not no_research and not resume)
     if problems:
@@ -907,8 +953,14 @@ def cmd_start(argv):
         print("aidev_test --resume: no unfinished run in this project.", file=sys.stderr)
         return 1
     os.makedirs(run.dir, exist_ok=True)
+    run.data["session"] = session
+    err = assign_workspaces(run, session, own)
+    if err:
+        print(f"aidev_test: {err}", file=sys.stderr)
+        return 1
+    run.save()  # before the driver pane opens: the driver reads the session and workspaces from it
     cfg = pane_configs(project)
-    if not running:
+    if own and not running:
         err = new_session(session, project)
         if err:
             print(f"aidev_test: {err}", file=sys.stderr)

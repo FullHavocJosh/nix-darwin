@@ -114,6 +114,32 @@ def main():
     check("the launcher is valid zsh", r.returncode == 0, r.stderr)
     check("session names are safe", a.session_name("/x/my repo.v2") == "aidev_test-my-repo-v2")
     check("HERDR_* never reaches tuios", not any(k.startswith("HERDR_") for k in a.TENV))
+    print("session and workspaces")
+    saved = {k: os.environ.get(k) for k in ("TUIOS_ENV", "TUIOS_SESSION", "AIDEV_TEST_OWN_SESSION")}
+    os.environ.update(TUIOS_ENV="1", TUIOS_SESSION="dev_test-x")
+    os.environ.pop("AIDEV_TEST_OWN_SESSION", None)
+    check("inside tuios a run opens in the current session", a.start_session(p) == "dev_test-x")
+    os.environ["AIDEV_TEST_OWN_SESSION"] = "1"
+    check("AIDEV_TEST_OWN_SESSION=1 keeps a session of its own", a.start_session(p) == a.session_name(p))
+    for k, v in saved.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+    real_windows = a.windows
+    a.windows = lambda s: [{"workspace": 1}, {"workspace": 2}, {"workspace": 2}, {"workspace": 3}]
+    r2 = a.Run(p, "20260101-000001")
+    ws = r2.data.get("ws") if a.assign_workspaces(r2, "dev_test-x", own=False) is None else None
+    check("the layers take the free workspaces in order",
+          ws and ws["research"] == 4 and ws["driver"] == 9 and ws["build-claude"] == ws["build"] == 6, ws)
+    a.windows = lambda s: [{"workspace": n} for n in range(1, 6)]
+    check("too few free workspaces is refused", a.assign_workspaces(a.Run(p, "20260101-000002"), "s", own=False))
+    a.windows = real_windows
+    r3 = a.Run(p, "20260101-000003")
+    a.assign_workspaces(r3, a.session_name(p), own=True)
+    check("a session of its own uses the fixed numbers", r3.data["ws"] == a.WS_OWN)
+    a.WS.clear()
+    a.WS.update(a.WS_OWN)
 
     print("run state")
     run.data["phase"] = "build"
