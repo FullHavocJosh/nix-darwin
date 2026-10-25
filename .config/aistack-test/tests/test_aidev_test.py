@@ -141,6 +141,56 @@ def main():
     a.WS.clear()
     a.WS.update(a.WS_OWN)
 
+    print("Lumo research")
+    b, fl = a.parse_brief("thinking\nBRIEF:\ncalc.py adds.\nFILES:\n- calc.py:1-2\n2. `lib/x.py`\nnot a file\n")
+    check("parse_brief splits the brief and the files", b == "calc.py adds." and fl == ["calc.py:1-2", "lib/x.py"],
+          (b, fl))
+    lr = a.Run(p, "20260101-000004")
+    sid = lr.data["panes"].setdefault("research", {}).setdefault("session_id", "abc-123")
+    os.makedirs(a.research_sessions(lr), exist_ok=True)
+    sess = os.path.join(a.research_sessions(lr), f"2026-01-01T00-00-00-000Z_{sid}.jsonl")
+
+    def say(eid, role, text):
+        with open(sess, "a") as fh:
+            fh.write(json.dumps({"type": "message", "id": eid,
+                                 "message": {"role": role, "content": [{"type": "text", "text": text}]}}) + "\n")
+
+    say("u1", "user", "REQUEST FROM THE USER: add subtract")
+    say("a1", "assistant", "Let me look.\nNEED: calc.py")
+    sent = []
+    real = (a.agent_state, a.queue)
+    a.agent_state = lambda s, n: "idle"
+    a.queue = lambda s, n, t: sent.append(t) or True
+    os.environ["RALPH_MCP_ROOTS"] = p
+    ralph = a.load_ralph()
+    a.lumo_step(lr, "s", ralph)
+    check("a NEED line gets the file typed back",
+          len(sent) == 1 and sent[0].startswith("Requested context:") and "def add" in sent[0], sent)
+    a.lumo_step(lr, "s", ralph)
+    check("the same reply is answered once", len(sent) == 1)
+    say("u2", "user", sent[0] if sent else "Requested context:")
+    say("a2", "assistant", "BRIEF:\ncalc.py has add only.\nFILES:\ncalc.py:1-2")
+    a.lumo_step(lr, "s", ralph)
+    bp = os.path.join(lr.plan_dir, "brief.md")
+    text = open(bp).read() if os.path.isfile(bp) else ""
+    check("BRIEF: becomes plan/brief.md with the request and the file",
+          "add subtract" in text and "calc.py has add only" in text and "Requested context" not in text
+          and "1: def add" in text, text[:300])
+    lp = ralph.planner_lib()
+    check("a line range is read, also written with a space",
+          "1: def add" in a.resolve_need(ralph, lp, p, "calc.py:1-2")
+          and "1: def add" in a.resolve_need(ralph, lp, p, "calc.py 1-2"))
+    out = a.resolve_need(ralph, lp, p, 'grep -n "def add" calc.py | head -5')
+    check("a shell-style grep is cut down to the pattern and the file", "[grep def add in calc.py]" in out
+          and "calc.py:1:" in out, out)
+    with open(os.path.join(p, ".env"), "w") as fh:
+        fh.write("TOKEN=x\n")
+    check("a range of a secret file is refused", "denied" in a.resolve_need(ralph, lp, p, ".env:1-1"))
+    os.remove(os.path.join(p, ".env"))
+    a.agent_state, a.queue = real
+    lr.data["phase"] = "done"
+    lr.save()
+
     print("run state")
     run.data["phase"] = "build"
     run.save()

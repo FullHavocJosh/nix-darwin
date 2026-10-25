@@ -10,7 +10,7 @@ those stay on herdr and are unchanged.
 | `devim_test [name]`               | that layout for the current directory, always a new session                                           |
 | `nxvim_test`                      | the nix-darwin session only                                                                           |
 | `aidev_test [task]`               | aidev with interactive layers, in the current tuios session (else session `aidev_test-<repo>`)        |
-| `aidev_test --no-research [task]` | skip the local research layer and brief Claude in the plan pane yourself                              |
+| `aidev_test --no-research [task]` | skip the research layer and brief Claude in the plan pane yourself                                    |
 | `aidev_test --resume`             | rebuild the panes of an unfinished run after a daemon restart, conversations included                 |
 | `aidev_test_status`               | the latest run's phase and tasks                                                                      |
 | `ai_test [-c] [message]`          | one Claude Code pane in session `ai_test-<dir>` (`-c` continues the last one here)                    |
@@ -26,17 +26,22 @@ are in, on its lowest free workspaces (six are needed), beside your own windows.
 `AIDEV_TEST_OWN_SESSION=1`, they get session `aidev_test-<repo>` with the workspace numbers below. The run keeps
 its session and workspaces in `state.json`, so the driver and `--resume` use the same ones. One run per session.
 
-| Workspace  | Pane                               | Model                                                                 | Grants             |
-| ---------- | ---------------------------------- | --------------------------------------------------------------------- | ------------------ |
-| 1 research | `research`                         | pi on the local 9B: `repo_*` research (budgeted), then `handoff`      | read               |
-| 2 plan     | `plan`                             | Claude Code, advisor mode: writes `plan/prd.json`, `plan/verify.json` | read               |
-| 3 build    | `build`                            | pi on the on-device 30B, else OpenCode on a free Zen model            | read               |
-| 3 build    | `build-pickle`, `build-claude`     | only when you pick escalation (Claude is billed, advisor off)         | read               |
-| 4 review   | `review`                           | Claude Code, advisor mode: writes `reviews/<run>.md`                  | read               |
-| 5 dev      | `dev-nvim`, `dev-tuicr`, `dev-zsh` | your editor and diff in the work dir                                  | default            |
-| 9 driver   | `driver`                           | `aidev_test.py driver`, no model                                      | read, write, admin |
+| Workspace  | Pane                               | Model                                                                          | Grants             |
+| ---------- | ---------------------------------- | ------------------------------------------------------------------------------ | ------------------ |
+| 1 research | `research`                         | pi on Lumo (no tools; the driver answers its `NEED:` lines), else the local 9B | read               |
+| 2 plan     | `plan`                             | Claude Code, advisor mode: writes `plan/prd.json`, `plan/verify.json`          | read               |
+| 3 build    | `build`                            | pi on the on-device 30B, else OpenCode on a free Zen model                     | read               |
+| 3 build    | `build-pickle`, `build-claude`     | only when you pick escalation (Claude is billed, advisor off)                  | read               |
+| 4 review   | `review`                           | Claude Code, advisor mode: writes `reviews/<run>.md`                           | read               |
+| 5 dev      | `dev-nvim`, `dev-tuicr`, `dev-zsh` | your editor and diff in the work dir                                           | default            |
+| 9 driver   | `driver`                           | `aidev_test.py driver`, no model                                               | read, write, admin |
 
-1. The research pane looks at the code and calls `handoff`, which writes `plan/brief.md`.
+1. The research pane is pi on Lumo, through the first lumo-tamer that answers (this machine, MacMiniM1, then
+   lumo.rollet.family). tamer passes no tools, so Lumo ends a reply with `NEED:` lines (a path, `ls`, `find`,
+   `grep` or keywords); the driver reads the reply from pi's session file, looks them up in the project (secrets
+   refused, no model) and types the context back, up to `AIDEV_TEST_LUMO_ROUNDS` (8) times. Lumo's `BRIEF:` reply
+   becomes `plan/brief.md`. Type "hand off" to it to end early. With no tamer answering, or
+   `AIDEV_TEST_RESEARCH=local`, the pane is pi on the local 9B with the `repo_*` tools and `handoff`.
 2. The driver sees the brief and opens the plan pane on it. You plan with Claude there. Claude writes the plan files,
    the driver checks them (the real stack's `validate`) and types any problems back into the plan pane.
 3. A valid plan becomes a question in the Inbox: start the build, or keep planning.

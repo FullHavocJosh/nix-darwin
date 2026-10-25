@@ -11,7 +11,9 @@
 One workspace per layer. Started inside tuios, the layers open in that session on its lowest free workspaces, beside
 your own windows; outside tuios (or with AIDEV_TEST_OWN_SESSION=1) in session aidev_test-<repo>, numbered:
 
-    1 research   pi on the local 9B: budgeted repo_* research, then `handoff` writes plan/brief.md
+    1 research   pi on Lumo through lumo-tamer, no tools: it asks for context with NEED: lines, the driver
+                 answers them and writes plan/brief.md from its BRIEF: reply. With no tamer answering, pi on
+                 the local 9B: budgeted repo_* research, then `handoff` writes plan/brief.md
     2 plan       interactive Claude (advisor mode): writes plan/prd.json and plan/verify.json
     3 build      interactive builder: pi on the on-device 30B, else OpenCode on a free Zen model;
                  build-pickle / build-claude panes only when the person picks escalation
@@ -29,10 +31,12 @@ Rules the design rests on:
   - Every choice that costs money or changes scope goes to the person with `tuios ask-human`.
 """
 
+import glob
 import hashlib
 import importlib.util
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -62,6 +66,8 @@ WORKER_ATTEMPTS = int(os.environ.get("AISTACK_WORKER_ATTEMPTS", "2"))
 TURN_TIMEOUT_S = int(os.environ.get("AISTACK_ATTEMPT_TIMEOUT_S", "1500"))
 VERIFY_TIMEOUT_S = int(os.environ.get("AISTACK_VERIFY_TIMEOUT_S", "300"))
 ASK_TIMEOUT_MS = 3_600_000  # the most ask-human waits; the driver asks again after that
+LUMO_MODEL = os.environ.get("AISTACK_LUMO_MODEL") or "lumo"
+LUMO_ROUNDS = int(os.environ.get("AIDEV_TEST_LUMO_ROUNDS", "8"))  # NEED rounds the driver answers per research
 AT_REST = ("idle", "done", "errored")
 
 # Each layer's workspace. A session of its own uses these numbers; a run started inside tuios opens in that session
@@ -83,6 +89,14 @@ def load_ralph():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def find_lumo():
+    """(base url, key) of the first lumo-tamer that answers, in the real stack's order (this machine, MacMiniM1, the
+    public endpoint), or None. AIDEV_TEST_RESEARCH=local skips Lumo and researches on the local 9B."""
+    if os.environ.get("AIDEV_TEST_RESEARCH") == "local":
+        return None
+    return next(load_ralph().tamer_endpoints(), None)
 
 
 # ---- tuios ----------------------------------------------------------------------------------------------------
@@ -377,11 +391,22 @@ def pane_configs(project):
             "opencode_dir": oc_dir}
 
 
-def write_research_pi(cfg, project):
+def write_research_pi(cfg, project, lumo=None):
+    """pi's models (the local 9B, and Lumo through the tamer `lumo` = (url, key) when given) and MCP servers. The
+    tamer key goes to a 0600 file that pi reads per request (apiKey "!command"), never into models.json or a script."""
     pdir = cfg["pi_research"]
-    wj(os.path.join(pdir, "models.json"), {"providers": {"llamacpp": {
+    providers = {"llamacpp": {
         "baseUrl": LOCAL_ENDPOINT + "/v1", "api": "openai-completions", "apiKey": "sk-local",
-        "models": [{"id": LOCAL_MODEL, "reasoning": True, "compat": {"thinkingFormat": "qwen-chat-template"}}]}}})
+        "models": [{"id": LOCAL_MODEL, "reasoning": True, "compat": {"thinkingFormat": "qwen-chat-template"}}]}}
+    if lumo:
+        key_file = os.path.join(pdir, "lumo.key")
+        fd = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(lumo[1] or "none")
+        providers["lumo"] = {"baseUrl": lumo[0], "api": "openai-completions",
+                             "apiKey": "!cat " + shlex.quote(key_file),
+                             "models": [{"id": LUMO_MODEL, "reasoning": False}]}
+    wj(os.path.join(pdir, "models.json"), {"providers": providers})
     wj(os.path.join(pdir, "mcp.json"), {"mcpServers": {
         "aidev_test": {"command": sys.executable, "args": [os.path.join(HERE, "aidev_test_mcp.py")],
                        "env": {"RALPH_MCP_ROOTS": project, "AIDEV_TEST_HOME": TEST_HOME,
@@ -486,14 +511,29 @@ RESEARCH_TOOLS = [
 ]
 
 
-def research_body(run, cfg, task):
-    write_research_pi(cfg, run.project)
+def research_sessions(run):
+    return os.path.join(run.dir, "research-sessions")
+
+
+def research_body(run, cfg, task, lumo=None):
+    """The research pane: pi on Lumo with no tools (it asks for context with NEED: lines, which the driver answers;
+    lumo_step), or, with no tamer answering, pi on the local 9B with the budgeted repo_* tools and handoff."""
+    write_research_pi(cfg, run.project, lumo)
     sid = run.data["panes"].setdefault("research", {}).setdefault("session_id", str(uuid.uuid4()))
-    sysp = write_text(os.path.join(run.dir, "bin", "research.system.md"),
-                      prompt_text("research", PROJECT=run.project, PLAN_DIR=run.plan_dir))
-    argv = ["pi", "--provider", "llamacpp", "--model", LOCAL_MODEL, "--name", "aidev_test research", "--no-skills",
-            "--thinking", os.environ.get("AISTACK_RELAY_THINKING", "off"), "--tools", ",".join(RESEARCH_TOOLS),
-            "--session-id", sid]
+    if lumo:
+        os.environ["RALPH_MCP_ROOTS"] = run.project  # ralph_mcp reads its roots at import
+        tree = load_ralph().TOOLS["repo_tree"][0]({"project_dir": run.project, "depth": 2})
+        sysp = write_text(os.path.join(run.dir, "bin", "research.system.md"), prompt_text(
+            "research-lumo", PROJECT=run.project, PLAN_DIR=run.plan_dir, ROUNDS=LUMO_ROUNDS,
+            TREE="\n".join(tree.get("entries") or ["(no files listed)"])))
+        argv = ["pi", "--provider", "lumo", "--model", LUMO_MODEL, "--name", "aidev_test research", "--no-skills",
+                "--no-tools", "--session-id", sid, "--session-dir", research_sessions(run)]
+    else:
+        sysp = write_text(os.path.join(run.dir, "bin", "research.system.md"),
+                          prompt_text("research", PROJECT=run.project, PLAN_DIR=run.plan_dir))
+        argv = ["pi", "--provider", "llamacpp", "--model", LOCAL_MODEL, "--name", "aidev_test research",
+                "--no-skills", "--thinking", os.environ.get("AISTACK_RELAY_THINKING", "off"), "--tools",
+                ",".join(RESEARCH_TOOLS), "--session-id", sid]
     line = with_system_prompt(argv, sysp)
     if task:
         line += " " + shlex.quote(f"REQUEST FROM THE USER: {task}")
@@ -642,7 +682,131 @@ def start_plan_pane(run, session, cfg, first):
         name_ws(session, "plan")
 
 
-def phase_research(run, session, cfg):
+def research_messages(run):
+    """[(entry id, role, text)] of the user and assistant messages in the research pane's pi session file, in file
+    order (pi appends; a /tree branch is rare in this pane and its entries simply come later)."""
+    sid = run.data["panes"].get("research", {}).get("session_id")
+    files = sorted(glob.glob(os.path.join(research_sessions(run), f"*_{sid}.jsonl"))) if sid else []
+    out = []
+    for path in files[-1:]:
+        with open(path) as fh:
+            for line in fh:
+                try:
+                    e = json.loads(line)
+                except ValueError:
+                    continue
+                m = e.get("message") or {}
+                if e.get("type") != "message" or m.get("role") not in ("user", "assistant"):
+                    continue
+                content = m.get("content")
+                text = content if isinstance(content, str) else "".join(
+                    b.get("text", "") for b in content or [] if isinstance(b, dict) and b.get("type") == "text")
+                if text.strip():
+                    out.append((e.get("id"), m["role"], text))
+    return out
+
+
+def parse_brief(text):
+    """Lumo's final reply -> (brief, files): the text after BRIEF: and the path[:START-END] lines after FILES:."""
+    body = text.split("BRIEF:", 1)[1]
+    brief, _sep, tail = body.partition("FILES:")
+    files = []
+    for line in tail.splitlines():
+        m = re.match(r"^\s*(?:[-*]|\d+[.)])?\s*`?([\w./@+-]+(?::\d+-\d+)?)`?", line)
+        if m and ("/" in m.group(1) or "." in m.group(1)):
+            files.append(m.group(1))
+    return brief.strip(), files[:12]
+
+
+_SANDBOX = {}
+BRIEF_FORM = ("When you have enough, do not answer the request yourself: reply with BRIEF: (what you saw in the files "
+              "and found online, with links) and then FILES: (one path:START-END per line, at most 12), and no NEED "
+              "lines. Otherwise ask for more with NEED: lines.")
+
+
+def resolve_need(ralph, lp, project, need):
+    """One NEED line -> context text. A line range (path:START-END) goes through the real stack's plan_file (deny
+    list, size cap). A shell-style grep, as Lumo writes it despite the prompt (flags, quotes, file arguments, a pipe),
+    is cut down to a pattern and the paths that exist. Anything else goes to lumo_planner: an exact path, ls, find,
+    grep <regex> [in <dir>], or keywords for its index."""
+    sb = _SANDBOX.setdefault(project, lp.Sandbox(project))
+    n = need.strip().strip("`")
+    r = re.match(r"^(\S+?)(?::|\s+(?:lines?\s+)?)(\d+)\s*-\s*(\d+)$", n)  # path:10-20, "path 10-20", "path lines 10-20"
+    if r:
+        n = f"{r.group(1)}:{r.group(2)}-{r.group(3)}"
+        _rel, text, why = ralph.plan_file(project, n)
+        return f"[{n}]\n" + (text if text is not None else f"error: {why}")
+    g = re.match(r"^grep\s+(.+)$", n, re.IGNORECASE)
+    if g:
+        arg = re.split(r"\s\|\s", g.group(1))[0]
+        try:
+            toks = shlex.split(arg)
+        except ValueError:
+            toks = arg.split()
+        toks = [t for t in toks if not t.startswith("-")]
+        if "in" in toks[1:]:
+            i = toks.index("in", 1)
+            pattern, paths = " ".join(toks[:i]), toks[i + 1:]
+        else:
+            k = len(toks)
+            while k > 1 and os.path.exists(os.path.join(project, toks[k - 1])):
+                k -= 1
+            pattern, paths = " ".join(toks[:k]), toks[k:]
+        if pattern:
+            return "\n\n".join(f"[grep {pattern} in {p}]\n{sb.grep(pattern, p)}" for p in (paths or ["."])[:6])
+    return lp.resolve_need(sb, n)
+
+
+def lumo_step(run, session, ralph):
+    """One look at the Lumo research pane once it is at rest. A new reply with NEED: lines gets the context typed back
+    (exact paths, ls, find and grep are read directly; anything else goes to the keyword index; no model), at most
+    LUMO_ROUNDS times. A new reply with BRIEF: is written to plan/brief.md through the research handoff, which the
+    research loop then sees."""
+    if agent_state(session, "research") not in AT_REST:
+        return
+    msgs = research_messages(run)
+    replies = [m for m in msgs if m[1] == "assistant"]
+    if not replies or replies[-1][0] == run.data.get("research_seen"):
+        return
+    rid, _role, text = replies[-1]
+    run.data["research_seen"] = rid
+    lp = ralph.planner_lib()
+    needs = lp.NEED_RE.findall(text)
+    if needs:
+        rounds = run.data["research_rounds"] = run.data.get("research_rounds", 0) + 1
+        if rounds > LUMO_ROUNDS:
+            body = f"none: the {LUMO_ROUNDS} rounds of context are used up. Write the BRIEF now with what you have."
+        else:
+            lp.RESOLVER = "keyword"
+            body = "\n\n".join(resolve_need(ralph, lp, run.project, n) for n in needs[:8])[: lp.MAX_RESULT_CHARS]
+        log(f"research: Lumo asked for {len(needs)} thing(s) (round {rounds}); typing the context back")
+        queue(session, "research", "Requested context:\n\n" + body + "\n\n" + BRIEF_FORM)
+    elif "BRIEF:" in text:
+        brief, files = parse_brief(text)
+        request = "\n\n".join(t for _i, role, t in msgs
+                              if role == "user" and not t.startswith(("Requested context:", "aidev_test driver:")))
+        mcp = load_module("aidev_test_mcp", os.path.join(HERE, "aidev_test_mcp.py"))
+        res = mcp.tool_handoff({"project_dir": run.project, "request": request or "(see the brief)",
+                                "brief": brief or text, "files": files})
+        log(f"research: Lumo's brief -> {res.get('brief') or res.get('problem')}")
+    elif not run.data.get("research_nudged"):
+        # Lumo stopped asking but answered the request itself (tamer passes pi's system prompt in the first message
+        # only, so the format fades). Remind it once; after that the person steers, and "hand off" ends it.
+        run.data["research_nudged"] = True
+        log("research: Lumo replied without NEED: or BRIEF:; asking it once for the brief")
+        queue(session, "research", "aidev_test driver: your research goes to the plan pane, not to the user. "
+              + BRIEF_FORM)
+    run.save()
+
+
+def load_module(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def phase_research(run, session, cfg, ralph):
     brief = os.path.join(run.plan_dir, "brief.md")
     prd = os.path.join(run.plan_dir, "prd.json")
     since = run.data.setdefault("research_since", time.time())
@@ -655,6 +819,8 @@ def phase_research(run, session, cfg):
             break
         if window_named(session, "plan"):  # aidev_test --no-research: the plan pane is already open
             break
+        if run.data.get("research") == "lumo":
+            lumo_step(run, session, ralph)
         time.sleep(3)
     has_brief = os.path.exists(brief) and os.path.getmtime(brief) >= since - 1
     first = (f"Read the research brief in {brief} and plan the work it describes." if has_brief
@@ -877,7 +1043,7 @@ def driver(project):
     while True:
         phase = run.data["phase"]
         if phase == "research":
-            phase_research(run, session, cfg)
+            phase_research(run, session, cfg, ralph)
         elif phase == "plan":
             if not window_named(session, "plan"):
                 start_plan_pane(run, session, cfg, f"Carry on with the plan in {run.plan_dir}.")
@@ -944,7 +1110,8 @@ def cmd_start(argv):
             print(f"aidev_test: a run is already open in {session}. Type the task into the research or plan pane.",
                   file=sys.stderr)
         return attach(session)
-    problems = preflight(need_local=not no_research and not resume)
+    lumo = find_lumo() if not no_research and not resume else None
+    problems = preflight(need_local=not no_research and not resume and not lumo)
     if problems:
         print("aidev_test: " + "; ".join(problems), file=sys.stderr)
         return 1
@@ -958,8 +1125,16 @@ def cmd_start(argv):
     if err:
         print(f"aidev_test: {err}", file=sys.stderr)
         return 1
-    run.save()  # before the driver pane opens: the driver reads the session and workspaces from it
     cfg = pane_configs(project)
+    rscript = None
+    if run.data["phase"] == "research" and not resume and not no_research:
+        run.data["research"] = "lumo" if lumo else "local"
+        rscript = write_script(run, "research", research_body(run, cfg, task, lumo))
+        run.data["panes"]["research"].update(script=rscript, cwd=project, grants="read")
+        print(f"aidev_test: research on {'Lumo (' + lumo[0] + ')' if lumo else 'the local ' + LOCAL_MODEL}",
+              file=sys.stderr)
+    # before the driver pane opens: the driver reads the session, workspaces and research pane from it
+    run.save()
     if own and not running:
         err = new_session(session, project)
         if err:
@@ -979,8 +1154,7 @@ def cmd_start(argv):
             start_plan_pane(run, session, cfg, task or "Wait for the person to describe the work.")
             tuios("select-workspace", str(WS["plan"]), "-s", session)
         else:
-            open_pane(run, session, "research", write_script(run, "research", research_body(run, cfg, task)),
-                      project)
+            open_pane(run, session, "research", rscript, project)
             name_ws(session, "research")
             tuios("select-workspace", str(WS["research"]), "-s", session)
     else:  # resume: the layers that were open come back with their conversations (their launchers --resume); the
