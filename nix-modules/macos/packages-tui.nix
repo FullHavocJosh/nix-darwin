@@ -486,6 +486,7 @@ in
       "typescript"
       "tree"
       "tree-sitter"
+      "tuios" # test stack only (.zshrc_functions_test); herdr stays the daily driver
       "typescript-language-server"
       "uv"
       "vscode-langservers-extracted"

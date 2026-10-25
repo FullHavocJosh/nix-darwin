@@ -1,0 +1,201 @@
+# Test stack on tuios (RFC ~/.ai/rfcs/2026-10-25-aidev-tuios-test.md): dev_test, devim_test, nxvim_test,
+# aidev_test and ai_test, side by side with dev, devim, nxvim, aidev and ai, which stay on herdr and are unchanged.
+# Every name here ends in _test, and nothing here redefines a function or alias of the real stack.
+#
+#   dev_test            one tuios session per repo under ~ (dev_test-<repo>: nvim | tuicr, then zsh), attach
+#   devim_test [name]   the same layout for the current directory, always a new session
+#   nxvim_test          the nix-darwin session only
+#   aidev_test [task]   aidev with every layer an interactive pane (.config/aistack-test/aidev_test.py)
+#   aidev_test --resume / --no-research, aidev_test_status
+#   ai_test [-c] [msg]  one Claude Code pane in session ai_test-<dir>
+#
+# Run these from a plain Ghostty window, not from inside herdr: two multiplexers nested in one terminal is untested.
+# Keys: ctrl+b is tuios's prefix; ctrl+b 1..9 workspaces, ctrl+b s sessions, ctrl+b i agents and the Inbox, ctrl+b d
+# detach. tuios's opt+ keys collide with aerospace and never arrive.
+
+# tuios with the test stack's config (~/.config/tuios; on macOS tuios otherwise reads ~/Library/Application
+# Support/tuios) and without herdr's variables, which a daemon started from a herdr pane would pass to every pane.
+_tuios_test() {
+  (
+    unset -m 'HERDR_*'
+    XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}" command tuios "$@"
+  )
+}
+
+_tuios_guard_test() {
+  if [ -z "$TUIOS_ENV" ] && [ -n "$HERDR_ENV$HERDR_PANE_ID" ] && [ "$AIDEV_TEST_ALLOW_NESTED" != 1 ]; then
+    echo "tuios test stack: run this from a plain Ghostty window, not inside herdr (no nested multiplexers)." >&2
+    return 1
+  fi
+  command -v tuios >/dev/null || { echo "tuios is not installed (darwin-rebuild installs it through brew)." >&2; return 1; }
+}
+
+_tuios_session_exists_test() {
+  _tuios_test ls --json 2>/dev/null | jq -e --arg n "$1" '.[]? | select(.name==$n)' >/dev/null 2>&1
+}
+
+# Inside tuios, switch this client to the session instead of nesting a second client in a pane.
+_tuios_attach_test() {
+  if [ -n "$TUIOS_ENV" ]; then
+    _tuios_test switch-session "$1"
+  else
+    _tuios_test attach "$1"
+  fi
+}
+
+# Session $1 for directory $2, the dev layout: workspace 1 "dev" with nvim and tuicr side by side (BSP tiling
+# splits them), workspace 2 "zsh". The pane `tuios new` opens becomes nvim. Commands are typed into a shell, as
+# herdr's `pane run` did, so quitting nvim or tuicr leaves the pane at a prompt.
+_tuios_devlayout_test() {
+  local s="$1" dir="$2" first
+  _tuios_session_exists_test "$s" && return 0
+  _tuios_test new "$s" -d --cwd "$dir" >/dev/null || return 1
+  first=$(_tuios_test list-windows -s "$s" --json | jq -r '.windows[0].window_id')
+  _tuios_test set-window -s "$s" -w "$first" --name nvim >/dev/null
+  _tuios_test send-text -s "$s" -w nvim $'nvim\n' >/dev/null
+  _tuios_test new-window tuicr -s "$s" --workspace 1 --cwd "$dir" --no-focus >/dev/null
+  _tuios_test send-text -s "$s" -w tuicr $'_tuicr_current_pr_test\n' >/dev/null
+  _tuios_test new-window zsh -s "$s" --workspace 2 --cwd "$dir" --no-focus >/dev/null
+  _tuios_test send-text -s "$s" -w zsh $'git status\n' >/dev/null
+  _tuios_test set-workspace-name 1 dev -s "$s" >/dev/null
+  _tuios_test set-workspace-name 2 zsh -s "$s" >/dev/null
+  _tuios_test focus-window nvim -s "$s" >/dev/null
+}
+
+# Like dev: a session per git repo directly under ~ (and ~/pscloudops/terraform-infrastructure on the work laptop),
+# created only when missing, then attach to nix-darwin's (else the first one).
+dev_test() {
+  _tuios_guard_test || return 1
+  local repo base first=""
+  for repo in "$HOME"/*/; do
+    repo="${repo%/}"
+    base="$(basename "$repo")"
+    [ -e "$repo/.git" ] || continue
+    _tuios_devlayout_test "dev_test-$base" "$repo" || continue
+    [ -z "$first" ] && first="dev_test-$base"
+  done
+  if [ -d ~/pscloudops/terraform-infrastructure ]; then
+    _tuios_devlayout_test dev_test-terraform-infrastructure ~/pscloudops/terraform-infrastructure
+  fi
+  if _tuios_session_exists_test dev_test-nix-darwin; then
+    _tuios_attach_test dev_test-nix-darwin
+  elif [ -n "$first" ]; then
+    _tuios_attach_test "$first"
+  fi
+}
+
+# Like devim: the current directory, named after it (or $1), always a new session (-2, -3... when the name is taken).
+devim_test() {
+  _tuios_guard_test || return 1
+  local name="dev_test-${1:-${PWD:t}}" s n=2
+  s="$name"
+  while _tuios_session_exists_test "$s"; do
+    s="$name-$n"
+    n=$((n + 1))
+  done
+  _tuios_devlayout_test "$s" "$PWD" && _tuios_attach_test "$s"
+}
+
+nxvim_test() {
+  _tuios_guard_test || return 1
+  [ -d ~/nix-darwin ] || { echo "nxvim_test: ~/nix-darwin does not exist on this machine" >&2; return 1; }
+  _tuios_devlayout_test dev_test-nix-darwin ~/nix-darwin && _tuios_attach_test dev_test-nix-darwin
+}
+
+aidev_test() {
+  _tuios_guard_test || return 1
+  python3 "$HOME/.config/aistack-test/aidev_test.py" start "$@"
+}
+
+aidev_test_status() {
+  python3 "$HOME/.config/aistack-test/aidev_test.py" status "$@"
+}
+
+ai_test() {
+  _tuios_guard_test || return 1
+  python3 "$HOME/.config/aistack-test/aidev_test.py" ai "$@"
+}
+
+# ---- tuicr in a tuios pane: copies of the _tuicr_* helpers in .zshrc_aliases with tuios in place of herdr --------
+# Same behaviour (see the comments there): the tuicr pane shows the current PR's diff, and a watcher restarts tuicr
+# whenever the repo's content changes. Pane ids come from $TUIOS_PANE_ID instead of $HERDR_PANE_ID.
+
+_tuios_wait_pane_stable_test() {
+  local pane_id="$1" prev_content="" cur_content stable_count=0 tries=0
+  while [ "$tries" -lt 40 ]; do
+    cur_content=$(_tuios_test capture-pane -w "$pane_id" 2>/dev/null)
+    if [ "$cur_content" = "$prev_content" ] && [ -n "$cur_content" ]; then
+      stable_count=$((stable_count + 1))
+      [ "$stable_count" -ge 3 ] && return 0
+    else
+      stable_count=0
+    fi
+    prev_content="$cur_content"
+    sleep 0.15
+    tries=$((tries + 1))
+  done
+}
+
+_tuicr_restart_test() {
+  local pane_id="$1" dir="$2"
+  local lock="/tmp/.tuicr-restart-lock-$pane_id"
+  if [ -f "$lock" ]; then
+    local lock_age=$(( $(date +%s) - $(stat -f %m "$lock" 2>/dev/null || echo 0) ))
+    [ "$lock_age" -lt 30 ] && return 0
+  fi
+  : > "$lock"
+  local marker="/tmp/.tuicr-restart-$pane_id"
+  : > "$marker"
+  _tuios_test send-keys -w "$pane_id" esc >/dev/null 2>&1
+  _tuios_test send-text -w "$pane_id" ":q" >/dev/null 2>&1
+  _tuios_test send-keys -w "$pane_id" enter >/dev/null 2>&1
+  _tuios_wait_pane_stable_test "$pane_id"
+  if [ -n "$dir" ]; then
+    _tuios_test send-text -w "$pane_id" "cd $dir && _tuicr_current_pr_test" >/dev/null 2>&1
+  else
+    _tuios_test send-text -w "$pane_id" "_tuicr_current_pr_test" >/dev/null 2>&1
+  fi
+  _tuios_test send-keys -w "$pane_id" enter >/dev/null 2>&1
+  rm -f "$marker" "$lock"
+}
+
+_tuicr_finish_test() {
+  local watcher_pid="$1" pane_id="$TUIOS_PANE_ID"
+  if [ -n "$pane_id" ] && [ -f "/tmp/.tuicr-restart-$pane_id" ]; then
+    return
+  fi
+  kill "$watcher_pid" 2>/dev/null
+}
+
+_tuicr_watch_and_refresh_test() {
+  local pane_id="$TUIOS_PANE_ID"
+  [ -n "$pane_id" ] || return 0
+  local last_state state
+  last_state=$(_tuicr_repo_fingerprint)
+  while true; do
+    sleep 5
+    state=$(_tuicr_repo_fingerprint)
+    if [ "$state" != "$last_state" ]; then
+      _tuicr_restart_test "$pane_id"
+      return
+    fi
+  done
+}
+
+_tuicr_current_pr_test() {
+  local pr_num
+  pr_num=$(gh pr view --json number -q .number 2>/dev/null)
+  _tuicr_watch_and_refresh_test &
+  local watcher_pid=$!
+  disown
+  if [ -n "$pr_num" ] && tuicr pr "$pr_num" --working-tree; then
+    _tuicr_finish_test "$watcher_pid"
+    return
+  fi
+  if tuicr -w; then
+    _tuicr_finish_test "$watcher_pid"
+    return
+  fi
+  tuicr -A
+  _tuicr_finish_test "$watcher_pid"
+}

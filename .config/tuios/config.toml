@@ -1,0 +1,22 @@
+# tuios: used only by the test stack (.zshrc_functions_test, .config/aistack-test; RFC
+# ~/.ai/rfcs/2026-10-25-aidev-tuios-test.md). herdr stays the daily driver.
+#
+# On macOS tuios reads ~/Library/Application Support/tuios/config.toml unless XDG_CONFIG_HOME is set. Every _test
+# function sets it (to ~/.config), so a daemon they start reads this file. Check with `tuios config files`.
+#
+# Keys: the defaults (prefix ctrl+b). aerospace owns alt globally, so tuios's opt+1..9 workspace keys never reach
+# it; use ctrl+b 1..9 instead (ctrl+b w lists workspaces, ctrl+b s sessions, ctrl+b i the agents and the Inbox).
+
+[agents]
+# off: tuios panes get no HERDR_* variables, so herdr-era code (gpr's _herdr_sync_dev_panes, the herdr Claude and
+# OpenCode hooks, herdr's pi extension) treats a tuios pane as a plain terminal instead of driving it through
+# tuios's herdr emulation. State reporting comes from tuios's own hooks, installed per pane by aidev_test.py.
+herdr_protocol = "off"
+
+[agents.permissions]
+# strict: a pane started without --grants holds `grants`. aidev_test starts every model pane with --grants read, so
+# a model can look at the other panes but cannot type into them, mail them or start panes. Shells you open, and the
+# driver, keep the rest. No pane gets fan or respond: fan/ship would merge and push outside gpr/gpa, and only the
+# person answers prompts.
+mode = "strict"
+grants = ["read", "write", "files", "admin"]

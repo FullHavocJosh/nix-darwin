@@ -39,6 +39,8 @@ fi
 [ -f ~/.zshrc_aliases ] && source ~/.zshrc_aliases
 [ -f ~/.zshrc_functions_ai ] && source ~/.zshrc_functions_ai
 [ -f ~/.zshrc_functions_git ] && source ~/.zshrc_functions_git
+# tuios test stack (dev_test, aidev_test, ai_test; RFC ~/.ai/rfcs/2026-10-25-aidev-tuios-test.md)
+[ -f ~/.zshrc_functions_test ] && source ~/.zshrc_functions_test
 
 # File descriptor limits fix for AWS MCP servers
 [ -f ~/.zshrc_ulimit ] && source ~/.zshrc_ulimit

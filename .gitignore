@@ -178,6 +178,10 @@ stow-uninstall-local-ignore
 /.config/herdr/plugins/
 /.config/herdr/.plugins.lock
 
+# tuios (test stack): keep config.toml, ignore what tuios writes beside it (themes, harnesses, keys, state)
+/.config/tuios/*
+!/.config/tuios/config.toml
+
 # Ignore AWS VPN configs
 /.config/AWS VPN Client*
 /.config/AWSVPNCLient*
