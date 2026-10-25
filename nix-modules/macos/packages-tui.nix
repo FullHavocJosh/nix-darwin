@@ -199,6 +199,25 @@ let
     PYEOF
   '';
 
+  # tuios agent integrations (tuios.dev/docs/agents): hooks that report each agent's state to the tuios pane it runs in,
+  # for the agents rail, the Inbox and approvals. Covers every harness tuios supports whose binary is on PATH, so an
+  # agent installed later is picked up on the next rebuild. Claude Code also gets the read-only `tuios mcp` server
+  # (OpenCode reaches it through mcp-lazy, which mirrors Claude's servers) and the status line feed, chained to
+  # claudetui's. aider has no integration upstream; tuios detects it by process. install rewrites only what is out of
+  # date (the first original stays beside it as .tuios.bak). Silent when already in place.
+  tuiosAgentSetup = pkgs.writeShellScript "tuios-agent-setup" ''
+    set -euo pipefail
+    command -v tuios >/dev/null || exit 0
+    for h in $(tuios doctor agents --json | ${pkgs.jq}/bin/jq -r '.harnesses[] | select(.binary_path) | .harness'); do
+      args=()
+      if [ "$h" = claude-code ]; then
+        args=(--mcp)
+        if command -v claudetui >/dev/null; then args+=(--then "claudetui statusline --compact"); else args+=(--statusline); fi
+      fi
+      tuios integration install "$h" "''${args[@]}" | { grep -v 'already .*current' || true; } | sed 's/^/[tuios] /'
+    done
+  '';
+
   # The shared ~/.ai directory (RFC 0003, .config/ai/README.md): every AI tool's output and state, and RFCs any model
   # may write from any tool. Creates the tree and links the README and RFC template; moves each old directory in once
   # (leaving a symlink at the old path for running jobs and old run configs); lets Claude Code write ~/.ai except
@@ -617,6 +636,10 @@ in
         (
           ${aiHomeSetup}
         ) || echo "WARNING: ~/.ai setup failed — continuing activation" >&2
+
+        (
+          ${tuiosAgentSetup}
+        ) || echo "WARNING: tuios agent setup failed — continuing activation" >&2
 
         # Claude Code commands that move work to aidev's free model (see AIDEV.md):
         #   /aidev-handoff  write an aidev plan in the session and start the run

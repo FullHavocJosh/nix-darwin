@@ -121,3 +121,7 @@ leader_key = "ctrl+t"
 [startup]
 tiled = true
 daemon = true
+
+[appearance]
+scrollback_lines = 100000
+zoom_size = 95
