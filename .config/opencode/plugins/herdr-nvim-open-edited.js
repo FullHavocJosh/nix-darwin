@@ -1,9 +1,9 @@
 // Ported from the Claude Code PostToolUse hook at
 // ~/nix-darwin/scripts/herdr-nvim-open-edited.sh
 //
-// Mirrors edited files into the sibling "nvim" pane of the same herdr tab,
-// the way tuicr already surfaces them for review. `:edit` only swaps the
-// current window's buffer -- it never closes other tabs -- and nvim's
+// Mirrors edited files into the sibling "nvim" pane of the same herdr tab.
+// `:edit` only swaps the current window's buffer -- it never closes other
+// tabs -- and nvim's
 // default 'hidden' is on, so it doesn't matter whether the target buffer
 // already has unsaved changes.
 

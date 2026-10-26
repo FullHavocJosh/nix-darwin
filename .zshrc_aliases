@@ -34,25 +34,23 @@ rdpnobaralaptop() {
 # tuios ones in .zshrc_functions_tuios.
 
 # Lays out aidev as tab 1 (the workspace's initial tab/pane, so it sorts first
-# in the tab bar), then a tab 2 "dev" tab with nvim (full-height left) and tuicr
-# (right) as a split, then zsh as its own tab 3. dev is left as the focused/
-# landing tab (nvim pane) -- aidev sorting first is purely a tab-order thing, not
-# a default-view thing. When there's no review command (remote/ai-edit layouts)
-# the dev tab's right column doubles as the zsh pane and no separate zsh tab is
-# made. Runs against an already-created workspace $ws_id (whose first tab/pane
+# in the tab bar), then a tab 2 "dev" tab with nvim (full-height left) and zsh
+# (right) as a split. dev is left as the focused/landing tab (nvim pane) --
+# aidev sorting first is purely a tab-order thing, not a default-view thing.
+# Runs against an already-created workspace $ws_id (whose first tab/pane
 # already exist at ${ws_id}:t1/${ws_id}:p1). Shared by _herdr_space (fresh
 # workspaces) and _herdr_worktree (worktree-backed workspaces that `herdr
 # worktree create` already opened).
 _herdr_populate_panes() {
-  local ws_id="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6" cmd_review="$7"
-  local label_nvim="nvim${tab_suffix}" label_aidev="ai${tab_suffix}" label_zsh="zsh${tab_suffix}" label_review="tuicr${tab_suffix}"
+  local ws_id="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6"
+  local label_nvim="nvim${tab_suffix}" label_aidev="ai${tab_suffix}" label_zsh="zsh${tab_suffix}"
 
   # aidev is tab 1 -- it's the workspace's initial tab/pane, no move needed.
   herdr tab rename "${ws_id}:t1" "$label_aidev" >/dev/null
   herdr pane rename "${ws_id}:p1" "$label_aidev" >/dev/null
   [ -n "$cmd_aidev" ] && herdr pane run "${ws_id}:p1" "$cmd_aidev" >/dev/null
 
-  # dev is tab 2: nvim full-height left, tuicr right.
+  # dev is tab 2: nvim full-height left, zsh right.
   local dev_result dev_tab p_nvim p_right
   dev_result=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label "dev${tab_suffix}" --no-focus)
   dev_tab=$(echo "$dev_result" | jq -r '.result.tab.tab_id')
@@ -61,32 +59,15 @@ _herdr_populate_panes() {
   [ -n "$cmd_nvim" ] && herdr pane run "$p_nvim" "$cmd_nvim" >/dev/null
 
   p_right=$(herdr pane split "$p_nvim" --direction right --ratio 0.5 --cwd "$dir" --no-focus | jq -r '.result.pane.pane_id')
-  if [ -n "$cmd_review" ]; then
-    herdr pane rename "$p_right" "$label_review" >/dev/null
-    herdr pane run "$p_right" "$cmd_review" >/dev/null
-  else
-    # No review pane -- the right column doubles as zsh (remote/ai-edit layouts).
-    herdr pane rename "$p_right" "$label_zsh" >/dev/null
-    [ -n "$cmd_zsh" ] && herdr pane run "$p_right" "$cmd_zsh" >/dev/null
-  fi
+  herdr pane rename "$p_right" "$label_zsh" >/dev/null
+  [ -n "$cmd_zsh" ] && herdr pane run "$p_right" "$cmd_zsh" >/dev/null
   herdr tab focus "$dev_tab" >/dev/null
   herdr pane focus --pane "$p_right" --direction left >/dev/null
-
-  # zsh gets its own tab after dev (only when tuicr took the dev tab's right column).
-  if [ -n "$cmd_review" ] && [ -n "$cmd_zsh" ]; then
-    local zsh_result p_zsh
-    zsh_result=$(herdr tab create --workspace "$ws_id" --cwd "$dir" --label "$label_zsh" --no-focus)
-    p_zsh=$(echo "$zsh_result" | jq -r '.result.root_pane.pane_id')
-    herdr pane rename "$p_zsh" "$label_zsh" >/dev/null
-    herdr pane run "$p_zsh" "$cmd_zsh" >/dev/null
-  fi
 }
 
 # Core primitive: a herdr workspace labeled $name (local pane cwd $dir) with a dev
-# tab split into nvim (focused, full-height left) / tuicr (right, running
-# $cmd_review when non-empty), a separate zsh tab running $cmd_zsh (only made
-# when $cmd_review is non-empty -- otherwise zsh takes over the dev tab's right
-# column instead), plus a separate aidev tab running $cmd_aidev. Used for both
+# tab split into nvim (focused, full-height left) / zsh (right, running
+# $cmd_zsh), plus a separate aidev tab running $cmd_aidev. Used for both
 # local project layouts and remote/ssh layouts (the remote ones just pass
 # ssh-wrapped commands instead of plain local ones).
 #
@@ -94,20 +75,20 @@ _herdr_populate_panes() {
 # herdr, attaching to a separate named session would nest multiplexers, so instead
 # this opens/focuses a workspace labeled $name in the CURRENT session.
 _herdr_space() {
-  local name="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6" cmd_review="$7"
+  local name="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6"
 
   if [ -n "$HERDR_ENV" ]; then
     local ws_id
     ws_id=$(herdr workspace list | jq -r --arg n "$name" '.result.workspaces[] | select(.label==$n) | .workspace_id' | head -1)
     if [ -z "$ws_id" ]; then
       ws_id=$(herdr workspace create --cwd "$dir" --label "$name" | jq -r '.result.workspace.workspace_id')
-      _herdr_populate_panes "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "$cmd_zsh" "$tab_suffix" "$cmd_review"
+      _herdr_populate_panes "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "$cmd_zsh" "$tab_suffix"
     fi
     herdr workspace focus "$ws_id" >/dev/null
     return
   fi
 
-  local label_nvim="nvim${tab_suffix}" label_aidev="ai${tab_suffix}" label_zsh="zsh${tab_suffix}" label_review="tuicr${tab_suffix}"
+  local label_nvim="nvim${tab_suffix}" label_aidev="ai${tab_suffix}" label_zsh="zsh${tab_suffix}"
   if ! herdr session list --json 2>/dev/null | jq -e --arg n "$name" '.sessions[] | select(.name==$n and .running==true)' >/dev/null 2>&1; then
     nohup herdr server --session "$name" >/dev/null 2>&1 &
     disown
@@ -119,7 +100,7 @@ _herdr_space() {
     herdr pane rename w1:p1 "$label_aidev" --session "$name" >/dev/null
     [ -n "$cmd_aidev" ] && herdr pane run w1:p1 "$cmd_aidev" --session "$name" >/dev/null
 
-    # dev is tab 2: nvim full-height left, tuicr right.
+    # dev is tab 2: nvim full-height left, zsh right.
     local dev_result dev_tab p_nvim p_right
     dev_result=$(herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label "dev${tab_suffix}" --no-focus)
     dev_tab=$(echo "$dev_result" | jq -r '.result.tab.tab_id')
@@ -128,25 +109,10 @@ _herdr_space() {
     [ -n "$cmd_nvim" ] && herdr pane run "$p_nvim" "$cmd_nvim" --session "$name" >/dev/null
 
     p_right=$(herdr pane split "$p_nvim" --direction right --ratio 0.5 --cwd "$dir" --no-focus --session "$name" | jq -r '.result.pane.pane_id')
-    if [ -n "$cmd_review" ]; then
-      herdr pane rename "$p_right" "$label_review" --session "$name" >/dev/null
-      herdr pane run "$p_right" "$cmd_review" --session "$name" >/dev/null
-    else
-      # No review pane -- the right column doubles as zsh (remote/ai-edit layouts).
-      herdr pane rename "$p_right" "$label_zsh" --session "$name" >/dev/null
-      [ -n "$cmd_zsh" ] && herdr pane run "$p_right" "$cmd_zsh" --session "$name" >/dev/null
-    fi
+    herdr pane rename "$p_right" "$label_zsh" --session "$name" >/dev/null
+    [ -n "$cmd_zsh" ] && herdr pane run "$p_right" "$cmd_zsh" --session "$name" >/dev/null
     herdr tab focus "$dev_tab" --session "$name" >/dev/null
     herdr pane focus --pane "$p_right" --direction left --session "$name" >/dev/null
-
-    # zsh gets its own tab after dev (only when tuicr took the dev tab's right column).
-    if [ -n "$cmd_review" ] && [ -n "$cmd_zsh" ]; then
-      local zsh_result p_zsh
-      zsh_result=$(herdr tab create --session "$name" --workspace w1 --cwd "$dir" --label "$label_zsh" --no-focus)
-      p_zsh=$(echo "$zsh_result" | jq -r '.result.root_pane.pane_id')
-      herdr pane rename "$p_zsh" "$label_zsh" --session "$name" >/dev/null
-      herdr pane run "$p_zsh" "$cmd_zsh" --session "$name" >/dev/null
-    fi
   fi
   herdr --session "$name"
 }
@@ -195,10 +161,8 @@ STARTUP
 }
 
 # Opens a new herdr space backed by a fresh git worktree (new branch off the
-# source repo's current HEAD) with the same nvim/tuicr/aidev/zsh layout, so multiple
-# in-flight branches/PRs on the same repo never share working-directory state. The
-# tuicr pane is exactly where this is most useful -- each worktree is its own
-# branch/PR by design, so _tuicr_current_pr has something fresh to load every time.
+# source repo's current HEAD) with the same nvim/aidev/zsh layout, so multiple
+# in-flight branches/PRs on the same repo never share working-directory state.
 # Requires an existing herdr session ($HERDR_ENV set) -- worktree spaces are meant
 # to live alongside your main dev session, not as their own standalone session.
 _herdr_worktree() {
@@ -224,66 +188,12 @@ _herdr_worktree() {
   ws_id=$(echo "$worktree_json" | jq -r '.result.workspace.workspace_id')
   wt_dir=$(echo "$worktree_json" | jq -r '.result.workspace.worktree.checkout_path')
 
-  _herdr_populate_panes "$ws_id" "$wt_dir" "nvim" "" "git status" "" "_tuicr_current_pr"
+  _herdr_populate_panes "$ws_id" "$wt_dir" "nvim" "" "git status" ""
   herdr workspace focus "$ws_id" >/dev/null
 }
 
 alias hiwt_herdr='_herdr_worktree home-infrastructure ~/home-infrastructure'
 
-# Fingerprints the repo's current content, not just which paths are dirty --
-# `git status --porcelain` reports "?? file" or "M file" the same way no matter
-# HOW MANY TIMES the file's content changes after that, since the status letter
-# itself doesn't change. That made the watcher below miss every edit after the
-# first one to a given file (confirmed: create a file, watcher catches it; append
-# a line to that same still-untracked file, watcher sees an unchanged porcelain
-# line and does nothing). `git diff HEAD` covers tracked files correctly since its
-# OUTPUT is the actual diff content, which changes on every edit -- but it doesn't
-# cover untracked files at all, so those still need their mtimes fingerprinted
-# individually (via `git ls-files --others --exclude-standard`, NUL-separated so
-# paths with spaces don't break it).
-_tuicr_repo_fingerprint() {
-  git rev-parse HEAD 2>/dev/null
-  git diff HEAD 2>/dev/null
-  git ls-files --others --exclude-standard -z 2>/dev/null | xargs -0 stat -f '%m %N' 2>/dev/null
-}
-
-# Quits whatever tuicr is currently showing in pane $1 -- PR mode, working-tree
-# diff, or the always-alive pristine/all-files fallback below -- and relaunches
-# _tuicr_current_pr there (cd'ing to $2 first if given). `:q` works as the quit
-# command regardless of which of those modes it's currently in. Used both by the
-# watcher below (to pick up the latest content on every change, including brand
-# new files -- see below for why a full restart, not `:e`, is what it takes) and
-# by _herdr_sync_dev_panes (to point an already-open tuicr pane at a newly
-# created worktree instead of leaving it showing the old one).
-#
-# The relaunch step uses send-text + send-keys enter, NOT `herdr pane run` --
-# confirmed by testing that `pane run` deadlocks specifically when the caller is
-# itself a lingering background process of the SAME pane it's targeting (as the
-# watcher below is): it appears to wait for the pane to have no attached child
-# processes before injecting the command, which can never become true while the
-# very process making the call is one of them. send-text/send-keys don't wait for
-# that and work fine self-targeted; `pane run` is still fine for cross-pane calls
-# (e.g. _herdr_sync_dev_panes targeting sibling panes from a different one).
-#
-# Waits for the PANE'S VISIBLE CONTENT to stabilize (three consecutive identical
-# reads) before sending the relaunch text, rather than just checking that the
-# foreground process is a plain shell. Confirmed by testing that process-state
-# alone isn't a reliable enough signal: the shell can report itself idle while its
-# OWN prompt-drawing hooks (starship, precmd, etc. -- these run inside the zsh
-# process itself, not as separate child processes process-info would catch) are
-# still mid-flight, and text sent into that window either vanishes silently or gets
-# garbled/concatenated with trailing output from the command that just finished.
-# Waiting for the actual displayed content to go still is a direct signal that
-# nothing is still rendering, instead of an indirect proxy for it.
-# Marker file used to tell the tuicr invocation being restarted (see
-# _tuicr_current_pr) that its own watcher is the one quitting it, so it should
-# leave that watcher alive to finish the relaunch below instead of killing it
-# the instant tuicr's `:q` returns control to the foreground caller. Without
-# this, the foreground caller's own `kill "$watcher_pid"` (fired right after
-# `tuicr -w`/`tuicr -A` returns) wins the race against this function's
-# stability-wait loop essentially every time, since it has no sleep in the
-# way -- confirmed via traced test runs: the quit sequence would go out, but
-# the relaunch command never did, leaving the pane at a dead shell prompt.
 # Waits for pane $1's VISIBLE CONTENT to go still (three consecutive
 # identical, non-empty reads) before returning -- a direct signal that
 # whatever's rendering there (shell startup, an editor repainting, a plugin
@@ -292,8 +202,7 @@ _tuicr_repo_fingerprint() {
 # rendered yet at all) never false-positives as "stable" on its very first
 # read. Times out after ~6s (40 tries * 0.15s) and returns anyway rather than
 # blocking forever if content never settles for some other reason -- callers
-# proceed either way, same as _tuicr_restart always did before this was
-# pulled out into its own function.
+# proceed either way.
 # Usage: _herdr_wait_pane_stable <pane_id>
 _herdr_wait_pane_stable() {
   local pane_id="$1"
@@ -312,124 +221,6 @@ _herdr_wait_pane_stable() {
   done
 }
 
-_tuicr_restart() {
-  local pane_id="$1" dir="$2"
-  # Guards against two independent callers restarting the SAME pane at once
-  # -- confirmed as a real scenario, not just theoretical: _tuicr_watch_and_refresh
-  # polls every 5s and calls this on its own, and _herdr_sync_dev_panes (gpr)
-  # can call it for the same pane within that same window right after a
-  # worktree's git state changes. Two concurrent :q + relaunch sequences
-  # racing on one pane's input stream is exactly the kind of interleaving that
-  # leaves it at a dead shell prompt -- neither sequence's stability-wait or
-  # marker-file handling accounts for a SECOND sequence doing the same thing
-  # at the same time. A stale lock (>30s -- several times longer than this
-  # function normally takes) is treated as an abandoned previous run, not a
-  # live one, so a crashed caller can't permanently wedge the pane.
-  local lock="/tmp/.tuicr-restart-lock-$pane_id"
-  if [ -f "$lock" ]; then
-    local lock_age=$(( $(date +%s) - $(stat -f %m "$lock" 2>/dev/null || echo 0) ))
-    [ "$lock_age" -lt 30 ] && return 0
-  fi
-  : > "$lock"
-
-  local marker="/tmp/.tuicr-restart-$pane_id"
-  : > "$marker"
-  herdr pane send-keys "$pane_id" esc >/dev/null 2>&1
-  herdr pane send-text "$pane_id" ":q" >/dev/null 2>&1
-  herdr pane send-keys "$pane_id" enter >/dev/null 2>&1
-
-  _herdr_wait_pane_stable "$pane_id"
-
-  if [ -n "$dir" ]; then
-    herdr pane send-text "$pane_id" "cd $dir && _tuicr_current_pr" >/dev/null 2>&1
-  else
-    herdr pane send-text "$pane_id" "_tuicr_current_pr" >/dev/null 2>&1
-  fi
-  herdr pane send-keys "$pane_id" enter >/dev/null 2>&1
-  rm -f "$marker" "$lock"
-}
-
-# Called instead of a bare `kill "$watcher_pid"` after each tuicr invocation
-# inside _tuicr_current_pr returns. If this pane's restart marker is present,
-# tuicr just exited because our OWN watcher is mid-restart (see _tuicr_restart
-# above) -- leave it running so it can finish sending the relaunch command.
-# Otherwise this was a real user-initiated quit, so clean up the watcher.
-_tuicr_finish() {
-  local watcher_pid="$1" pane_id="$HERDR_PANE_ID"
-  if [ -n "$pane_id" ] && [ -f "/tmp/.tuicr-restart-$pane_id" ]; then
-    return
-  fi
-  kill "$watcher_pid" 2>/dev/null
-}
-
-# Polls for content changes (see _tuicr_repo_fingerprint) in the tuicr pane's
-# directory and, whenever something changes, fully restarts tuicr there via
-# _tuicr_restart -- so the diff aidev/nvim are producing keeps showing up without
-# anyone touching the pane, INCLUDING brand new files, which a `:e` reload alone
-# can't pick up (confirmed by testing: `:e` only refreshes content for files
-# already in the current review's file list in local/-w mode; a file that becomes
-# dirty after tuicr launches never gets added to that list without a full
-# restart). A full restart is cheap enough for this to be a non-issue -- tuicr
-# starts in well under a second either way. Polling (not fswatch) because fswatch
-# isn't installed here and this is a low enough frequency that the extra
-# dependency isn't worth it; it only acts when the actual content (not just the
-# clock) has changed, which is what makes this "continuous" rather than a blind
-# timer-based reload.
-#
-# Exits after one restart rather than looping forever: that restart's own
-# _tuicr_current_pr call spawns a fresh watcher to keep going, so without this the
-# old watcher instance would keep running underneath the new one, piling up one
-# extra background loop per refresh.
-_tuicr_watch_and_refresh() {
-  local pane_id="$HERDR_PANE_ID"
-  [ -n "$pane_id" ] || return 0
-
-  local last_state state
-  last_state=$(_tuicr_repo_fingerprint)
-  while true; do
-    sleep 5
-    state=$(_tuicr_repo_fingerprint)
-    if [ "$state" != "$last_state" ]; then
-      _tuicr_restart "$pane_id"
-      return
-    fi
-  done
-}
-
-# tuicr pane's default command in the dev layout. Every branch this workflow creates
-# (gpr) has a matching GitHub PR from the moment it's created, so this loads that PR's
-# diff (including any not-yet-pushed working-tree changes) straight away instead of
-# landing on tuicr's local/PR target picker. Falls back to a plain local working-tree
-# diff when there's no PR to load (current branch has none, e.g. `nxvim`/`dev` opened
-# directly on main) or `tuicr pr` errors out (e.g. right after `gpr` creates a
-# worktree, the PR exists but its initial commit is empty, so `tuicr pr` finds no
-# file changes even with --working-tree). Final fallback is -A (review every tracked
-# file) when there's truly nothing to diff yet -- tuicr exits immediately on "no
-# changes to review" otherwise, which would leave the pane dead with nothing running
-# to receive the watcher's refresh or a later worktree-sync restart. Also runs
-# _tuicr_watch_and_refresh alongside it, in the background, so the diff stays live as
-# aidev/nvim keep committing/editing instead of freezing at whatever it looked like
-# on launch.
-_tuicr_current_pr() {
-  local pr_num
-  pr_num=$(gh pr view --json number -q .number 2>/dev/null)
-
-  _tuicr_watch_and_refresh &
-  local watcher_pid=$!
-  disown
-
-  if [ -n "$pr_num" ] && tuicr pr "$pr_num" --working-tree; then
-    _tuicr_finish "$watcher_pid"
-    return
-  fi
-  if tuicr -w; then
-    _tuicr_finish "$watcher_pid"
-    return
-  fi
-  tuicr -A
-  _tuicr_finish "$watcher_pid"
-}
-
 # aidev pane starts with `claude --resume` so any prior session in that pane
 # (herdr's pane persistence means detach/reattach normally just resumes
 # whatever's running) can also be picked back up after the pane itself was
@@ -437,26 +228,26 @@ _tuicr_current_pr() {
 # fresh otherwise.
 _herdr_devlayout() {
   local name="$1" dir="$2"
-  _herdr_space "$name" "$dir" "nvim" "" "git status" "" "_tuicr_current_pr"
+  _herdr_space "$name" "$dir" "nvim" "" "git status" ""
 }
 
 # Like _herdr_space, but never resumes an existing same-label workspace/session --
-# always creates a brand-new one with the standard nvim/tuicr dev-tab + separate
-# zsh/aidev tabs layout and focuses/attaches it. devim uses this because it
+# always creates a brand-new one with the standard nvim/zsh dev tab + separate
+# aidev tab layout and focuses/attaches it. devim uses this because it
 # should give a clean layout every time instead of reattaching to whatever's left
 # over from a previous run.
 _herdr_space_new() {
-  local name="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6" cmd_review="$7"
+  local name="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" cmd_zsh="$5" tab_suffix="$6"
 
   if [ -n "$HERDR_ENV" ]; then
     local ws_id
     ws_id=$(herdr workspace create --cwd "$dir" --label "$name" | jq -r '.result.workspace.workspace_id')
-    _herdr_populate_panes "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "$cmd_zsh" "$tab_suffix" "$cmd_review"
+    _herdr_populate_panes "$ws_id" "$dir" "$cmd_nvim" "$cmd_aidev" "$cmd_zsh" "$tab_suffix"
     herdr workspace focus "$ws_id" >/dev/null
     return
   fi
 
-  local label_nvim="nvim${tab_suffix}" label_aidev="ai${tab_suffix}" label_zsh="zsh${tab_suffix}" label_review="tuicr${tab_suffix}"
+  local label_nvim="nvim${tab_suffix}" label_aidev="ai${tab_suffix}" label_zsh="zsh${tab_suffix}"
   local session_name="${name}-$$"
   nohup herdr server --session "$session_name" >/dev/null 2>&1 &
   disown
@@ -468,7 +259,7 @@ _herdr_space_new() {
   herdr pane rename w1:p1 "$label_aidev" --session "$session_name" >/dev/null
   [ -n "$cmd_aidev" ] && herdr pane run w1:p1 "$cmd_aidev" --session "$session_name" >/dev/null
 
-  # dev is tab 2: nvim full-height left, tuicr right.
+  # dev is tab 2: nvim full-height left, zsh right.
   local dev_result dev_tab p_nvim p_right
   dev_result=$(herdr tab create --session "$session_name" --workspace w1 --cwd "$dir" --label "dev${tab_suffix}" --no-focus)
   dev_tab=$(echo "$dev_result" | jq -r '.result.tab.tab_id')
@@ -477,37 +268,21 @@ _herdr_space_new() {
   [ -n "$cmd_nvim" ] && herdr pane run "$p_nvim" "$cmd_nvim" --session "$session_name" >/dev/null
 
   p_right=$(herdr pane split "$p_nvim" --direction right --ratio 0.5 --cwd "$dir" --no-focus --session "$session_name" | jq -r '.result.pane.pane_id')
-  if [ -n "$cmd_review" ]; then
-    herdr pane rename "$p_right" "$label_review" --session "$session_name" >/dev/null
-    herdr pane run "$p_right" "$cmd_review" --session "$session_name" >/dev/null
-  else
-    # No review pane -- the right column doubles as zsh (remote/ai-edit layouts).
-    herdr pane rename "$p_right" "$label_zsh" --session "$session_name" >/dev/null
-    [ -n "$cmd_zsh" ] && herdr pane run "$p_right" "$cmd_zsh" --session "$session_name" >/dev/null
-  fi
+  herdr pane rename "$p_right" "$label_zsh" --session "$session_name" >/dev/null
+  [ -n "$cmd_zsh" ] && herdr pane run "$p_right" "$cmd_zsh" --session "$session_name" >/dev/null
   herdr tab focus "$dev_tab" --session "$session_name" >/dev/null
   herdr pane focus --pane "$p_right" --direction left --session "$session_name" >/dev/null
-
-  # zsh gets its own tab after dev (only when tuicr took the dev tab's right column).
-  if [ -n "$cmd_review" ] && [ -n "$cmd_zsh" ]; then
-    local zsh_result p_zsh
-    zsh_result=$(herdr tab create --session "$session_name" --workspace w1 --cwd "$dir" --label "$label_zsh" --no-focus)
-    p_zsh=$(echo "$zsh_result" | jq -r '.result.root_pane.pane_id')
-    herdr pane rename "$p_zsh" "$label_zsh" --session "$session_name" >/dev/null
-    herdr pane run "$p_zsh" "$cmd_zsh" --session "$session_name" >/dev/null
-  fi
   herdr --session "$session_name"
 }
 
-# devim's layout function: same nvim/tuicr dev tab + separate zsh/aidev tabs as
+# devim's layout function: same nvim/zsh dev tab + separate aidev tab as
 # _herdr_devlayout, but routed through _herdr_space_new so it always starts fresh.
 _herdr_devlayout_new() {
   local name="$1" dir="$2"
-  _herdr_space_new "$name" "$dir" "nvim" "" "git status" "" "_tuicr_current_pr"
+  _herdr_space_new "$name" "$dir" "nvim" "" "git status" ""
 }
 
-# Same split layout (no tuicr pane, since _herdr_space is called without
-# $cmd_review here), but each pane ssh's into $host and runs its command in
+# Same split layout, but each pane ssh's into $host and runs its command in
 # $remote_dir there. No herdr install needed on the remote end -- it's just an
 # ssh'd-in shell inside a local pane, same as typing the ssh command by hand.
 #
@@ -536,7 +311,7 @@ _herdr_project() {
 }
 
 alias nxvim_herdr='_herdr_project nix-darwin ~/nix-darwin'
-# devim opens the current directory with the standard nvim/tuicr/aidev/zsh layout,
+# devim opens the current directory with the standard nvim/aidev/zsh layout,
 # naming the herdr space after the current directory by default. An optional
 # first arg overrides the space name (e.g. `devim updates` names it "updates"
 # instead of the repo's basename) while still using the current directory.

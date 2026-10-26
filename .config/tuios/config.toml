@@ -95,6 +95,47 @@ leader_key = "ctrl+t"
 # scrolllock, a spare letter) avoids that. Unbound by default.
 # ============================================================================
 
+# The herdr keys (.config/herdr/config.toml), on ctrl and ctrl+shift: aerospace owns alt, so tuios's default opt+
+# keys (opt+1..9 workspaces, alt+arrows focus, opt+tab windows) never arrive. Global keys act in window and terminal
+# mode and do not reach the pane. Not carried over from herdr:
+#   ctrl+j/k next/previous agent: tuios has no agent cycle (ctrl+t o oldest needing you, ctrl+t O newest finished),
+#     and both keys belong to LazyVim's window moves and zsh's accept-line/kill-line.
+#   ctrl+h/l pane cycle: LazyVim moves between Neotree and the editor with them; the dev layout puts nvim and zsh on
+#     workspaces 1 and 2, so ctrl+1/ctrl+2 do the same.
+#   prefix+w close pane: ctrl+t w is the workspace prefix; ctrl+t x closes.
+[keybindings.global]
+# herdr switch_tab: workspaces by number.
+switch_workspace_1 = ["ctrl+1"]
+switch_workspace_2 = ["ctrl+2"]
+switch_workspace_3 = ["ctrl+3"]
+switch_workspace_4 = ["ctrl+4"]
+switch_workspace_5 = ["ctrl+5"]
+switch_workspace_6 = ["ctrl+6"]
+switch_workspace_7 = ["ctrl+7"]
+switch_workspace_8 = ["ctrl+8"]
+switch_workspace_9 = ["ctrl+9"]
+# herdr next/previous_workspace: a herdr workspace per repo is a tuios session per repo (dev-<repo>).
+next_session = ["ctrl+shift+j"]
+prev_session = ["ctrl+shift+k"]
+prefix_toggle_sidebar = ["ctrl+shift+h"]
+# herdr workspace_picker: agents, sessions, workspaces and panes in one picker.
+goto_picker = ["ctrl+shift+p"]
+# ctrl+p back to zsh (up-line-or-beginning-search) and Neotree; the palette stays on ctrl+t P.
+command_palette = []
+
+[keybindings.prefix_mode]
+# herdr split_vertical was prefix+/; ctrl+shift+p covers choose_tree's pane search.
+prefix_split_vertical = ["|", "\\", "/"]
+choose_tree = []
+# ctrl+t g is lazygit below, the herdr gitview key.
+toggle_scratch = ["`"]
+
+[[keybindings.command]]
+key = "prefix+g"
+type = "shell"
+command = "tuios popup --width 90% --height 90% --cwd \"$TUIOS_ACTIVE_PANE_CWD\" -- lazygit"
+description = "lazygit in a popup"
+
 # ============================================================================
 # DOCK COMPONENTS
 # ============================================================================
@@ -151,12 +192,15 @@ dock_prefix_indicator = "pill"
 [spotlight]
 enabled = false
 
-[appearance.sidebar.left]
-enabled = true
-width = 39
-
+# One rail, on the left. No [appearance.sidebar.left/right] edge tables: the edge opposite position stays hidden
+# unless its table sets enabled = true, and ctrl+t H toggles it for a moment.
 [appearance.sidebar]
 enabled = true
+position = "left"
+width = 39
+# Files as a tree that opens folders in place, capped at a fifth of the rail; agents get the most room.
+sections = "sessions:30,terminals:15,files:20,agents:35"
+files_style = "tree"
 header_case = "uppercase"
 row_style = "underline"
 header_style = "pill"
@@ -164,9 +208,3 @@ show_numbers = false
 marquee = true
 tooltips = true
 subagent_collapse = "collapsed"
-width = 39
-position = "left"
-
-[appearance.sidebar.right]
-enabled = false
-width = 10

@@ -3,7 +3,7 @@
 # Helper functions and main workflow commands for git operations
 # =============================================================================
 
-# Several functions below (_herdr_sync_dev_panes -> _tuicr_restart,
+# Several functions below (_herdr_sync_dev_panes -> _herdr_wait_pane_stable,
 # devlite/aidevlite -> _herdr_ai_edit_workspace) call functions that live in
 # .zshrc_aliases. .zshrc sources that file before this one in a normal
 # interactive shell, but anything that sources only this file directly — an
@@ -11,12 +11,11 @@
 # script, a non-interactive subshell — hits "command not found" instead.
 # Confirmed live: gpr calls into _herdr_sync_dev_panes even when HERDR_ENV is
 # only ambiently inherited (not from a full interactive shell), and the
-# failure is silent from gpr's own output — the real tuicr pane just never
-# gets pointed at the new worktree, which is indistinguishable from "tuicr
-# isn't opening" to whoever's watching that pane. Self-heal instead of relying
-# on load order that nothing enforces. _tuicr_restart is the canary — if it's
-# missing, none of .zshrc_aliases loaded, so (re-)source the whole file.
-if ! command -v _tuicr_restart >/dev/null 2>&1; then
+# failure is silent from gpr's own output: the dev panes just never get
+# pointed at the new worktree. Self-heal instead of relying on load order that
+# nothing enforces. _herdr_wait_pane_stable is the canary: if it's missing,
+# none of .zshrc_aliases loaded, so (re-)source the whole file.
+if ! command -v _herdr_wait_pane_stable >/dev/null 2>&1; then
   [[ -f "$HOME/.zshrc_aliases" ]] && source "$HOME/.zshrc_aliases" 2>/dev/null
 fi
 
@@ -3568,7 +3567,7 @@ $type_prefix: $branch_name"
   fi
 
   # aidev's own pane deliberately stays put (see above), but the sibling
-  # nvim/tuicr/zsh panes over in the workspace's dev tab should still follow the
+  # nvim/zsh panes over in the workspace's dev tab should still follow the
   # worktree -- that's where the actual file changes are happening, so they
   # should be showing it even though aidev's cwd doesn't move. Push them there
   # when running in herdr.
@@ -3577,7 +3576,7 @@ $type_prefix: $branch_name"
   return 0
 }
 
-# Pushes every pane in the workspace's dev tab (nvim/tuicr/zsh -- see
+# Pushes every pane in the workspace's dev tab (nvim/zsh -- see
 # _herdr_populate_panes) to $1 -- whatever directory that is. Called from
 # gpr_func with a freshly created worktree (gpr's own `cd` only affects the
 # calling pane, see gpr_func above), and from the pr-merged-reset skill
@@ -3588,16 +3587,13 @@ $type_prefix: $branch_name"
 # than scanning
 # every pane in $HERDR_WORKSPACE_ID and matching by pane label -- that would also
 # catch any OTHER tab the user happens to have open in this workspace if a pane
-# in it were ever labeled nvim/tuicr/zsh too. Scoping to the resolved dev tab_id
+# in it were ever labeled nvim/zsh too. Scoping to the resolved dev tab_id
 # instead means only that tab's panes are ever touched, full stop. Per pane kind,
 # by label:
 #   - nvim: `:cd $1` repoints file ops (netrw, :e, fuzzy-finders) without
 #     restarting nvim, so open buffers/undo history survive untouched, chained
 #     with `| Neotree git_status` (same view as <leader>gs, see keymaps.lua) so
 #     the changed-files list is what's on screen without touching the pane.
-#   - tuicr: quit and relaunch via _tuicr_current_pr in the new directory, so it
-#     loads the new worktree's PR diff (changed files) instead of the old one's --
-#     there's no live ":cd" equivalent for tuicr's target repo.
 #   - zsh: plain `cd $1`, but ONLY if the pane is sitting at an idle shell prompt
 #     (checked via process-info) -- never inject a command into a pane that's
 #     actively running something else.
@@ -3637,20 +3633,14 @@ _herdr_sync_dev_panes() {
           # mode or a one-level popup (completion menu, telescope prompt) --
           # it doesn't close a floating window that's ALSO showing on top of
           # that, which a second esc does. Then wait for whatever's rendering
-          # to settle before typing an Ex command at it -- unlike
-          # _tuicr_restart's quit+relaunch, nothing here previously waited
-          # for the pane to be in a known-ready state, so this fired the
-          # instant gpr ran regardless of what nvim happened to be doing at
-          # that exact moment.
+          # to settle before typing an Ex command at it, instead of firing
+          # the instant gpr runs regardless of what nvim is doing.
           herdr pane send-keys "$pane_id" esc >/dev/null 2>&1
           herdr pane send-keys "$pane_id" esc >/dev/null 2>&1
           _herdr_wait_pane_stable "$pane_id"
           herdr pane send-text "$pane_id" ":cd $dir | Neotree git_status" >/dev/null 2>&1
           herdr pane send-keys "$pane_id" enter >/dev/null 2>&1
         fi
-        ;;
-      tuicr*)
-        _tuicr_restart "$pane_id" "$dir"
         ;;
       zsh*)
         local fg

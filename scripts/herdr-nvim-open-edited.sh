@@ -2,9 +2,9 @@
 # Claude Code PostToolUse hook (Edit|Write|MultiEdit|NotebookEdit).
 #
 # Mirrors edited files into the sibling "nvim" pane of the same herdr tab
-# (see .zshrc_aliases _herdr_populate_panes), the way tuicr already surfaces
-# them for review. `:edit` only swaps the current window's buffer -- it never
-# closes other tabs -- and nvim's default 'hidden' is on, so it doesn't matter
+# (see .zshrc_aliases _herdr_populate_panes). `:edit` only swaps the current
+# window's buffer -- it never closes other tabs -- and nvim's default 'hidden'
+# is on, so it doesn't matter
 # whether the target buffer already has unsaved changes.
 set -eu
 
@@ -30,8 +30,8 @@ escaped_path=$(printf '%s' "$file_path" | sed "s/'/''/g")
 
 # `herdr pane run` (text+Enter in one call) reliably races with nvim here --
 # the colon command lands as literal inserted text instead of executing. The
-# three-step send-keys/send-text/send-keys sequence used elsewhere for tuicr
-# (_tuicr_restart in .zshrc_aliases) does not have that problem, so match it.
+# three-step send-keys/send-text/send-keys sequence (as _herdr_sync_dev_panes
+# in .zshrc_functions_git uses for nvim) does not have that problem.
 herdr pane send-keys "$pane_id" esc >/dev/null 2>&1 || true
 herdr pane send-text "$pane_id" ":execute 'edit ' . fnameescape('${escaped_path}')" >/dev/null 2>&1 || true
 herdr pane send-keys "$pane_id" enter >/dev/null 2>&1 || true
