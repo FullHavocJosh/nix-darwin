@@ -150,3 +150,19 @@ dock_prefix_indicator = "pill"
 
 [spotlight]
 enabled = false
+
+[appearance.sidebar.left]
+enabled = true
+
+[appearance.sidebar]
+enabled = false
+header_case = "uppercase"
+row_style = "underline"
+header_style = "pill"
+show_numbers = false
+marquee = true
+tooltips = true
+subagent_collapse = "collapsed"
+
+[appearance.sidebar.right]
+enabled = false
