@@ -298,7 +298,7 @@ let
   claudeRoutingRules = pkgs.writeShellScript "claude-routing-rules" ''
     set -euo pipefail
     mkdir -p "$HOME/.claude" "$HOME/.local/bin"
-    # aidev is a zsh function; OpenCode, pi and scripts run other shells, so they get it through this executable
+    # aidev is a zsh function (.zshrc_functions_tuios); OpenCode, pi and scripts get it through this executable
     ln -sfn "$HOME/.config/aistack/aidev-cli" "$HOME/.local/bin/aidev"
     python3 - "$HOME/.claude/CLAUDE.md" <<'PYEOF'
     import os, re, sys
@@ -315,10 +315,11 @@ let
       turns/$0.09 vs 18 turns/$0.16 by hand. Pure pattern replacements: one sed or python command; if that is not
       possible or not allowed, local_edit, not Edit by hand. A single small or subtle edit: make it yourself.
       Enforced: a hook refuses the third file edited by hand in one request.
-    - aidev (free builders: the on-device 30B, then Big Pickle; one Claude review). A feature planned in this
-      session: /aidev-handoff (you write the plan, `aidev --handoff <dir>` builds it). One self-contained edit across
-      files that a check can verify: `AIDEV_TEST_CMD="<check>" aidev -p "<exact change. Change nothing else.>" <files>`,
-      then review its diff. Plain `aidev` is the user's interactive planner; never run it yourself.
+    - aidev (tuios: Claude runs free builders, the on-device 30B, then a free Zen model). A feature planned in this
+      session: /aidev-handoff (you write the plan, `aidev --handoff <dir>` opens the run). One self-contained edit
+      across files that a check can verify: `AIDEV_TEST_CMD="<check>" aidev -p "<exact change. Change nothing else.>"
+      <files>` (blocks; in tuios the builder works in a pane), then review its diff. Plain `aidev` is the user's
+      interactive planner; never run it yourself.
     - Private sources (GitHub, Terraform, Atlassian and other MCP servers) and judgment calls: yourself.
     """.replace("\n    ", "\n").rstrip() + "\n" + end
     text = open(path).read() if os.path.exists(path) else ""

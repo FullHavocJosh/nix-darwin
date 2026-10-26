@@ -4,18 +4,21 @@ The daily terminal and AI stack, on tuios, with Claude Code as the backbone of a
 talks to by tuios mail. The commands are in `.zshrc_functions_tuios`. The herdr versions stay available as
 `<name>_herdr` (`dev_herdr`, `nxvim_herdr`, `aidev_herdr`, ...). `ai` and `ainfo` use no multiplexer and are unchanged.
 
-| Command                                      | What it does                                                                                         |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `dev`                                        | one tuios session per repo under `~` (`dev-<repo>`): workspace 1 nvim and tuicr, workspace 2 zsh     |
-| `devim [name]`                               | that layout for the current directory, always a new session                                          |
-| `nxvim`, `psvim`, `hivim`, `itvim`           | the session of one project, skipped where it is not cloned                                           |
-| `hiwt <branch>`                              | a new home-infrastructure worktree and branch in `.worktrees/`, with a session of its own            |
-| `mmdev`, `himmdev`, `nxmmdev`                | a session whose windows ssh to MacMiniM1                                                             |
-| `aidev [task]`                               | Claude, Lumo and a builder, in the current tuios session (else session `aidev-<repo>`)               |
-| `aidev --resume`                             | reopen the Claude and Lumo panes of an unfinished run after a daemon restart, conversations included |
-| `aidev -p`, `--handoff`, `--rfc`, `--direct` | still the pi + ralph stack (`aidev_herdr`), until they are ported                                    |
-| `aidev_status`                               | the latest run's work dir, builder and tasks                                                         |
-| `ai_tuios [-c] [message]`                    | one Claude Code pane in session `ai_tuios-<dir>` (`-c` continues the last one here)                  |
+| Command                            | What it does                                                                                         |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `dev`                              | one tuios session per repo under `~` (`dev-<repo>`): workspace 1 nvim and tuicr, workspace 2 zsh     |
+| `devim [name]`                     | that layout for the current directory, always a new session                                          |
+| `nxvim`, `psvim`, `hivim`, `itvim` | the session of one project, skipped where it is not cloned                                           |
+| `hiwt <branch>`                    | a new home-infrastructure worktree and branch in `.worktrees/`, with a session of its own            |
+| `mmdev`, `himmdev`, `nxmmdev`      | a session whose windows ssh to MacMiniM1                                                             |
+| `aidev [task]`                     | Claude, Lumo and a builder, in the current tuios session (else session `aidev-<repo>`)               |
+| `aidev --resume`                   | reopen the Claude and Lumo panes of an unfinished run after a daemon restart, conversations included |
+| `aidev -p "<change>" [files]`      | one edit by a free builder, blocking; `AIDEV_TEST_CMD` must pass                                     |
+| `aidev --handoff <dir>`            | a run for a plan another session wrote (`/aidev-handoff`); one JSON line, no attach                  |
+| `aidev --rfc <name> [words]`       | a run whose Claude plans from an RFC in `~/.ai/rfcs`                                                 |
+| `aidev --direct [words]`           | a free builder, interactive, in this terminal (gpa's fix windows use it)                             |
+| `aidev_status`                     | the latest run's work dir, builder and tasks                                                         |
+| `ai_tuios [-c] [message]`          | one Claude Code pane in session `ai_tuios-<dir>` (`-c` continues the last one here)                  |
 
 gpr points the current session's `nvim`, `tuicr` and `zsh` windows at its new worktree. gpa's manual-fix choices open
 nvim and aidev on a free workspace of the current session.
@@ -42,8 +45,8 @@ its lowest free workspaces (three are needed). Outside tuios, or with `AIDEV_TUI
 1. You describe the work to Claude. It reads the code and asks Lumo (`ask-lumo`) for current docs, API changes and known
    bugs. Lumo is the first lumo-tamer that answers (this machine, MacMiniM1, then lumo.rollet.family); with none, there
    is no Lumo pane and Claude does the lookups itself.
-2. Claude writes `plan/prd.json` and `plan/verify.json`, checks them with aistack's rules (`check-plan`) and
-   shows you the tasks. It builds only when you say so.
+2. Claude writes `plan/prd.json` and `plan/verify.json`, checks them with aistack's rules (`check-plan`) and shows you
+   the tasks. It builds only when you say so.
 3. Claude creates the gpr worktree and draft PR (`worktree`, main checkout only) and opens the builder (`builder`). For
    each task it writes a task file, mails it to the builder and types the prompt (`send-task`), waits for the builder's
    reply mail, then runs the task's verify commands itself, without a shell (`wait-task`). On a failure it sends the
@@ -66,6 +69,24 @@ Cost: Claude is interactive, so no per-call budget cap applies. `AIDEV_TUIOS_CLA
 `AIDEV_TUIOS_CLAUDE_EFFORT` set its model and effort (default: `AISTACK_CLAUDE_MODEL` / `AISTACK_CLAUDE_EFFORT`, else
 sonnet / medium). Lumo and the 30B are free; a free Zen model is used only when one fits the repo (a private repo needs
 a zero-retention one).
+
+### Script forms
+
+These replace the pi + ralph stack's forms (still there as `aidev_herdr`). Agents reach them through
+`~/.local/bin/aidev` (`../aistack/aidev-cli`), which allows only `-p` and `--handoff`.
+
+- `aidev -p "<change>" [files]`: one edit in this directory. Inside tuios the on-device 30B opens in a pane on a free
+  workspace (you can watch it and type into it), gets the change by mail and a typed prompt, and replies by mail to the
+  caller's pane. The change counts only when the tree changed and `AIDEV_TEST_CMD` (a shell command) exits 0; otherwise
+  a free Zen model tries once more, where one fits the repo. The pane closes afterwards, and the script prints each
+  builder's reply and `git diff --stat`. Outside tuios the same builders run headless. Exit 0 means done.
+  `AIDEV_TUIOS_EDIT_TIMEOUT_S` (540) caps each attempt.
+- `aidev --handoff <dir>`: checks `prd.json` and `verify.json` with aistack's rules (`problems` on failure), creates the
+  gpr worktree and draft PR in a main checkout, and opens Claude and Lumo with Claude told to build the approved plan.
+  It prints `started`, `run_id`, `session`, `work_dir`, `pr_url`.
+- `aidev --rfc <name> [words]`: a normal run whose first prompt names the RFC file; Claude reads it and plans from it.
+- `aidev --direct [words]`: pi on the on-device 30B in this terminal, else OpenCode on a free Zen model.
+- A builder pane carries `AIDEV_TUIOS_BUILDER=1`, and `-p` and `--handoff` refuse to run there.
 
 tuios agent features must be on: `[agents] enabled = true` in `../tuios/config.toml`. After a change to that file, run
 `tuios config apply` from a terminal outside tuios (a pane cannot widen grants), or restart the daemon.

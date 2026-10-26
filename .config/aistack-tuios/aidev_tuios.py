@@ -3,6 +3,11 @@
 shell function runs it; the pi + ralph stack it replaced is aidev_herdr, and its state (~/.ai/aidev) stays separate.
 
     aidev_tuios.py start [--resume] [task words...]   open the panes: in this tuios session, else aidev-<repo>
+    aidev_tuios.py start --rfc <name> [words...]       the same, with Claude told to carry out an RFC (~/.ai/rfcs)
+    aidev_tuios.py start --handoff <dir>               build a plan another session wrote and the user approved
+                                                       (prd.json + verify.json): one JSON line, never attaches
+    aidev_tuios.py start -p "<change>" [files...]      one edit by a free builder, checked here (AIDEV_TEST_CMD)
+    aidev_tuios.py start --direct [words...]           an interactive free builder in this terminal
     aidev_tuios.py ai [-c] [message words...]         ai_tuios: one Claude pane in session ai_tuios-<dir>
     aidev_tuios.py status [<project>]                  print the latest run's state
 
@@ -312,8 +317,9 @@ class Run:
         runs = os.path.join(self.state, "runs")
         if not run_id:
             ids = sorted(os.listdir(runs)) if os.path.isdir(runs) else []
+            # an `aidev -p` edit keeps its files in runs/edit-<id> too, but is never the project's run
             live = [r for r in ids if rj(os.path.join(runs, r, "state.json"), {}).get("phase") not in
-                    (None, "done", "aborted")]
+                    (None, "done", "aborted", "edit")]
             run_id = live[-1] if live else time.strftime("%Y%m%d-%H%M%S")
         self.id = run_id
         self.dir = os.path.join(runs, run_id)
@@ -517,17 +523,19 @@ def lumo_body(run, cfg, lumo):
             + with_system_prompt(argv, sysp))
 
 
-def build_body(run, cfg, kind):
-    """The builder pane's launcher body for `kind` (30b, pickle, claude), or None when that builder does not exist
-    here."""
+def build_body(run, cfg, kind, name=None):
+    """The launcher body of builder `kind` (30b, pickle, claude) in pane `name`, or None when that builder does not
+    exist here. It replies by mail to run.data["reply_to"]: the claude pane in a run, the caller of `aidev -p` in an
+    edit. AIDEV_TUIOS_BUILDER=1 in its environment stops it from starting aidev -p or --handoff itself (a loop)."""
     wd = run.data.get("work_dir") or run.project
-    name = BUILDERS[kind]
-    system = prompt_text("build", WORK_DIR=wd, RUN_DIR=run.dir)
+    name = name or BUILDERS[kind]
+    system = prompt_text("build", WORK_DIR=wd, RUN_DIR=run.dir, REPLY_TO=run.data.get("reply_to") or "claude")
     pane = run.data["panes"].setdefault(name, {})
     if kind == "claude":
         pane["builder"] = f"Claude Code {CLAUDE_MODEL} (billed)"
         settings = write_working_settings(cfg, os.path.join(os.path.dirname(cfg["claude_backbone"]), "builder.json"))
-        return claude_body(run, cfg, name, system, "Wait for the first task.", wd, advisor=False, settings=settings)
+        return claude_body(run, cfg, name, system, "Wait for the first task.", wd, advisor=False, settings=settings,
+                           env={"AIDEV_TUIOS_BUILDER": "1"})
     sysp = write_text(os.path.join(run.dir, "bin", f"{name}.system.md"), system)
     if kind == "30b":
         if not os.path.isfile(CODER_FILE):
@@ -535,20 +543,54 @@ def build_body(run, cfg, kind):
         model = write_build_pi(cfg)
         sid = pane.setdefault("session_id", str(uuid.uuid4()))
         argv = [sys.executable, os.path.join(AISTACK, "coder_pi.py"), "--hold", "--", "pi", "--model", model,
-                "--name", "aidev build", "--no-skills", "--session-id", sid]
+                "--name", f"aidev {name}", "--no-skills", "--session-id", sid]
         pane["builder"] = "on-device Qwen3-Coder-30B (free)"
-        return (f"cd {shlex.quote(wd)}\nexport PI_CODING_AGENT_DIR={shlex.quote(cfg['pi_build'])}\n"
-                + with_system_prompt(argv, sysp))
+        return (f"cd {shlex.quote(wd)}\nexport AIDEV_TUIOS_BUILDER=1\n"
+                f"export PI_CODING_AGENT_DIR={shlex.quote(cfg['pi_build'])}\n" + with_system_prompt(argv, sysp))
     model = run.data.get("zen_model") or zen_model(run.project)
     if not model:
         return None
     run.data["zen_model"] = model
     pane["builder"] = f"OpenCode {model} (free)"
-    model = model if "/" in model else f"opencode/{model}"  # opencode wants provider/model
     first = f"Read your instructions in {sysp}, then wait for the first task."
     # OPENCODE_CONFIG_DIR adds the tuios state plugin to the user's own opencode config, for this pane only
-    return (f"cd {shlex.quote(wd)}\nexport OPENCODE_CONFIG_DIR={shlex.quote(cfg['opencode_dir'])}\n"
-            f"opencode mini --model {shlex.quote(model)} --prompt {shlex.quote(first)}")
+    return (f"cd {shlex.quote(wd)}\nexport AIDEV_TUIOS_BUILDER=1\n"
+            f"export OPENCODE_CONFIG_DIR={shlex.quote(cfg['opencode_dir'])}\n"
+            f"opencode mini --model {shlex.quote(opencode_model(model))} --prompt {shlex.quote(first)}")
+
+
+def opencode_model(model):
+    return model if "/" in model else f"opencode/{model}"  # opencode wants provider/model
+
+
+def no_builder_why(kind):
+    if kind == "30b":
+        return f"no model file {CODER_FILE}"
+    return ("no free Zen model fits this repo (a private repo needs a zero-retention one): "
+            f"python3 {AISTACK}/zen_models.py choose --private yes")
+
+
+def free_workspace(session):
+    used = {w.get("workspace") for w in windows(session)}
+    return next((n for n in range(1, 10) if n not in used), None)
+
+
+def start_builder(run, kind, name, ws, cwd):
+    """Builder `kind` in a new pane `name` on workspace `ws` of the run's session, through tuios start-agent (the
+    caller needs fan or admin; admin includes fan), which returns once the agent is ready. (ok, message)."""
+    cfg = pane_configs(run.project)
+    body = build_body(run, cfg, kind, name)
+    if not body:
+        return False, f"no {kind} builder: {no_builder_why(kind)}"
+    script = write_script(run, name, body)
+    code, out, err = tuios("start-agent", f"/bin/zsh {script}", "-s", run.session, "--name", name,
+                           "--grants", GRANTS["build"], "--cwd", cwd, "--workspace", str(ws),
+                           "--ready-timeout", "300000", timeout=330)
+    run.data["panes"][name].update(script=script, cwd=cwd, grants=GRANTS["build"])
+    run.event("builder", name=name, ok=code == 0)
+    run.save()
+    return code == 0, (f"{name}: {run.data['panes'][name].get('builder')}. start-agent (exit {code}): "
+                       f"{(out or err).strip()[-500:]}")
 
 
 def start_dev_workspace(run, session, wd):
@@ -748,25 +790,54 @@ def cmd_builder(run, argv):
                                       ["yes", "no"]) != "yes":
         print("the user said no to a billed builder")
         return 1
-    cfg = pane_configs(run.project)
-    body = build_body(run, cfg, kind)
-    if not body:
-        why = (f"no model file {CODER_FILE}" if kind == "30b" else
-               "no free Zen model fits this repo (a private repo needs a zero-retention one): "
-               f"python3 {AISTACK}/zen_models.py choose --private yes")
-        print(f"no {kind} builder: {why}")
-        return 1
-    script = write_script(run, name, body)
-    code, out, err = tuios("start-agent", f"/bin/zsh {script}", "-s", run.session, "--name", name,
-                           "--grants", GRANTS["build"], "--cwd", wd, "--workspace", str(WS["build"]),
-                           "--ready-timeout", "300000", timeout=330)
-    run.data["panes"][name].update(script=script, cwd=wd, grants=GRANTS["build"])
-    run.data["builder"] = name
-    run.event("builder", name=name, ok=code == 0)
-    run.save()
-    print(f"{name}: {run.data['panes'][name].get('builder')}. start-agent (exit {code}): "
-          f"{(out or err).strip()[-500:]}")
-    return 0 if code == 0 else 1
+    ok, msg = start_builder(run, kind, name, WS["build"], wd)
+    if ok or name in run.data["panes"]:
+        run.data["builder"] = name
+        run.save()
+    print(msg)
+    return 0 if ok else 1
+
+
+def mail_task(run, builder, subject, mail_text, prompt):
+    """Mail `mail_text` to the builder, then type `prompt` into it (tuios marks mail as data, not instructions, so the
+    instruction itself is typed). @@MID@@ in `prompt` becomes the mail's id, the thread the reply goes to. Returns
+    that id, or None."""
+    args = ["send-agent-message", "-s", run.session, "-w", builder, "--subject", subject]
+    if os.environ.get("TUIOS_PANE_ID"):
+        args += ["--from", os.environ["TUIOS_PANE_ID"]]
+    code, out, err = tuios(*args, mail_text)
+    mid = mail_id(out)
+    if code or not mid:
+        print(f"mailing the builder failed: {(err or out).strip()[:300]}")
+        return None
+    queue(run.session, builder, prompt.replace("@@MID@@", mid))
+    return mid
+
+
+def reply_line(run, mid):
+    return (f"When you are done or blocked, reply to mail #{mid}: tuios send-agent-message -w "
+            f"{run.data.get('reply_to') or 'claude'} --reply-to {mid} 'done: <one line>' (or 'blocked: <why>').")
+
+
+def wait_reply(session, me, thread, builder, limit):
+    """The builder's reply in mail thread `thread`, read from pane `me`'s inbox: (status, text). status is "reply",
+    "rest" (a minute at rest without one), "gone" (the pane closed) or "timeout". A builder can rest for a moment
+    between steps (seen live: the 30B mailed 6 s after a rest), so a short rest does not end the wait."""
+    end, worked, rest_since = time.time() + limit, False, None
+    while time.time() < end:
+        tuios("wait-for", "agent-message", "-s", session, "-w", me, "--thread", thread, "--timeout", "10000",
+              timeout=30)
+        replies = thread_replies(session, me, thread)
+        if replies:
+            return "reply", replies[-1][2]
+        st = agent_state(session, builder)
+        if st == "gone":
+            return "gone", ""
+        worked = worked or st in ("working", "needs_input")
+        rest_since = (rest_since or time.time()) if worked and st in AT_REST else None
+        if rest_since and time.time() - rest_since >= 60:
+            return "rest", "(no reply: the builder came to rest without mailing)"
+    return "timeout", ""
 
 
 def cmd_send_task(run, argv):
@@ -790,21 +861,13 @@ def cmd_send_task(run, argv):
         t["notes"].append(f"- Before attempt {t['attempts']}: {note}")
     path = write_text(os.path.join(run.dir, "tasks", f"{tid}.md"),
                       task_prompt(prd, stories[tid], verify[tid], t["notes"]))
-    args = ["send-agent-message", "-s", run.session, "-w", builder, "--subject", f"task {tid}"]
-    if os.environ.get("TUIOS_PANE_ID"):
-        args += ["--from", os.environ["TUIOS_PANE_ID"]]
-    code, out, err = tuios(*args, f"Task {tid}, attempt {t['attempts']}: do the task in {path}, in {wd}.")
-    mid = mail_id(out)
-    if code or not mid:
-        print(f"mailing the builder failed: {(err or out).strip()[:300]}")
+    mid = mail_task(run, builder, f"task {tid}", f"Task {tid}, attempt {t['attempts']}: do the task in {path}, in {wd}.",
+                    f"aidev task {tid}: read {path} and do exactly that task in {wd}. {reply_line(run, '@@MID@@')}")
+    if not mid:
         return 1
     t.update(status="sent", thread=mid)
     run.event("send_task", task=tid, attempt=t["attempts"], thread=mid)
     run.save()
-    # The prompt itself is typed (tuios marks mail as data, not instructions); the reply comes back by mail.
-    queue(run.session, builder, f"aidev task {tid}: read {path} and do exactly that task in {wd}. When you are "
-          f"done or blocked, reply to mail #{mid}: tuios send-agent-message -w claude --reply-to {mid} "
-          "'done: <one line>' (or 'blocked: <why>').")
     print(f"sent {tid} (attempt {t['attempts']}) to {builder} as mail #{mid}. Next: {HELPER} wait-task {tid}")
     return 0
 
@@ -838,26 +901,11 @@ def cmd_wait_task(run, argv):
     if not t.get("thread"):
         print(f"{tid} was not sent: run send-task {tid}")
         return 1
-    # A builder can rest for a moment between steps (seen live: the 30B mailed 6 s after a rest), so only a minute at
-    # rest without a reply ends the wait early.
-    end, worked, rest_since, reply = time.time() + limit, False, None, None
-    while time.time() < end:
-        tuios("wait-for", "agent-message", "-s", run.session, "-w", me, "--thread", t["thread"], "--timeout",
-              "10000", timeout=30)
-        replies = thread_replies(run.session, me, t["thread"])
-        if replies:
-            reply = replies[-1][2]
-            break
-        st = agent_state(run.session, builder)
-        if st == "gone":
-            print(f"the {builder} pane is gone; open a builder again")
-            return 1
-        worked = worked or st in ("working", "needs_input")
-        rest_since = (rest_since or time.time()) if worked and st in AT_REST else None
-        if rest_since and time.time() - rest_since >= 60:
-            reply = "(no reply: the builder came to rest without mailing)"
-            break
-    if not reply:
+    status, reply = wait_reply(run.session, me, t["thread"], builder, limit)
+    if status == "gone":
+        print(f"the {builder} pane is gone; open a builder again")
+        return 1
+    if status == "timeout":
         st = agent_state(run.session, builder)
         print(f"{tid}: no reply after {limit} s; {builder} is {st}"
               + (" and waits on a prompt for the user" if st == "needs_input" else "")
@@ -911,43 +959,27 @@ def new_session(session, cwd):
     return None
 
 
-def cmd_start(argv):
-    resume = "--resume" in argv
-    task = " ".join(a for a in argv if a != "--resume").strip()
-    if nested_in_herdr():
-        print("aidev: run it from a plain Ghostty window, not inside herdr (no nested multiplexers).",
-              file=sys.stderr)
-        return 1
-    project = project_root(os.getcwd())
-    # --resume goes back to the session the run was started in; a new run opens in this one (start_session)
+def where_to_run(project, resume=False):
+    """(session, own, running, error) for a run of `project`: --resume goes back to the session the run was started
+    in; a new run opens in this tuios session, else in aidev-<repo> (start_session). One run per session."""
     session = (Run(project).data.get("session") if resume else None) or start_session(project)
     own = session == session_name(project)
     claude_w = None if own else window_named(session, "claude")
     if claude_w and os.path.realpath(claude_w.get("cwd") or "") != project:
-        print(f"aidev: {session} already holds a run for {claude_w.get('cwd')}; one run per session. Use "
-              "AIDEV_TUIOS_OWN_SESSION=1 for a session of its own.", file=sys.stderr)
-        return 1
-    running = session_exists(session) if own else bool(claude_w)
-    if running and not resume:
-        if task:
-            print(f"aidev: a run is already open in {session}. Tell Claude the task in its pane.",
-                  file=sys.stderr)
-        return attach(session)
-    problems = preflight()
-    if problems:
-        print("aidev: " + "; ".join(problems), file=sys.stderr)
-        return 1
-    run = Run(project, None if resume else time.strftime("%Y%m%d-%H%M%S"))
-    if resume and not os.path.exists(run.path):
-        print("aidev --resume: no unfinished run in this project.", file=sys.stderr)
-        return 1
+        return session, own, True, (f"{session} already holds a run for {claude_w.get('cwd')}; one run per session. "
+                                    "Use AIDEV_TUIOS_OWN_SESSION=1 for a session of its own.")
+    return session, own, (session_exists(session) if own else bool(claude_w)), None
+
+
+def open_run(run, session, own, running, task, resume=False):
+    """Open the claude and lumo panes of `run` in `session` (with `resume`, again from their stored launchers, which
+    resume the conversations). Returns an error text, or None."""
     os.makedirs(run.dir, exist_ok=True)
     run.data["session"] = session
     err = assign_workspaces(run, session, own)
     if err:
-        print(f"aidev: {err}", file=sys.stderr)
-        return 1
-    cfg = pane_configs(project)
+        return err
+    cfg = pane_configs(run.project)
     scripts = {}
     if not resume:
         lumo = find_lumo()
@@ -962,18 +994,265 @@ def cmd_start(argv):
                    if n in ("claude", "lumo") and p.get("script") and os.path.exists(p["script"])}
     run.save()
     if own and not running:
-        err = new_session(session, project)
+        err = new_session(session, run.project)
         if err:
-            print(f"aidev: {err}", file=sys.stderr)
-            return 1
+            return err
     for name in ("claude", "lumo"):
-        if name in scripts and open_pane(run, session, name, scripts[name], project, GRANTS[name]):
+        if name in scripts and open_pane(run, session, name, scripts[name], run.project, GRANTS[name]):
             name_ws(session, name)
     if own:
-        start_dev_workspace(run, session, run.data.get("work_dir") or project)
+        start_dev_workspace(run, session, run.data.get("work_dir") or run.project)
     tuios("select-workspace", str(WS["claude"]), "-s", session)
     run.save()
+    return None
+
+
+def rfc_task(name, words):
+    """Claude's first prompt for `aidev --rfc NAME [words]`: NAME is a path, or a name in ~/.ai/rfcs (with or without
+    .md). (task, error)."""
+    rdir = os.path.join(AI_HOME, "rfcs")
+    for f in (name, os.path.join(rdir, name), os.path.join(rdir, name + ".md")):
+        if f and os.path.isfile(os.path.expanduser(f)):
+            path = os.path.realpath(os.path.expanduser(f))
+            if os.path.getsize(path) > 40000:
+                return None, f"{path} is over 40000 bytes; trim it first"
+            extra = f" Also: {' '.join(words)}" if words else ""
+            return (f"Carry out the RFC saved at {path}. Another session wrote it: read it, check its claims against "
+                    f"the project, and plan from it.{extra}"), None
+    return None, f"no RFC '{name}' (a path, or a name in {rdir})"
+
+
+def cmd_start(argv):
+    resume = "--resume" in argv
+    argv = [a for a in argv if a != "--resume"]
+    task = " ".join(argv).strip()
+    if argv and argv[0] == "--rfc":
+        task, err = rfc_task(argv[1] if len(argv) > 1 else "", argv[2:])
+        if err:
+            print(f"aidev --rfc: {err}", file=sys.stderr)
+            return 1
+    if nested_in_herdr():
+        print("aidev: run it from a plain Ghostty window, not inside herdr (no nested multiplexers).",
+              file=sys.stderr)
+        return 1
+    project = project_root(os.getcwd())
+    session, own, running, err = where_to_run(project, resume)
+    if err:
+        print(f"aidev: {err}", file=sys.stderr)
+        return 1
+    if running and not resume:
+        if task:
+            print(f"aidev: a run is already open in {session}. Tell Claude the task in its pane.",
+                  file=sys.stderr)
+        return attach(session)
+    problems = preflight()
+    if problems:
+        print("aidev: " + "; ".join(problems), file=sys.stderr)
+        return 1
+    run = Run(project, None if resume else time.strftime("%Y%m%d-%H%M%S"))
+    if resume and not os.path.exists(run.path):
+        print("aidev --resume: no unfinished run in this project.", file=sys.stderr)
+        return 1
+    err = open_run(run, session, own, running, task, resume)
+    if err:
+        print(f"aidev: {err}", file=sys.stderr)
+        return 1
     return attach(session)
+
+
+def cmd_handoff(argv):
+    """aidev --handoff DIR: build the plan in DIR/prd.json + DIR/verify.json, which another session (/aidev-handoff)
+    wrote and the user approved there. Checks it with aistack's rules, creates the worktree and draft PR in a main
+    checkout, and opens Claude (told to build it without asking again) and Lumo. Prints one JSON line and never
+    attaches: an agent runs this."""
+    def done(**kw):
+        print(json.dumps(kw))
+        return 0 if kw.get("started") else 1
+
+    if not argv:
+        return done(problem="usage: aidev --handoff <plan dir>")
+    if os.environ.get("AIDEV_TUIOS_BUILDER"):
+        return done(problem="refused inside an aidev builder pane (it would start a run from a run)")
+    src = os.path.realpath(os.path.expanduser(argv[0]))
+    prd, verify = rj(os.path.join(src, "prd.json")), rj(os.path.join(src, "verify.json"))
+    if not isinstance(prd, dict) or not isinstance(verify, dict):
+        return done(problem=f"{src} needs prd.json and verify.json (see /aidev-handoff)")
+    project = project_root(os.getcwd())
+    ralph = load_ralph(project)
+    problems = ralph.validate(prd, verify)
+    if problems:
+        return done(problems=problems)
+    session, own, running, err = where_to_run(project)
+    if err or window_named(session, "claude"):
+        return done(problem=err or f"a run is already open in {session}: finish it first (aidev_status)")
+    problems = preflight()
+    if problems:
+        return done(problem="; ".join(problems))
+    plan_dir = ralph.plan_dir(project)
+    os.makedirs(plan_dir, exist_ok=True)
+    wj(os.path.join(plan_dir, "prd.json"), prd)
+    wj(os.path.join(plan_dir, "verify.json"), verify)
+    os.environ["AISTACK_WORKTREE_MODE"] = os.environ.get("AIDEV_TUIOS_WORKTREE_MODE") or (
+        "create" if is_main_checkout(project) else "none")
+    os.environ["AISTACK_TIERS"] = "aidev: Claude Code backbone, Lumo research, free builder"
+    wd, created, err = ralph.ensure_workdir(project, prd, verify)
+    if err:
+        return done(problem=err)
+    run = Run(project, time.strftime("%Y%m%d-%H%M%S"))
+    run.data.update(work_dir=wd, handoff=src)
+    run.event("handoff", source=src, work_dir=wd, created=created)
+    task = (f"The user approved the plan handed off from {src} in the session that wrote it. It is now in {plan_dir}, "
+            f"and the work dir is {wd}. Run check-plan, then builder, then build every task in order without asking "
+            "again. Review the whole change at the end and report to the user.")
+    err = open_run(run, session, own, running, task)
+    if err:
+        return done(problem=err)
+    meta = rj(os.path.join(state_dir(project), "project.json"), {}) or {}
+    return done(started=True, run_id=run.id, session=session, work_dir=wd, pr_url=meta.get("pr_url"),
+                plan_dir=plan_dir, follow=f"aidev in {project} attaches to {session}; aidev_status shows the tasks")
+
+
+def tree_state(cwd):
+    """A fingerprint of the work tree's content: changes whenever a tracked or untracked file does."""
+    parts = []
+    for args in (["status", "--porcelain=v1", "-uall"], ["diff"]):
+        r = subprocess.run(["git", "-C", cwd, *args], capture_output=True, text=True, check=False)
+        parts.append(r.stdout)
+    return hashlib.sha1("\0".join(parts).encode()).hexdigest()
+
+
+def check_edit(cwd, before, test_cmd):
+    """Why the edit is not done, or "" when it is: the tree must have changed and AIDEV_TEST_CMD (a shell command
+    the caller set, as in aidev_herdr) must exit 0."""
+    if tree_state(cwd) == before:
+        return "it changed nothing"
+    if test_cmd:
+        r = subprocess.run(test_cmd, shell=True, cwd=cwd, capture_output=True, text=True, timeout=VERIFY_TIMEOUT_S,
+                           stdin=subprocess.DEVNULL, check=False)
+        if r.returncode:
+            return f"AIDEV_TEST_CMD exits {r.returncode}:\n{(r.stdout + r.stderr)[-2000:]}"
+    return ""
+
+
+def edit_in_pane(run, kind, task_path, limit):
+    """One attempt of `aidev -p` in a builder pane on a free workspace of this session. (reply, error)."""
+    ws = free_workspace(run.session)
+    if not ws:
+        return "", "no free workspace in this session"
+    name = f"edit-{kind}-{time.strftime('%H%M%S')}"
+    ok, msg = start_builder(run, kind, name, ws, run.data["work_dir"])
+    print(msg, file=sys.stderr)
+    if not ok:
+        return "", msg
+    try:
+        mid = mail_task(run, name, "edit", f"Edit: do the change in {task_path}, in {run.data['work_dir']}.",
+                        f"aidev edit: read {task_path} and make exactly that change in {run.data['work_dir']}. "
+                        + reply_line(run, "@@MID@@"))
+        if not mid:
+            return "", "mailing the builder failed"
+        status, reply = wait_reply(run.session, os.environ["TUIOS_PANE_ID"], mid, name, limit)
+        if status in ("gone", "timeout"):
+            return reply, f"the builder {'closed' if status == 'gone' else f'did not finish in {limit} s'}"
+        return reply, ""
+    finally:
+        tuios("close-window", name, "-s", run.session)  # frees the 30B for the next job; the diff stays
+
+
+def edit_headless(run, kind, task_text, limit):
+    """One attempt of `aidev -p` without tuios: the same builder as a one-shot command in this terminal."""
+    cfg = pane_configs(run.project)
+    env = {**os.environ, "AIDEV_TUIOS_BUILDER": "1"}
+    if kind == "30b":
+        if not os.path.isfile(CODER_FILE):
+            return "", no_builder_why(kind)
+        env["PI_CODING_AGENT_DIR"] = cfg["pi_build"]
+        argv = [sys.executable, os.path.join(AISTACK, "coder_pi.py"), "--hold", "--", "pi", "--model",
+                write_build_pi(cfg), "--no-skills", "-p", task_text]
+    else:
+        model = zen_model(run.project)
+        if not model:
+            return "", no_builder_why(kind)
+        argv = ["opencode", "run", "--auto", "--agent", "build", "--model", opencode_model(model), task_text]
+    print(f"aidev -p: {kind} builder, headless", file=sys.stderr)
+    try:
+        r = subprocess.run(argv, cwd=run.data["work_dir"], env=env, capture_output=True, text=True, timeout=limit,
+                           stdin=subprocess.DEVNULL, check=False)
+    except subprocess.TimeoutExpired:
+        return "", f"the builder did not finish in {limit} s"
+    return (r.stdout + r.stderr)[-1500:], (f"the builder exited {r.returncode}" if r.returncode else "")
+
+
+def cmd_edit(argv):
+    """aidev -p "<change>" [files...]: one edit by a free builder in this directory: the on-device 30B, then a free
+    Zen model when the 30B leaves it unchanged or AIDEV_TEST_CMD failing. Inside tuios the builder works in a pane on
+    a free workspace (you can watch and type into it) and replies by mail; elsewhere it runs headless. Blocks until
+    done; exit 0 only when the tree changed and AIDEV_TEST_CMD passes."""
+    words = [a for a in argv if a not in ("-p", "--print")]
+    if not words:
+        print('usage: aidev -p "<exact change. Change nothing else.>" [files...]', file=sys.stderr)
+        return 2
+    if os.environ.get("AIDEV_TUIOS_BUILDER"):
+        print("aidev -p: refused inside an aidev builder pane (it would start a builder from a builder)",
+              file=sys.stderr)
+        return 2
+    cwd = os.path.realpath(os.getcwd())
+    project = project_root(cwd)
+    test_cmd = os.environ.get("AIDEV_TEST_CMD") or ""
+    in_tuios = bool(os.environ.get("TUIOS_ENV") and os.environ.get("TUIOS_SESSION") and os.environ.get("TUIOS_PANE_ID"))
+    limit = int(os.environ.get("AIDEV_TUIOS_EDIT_TIMEOUT_S", "540"))
+    run = Run(project, "edit-" + time.strftime("%Y%m%d-%H%M%S"))
+    run.data.update(phase="edit", work_dir=cwd, session=os.environ.get("TUIOS_SESSION"),
+                    reply_to=os.environ.get("TUIOS_PANE_ID"))
+    files = words[1:]
+    task_text = (words[0] + (f"\n\nFiles: {', '.join(files)}" if files else "")
+                 + (f"\n\nThis check must exit 0 when you are done; run it yourself: {test_cmd}" if test_cmd else "")
+                 + "\n\nRead the code first and follow its conventions. Change only what this asks. No git commits.")
+    task_path = write_text(os.path.join(run.dir, "tasks", "edit.md"), task_text + "\n")
+    run.save()
+    before, why = tree_state(cwd), ""
+    for i, kind in enumerate(("30b", "pickle")):
+        if kind == "30b" and not os.path.isfile(CODER_FILE):
+            continue
+        if i and why:
+            print(f"aidev -p: the 30B did not finish ({why.splitlines()[0]}); trying a free Zen model", file=sys.stderr)
+            task_path = write_text(task_path, task_text + f"\n\nAn earlier attempt left this: {why}\n")
+        if in_tuios:
+            reply, err = edit_in_pane(run, kind, task_path, limit)
+        else:
+            reply, err = edit_headless(run, kind, open(task_path).read(), limit)
+        why = err or check_edit(cwd, before, test_cmd)
+        run.event("edit", builder=kind, ok=not why, why=why[:500], reply=reply[:500])
+        print(f"{kind} builder: {reply.strip()[:1500] or '(no reply)'}")
+        if not why:
+            break
+    run.data["result"] = "done" if not why else why[:500]
+    run.save()
+    stat = subprocess.run(["git", "-C", cwd, "diff", "--stat"], capture_output=True, text=True, check=False).stdout
+    print(stat.rstrip() or "(no tracked file changed)")
+    if why:
+        print(f"aidev -p: not done: {why}", file=sys.stderr)
+        return 1
+    print("aidev -p: done" + (" (AIDEV_TEST_CMD passes)" if test_cmd else "") + f"; log {run.dir}")
+    return 0
+
+
+def cmd_direct(argv):
+    """aidev --direct [words...]: an interactive free builder in this terminal (gpa's fix windows type this): pi on
+    the on-device 30B, else OpenCode on a free Zen model. The words are its first message."""
+    words = " ".join(a for a in argv if a != "--direct").strip()
+    project = project_root(os.getcwd())
+    cfg = pane_configs(project)
+    if os.path.isfile(CODER_FILE):
+        argv = [sys.executable, os.path.join(AISTACK, "coder_pi.py"), "--hold", "--", "pi", "--model",
+                write_build_pi(cfg), "--name", "aidev direct", "--no-skills"] + ([words] if words else [])
+        os.execvpe(argv[0], argv, {**os.environ, "PI_CODING_AGENT_DIR": cfg["pi_build"]})
+    model = zen_model(project)
+    if not model:
+        print(f"aidev --direct: no free builder here ({no_builder_why('30b')}; {no_builder_why('pickle')})",
+              file=sys.stderr)
+        return 1
+    argv = ["opencode", "mini", "--model", opencode_model(model)] + (["--prompt", words] if words else [])
+    os.execvpe(argv[0], argv, {**os.environ, "OPENCODE_CONFIG_DIR": cfg["opencode_dir"]})
 
 
 def cmd_ai(argv):
@@ -1026,6 +1305,13 @@ def cmd_status(argv):
 def main(argv):
     cmd, rest = (argv[0], argv[1:]) if argv else ("", [])
     if cmd == "start":
+        # as in aidev_herdr: -p anywhere means one headless edit
+        if "-p" in rest or "--print" in rest:
+            return cmd_edit(rest)
+        if rest[:1] == ["--handoff"]:
+            return cmd_handoff(rest[1:])
+        if rest[:1] == ["--direct"]:
+            return cmd_direct(rest[1:])
         return cmd_start(rest)
     if cmd == "ai":
         return cmd_ai(rest)
