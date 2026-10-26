@@ -132,6 +132,27 @@ choose_tree = []
 # browser stays in the command palette (ctrl+t P).
 toggle_scratch = ["s"]
 prefix_scrollback = []
+# n new window, w close window, W close session; tab/shift+tab alone cycle windows (n/p dropped, c and x freed).
+prefix_new_window = ["n"]
+prefix_close_window = ["w"]
+prefix_close_session = ["W"]
+prefix_next_window = ["tab"]
+prefix_prev_window = ["shift+tab"]
+# The workspace prefix leaves w for space (herdr's "spaces"): ctrl+t space 1..9 switch, shift+1..9 move the window,
+# r rename. Tiling stays on ctrl+t t t; the workspace switcher is in ctrl+shift+p / ctrl+t G and the palette.
+prefix_workspace = ["space"]
+prefix_toggle_tiling = []
+prefix_workspace_switcher = []
+# q leaves tuios and everything keeps running (dev reattaches); d stays. The quit that kills the session has no key.
+prefix_detach = ["q", "d"]
+prefix_quit = []
+# hjkl beside the arrows, as in window mode and copy mode. j and k move to J (newest message) and K (keybind manager).
+terminal_focus_left = ["left", "h"]
+terminal_focus_down = ["down", "j"]
+terminal_focus_up = ["up", "k"]
+terminal_focus_right = ["right", "l"]
+prefix_jump_notif = ["J"]
+prefix_keybinds = ["K"]
 
 [[keybindings.command]]
 key = "prefix+g"
