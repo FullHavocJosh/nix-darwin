@@ -192,12 +192,15 @@ dock_prefix_indicator = "pill"
 [spotlight]
 enabled = false
 
-[appearance.sidebar.left]
-enabled = true
-width = 39
-
+# One rail, on the left. No [appearance.sidebar.left/right] edge tables: the edge opposite position stays hidden
+# unless its table sets enabled = true, and ctrl+t H toggles it for a moment.
 [appearance.sidebar]
 enabled = true
+position = "left"
+width = 39
+# Files as a tree that opens folders in place, capped at a fifth of the rail; agents get the most room.
+sections = "sessions:30,terminals:15,files:20,agents:35"
+files_style = "tree"
 header_case = "uppercase"
 row_style = "underline"
 header_style = "pill"
@@ -205,9 +208,3 @@ show_numbers = false
 marquee = true
 tooltips = true
 subagent_collapse = "collapsed"
-width = 39
-position = "left"
-
-[appearance.sidebar.right]
-enabled = false
-width = 10
