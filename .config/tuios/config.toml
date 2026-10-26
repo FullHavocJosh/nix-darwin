@@ -127,8 +127,11 @@ command_palette = []
 # herdr split_vertical was prefix+/; ctrl+shift+p covers choose_tree's pane search.
 prefix_split_vertical = ["|", "\\", "/"]
 choose_tree = []
-# ctrl+t g is lazygit below, the herdr gitview key.
-toggle_scratch = ["`"]
+# ctrl+t g is lazygit below, the herdr gitview key. The scratch terminal takes s from the scrollback browser:
+# ctrl+t [ (copy mode) and ctrl+t E (scrollback in nvim) read pane output, atuin covers typed commands, and the
+# browser stays in the command palette (ctrl+t P).
+toggle_scratch = ["s"]
+prefix_scrollback = []
 
 [[keybindings.command]]
 key = "prefix+g"

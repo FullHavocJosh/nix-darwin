@@ -36,39 +36,6 @@
         f.write('\n')
     "
         chown ${config.system.primaryUser} "$TRUST_FILE"
-
-        # Stash herdr's pre-upgrade version here, before `brew bundle`'s own
-        # --upgrade sweep (homebrew.onActivation.upgrade = true, see
-        # packages-tui.nix) potentially upgrades it. The later herdr-specific
-        # check in system.activationScripts.script.text runs after brew bundle
-        # has already completed, so comparing against a version captured at
-        # that point would always see the post-upgrade version on both sides
-        # of the diff -- silently skipping the live-handoff even when brew
-        # bundle just upgraded herdr out from under a running session.
-        # Lives under ~/.config/herdr/ (same dir as herdr's own config.toml,
-        # dotfile-synced across machines) rather than /tmp, for persistence
-        # and debuggability -- but it's gitignored, since this is per-device
-        # runtime state (each machine's own herdr version), never something
-        # to sync between devices via git.
-        # Use absolute paths rather than `command -v`/bare `brew` here: this
-        # runs via a plain `sudo -u user <cmd>`, not a login shell, so PATH
-        # is whatever root's activation script started with -- it does NOT
-        # include /opt/homebrew/bin. (The later script.text phase works
-        # because it explicitly exports PATH with $HOMEBREW_PREFIX/bin
-        # before its own herdr check.) Without this, the existence check
-        # below always failed, so this file was never written, old version
-        # always read back empty, and every darwin-rebuild looked like an
-        # update -- forcing a live-handoff every single run.
-        HERDR_STATE_DIR="$USER_HOME/.config/herdr"
-        HERDR_VERSION_STATE_FILE="$HERDR_STATE_DIR/.version-before-rebuild"
-        mkdir -p "$HERDR_STATE_DIR"
-        if [ -x /opt/homebrew/bin/herdr ]; then
-          HERDR_VERSION_BEFORE_REBUILD=$(sudo --set-home -u ${config.system.primaryUser} /opt/homebrew/bin/brew list --versions herdr 2>/dev/null || true)
-          printf '%s\n' "$HERDR_VERSION_BEFORE_REBUILD" > "$HERDR_VERSION_STATE_FILE"
-        else
-          rm -f "$HERDR_VERSION_STATE_FILE"
-        fi
-        chown ${config.system.primaryUser} "$HERDR_VERSION_STATE_FILE" 2>/dev/null || true
   '';
 
   # Expose Homebrew and standard paths to GUI apps (e.g. Neovide finding nvim).
@@ -596,134 +563,76 @@
           fi
         fi
 
-        # herdr is a brew package (see packages-tui.nix): its own self-update is disabled
-        # on Homebrew installs ("run brew update && brew upgrade herdr" instead). But
-        # homebrew.onActivation.upgrade = true (packages-tui.nix) already makes brew
-        # bundle's own --upgrade sweep upgrade herdr, and that runs earlier in
-        # activation (system.activationScripts.homebrew, before this script.text
-        # phase) -- so by the time we'd capture a "before" version here, herdr is
-        # already on the new binary. Comparing before/after at this point would
-        # always see the same (already-upgraded) version on both sides and silently
-        # skip the live-handoff even when brew bundle just upgraded herdr under a
-        # running session. The real "before" version is stashed to
-        # ~/.config/herdr/.version-before-rebuild (gitignored -- per-device
-        # runtime state, not synced) up in the homebrew activation script,
-        # before brew bundle runs at all -- compare against that instead.
-        # `brew upgrade herdr` below is a fallback in case herdr didn't get upgraded
-        # by the bundle sweep for some reason (e.g. temporarily dropped from the
-        # Brewfile); harmless no-op otherwise since it's already current.
-        # Hand each running named session's live panes/spaces/agents off to the
-        # newly-installed binary instead of losing them to a cold restart.
-        # `herdr server live-handoff` with no --session targets the unnamed "default"
-        # session, which is never what's actually running (this machine's daily
-        # driver is "dev") -- so loop over every session actually reporting
-        # running:true instead of assuming one name.
-        if command -v herdr &>/dev/null; then
-          echo "Checking for herdr updates..."
-          HERDR_VERSION_STATE_FILE="$HOME/.config/herdr/.version-before-rebuild"
-          HERDR_OLD_VERSION=$(cat "$HERDR_VERSION_STATE_FILE" 2>/dev/null)
-          brew upgrade herdr 2>&1 || echo "herdr already up to date or upgrade failed"
-          HERDR_NEW_VERSION=$(brew list --versions herdr 2>/dev/null)
-          rm -f "$HERDR_VERSION_STATE_FILE"
-          if [ "$HERDR_OLD_VERSION" != "$HERDR_NEW_VERSION" ]; then
-            echo "herdr updated ($HERDR_OLD_VERSION -> $HERDR_NEW_VERSION), handing off live sessions..."
-            herdr session list --json 2>/dev/null | jq -r '.sessions[] | select(.running==true) | .name' | while read -r session_name; do
-              herdr server live-handoff --session "$session_name" 2>&1 || echo "Failed to hand off herdr session '$session_name' to the updated binary"
+        # tuios, the daily stack (herdr is the legacy *_herdr stack and gets neither step).
+        #
+        # Update: brew bundle's --upgrade sweep (homebrew.onActivation.upgrade, packages-tui.nix) can replace tuios
+        # under a running daemon, which keeps running the build it started with. herdr had a live-handoff; tuios's
+        # `restart-server` stops every program in every pane (each session comes back with its layout, history and
+        # fresh shells, and dev relaunches nvim), so activation only says when the daemon runs an older build. The
+        # daemon's build is the Cellar directory of its executable (lsof), the installed one the Cellar directory that
+        # `tuios` on PATH resolves to. The config needs nothing: tuios watches config.toml, a stow symlink into this repo.
+        #
+        # Panes: every pane keeps the zsh it started with, so a function or alias change from this rebuild is invisible
+        # to it, and so is a new environment.variables entry: /etc/zshenv sets the environment once per shell
+        # (__NIX_DARWIN_SET_ENVIRONMENT_DONE), and `source ~/.zshrc` alone does not touch it. Each pane gets the
+        # set-environment script and ~/.zshrc sourced. A pane running a program gets Ctrl-Z (0x1a) first and `fg` after,
+        # once its shell is back in the foreground; a program that never yields (some disable SIGTSTP) is left alone.
+        # Ctrl-U (0x15) first clears a half-typed command line, so the source line never runs glued onto it. Skipped:
+        # agents that are working (mid-stream) or waiting on a prompt (tuios's rule: never type into needs_input), ssh
+        # and mosh panes (the Ctrl-Z would reach the remote job), and the pane running this darwin-rebuild.
+        if command -v tuios &>/dev/null; then
+          # The daemon's pid file (pgrep does not list the daemon process on macOS).
+          tuios_daemon=$(cat "/tmp/tuios-$(id -u)/tuios.sock.pid" 2>/dev/null)
+          if [ -n "$tuios_daemon" ] && kill -0 "$tuios_daemon" 2>/dev/null; then
+            tuios_running=$(lsof -p "$tuios_daemon" -a -d txt -Fn 2>/dev/null | grep -m1 -o 'Cellar/tuios/[^/]*' | cut -d/ -f3)
+            tuios_installed=$(readlink -f "$(command -v tuios)" | grep -o 'Cellar/tuios/[^/]*' | cut -d/ -f3)
+            if [ -n "$tuios_running" ] && [ -n "$tuios_installed" ] && [ "$tuios_running" != "$tuios_installed" ]; then
+              echo "tuios updated ($tuios_running -> $tuios_installed); the daemon still runs $tuios_running."
+              echo "  Run 'tuios restart-server' when the panes can stop: it restarts every program in every pane."
+            fi
+
+            echo "Refreshing tuios panes with latest dotfiles and env vars..."
+            tuios_clear=$'\x15'
+            tuios_source='set_env=$(grep -o "/nix/store/[^[:space:]]*-set-environment" /etc/zshenv 2>/dev/null); [ -n "$set_env" ] && source "$set_env"; source ~/.zshrc'
+            tuios ls --json 2>/dev/null | jq -r '.[].name' | while read -r tuios_session; do
+              tuios list-windows -s "$tuios_session" --json </dev/null 2>/dev/null |
+                jq -r '.windows[] | select(.agent_state != "working" and .agent_state != "needs_input") | "\(.window_id) \(.pid) \(.tty)"' |
+                while read -r wid shell_pid tty; do
+                  tty=$(basename "$tty")
+                  fg=$(ps -o pid=,stat=,command= -t "$tty" 2>/dev/null | awk '$2 ~ /\+/')
+                  [ -n "$fg" ] || continue
+                  case "$fg" in
+                    *darwin-rebuild*) continue ;;
+                  esac
+                  case "$(echo "$fg" | awk 'NR==1 {print $3}' | xargs basename 2>/dev/null)" in
+                    ssh | mosh | mosh-client) continue ;;
+                  esac
+                  had_job=false
+                  if ! echo "$fg" | awk '{print $1}' | grep -qx "$shell_pid"; then
+                    had_job=true
+                    tuios send-text -s "$tuios_session" -w "$wid" $'\x1a' </dev/null >/dev/null 2>&1
+                    settled=false
+                    for _ in 1 2 3 4 5 6 7 8 9 10; do
+                      sleep 0.3
+                      if ps -o pid=,stat= -t "$tty" 2>/dev/null | awk '$2 ~ /\+/ {print $1}' | grep -qx "$shell_pid"; then
+                        settled=true
+                        break
+                      fi
+                    done
+                    if [ "$settled" != true ]; then
+                      echo "tuios pane $wid ($tuios_session) did not yield its shell after Ctrl-Z, leaving it alone"
+                      continue
+                    fi
+                  fi
+                  tuios send-text -s "$tuios_session" -w "$wid" "$tuios_clear$tuios_source"$'\n' </dev/null >/dev/null 2>&1 ||
+                    echo "Failed to refresh tuios pane $wid ($tuios_session)"
+                  if [ "$had_job" = true ]; then
+                    tuios send-text -s "$tuios_session" -w "$wid" $'fg\n' </dev/null >/dev/null 2>&1 ||
+                      echo "Failed to resume the foreground job in tuios pane $wid ($tuios_session)"
+                  fi
+                done
             done
-          else
-            echo "herdr already up to date, skipping live-handoff"
           fi
-
-          # Every live herdr pane keeps running the zsh it started with -- a
-          # function/alias change from this rebuild (gpr/gpa/gpc, aistack, etc)
-          # is invisible to it until something re-sources the dotfiles in that
-          # shell, and so is a brand-new environment.variables entry (e.g.
-          # AI_LOCAL_DEFAULT from laptop.nix/work.nix): /etc/zshenv only ever
-          # runs its env-setting block once per shell process (guarded by
-          # __ETC_ZSHENV_SOURCED/__NIX_DARWIN_SET_ENVIRONMENT_DONE), so a pane
-          # opened before a var was added keeps missing it forever -- plain
-          # `source ~/.zshrc` was confirmed live to NOT fix this (it doesn't
-          # touch /etc/zshenv at all). Broadcast both refreshes on every
-          # activation, not just when herdr itself updated above (dotfiles and
-          # system env vars can both change on their own).
-          #
-          # Applies to every live pane, not just ones labeled "zsh" -- a pane
-          # can have nvim/btop/an AI agent running in it, and the goal is
-          # to source the dotfiles in its underlying shell and leave whatever
-          # was running exactly where it was, not skip the pane or replace what
-          # it was doing. `herdr pane process-info` reports the real foreground
-          # process (not the static "label", which is the pane's intended
-          # purpose, not its live state) -- when it differs from the pane's own
-          # shell_pid, something else owns the terminal right now.
-          #
-          # For those panes: suspend the foreground job with a literal Ctrl-Z
-          # (0x1a) over `pane send-text` -- verified live against both a plain
-          # `sleep` and a real ncurses app (btop): `pane send-keys <id> ctrl+z`
-          # (the logical key name) measurably lags before the suspend lands, so
-          # this polls process-info for it to actually settle back to the shell
-          # rather than assuming it took effect immediately. If it never
-          # settles (some apps disable SIGTSTP on purpose), the pane is left
-          # completely alone -- better to skip a refresh than send
-          # "source ~/.zshrc" as literal keystrokes into whatever's still
-          # running there. Once settled: refresh env vars and source the
-          # dotfiles, then `fg` to
-          # resume the suspended job exactly where it left off -- confirmed
-          # live that btop came back with its own window undisturbed, same
-          # pid, not relaunched.
-          #
-          # One pane is never a suspend target: whichever one is itself mid-
-          # `darwin-rebuild`, i.e. this very activation run, if it was launched
-          # from inside a herdr pane. Suspending that foreground job would
-          # suspend the activation script out from under itself. Matched by a
-          # cmdline substring, not a pid (this script's own pid isn't visible
-          # to a plain `herdr pane list` scan the way a shell job's is).
-          echo "Refreshing herdr panes with latest dotfiles and env vars..."
-          herdr pane list 2>/dev/null | jq -c '.result.panes[]?' | while read -r pane_json; do
-            pane_id=$(echo "$pane_json" | jq -r '.pane_id')
-            agent_status=$(echo "$pane_json" | jq -r '.agent_status // empty')
-            # A "working" agent pane is mid-stream -- actively reading from its
-            # provider's network connection, not just sitting at its own input
-            # prompt. A suspend/resume pause is brief (under a second once it
-            # lands) and a TCP socket tolerates that fine on its own, but there
-            # is no way to rule out a provider- or client-side idle timeout
-            # tripping during it, and this is exactly the kind of live session
-            # a corrupted resume would actually cost something real. Skip it;
-            # it will pick up the refresh once it goes idle and gets run again
-            # (or the next rebuild).
-            [ "$agent_status" = "working" ] && continue
-            info=$(herdr pane process-info --pane "$pane_id" 2>/dev/null)
-            shell_pid=$(echo "$info" | jq -r '.result.process_info.shell_pid // empty')
-            fg_pid=$(echo "$info" | jq -r '.result.process_info.foreground_processes[0].pid // empty')
-            fg_cmdline=$(echo "$info" | jq -r '.result.process_info.foreground_processes[0].cmdline // empty')
-            [ -z "$shell_pid" ] && continue
-            case "$fg_cmdline" in
-              *darwin-rebuild*) continue ;;
-            esac
-
-            had_job=false
-            if [ -n "$fg_pid" ] && [ "$fg_pid" != "$shell_pid" ]; then
-              had_job=true
-              herdr pane send-text "$pane_id" $'\x1a' >/dev/null 2>&1
-              settled=false
-              for _ in 1 2 3 4 5 6 7 8 9 10; do
-                sleep 0.3
-                now_pid=$(herdr pane process-info --pane "$pane_id" 2>/dev/null | jq -r '.result.process_info.foreground_processes[0].pid // empty')
-                if [ "$now_pid" = "$shell_pid" ]; then
-                  settled=true
-                  break
-                fi
-              done
-              if [ "$settled" != true ]; then
-                echo "Herdr pane '$pane_id' did not yield its shell after Ctrl-Z -- leaving it alone"
-                continue
-              fi
-            fi
-
-            herdr pane run "$pane_id" 'set_env=$(grep -o "/nix/store/[^[:space:]]*-set-environment" /etc/zshenv 2>/dev/null); [ -n "$set_env" ] && source "$set_env"; source ~/.zshrc' >/dev/null 2>&1 || echo "Failed to refresh herdr pane '$pane_id'"
-            if [ "$had_job" = true ]; then
-              herdr pane run "$pane_id" "fg" >/dev/null 2>&1 || echo "Failed to resume foreground job in herdr pane '$pane_id'"
-            fi
-          done
         fi
     USERSCRIPT
   '';
