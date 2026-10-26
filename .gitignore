@@ -176,7 +176,6 @@ stow-uninstall-local-ignore
 # Ignore herdr runtime state (session sockets, etc.) but keep config.toml tracked
 /.config/herdr/sessions/
 /.config/herdr/release-notes.json
-/.config/herdr/.version-before-rebuild
 # Plugin install cache (nested git checkouts, lock files): herdr rebuilds it
 /.config/herdr/plugins/
 /.config/herdr/.plugins.lock
