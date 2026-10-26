@@ -54,3 +54,6 @@ clipboard-write = allow
 keybind = super+c=copy_to_clipboard
 keybind = super+v=paste_from_clipboard
 keybind = shift+enter=text:\x1b\r
+# Ghostty tabs are unused (tuios has the windows): ctrl+tab / ctrl+shift+tab go to tuios, which cycles windows.
+keybind = ctrl+tab=unbind
+keybind = ctrl+shift+tab=unbind
