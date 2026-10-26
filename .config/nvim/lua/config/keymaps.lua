@@ -7,12 +7,12 @@ vim.api.nvim_set_keymap("i", "<D-z>", "<C-o>u", { noremap = true, silent = true 
 vim.api.nvim_set_keymap("n", "<D-r>", "<C-r>", { noremap = true, silent = true })
 vim.api.nvim_set_keymap("i", "<D-r>", "<C-o><C-r>", { noremap = true, silent = true })
 
-keymap.set("n", "<leader>wv", "<C-w>v", { desc = "Split window vertically" })
-keymap.set("n", "<leader>wh", "<C-w>s", { desc = "Split window horizontally" })
-keymap.set("n", "<leader>w=", "<C-w>=", { desc = "Make split windows equal width & height" })
-keymap.set("n", "<leader>wc", ":close<CR>", { desc = "Close current split window" })
-keymap.set("n", "<leader>w+", "<C-w>+", { desc = "Increase split height" })
-keymap.set("n", "<leader>w-", "<C-w>-", { desc = "Decrease split height" })
+-- <leader>w closes the buffer, as ctrl+t w closes a tuios pane and cmd+w a macOS window. Window commands are Vim's
+-- own ctrl+w v, s, =, c, + and -. LazyVim's <leader>wd and <leader>wm go too, so <leader>w fires at once instead of
+-- waiting for a second key (zoom stays on <leader>uZ; plugins/which-key.lua drops the windows group). <leader>x stays.
+pcall(vim.keymap.del, "n", "<leader>wd")
+pcall(vim.keymap.del, "n", "<leader>wm")
+keymap.set("n", "<leader>w", ":bdelete<CR>", { desc = "Close current buffer" })
 
 keymap.set("n", "<leader>e", ":Neotree toggle float<CR>", { desc = "Toggle Neo-tree (floating)" })
 keymap.set("n", "<leader>o", ":Neotree filesystem reveal left<CR>", { desc = "Reveal current file in Neo-tree" })
