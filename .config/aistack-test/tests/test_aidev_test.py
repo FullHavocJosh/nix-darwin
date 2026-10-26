@@ -4,6 +4,7 @@ the research handoff. Uses the real stack's ralph_mcp.py from ~/.config/aistack 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-test/tests/test_aidev_test.py
 """
 import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -131,8 +132,9 @@ def main():
     r2 = a.Run(p, "20260101-000001")
     ws = r2.data.get("ws") if a.assign_workspaces(r2, "dev_test-x", own=False) is None else None
     check("the layers take the free workspaces in order",
-          ws and ws["research"] == 4 and ws["driver"] == 9 and ws["build-claude"] == ws["build"] == 6, ws)
-    a.windows = lambda s: [{"workspace": n} for n in range(1, 6)]
+          ws and ws["claude"] == 4 and ws["lumo"] == 5 and ws["build-claude"] == ws["build"] == 6
+          and "dev" not in ws, ws)
+    a.windows = lambda s: [{"workspace": n} for n in range(1, 8)]
     check("too few free workspaces is refused", a.assign_workspaces(a.Run(p, "20260101-000002"), "s", own=False))
     a.windows = real_windows
     r3 = a.Run(p, "20260101-000003")
@@ -141,55 +143,118 @@ def main():
     a.WS.clear()
     a.WS.update(a.WS_OWN)
 
-    print("Lumo research")
-    b, fl = a.parse_brief("thinking\nBRIEF:\ncalc.py adds.\nFILES:\n- calc.py:1-2\n2. `lib/x.py`\nnot a file\n")
-    check("parse_brief splits the brief and the files", b == "calc.py adds." and fl == ["calc.py:1-2", "lib/x.py"],
-          (b, fl))
-    lr = a.Run(p, "20260101-000004")
-    sid = lr.data["panes"].setdefault("research", {}).setdefault("session_id", "abc-123")
-    os.makedirs(a.research_sessions(lr), exist_ok=True)
-    sess = os.path.join(a.research_sessions(lr), f"2026-01-01T00-00-00-000Z_{sid}.jsonl")
+    print("Claude's helpers")
+    calls = []
+
+    def fake_tuios(*args, timeout=60):
+        calls.append(args)
+        if args[0] == "send-agent-message":
+            return 0, "message 7 queued for build (abcd1234)\n", ""
+        return 0, "", ""
+
+    real_t = (a.tuios, a.window_named, a.agent_state, a.tuios_json)
+    a.tuios = fake_tuios
+    a.window_named = lambda s, n: {"custom_name": n}
+    check("the mail id is read from send-agent-message", a.mail_id("message 12 queued for build (x)") == "12")
+    hr = a.Run(p, "20260101-000005")
+    os.makedirs(hr.dir, exist_ok=True)
+    hr.data.update(session="s", ws=dict(a.WS_OWN))
+    ralph = a.load_ralph(p)
+    plan_dir = ralph.plan_dir(p)
+    check("the real stack's plan dir is the run's", plan_dir == hr.plan_dir, (plan_dir, hr.plan_dir))
+    os.makedirs(plan_dir, exist_ok=True)
+    check("check-plan without files says so", a.cmd_check_plan(hr, []) == 1)
+    a.wj(os.path.join(plan_dir, "prd.json"), {
+        "name": "subtract", "title": "Add subtract", "description": "Adds sub to calc.py.",
+        "userStories": [{"id": "T1", "title": "Add subtract", "description": "calc.py: def sub(a, b)",
+                         "acceptanceCriteria": ["sub works"], "priority": 1, "passes": False, "dependsOn": []}]})
+    a.wj(os.path.join(plan_dir, "verify.json"), {"T1": ["python3 -c 'import calc; assert calc.sub(3, 1) == 2'"]})
+    check("a valid plan passes check-plan and gets PLAN.txt",
+          a.cmd_check_plan(hr, []) == 0 and os.path.isfile(os.path.join(plan_dir, "PLAN.txt")))
+    os.environ["AIDEV_TEST_WORKTREE_MODE"] = "none"
+    check("worktree outside a main checkout works in the project",
+          a.cmd_worktree(hr, []) == 0 and hr.data["work_dir"] == p)
+    hr.data["builder"] = "build"
+    check("send-task succeeds", a.cmd_send_task(hr, ["T1", "use the same style"]) == 0)
+    sends = [c for c in calls if c[0] == "send-agent-message"]
+    queues = [c for c in calls if c[0] == "queue"]
+    check("the task is mailed to the builder", sends and "build" in sends[-1] and "task T1" in sends[-1], sends)
+    check("the typed prompt names the mail to reply to", queues and "--reply-to 7" in queues[-1][-1], queues)
+    tfile = open(os.path.join(hr.dir, "tasks", "T1.md")).read()
+    check("Claude's note reaches the task file", "use the same style" in tfile)
+    a.tuios_json = lambda *args, **kw: {"messages": [{"id": 7, "from": "claude (11111111)", "text": "task"},
+                                                    {"id": 8, "from": "build (abcd1234)", "text": "done: sub"}]}
+    a.agent_state = lambda s, n: "idle"
+    check("wait-task takes the reply, then the checks fail while sub is missing",
+          a.cmd_wait_task(hr, ["T1", "5"]) == 1 and hr.data["tasks"]["T1"]["status"] == "failed")
+    with open(os.path.join(p, "calc.py"), "a") as fh:
+        fh.write("\n\ndef sub(a, b):\n    return a - b\n")
+    check("verify passes once the code is there",
+          a.cmd_verify(hr, ["T1"]) == 0 and hr.data["tasks"]["T1"]["status"] == "verified")
+    a.window_named = lambda s, n: None
+    os.environ["AIDEV_TEST_FAKE_HUMAN"] = f
+    with open(f, "w") as fh:
+        fh.write("no\n")
+    check("a billed builder needs the user's yes", a.cmd_builder(hr, ["claude"]) == 1
+          and not any(c[0] == "start-agent" for c in calls))
+    del os.environ["AIDEV_TEST_FAKE_HUMAN"]
+
+    print("Lumo pane")
+    lumo_dir = os.path.join(d, "pi-lumo")
+    os.makedirs(lumo_dir, exist_ok=True)
+    a.write_lumo_pi({"pi_lumo": lumo_dir}, ("http://127.0.0.1:3003/v1", "sekrit-key"))
+    models = open(os.path.join(lumo_dir, "models.json")).read()
+    check("the tamer key is in a 0600 file, not in models.json",
+          os.stat(os.path.join(lumo_dir, "lumo.key")).st_mode & 0o777 == 0o600 and "sekrit-key" not in models
+          and "!cat" in models)
+    lsid = hr.data["panes"].setdefault("lumo", {}).setdefault("session_id", "lumo-1")
+    os.makedirs(a.lumo_sessions(hr), exist_ok=True)
+    sess = os.path.join(a.lumo_sessions(hr), f"2026-01-01T00-00-00-000Z_{lsid}.jsonl")
 
     def say(eid, role, text):
         with open(sess, "a") as fh:
             fh.write(json.dumps({"type": "message", "id": eid,
                                  "message": {"role": role, "content": [{"type": "text", "text": text}]}}) + "\n")
 
-    say("u1", "user", "REQUEST FROM THE USER: add subtract")
-    say("a1", "assistant", "Let me look.\nNEED: calc.py")
-    sent = []
-    real = (a.agent_state, a.queue)
-    a.agent_state = lambda s, n: "idle"
-    a.queue = lambda s, n, t: sent.append(t) or True
-    os.environ["RALPH_MCP_ROOTS"] = p
-    ralph = a.load_ralph()
-    a.lumo_step(lr, "s", ralph)
-    check("a NEED line gets the file typed back",
-          len(sent) == 1 and sent[0].startswith("Requested context:") and "def add" in sent[0], sent)
-    a.lumo_step(lr, "s", ralph)
-    check("the same reply is answered once", len(sent) == 1)
-    say("u2", "user", sent[0] if sent else "Requested context:")
-    say("a2", "assistant", "BRIEF:\ncalc.py has add only.\nFILES:\ncalc.py:1-2")
-    a.lumo_step(lr, "s", ralph)
-    bp = os.path.join(lr.plan_dir, "brief.md")
-    text = open(bp).read() if os.path.isfile(bp) else ""
-    check("BRIEF: becomes plan/brief.md with the request and the file",
-          "add subtract" in text and "calc.py has add only" in text and "Requested context" not in text
-          and "1: def add" in text, text[:300])
-    lp = ralph.planner_lib()
-    check("a line range is read, also written with a space",
-          "1: def add" in a.resolve_need(ralph, lp, p, "calc.py:1-2")
-          and "1: def add" in a.resolve_need(ralph, lp, p, "calc.py 1-2"))
-    out = a.resolve_need(ralph, lp, p, 'grep -n "def add" calc.py | head -5')
-    check("a shell-style grep is cut down to the pattern and the file", "[grep def add in calc.py]" in out
-          and "calc.py:1:" in out, out)
-    with open(os.path.join(p, ".env"), "w") as fh:
-        fh.write("TOKEN=x\n")
-    check("a range of a secret file is refused", "denied" in a.resolve_need(ralph, lp, p, ".env:1-1"))
-    os.remove(os.path.join(p, ".env"))
-    a.agent_state, a.queue = real
-    lr.data["phase"] = "done"
-    lr.save()
+    say("u1", "user", "old question")
+    say("a1", "assistant", "old answer")
+
+    def lumo_turn(*args, timeout=60):
+        calls.append(args)
+        if args[0] == "ask-agent":
+            say("u2", "user", args[-1])
+            say("a2", "assistant", "Use X 2.0; see https://example.org")
+        return 0, "", ""
+
+    a.tuios = lumo_turn
+    real_stdout, sys.stdout = sys.stdout, io.StringIO()
+    try:
+        rc = a.cmd_ask_lumo(hr, ["which", "X?"])
+        printed = sys.stdout.getvalue()
+    finally:
+        sys.stdout = real_stdout
+    check("ask-lumo prints the new reply only", rc == 0 and "X 2.0" in printed and "old answer" not in printed,
+          printed)
+    asks = [c for c in calls if c[0] == "ask-agent"]
+    check("the question goes to the lumo pane", asks and "lumo" in asks[-1] and asks[-1][-1] == "which X?", asks)
+
+    print("Claude pane")
+    ccfg = {"claude_settings": os.path.join(d, "s.json"), "claude_mcp": "/m.json",
+            "claude_backbone": os.path.join(d, "b.json")}
+    a.wj(ccfg["claude_settings"], {"hooks": {"x": 1}})
+    body = a.claude_pane_body(hr, ccfg, "add subtract", True)
+    check("the backbone runs with advisor off and knows its run",
+          "export CLAUDE_ADVISOR=off" in body and f"AIDEV_TEST_RUN={hr.id}" in body)
+    bs = json.load(open(ccfg["claude_backbone"]))
+    check("its settings keep tuios's hooks and allow the helpers",
+          bs.get("hooks") == {"x": 1} and any("aidev_test.py" in x for x in bs["permissions"]["allow"]))
+    sysp = open(os.path.join(hr.dir, "bin", "claude.system.md")).read()
+    check("its prompt names the helpers and has no placeholder left", "ask-lumo" in sysp and "@@" not in sysp)
+    check("the builder holds less than Claude, so it cannot type into Claude's pane",
+          set(a.GRANTS["build"].split(",")) < set(a.GRANTS["claude"].split(",")))
+    a.tuios, a.window_named, a.agent_state, a.tuios_json = real_t
+    hr.data["phase"] = "done"
+    hr.save()
 
     print("run state")
     run.data["phase"] = "build"
@@ -198,29 +263,6 @@ def main():
     run.data["phase"] = "done"
     run.save()
     check("a finished run is not", a.Run(p).id != "20260101-000000")
-
-    print("research handoff (aidev_test_mcp.py)")
-    os.environ["RALPH_MCP_ROOTS"] = p
-    m = load("aidev_test_mcp", os.path.join(ROOT, "aidev_test_mcp.py"))
-    res = m.tool_handoff({"project_dir": p, "request": "add subtract", "brief": "calc.py has add only",
-                          "files": ["calc.py:1-2", ".env", "missing.py"]})
-    brief = res.get("brief", "")
-    check("handoff writes plan/brief.md in the test state dir",
-          res.get("ok") and brief.startswith(os.environ["AIDEV_TEST_HOME"]) and os.path.isfile(brief), res)
-    text = open(brief).read() if os.path.isfile(brief) else ""
-    check("the brief has the request, the findings and the excerpt",
-          "add subtract" in text and "calc.py has add only" in text and "1: def add(a, b):" in text)
-    check("secrets and missing files are left out and listed", len(res.get("files_skipped", [])) == 2, res)
-    check("handoff needs a request and a brief", not m.tool_handoff({"project_dir": p, "request": ""}).get("ok"))
-    out = m.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
-    names = sorted(t["name"] for t in out["tools"])
-    check("the research pane gets exactly these tools",
-          names == ["handoff", "repo_grep", "repo_read", "repo_tree", "save_rfc"], names)
-    os.environ["RALPH_MCP_ROOTS"] = "/nonexistent-root"
-    m2 = load("aidev_test_mcp2", os.path.join(ROOT, "aidev_test_mcp.py"))
-    msg = m2.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-                     "params": {"name": "repo_tree", "arguments": {"project_dir": p}}})
-    check("outside RALPH_MCP_ROOTS the tools refuse", msg.get("isError"), json.dumps(msg)[:200])
 
     print(f"\n{'FAILED: ' + ', '.join(FAILS) if FAILS else 'all passed'}")
     return 1 if FAILS else 0
