@@ -838,23 +838,24 @@ def cmd_wait_task(run, argv):
     if not t.get("thread"):
         print(f"{tid} was not sent: run send-task {tid}")
         return 1
-    end, worked, reply = time.time() + limit, False, None
-    while time.time() < end and not reply:
+    # A builder can rest for a moment between steps (seen live: the 30B mailed 6 s after a rest), so only a minute at
+    # rest without a reply ends the wait early.
+    end, worked, rest_since, reply = time.time() + limit, False, None, None
+    while time.time() < end:
         tuios("wait-for", "agent-message", "-s", run.session, "-w", me, "--thread", t["thread"], "--timeout",
-              "15000", timeout=30)
+              "10000", timeout=30)
         replies = thread_replies(run.session, me, t["thread"])
         if replies:
             reply = replies[-1][2]
             break
         st = agent_state(run.session, builder)
-        worked = worked or st in ("working", "needs_input")
         if st == "gone":
             print(f"the {builder} pane is gone; open a builder again")
             return 1
-        if worked and st in AT_REST and time.time() + 1 < end:
-            time.sleep(20)  # at rest without a reply: give it a moment to mail, then check anyway
-            replies = thread_replies(run.session, me, t["thread"])
-            reply = replies[-1][2] if replies else "(no reply: the builder came to rest without mailing)"
+        worked = worked or st in ("working", "needs_input")
+        rest_since = (rest_since or time.time()) if worked and st in AT_REST else None
+        if rest_since and time.time() - rest_since >= 60:
+            reply = "(no reply: the builder came to rest without mailing)"
             break
     if not reply:
         st = agent_state(run.session, builder)
