@@ -714,7 +714,8 @@ function _aidev_opencode() {
   fi
 }
 
-# aidev -- the default way to get work done: the planner stack with Claude Code used as little as possible.
+# aidev_herdr -- the pi + ralph planner stack, with Claude Code used as little as possible. It was `aidev` before
+# the tuios stack took that name (.zshrc_functions_tuios); `aidev -p/--handoff/--rfc/--direct` still come here.
 #
 #   aidev [task words...]        e.g.  aidev add a --json flag to the report command
 #   aidev                        then describe the work as pi's first message
@@ -730,8 +731,9 @@ function _aidev_opencode() {
 # with online research when MacMiniM1 is reachable (free);  Claude Code writes the plan in ONE call from that research
 # (ralph_plan + claude-plan.sh);  the on-device 30B builds (Big Pickle when it fails and a Zen key exists, then
 # Claude, billed);  Claude Code reviews once at the end. The relay runs with thinking off (AISTACK_RELAY_THINKING).
-# The stack itself is _aidev_stack above. `aistack` is an alias for this command.
-function aidev() {
+# The stack itself is _aidev_stack above. `aistack` is an alias for this command; the usage lines above say aidev
+# because the tuios aidev passes these forms on.
+function aidev_herdr() {
   local direct=false handoff="" rfc=""
   local -a rest
   while (( $# )); do

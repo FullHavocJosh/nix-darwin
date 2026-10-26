@@ -94,7 +94,16 @@ function asc() {
   fi
 }
 
-# Helper function: Open a herdr workspace (nvim + aidev tabs) for linting fixes
+# gpa's manual-fix workspace: tuios unless this runs in a herdr pane.
+_ai_edit_workspace() {
+  if [ -n "$HERDR_ENV" ] && [ -z "$TUIOS_ENV" ]; then
+    _herdr_ai_edit_workspace "$@"
+  else
+    _tuios_ai_edit_workspace "$@"
+  fi
+}
+
+# Helper function: Open a workspace (nvim + aidev tabs) for linting fixes
 # Usage: _linter_create_edit_workspace <files_with_issues> <lint_report>
 function _linter_create_edit_workspace() {
   local -a files_array
@@ -127,11 +136,11 @@ EOF
   local session_name="lint-fix-$$"
   local cmd_aidev="echo '=== aidev Linting Assistant ==='; echo; aidev --direct \"\$(cat '$prompt_file')\""
 
-  _herdr_ai_edit_workspace "$session_name" "$repo_root" "nvim '$first_file'" "$cmd_aidev"
+  _ai_edit_workspace "$session_name" "$repo_root" "nvim '$first_file'" "$cmd_aidev"
 
   echo "  Workspace: $session_name"
   echo "  Files: ${files_array[@]}"
-  echo "  Edit the files in the herdr workspace, then switch back here when done."
+  echo "  Edit the files in the new workspace, then switch back here when done."
   echo ""
 }
 
@@ -377,7 +386,7 @@ function _run_linters() {
         echo ""
       fi
       echo "Options:"
-      echo "  [e] Edit files with AI assistance (opens herdr workspace)"
+      echo "  [e] Edit files with AI assistance (opens an nvim + aidev workspace)"
       $recheck || echo "  [f] Auto-fix formatting issues (where possible)"
       echo "  [i] Ignore and continue"
       echo "  [q] Quit and fix manually"
@@ -389,7 +398,7 @@ function _run_linters() {
     case "$lint_choice" in
       e | E)
         echo ""
-        echo "ℹ Opening herdr workspace for manual fixes with AI assistance..."
+        echo "ℹ Opening a workspace for manual fixes with AI assistance..."
         echo "  nvim tab: files with issues"
         echo "  aidev tab: aidev assistant"
         echo ""
@@ -405,7 +414,7 @@ function _run_linters() {
         echo "⏸  Waiting for you to finish editing..."
         echo "═══════════════════════════════════════════════════════════"
         echo ""
-        echo "When you're done editing in the herdr workspace:"
+        echo "When you're done editing in the new workspace:"
         echo "  1. Save your changes in nvim"
         echo "  2. Switch back to this pane"
         echo "  3. Press Enter here to re-run linting checks"
@@ -1180,7 +1189,7 @@ function gpc-local() {
 }
 
 
-# Helper function: Open a herdr workspace for manual file editing with AI assistance
+# Helper function: Open a workspace for manual file editing with AI assistance
 # Usage: _gpa_create_edit_workspace <file_path> <recommendation_text>
 function _gpa_create_edit_workspace() {
   local file_path="$1"
@@ -1195,11 +1204,11 @@ function _gpa_create_edit_workspace() {
 
   local cmd_aidev="echo '=== Code Review Fix Assistant ==='; echo; echo 'Recommendation:'; cat '$rec_file'; echo; echo 'Starting aidev...'; echo; aidev --direct \"Help me implement this fix: \$(cat '$rec_file'). The file to fix is: $file_path\""
 
-  _herdr_ai_edit_workspace "$session_name" "$file_dir" "nvim '$file_path'" "$cmd_aidev"
+  _ai_edit_workspace "$session_name" "$file_dir" "nvim '$file_path'" "$cmd_aidev"
 
   echo "  Workspace: $session_name"
   echo "  File: $file_path"
-  echo "  Edit the file in the herdr workspace, then switch back here when done."
+  echo "  Edit the file in the new workspace, then switch back here when done."
   echo ""
 }
 
@@ -1732,9 +1741,10 @@ function _gpa_send_all_to_aidev() {
   echo ""
   echo "=== aidev: Fix All Issues ==="
   echo ""
+  # Inline and blocking (gpa re-reviews afterwards), so the pi + ralph stack, not the tuios panes.
   # aidev's opencode path cannot take the issues (opencode v2 has no top-level --model), and the issues are
   # review findings to evaluate and plan, so hand them to aistack's planner as its first message.
-  (cd "$repo_root" && aidev "The staged changes in this repository failed code review. Evaluate each finding below (some may be false positives), plan the fixes for the real ones, and fix them in the working tree.
+  (cd "$repo_root" && aidev_herdr "The staged changes in this repository failed code review. Evaluate each finding below (some may be false positives), plan the fixes for the real ones, and fix them in the working tree.
 
 $(cat "$prompt_file")")
   rm -f "$prompt_file"
@@ -1975,7 +1985,7 @@ function _gpa_interactive_fix() {
     echo "$recommendation"
     echo ""
     echo "Options:"
-    echo "  [m] Manual fix - open herdr workspace with nvim + aidev"
+    echo "  [m] Manual fix - open a workspace with nvim + aidev"
     echo "  [a] Auto-fix - let aidev fix it automatically"
     echo "  [s] Skip this issue"
     echo "  [q] Quit and proceed to commit"
@@ -1994,7 +2004,7 @@ function _gpa_interactive_fix() {
         echo "⏸  Waiting for you to finish editing..."
         echo "═══════════════════════════════════════════════════════════"
         echo ""
-        echo "When you're done editing in the herdr workspace:"
+        echo "When you're done editing in the new workspace:"
         echo "  1. Save your changes in nvim"
         echo "  2. Switch back to this pane"
         echo "  3. Press Enter here to continue"
@@ -3563,6 +3573,7 @@ $type_prefix: $branch_name"
   # should be showing it even though aidev's cwd doesn't move. Push them there
   # when running in herdr.
   [ -n "$HERDR_ENV" ] && _herdr_sync_dev_panes "$worktree_dir"
+  [ -n "$TUIOS_ENV" ] && _tuios_sync_dev_panes "$worktree_dir"
   return 0
 }
 
