@@ -123,7 +123,19 @@ tiled = true
 daemon = true
 
 [agents]
+# on: aidev_test's Claude pane mails the builder, asks the Lumo pane (ask-agent) and asks you (ask-human).
 enabled = true
+# off: tuios panes get no HERDR_* variables, so herdr-era code (gpr's _herdr_sync_dev_panes, the herdr Claude and
+# OpenCode hooks, herdr's pi extension) treats a tuios pane as a plain terminal instead of driving it through
+# tuios's herdr emulation. State reporting comes from tuios's own hooks, installed per pane by aidev_test.py.
+herdr_protocol = "off"
+
+[agents.permissions]
+# strict: a pane started without --grants holds `grants` (your shells). aidev_test starts every model pane with its
+# own --grants: Claude read,write,fan,files; the builder read,write (mail back to Claude, but no typing into it,
+# since Claude holds grants the builder lacks); Lumo read. No pane gets respond: only you answer prompts.
+mode = "strict"
+grants = ["read", "write", "files", "admin"]
 
 [appearance]
 scrollback_lines = 100000
