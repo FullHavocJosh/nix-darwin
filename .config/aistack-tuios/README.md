@@ -27,9 +27,11 @@ Review: `ctrl+t v` opens the tuios review view of the focused pane's changes, ag
 gpr branch shows only unpushed and uncommitted work). `c` notes a line, `C` a hunk, `S` sends the notes to the pane's
 agent. `prdiff` prints the whole PR's diff against origin's default branch.
 
-Run them from a plain Ghostty window, not inside herdr. Keys: `ctrl+t` is tuios's prefix. `ctrl+t 1`..`9` switch
-workspaces, `ctrl+t s` sessions, `ctrl+t i` the agents and the Inbox, `ctrl+t d` detach. tuios's `opt+` keys never
-arrive, because aerospace owns alt.
+Run them from a plain Ghostty window, not inside herdr. Keys (`.config/tuios/config.toml`, the herdr keys where tuios
+can take them): `ctrl+t` is tuios's prefix. `ctrl+1`..`9` switch workspaces, `ctrl+shift+j`/`k` the next and previous
+session, `ctrl+shift+p` goes to an agent, session or pane, `ctrl+shift+h` shows the sidebar. `ctrl+t i` opens the
+agents and the Inbox, `ctrl+t g` lazygit, `ctrl+t d` detaches. tuios's `opt+` keys never arrive, because aerospace
+owns alt.
 
 ## aidev
 
