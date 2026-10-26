@@ -122,6 +122,9 @@ leader_key = "ctrl+t"
 tiled = true
 daemon = true
 
+[agents]
+enabled = true
+
 [appearance]
 scrollback_lines = 100000
 zoom_size = 95
