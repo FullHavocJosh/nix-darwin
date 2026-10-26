@@ -234,6 +234,15 @@ let
       fi
     }
     move "$HOME/.ainfo" "$ai/ainfo"
+    # The tuios stack's state, from when it was the _test stack (aidev_test.py)
+    move "$ai/aidev_test" "$ai/aidev_tuios"
+    move "$ai/cache/aidev_test" "$ai/cache/aidev_tuios"
+    # Stow links of files the tuios stack renamed; left dangling after the rename
+    for old in "$HOME/.config/aistack-test" "$HOME/.zshrc_functions_test"; do
+      if [ -L "$old" ] && [ ! -e "$old" ]; then
+        rm "$old" && echo "[ai] Removed stale link $old"
+      fi
+    done
     move "$HOME/.aistack" "$ai/aidev"
     move "$HOME/.cache/aistack-pi-ai" "$ai/ai"
     move "$HOME/.cache/nix-darwin-ai/aistack-pi" "$ai/cache/aistack-pi"
@@ -505,7 +514,7 @@ in
       "typescript"
       "tree"
       "tree-sitter"
-      "tuios" # test stack only (.zshrc_functions_test); herdr stays the daily driver
+      "tuios" # the daily multiplexer (.zshrc_functions_tuios); herdr stays for the *_herdr commands
       "typescript-language-server"
       "uv"
       "vscode-langservers-extracted"

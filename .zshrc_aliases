@@ -29,6 +29,10 @@ rdpnobaralaptop() {
   printf '%s\n' "$pass" | sdl-freerdp /v:${NOBARA_LAPTOP_IP} "/u:$user" /from-stdin /cert:ignore /dynamic-resolution /size:1920x1080
 }
 
+# ---- herdr: the previous daily stack, kept as <name>_herdr (dev_herdr, devim_herdr, nxvim_herdr, psvim_herdr,
+# hivim_herdr, itvim_herdr, hiwt_herdr, mmdev_herdr, himmdev_herdr, nxmmdev_herdr). The daily commands are the
+# tuios ones in .zshrc_functions_tuios.
+
 # Lays out aidev as tab 1 (the workspace's initial tab/pane, so it sorts first
 # in the tab bar), then a tab 2 "dev" tab with nvim (full-height left) and tuicr
 # (right) as a split, then zsh as its own tab 3. dev is left as the focused/
@@ -224,7 +228,7 @@ _herdr_worktree() {
   herdr workspace focus "$ws_id" >/dev/null
 }
 
-alias hiwt='_herdr_worktree home-infrastructure ~/home-infrastructure'
+alias hiwt_herdr='_herdr_worktree home-infrastructure ~/home-infrastructure'
 
 # Fingerprints the repo's current content, not just which paths are dirty --
 # `git status --porcelain` reports "?? file" or "M file" the same way no matter
@@ -531,19 +535,19 @@ _herdr_project() {
   cd "$dir" && _herdr_devlayout "$name" "$dir"
 }
 
-alias nxvim='_herdr_project nix-darwin ~/nix-darwin'
+alias nxvim_herdr='_herdr_project nix-darwin ~/nix-darwin'
 # devim opens the current directory with the standard nvim/tuicr/aidev/zsh layout,
 # naming the herdr space after the current directory by default. An optional
 # first arg overrides the space name (e.g. `devim updates` names it "updates"
 # instead of the repo's basename) while still using the current directory.
-devim() {
+devim_herdr() {
   local dir="$(pwd)"
   local name="${1:-$(basename "$dir")}"
   _herdr_devlayout_new "$name" "$dir"
 }
-alias psvim='_herdr_project pscloudops ~/pscloudops'
-alias hivim='_herdr_project home-infrastructure ~/home-infrastructure'
-alias itvim='_herdr_project Infrastructure-Terrakube ~/Infrastructure-Terrakube'
+alias psvim_herdr='_herdr_project pscloudops ~/pscloudops'
+alias hivim_herdr='_herdr_project home-infrastructure ~/home-infrastructure'
+alias itvim_herdr='_herdr_project Infrastructure-Terrakube ~/Infrastructure-Terrakube'
 
 # Single daily-driver herdr session named "dev" holding one workspace per project.
 # Reruns of `dev` just reattach -- no re-scanning. First run auto-discovers every
@@ -584,11 +588,11 @@ _herdr_dev() {
 
   herdr --session dev
 }
-alias dev='_herdr_dev'
+alias dev_herdr='_herdr_dev'
 
-alias mmdev='_herdr_remote_space macmini havoc@macminim1.rollet.family ~'
-alias nxmmdev='_herdr_remote_space macmini-nix-darwin havoc@macminim1.rollet.family ~/nix-darwin'
-alias himmdev='_herdr_remote_space macmini-home-infrastructure havoc@macminim1.rollet.family ~/home-infrastructure'
+alias mmdev_herdr='_herdr_remote_space macmini havoc@macminim1.rollet.family ~'
+alias nxmmdev_herdr='_herdr_remote_space macmini-nix-darwin havoc@macminim1.rollet.family ~/nix-darwin'
+alias himmdev_herdr='_herdr_remote_space macmini-home-infrastructure havoc@macminim1.rollet.family ~/home-infrastructure'
 
 alias clear="clear ; clear ; clear"
 alias eza="eza -la"
@@ -616,7 +620,7 @@ alias gpa-clear-cache='_gpa_clear_cache'
 alias gp='git pull && git submodule update --init --recursive'
 
 
-alias aistack='aidev'   # the two stacks were merged; aidev is the command
+alias aistack='aidev_herdr'   # the pi + ralph stack (aidev is the tuios one, .zshrc_functions_tuios)
 alias lumoreauth='zsh ~/.config/lumo/reauth.sh'
 alias lumoauth='zsh ~/.config/lumo/reauth.sh --local'
 

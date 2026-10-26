@@ -1,7 +1,8 @@
-"""Tests for the tuios test stack (aidev_test.py, aidev_test_mcp.py) that need no tuios daemon, no model and no
-network: task order, verify without a shell, the ask-human length cap, the test answer file, launcher scripts and
-the research handoff. Uses the real stack's ralph_mcp.py from ~/.config/aistack (AISTACK_DIR overrides).
-Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-test/tests/test_aidev_test.py
+"""Tests for aidev on tuios (aidev_tuios.py) that need no tuios daemon, no model and no network: task order, verify
+without a shell, the ask-human length cap, the test answer file, launchers, sessions and workspaces, Claude's helpers
+with a faked tuios, the Lumo pane and the Claude pane. Uses aistack's ralph_mcp.py from ~/.config/aistack
+(AISTACK_DIR overrides).
+Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_aidev_tuios.py
 """
 import importlib.util
 import io
@@ -14,7 +15,7 @@ import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)  # .config/aistack-test
+ROOT = os.path.dirname(HERE)  # .config/aistack-tuios
 FAILS = []
 
 
@@ -43,8 +44,8 @@ def project():
 
 
 def main():
-    os.environ["AIDEV_TEST_HOME"] = os.path.realpath(tempfile.mkdtemp(prefix="aidev-test-home-"))
-    a = load("aidev_test", os.path.join(ROOT, "aidev_test.py"))
+    os.environ["AIDEV_TUIOS_HOME"] = os.path.realpath(tempfile.mkdtemp(prefix="aidev-test-home-"))
+    a = load("aidev", os.path.join(ROOT, "aidev_tuios.py"))
 
     print("task order")
     prd = {"userStories": [{"id": "T3", "priority": 1, "dependsOn": ["T1"]}, {"id": "T1", "priority": 2},
@@ -78,7 +79,7 @@ def main():
     f = os.path.join(d, "answers.txt")
     with open(f, "w") as fh:
         fh.write("nonsense\nkeep planning\n")
-    os.environ["AIDEV_TEST_FAKE_HUMAN"] = f
+    os.environ["AIDEV_TUIOS_FAKE_HUMAN"] = f
     got = a.fake_human("Start?", ["start", "keep planning"])
     check("the first line that is an option answers", got == "keep planning", got)
     check("that line is used up, others stay", open(f).read().split() == ["nonsense"])
@@ -86,7 +87,7 @@ def main():
     t0 = time.time()
     got = a.fake_human("Start?", ["start", "keep planning"])
     check("it waits for an answer to arrive", got == "start" and time.time() - t0 >= 1.0)
-    del os.environ["AIDEV_TEST_FAKE_HUMAN"]
+    del os.environ["AIDEV_TUIOS_FAKE_HUMAN"]
 
     print("task prompt")
     story = {"id": "T1", "title": "Add subtract", "description": "In calc.py", "acceptanceCriteria": ["works"]}
@@ -113,15 +114,15 @@ def main():
         "exec zsh -i"))
     r = subprocess.run(["zsh", "-n", script], capture_output=True, text=True, check=False)
     check("the launcher is valid zsh", r.returncode == 0, r.stderr)
-    check("session names are safe", a.session_name("/x/my repo.v2") == "aidev_test-my-repo-v2")
+    check("session names are safe", a.session_name("/x/my repo.v2") == "aidev-my-repo-v2")
     check("HERDR_* never reaches tuios", not any(k.startswith("HERDR_") for k in a.TENV))
     print("session and workspaces")
-    saved = {k: os.environ.get(k) for k in ("TUIOS_ENV", "TUIOS_SESSION", "AIDEV_TEST_OWN_SESSION")}
-    os.environ.update(TUIOS_ENV="1", TUIOS_SESSION="dev_test-x")
-    os.environ.pop("AIDEV_TEST_OWN_SESSION", None)
-    check("inside tuios a run opens in the current session", a.start_session(p) == "dev_test-x")
-    os.environ["AIDEV_TEST_OWN_SESSION"] = "1"
-    check("AIDEV_TEST_OWN_SESSION=1 keeps a session of its own", a.start_session(p) == a.session_name(p))
+    saved = {k: os.environ.get(k) for k in ("TUIOS_ENV", "TUIOS_SESSION", "AIDEV_TUIOS_OWN_SESSION")}
+    os.environ.update(TUIOS_ENV="1", TUIOS_SESSION="dev-x")
+    os.environ.pop("AIDEV_TUIOS_OWN_SESSION", None)
+    check("inside tuios a run opens in the current session", a.start_session(p) == "dev-x")
+    os.environ["AIDEV_TUIOS_OWN_SESSION"] = "1"
+    check("AIDEV_TUIOS_OWN_SESSION=1 keeps a session of its own", a.start_session(p) == a.session_name(p))
     for k, v in saved.items():
         if v is None:
             os.environ.pop(k, None)
@@ -130,7 +131,7 @@ def main():
     real_windows = a.windows
     a.windows = lambda s: [{"workspace": 1}, {"workspace": 2}, {"workspace": 2}, {"workspace": 3}]
     r2 = a.Run(p, "20260101-000001")
-    ws = r2.data.get("ws") if a.assign_workspaces(r2, "dev_test-x", own=False) is None else None
+    ws = r2.data.get("ws") if a.assign_workspaces(r2, "dev-x", own=False) is None else None
     check("the layers take the free workspaces in order",
           ws and ws["claude"] == 4 and ws["lumo"] == 5 and ws["build-claude"] == ws["build"] == 6
           and "dev" not in ws, ws)
@@ -161,7 +162,7 @@ def main():
     hr.data.update(session="s", ws=dict(a.WS_OWN))
     ralph = a.load_ralph(p)
     plan_dir = ralph.plan_dir(p)
-    check("the real stack's plan dir is the run's", plan_dir == hr.plan_dir, (plan_dir, hr.plan_dir))
+    check("aistack's plan dir is the run's", plan_dir == hr.plan_dir, (plan_dir, hr.plan_dir))
     os.makedirs(plan_dir, exist_ok=True)
     check("check-plan without files says so", a.cmd_check_plan(hr, []) == 1)
     a.wj(os.path.join(plan_dir, "prd.json"), {
@@ -171,7 +172,7 @@ def main():
     a.wj(os.path.join(plan_dir, "verify.json"), {"T1": ["python3 -c 'import calc; assert calc.sub(3, 1) == 2'"]})
     check("a valid plan passes check-plan and gets PLAN.txt",
           a.cmd_check_plan(hr, []) == 0 and os.path.isfile(os.path.join(plan_dir, "PLAN.txt")))
-    os.environ["AIDEV_TEST_WORKTREE_MODE"] = "none"
+    os.environ["AIDEV_TUIOS_WORKTREE_MODE"] = "none"
     check("worktree outside a main checkout works in the project",
           a.cmd_worktree(hr, []) == 0 and hr.data["work_dir"] == p)
     hr.data["builder"] = "build"
@@ -192,12 +193,12 @@ def main():
     check("verify passes once the code is there",
           a.cmd_verify(hr, ["T1"]) == 0 and hr.data["tasks"]["T1"]["status"] == "verified")
     a.window_named = lambda s, n: None
-    os.environ["AIDEV_TEST_FAKE_HUMAN"] = f
+    os.environ["AIDEV_TUIOS_FAKE_HUMAN"] = f
     with open(f, "w") as fh:
         fh.write("no\n")
     check("a billed builder needs the user's yes", a.cmd_builder(hr, ["claude"]) == 1
           and not any(c[0] == "start-agent" for c in calls))
-    del os.environ["AIDEV_TEST_FAKE_HUMAN"]
+    del os.environ["AIDEV_TUIOS_FAKE_HUMAN"]
 
     print("Lumo pane")
     lumo_dir = os.path.join(d, "pi-lumo")
@@ -244,10 +245,10 @@ def main():
     a.wj(ccfg["claude_settings"], {"hooks": {"x": 1}})
     body = a.claude_pane_body(hr, ccfg, "add subtract", True)
     check("the backbone runs with advisor off and knows its run",
-          "export CLAUDE_ADVISOR=off" in body and f"AIDEV_TEST_RUN={hr.id}" in body)
+          "export CLAUDE_ADVISOR=off" in body and f"AIDEV_TUIOS_RUN={hr.id}" in body)
     bs = json.load(open(ccfg["claude_backbone"]))
     check("its settings keep tuios's hooks and allow the helpers",
-          bs.get("hooks") == {"x": 1} and any("aidev_test.py" in x for x in bs["permissions"]["allow"]))
+          bs.get("hooks") == {"x": 1} and any("aidev_tuios.py" in x for x in bs["permissions"]["allow"]))
     check("it runs in the default output style, not Advisor", bs.get("outputStyle") == "default")
     sysp = open(os.path.join(hr.dir, "bin", "claude.system.md")).read()
     check("its prompt names the helpers and has no placeholder left", "ask-lumo" in sysp and "@@" not in sysp)

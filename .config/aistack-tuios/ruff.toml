@@ -1,0 +1,2 @@
+# aistack-tuios follows the aistack scripts' lint rules (see that file for why each rule is off).
+extend = "../aistack/ruff.toml"
