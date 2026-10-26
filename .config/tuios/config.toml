@@ -130,6 +130,11 @@ scrollback_lines = 100000
 zoom_size = 95
 window_title_align = "left"
 window_button_style = "pill"
+show_cpu = true
+show_ram = true
+clock_format = "3:004PM"
+show_clock = true
+dock_prefix_indicator = "pill"
 
 [spotlight]
 enabled = false
