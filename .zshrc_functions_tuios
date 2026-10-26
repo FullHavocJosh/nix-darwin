@@ -10,7 +10,9 @@
 #                        workspaces of the current tuios session (outside tuios: session aidev-<repo>;
 #                        .config/aistack-tuios/aidev_tuios.py)
 #   aidev --resume, aidev_status
-#   aidev -p / --handoff / --rfc / --direct   still the pi + ralph stack (aidev_herdr) until they are ported
+#   aidev -p "<change>" [files]   one edit by a free builder (a pane on a free workspace), AIDEV_TEST_CMD checked
+#   aidev --handoff <dir>         a run for a plan another session wrote; aidev --rfc <name> plans from an RFC
+#   aidev --direct [words]        a free builder, interactive, in this terminal
 #   ai_tuios [-c] [msg]  one Claude Code pane in session ai_tuios-<dir>
 #
 # gpr points this session's nvim, tuicr and zsh windows at a new worktree (_tuios_sync_dev_panes), and gpa's
@@ -227,13 +229,9 @@ STARTUP
   _launch_terminal_window "$attach_script" "$name"
 }
 
-# aidev [task] opens the tuios panes. The script forms (-p, --handoff, --rfc, --direct), which agents, gpa and the
-# CLAUDE.md routing use, still run the pi + ralph stack until they are ported.
+# aidev [task] opens the tuios panes; aidev_tuios.py also takes the script forms (-p, --handoff, --rfc, --direct).
+# The pi + ralph stack is aidev_herdr.
 aidev() {
-  case "${1:-}" in
-    --resume) ;;
-    -*) aidev_herdr "$@"; return ;;
-  esac
   _tuios_guard || return 1
   python3 "$HOME/.config/aistack-tuios/aidev_tuios.py" start "$@"
 }

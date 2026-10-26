@@ -1,12 +1,12 @@
 ---
-description: Hand the build of the work discussed in this session to aidev (free builders, one Claude review)
+description: Hand the build of the work discussed in this session to aidev (Claude in tuios runs free builders)
 argument-hint: "[what to build, if not obvious from the conversation]"
 ---
 
 Hand off the build to aidev instead of building it in this session. This session already holds the context, so it
-writes the plan once; aidev's free builders (the on-device 30B where it exists, Big Pickle when it fails or there is
-no 30B) build it task by task, a task counts as done only when its verify commands exit 0, and Claude Code reviews the
-whole result once. No billed planning call. Works the same from Claude Code, OpenCode and pi.
+writes the plan once. aidev opens its tuios panes: Claude Code there sends the tasks one at a time to a free builder
+(the on-device 30B where it exists, else a free Zen model), counts a task as done only when its verify commands exit 0,
+and reviews the whole result. Works the same from Claude Code, OpenCode and pi.
 
 What to build: $ARGUMENTS (if empty, the change agreed in this conversation).
 
@@ -30,8 +30,10 @@ What to build: $ARGUMENTS (if empty, the change agreed in this conversation).
 3. Show the user the tasks and verify commands, and wait for a clear yes. Nothing starts before that.
 4. From the repository's main checkout (or the directory the agents should work in), run:
    `aidev --handoff <plan dir>`
-   In a main checkout this creates a git worktree and a draft PR through `gpr`, then starts the run in the
-   background. It prints one JSON object: `started`, `run_id`, `work_dir`, `pr_url`, `events`, or `problems` /
-   `problem` when it refused. On `problems`, fix the plan files and run it again.
-5. Tell the user the run id, the work dir and PR, and that `aidev` in the project follows the run (pi offers to follow
-   the active run). Then stop: do not watch the run from this session, that is what the handoff saves.
+   In a main checkout this creates a git worktree and a draft PR through `gpr`, then opens aidev's panes: in this
+   tuios session when run from one (on free workspaces), else in session `aidev-<repo>`. It prints one JSON object:
+   `started`, `run_id`, `session`, `work_dir`, `pr_url`, or `problems` / `problem` when it refused. On `problems`, fix
+   the plan files and run it again.
+5. Tell the user the run id, the session, the work dir and PR, and that `aidev` in the project attaches to the run
+   (`aidev_status` shows the tasks). Then stop: do not watch the run from this session, that is what the handoff
+   saves.

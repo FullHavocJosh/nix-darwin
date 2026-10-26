@@ -258,6 +258,91 @@ def main():
     hr.data["phase"] = "done"
     hr.save()
 
+    print("script forms")
+    rdir = os.path.join(d, "ai-home", "rfcs")
+    os.makedirs(rdir, exist_ok=True)
+    with open(os.path.join(rdir, "2026-01-01-x.md"), "w") as fh:
+        fh.write("# x\n")
+    real_ai_home, a.AI_HOME = a.AI_HOME, os.path.join(d, "ai-home")
+    task, err = a.rfc_task("2026-01-01-x", ["and", "y"])
+    check("--rfc finds a name in ~/.ai/rfcs and names the file for Claude",
+          not err and os.path.join(rdir, "2026-01-01-x.md") in task and task.endswith("Also: and y"), (task, err))
+    check("--rfc refuses an unknown name", a.rfc_task("nope", [])[1])
+    a.AI_HOME = real_ai_home
+    ep = project()
+    before = a.tree_state(ep)
+    check("an edit that changes nothing is not done", a.check_edit(ep, before, "") == "it changed nothing")
+    with open(os.path.join(ep, "calc.py"), "a") as fh:
+        fh.write("\n\ndef sub(a, b):\n    return a - b\n")
+    check("a changed tree with a passing check is done", a.check_edit(ep, before, "python3 -c 'import calc'") == "")
+    check("a failing AIDEV_TEST_CMD is reported", "exits 3" in a.check_edit(ep, before, "exit 3"))
+    subprocess.run(["git", "checkout", "-q", "calc.py"], cwd=ep, check=False)
+
+    attempts = []
+
+    def fake_headless(run, kind, task_text, limit):
+        attempts.append(kind)
+        if kind == "pickle":
+            with open(os.path.join(run.data["work_dir"], "calc.py"), "a") as fh:
+                fh.write("\n\ndef sub(a, b):\n    return a - b\n")
+        return f"{kind} did its turn", ""
+
+    saved_env = {k: os.environ.get(k) for k in ("TUIOS_ENV", "AIDEV_TEST_CMD", "AIDEV_TUIOS_BUILDER")}
+    os.environ.pop("TUIOS_ENV", None)
+    os.environ["AIDEV_TEST_CMD"] = "python3 -c 'import calc; calc.sub'"
+    real_headless, real_coder = a.edit_headless, a.CODER_FILE
+    a.edit_headless, a.CODER_FILE = fake_headless, os.path.join(ep, "calc.py")  # any existing file: "the 30B is here"
+    cwd0 = os.getcwd()
+    os.chdir(ep)
+    real_stdout, sys.stdout = sys.stdout, io.StringIO()
+    try:
+        rc = a.cmd_edit(["add sub(a, b) to calc.py", "calc.py"])
+        printed = sys.stdout.getvalue()
+    finally:
+        sys.stdout = real_stdout
+    check("-p tries the 30B, then the Zen builder when the check still fails",
+          rc == 0 and attempts == ["30b", "pickle"] and "aidev -p: done" in printed, (rc, attempts, printed[-400:]))
+    check("-p never becomes the project's run", a.Run(ep).id.startswith("edit-") is False)
+    os.environ["AIDEV_TUIOS_BUILDER"] = "1"
+    check("-p is refused inside a builder pane", a.cmd_edit(["x"]) == 2)
+    os.chdir(cwd0)
+    a.edit_headless, a.CODER_FILE = real_headless, real_coder
+    for k, v in saved_env.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+
+    hp = project()
+    hdir = os.path.join(d, "handoff")
+    os.makedirs(hdir, exist_ok=True)
+    a.wj(os.path.join(hdir, "prd.json"), {"name": "x", "title": "Add x", "description": "d.", "userStories": [
+        {"id": "T1", "title": "t", "description": "d", "acceptanceCriteria": ["c"], "priority": 1, "passes": False,
+         "dependsOn": []}]})
+    a.wj(os.path.join(hdir, "verify.json"), {"T1": ["true ; false"]})
+    os.chdir(hp)
+    real_stdout, sys.stdout = sys.stdout, io.StringIO()
+    try:
+        rc = a.cmd_handoff([hdir])
+        out = json.loads(sys.stdout.getvalue().strip().splitlines()[-1])
+        rc2 = a.cmd_handoff([os.path.join(d, "no-such-dir")])
+        out2 = json.loads(sys.stdout.getvalue().strip().splitlines()[-1])
+    finally:
+        sys.stdout = real_stdout
+        os.chdir(cwd0)
+    check("--handoff refuses a plan that breaks aistack's rules, as JSON problems",
+          rc == 1 and out.get("problems") and not out.get("started"), out)
+    check("--handoff without the plan files says so", rc2 == 1 and "prd.json" in out2.get("problem", ""), out2)
+
+    er = a.Run(p, "edit-20260101-000000")
+    er.data.update(phase="edit", work_dir=p, reply_to="abcd-pane")
+    body = a.build_body(er, {"pi_build": os.path.join(d, "pi-b"), "opencode_dir": d,
+                             "claude_backbone": os.path.join(d, "b.json"), "claude_settings": ccfg["claude_settings"],
+                             "claude_mcp": "/m.json"}, "claude", "edit-claude-x")
+    sp = open(os.path.join(er.dir, "bin", "edit-claude-x.system.md")).read()
+    check("an edit's builder replies to the caller's pane, and cannot run aidev itself",
+          "-w abcd-pane" in sp and "AIDEV_TUIOS_BUILDER=1" in body, sp[:300])
+
     print("run state")
     run.data["phase"] = "build"
     run.save()

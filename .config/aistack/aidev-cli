@@ -1,25 +1,24 @@
 #!/bin/zsh
 # aidev for agents: the `aidev` that OpenCode, pi and scripts find on PATH (~/.local/bin/aidev links here).
-# aidev itself is a zsh function (.zshrc_functions_ai); interactive zsh has it, so this is only reached from other
-# shells, and it runs the function in an interactive zsh. An agent can use the two headless forms:
+# aidev itself is a zsh function (.zshrc_functions_tuios); this runs the same script without an interactive zsh.
+# An agent can use the two headless forms:
 #
-#   aidev -p "<exact change. Change nothing else.>" <files>   one edit: the on-device 30B, then Big Pickle
-#                                                              (AIDEV_TEST_CMD: a check that must pass)
-#   aidev --handoff <dir>                                      run a plan the agent wrote (prd.json + verify.json)
+#   aidev -p "<exact change. Change nothing else.>" <files>   one edit by a free builder (the on-device 30B, then a
+#                                                              free Zen model); blocks; AIDEV_TEST_CMD must pass.
+#                                                              Inside tuios the builder works in a pane you can watch
+#   aidev --handoff <dir>                                      open a run for a plan the agent wrote and the user
+#                                                              approved (prd.json + verify.json); prints one JSON line
 #
-# Plain `aidev` (the interactive planner in pi) and `aidev --direct` belong in the user's terminal. Never inside an
-# aidev run: an agent there building with aidev again would loop.
+# Plain `aidev`, --rfc and --direct belong in the user's terminal. Never inside a run's builder (the script refuses
+# there too: AIDEV_TUIOS_BUILDER) or a pi + ralph run (AISTACK_STATE_DIR): building with aidev again would loop.
 
 if [[ -n "${AISTACK_STATE_DIR:-}" ]]; then
-  echo "aidev: refusing to start inside an aidev run (AISTACK_STATE_DIR is set)" >&2
+  echo "aidev: refusing to start inside an aidev_herdr run (AISTACK_STATE_DIR is set)" >&2
   exit 2
 fi
-case "${1:-}" in
-  -p|--print|--handoff) ;;
-  *)
-    echo "aidev (from an agent): use  aidev -p \"<exact change>\" <files>  or  aidev --handoff <plan dir>." >&2
-    echo "Plain aidev and aidev --direct are interactive: give the user the command to run in their terminal." >&2
-    exit 2
-    ;;
-esac
-exec zsh -i -c 'aidev "$@"' aidev "$@"
+if [[ "${1:-}" != "--handoff" && " $* " != *" -p "* && " $* " != *" --print "* ]]; then
+  echo "aidev (from an agent): use  aidev -p \"<exact change>\" <files>  or  aidev --handoff <plan dir>." >&2
+  echo "Plain aidev, --rfc and --direct are interactive: give the user the command to run in their terminal." >&2
+  exit 2
+fi
+exec python3 "${AIDEV_TUIOS_DIR:-$HOME/.config/aistack-tuios}/aidev_tuios.py" start "$@"
