@@ -133,12 +133,12 @@ def main():
     r2 = a.Run(p, "20260101-000001")
     ws = r2.data.get("ws") if a.assign_workspaces(r2, "dev-x", own=False) is None else None
     check("without an nvim window Claude takes the first free workspace, Lumo and the builders the next",
-          ws and ws["claude"] == 4 and ws["lumo"] == ws["build"] == ws["build-claude"] == 5 and "dev" not in ws, ws)
+          ws and ws[a.PLAN] == 4 and ws[a.RESEARCH] == ws["build"] == ws["build-claude"] == 5 and "dev" not in ws, ws)
     a.windows = lambda s: [{"workspace": 1, "custom_name": "nvim"}, {"workspace": 3}]
     r4 = a.Run(p, "20260101-000004")
     ws = r4.data.get("ws") if a.assign_workspaces(r4, "dev-x", own=False) is None else None
     check("in the dev layout Claude joins nvim's workspace, Lumo and the builders share the next free one",
-          ws and ws["claude"] == 1 and ws["lumo"] == ws["build"] == ws["build-pickle"] == 2, ws)
+          ws and ws[a.PLAN] == 1 and ws[a.RESEARCH] == ws["build"] == ws["build-pickle"] == 2, ws)
     a.windows = lambda s: [{"workspace": n} for n in range(1, 9)]
     check("too few free workspaces is refused", a.assign_workspaces(a.Run(p, "20260101-000002"), "s", own=False))
     a.windows = lambda s: [{"workspace": 1, "custom_name": "nvim"}] + [{"workspace": n} for n in range(2, 10)]
@@ -189,7 +189,7 @@ def main():
     check("the typed prompt names the mail to reply to", queues and "--reply-to 7" in queues[-1][-1], queues)
     tfile = open(os.path.join(hr.dir, "tasks", "T1.md")).read()
     check("Claude's note reaches the task file", "use the same style" in tfile)
-    a.tuios_json = lambda *args, **kw: {"messages": [{"id": 7, "from": "claude (11111111)", "text": "task"},
+    a.tuios_json = lambda *args, **kw: {"messages": [{"id": 7, "from": "plan (11111111)", "text": "task"},
                                                     {"id": 8, "from": "build (abcd1234)", "text": "done: sub"}]}
     a.agent_state = lambda s, n: "idle"
     check("wait-task takes the reply, then the checks fail while sub is missing",
@@ -230,7 +230,7 @@ def main():
     check("the tamer key is in a 0600 file, not in models.json",
           os.stat(os.path.join(lumo_dir, "lumo.key")).st_mode & 0o777 == 0o600 and "sekrit-key" not in models
           and "!cat" in models)
-    lsid = hr.data["panes"].setdefault("lumo", {}).setdefault("session_id", "lumo-1")
+    lsid = hr.data["panes"].setdefault(a.RESEARCH, {}).setdefault("session_id", "lumo-1")
     os.makedirs(a.lumo_sessions(hr), exist_ok=True)
     sess = os.path.join(a.lumo_sessions(hr), f"2026-01-01T00-00-00-000Z_{lsid}.jsonl")
 
@@ -259,7 +259,7 @@ def main():
     check("ask-lumo prints the new reply only", rc == 0 and "X 2.0" in printed and "old answer" not in printed,
           printed)
     asks = [c for c in calls if c[0] == "ask-agent"]
-    check("the question goes to the lumo pane", asks and "lumo" in asks[-1] and asks[-1][-1] == "which X?", asks)
+    check("the question goes to the research pane", asks and a.RESEARCH in asks[-1] and asks[-1][-1] == "which X?", asks)
     say("u3", "user", "typed by you in the lumo pane")
     say("a3", "assistant", "Lumo answer three")
     a.tuios_json = lambda *args, **kw: {}
@@ -283,19 +283,19 @@ def main():
     check("its settings keep tuios's hooks and allow the helpers",
           bs.get("hooks") == {"x": 1} and any("aidev_tuios.py" in x for x in bs["permissions"]["allow"]))
     check("it runs in the default output style, not Advisor", bs.get("outputStyle") == "default")
-    sysp = open(os.path.join(hr.dir, "bin", "claude.system.md")).read()
+    sysp = open(os.path.join(hr.dir, "bin", "plan.system.md")).read()
     check("its prompt names the helpers and has no placeholder left", "ask-lumo" in sysp and "@@" not in sysp)
     check("the builder holds less than Claude, so it cannot type into Claude's pane",
-          set(a.GRANTS["build"].split(",")) < set(a.GRANTS["claude"].split(",")))
+          set(a.GRANTS["build"].split(",")) < set(a.GRANTS[a.PLAN].split(",")))
     a.window_named = lambda s, n: {"custom_name": n}
     hr.data.update(work_dir=p, builder="build")
     check("finish closes the builder pane and keeps the run open for the next piece of work",
           a.cmd_finish(hr, []) == 0 and hr.data.get("phase") != "done" and not hr.data.get("work_dir")
           and hr.data["finished"][-1]["work_dir"] == p and any(c[:2] == ("close-window", "build") for c in calls))
     rr = a.Run(p, "20260101-000006")
-    rr.data.update(session="dev-r", phase="done", panes={"claude": {"script": script, "cwd": p}})
+    rr.data.update(session="dev-r", phase="done", panes={a.PLAN: {"script": script, "cwd": p}})
     rr.save()
-    check("a session's run is found by its claude pane",
+    check("a session's run is found by its plan pane",
           a.session_run(p, "dev-r") is not None and a.session_run(p, "dev-r").id == rr.id and not a.session_run(p, "x"))
     a.tuios, a.window_named, a.agent_state, a.tuios_json = real_t
     hr.data["phase"] = "done"
