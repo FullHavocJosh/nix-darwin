@@ -12,7 +12,7 @@
 #   ai_test [-c] [msg]  one Claude Code pane in session ai_test-<dir>
 #
 # Run these from a plain Ghostty window, not from inside herdr: two multiplexers nested in one terminal is untested.
-# Keys: ctrl+b is tuios's prefix; ctrl+b 1..9 workspaces, ctrl+b s sessions, ctrl+b i agents and the Inbox, ctrl+b d
+# Keys: ctrl+t is tuios's prefix; ctrl+t 1..9 workspaces, ctrl+t s sessions, ctrl+t i agents and the Inbox, ctrl+t d
 # detach. tuios's opt+ keys collide with aerospace and never arrive.
 
 # tuios with the test stack's config (~/.config/tuios; on macOS tuios otherwise reads ~/Library/Application
