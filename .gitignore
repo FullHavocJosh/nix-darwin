@@ -88,6 +88,9 @@ ansible-linux/inventory/staging
 /.opencode
 /.config/opencode/commands/
 /.config/opencode/.env
+# tuios's opencode plugin: written and kept current by `tuios integration install` (tuiosAgentSetup, packages-tui.nix)
+/.config/opencode/plugins/tuios-agent-state.js
+/.config/opencode/plugins/tuios-agent-state/
 
 # Ignore k9s clusters
 /.config/k9s/clusters/
