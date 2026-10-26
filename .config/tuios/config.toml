@@ -153,9 +153,10 @@ enabled = false
 
 [appearance.sidebar.left]
 enabled = true
+width = 39
 
 [appearance.sidebar]
-enabled = false
+enabled = true
 header_case = "uppercase"
 row_style = "underline"
 header_style = "pill"
@@ -163,6 +164,9 @@ show_numbers = false
 marquee = true
 tooltips = true
 subagent_collapse = "collapsed"
+width = 39
+position = "left"
 
 [appearance.sidebar.right]
 enabled = false
+width = 10
