@@ -54,12 +54,20 @@ export ATUIN_NOBIND="true"
 eval "$(atuin init zsh)"
 bindkey '^a' atuin-search
 
-# Enable fzf.
+# Enable fzf. Its file picker moves from ctrl+t (the tuios prefix) to ctrl+f, and its alt+c directory picker goes
+# (aerospace owns alt): cdi (zoxide's picker) picks a directory instead. ctrl+r stays fzf's history; atuin is on ctrl+a.
 eval "$(fzf --zsh)"
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+for _keymap in emacs viins vicmd; do
+  bindkey -M "$_keymap" -r '^T'
+  bindkey -M "$_keymap" -r '\ec'
+  bindkey -M "$_keymap" '^F' fzf-file-widget
+done
+unset _keymap
 
-# Enable zoxide.
+# Enable zoxide. cdi is its interactive picker: zinit's zi alias shadows zoxide's own zi.
 eval "$(zoxide init zsh)"
+alias cdi='__zoxide_zi'
 
 export PATH="/opt/homebrew/opt/node@24/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"

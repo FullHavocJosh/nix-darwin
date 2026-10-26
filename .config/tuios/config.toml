@@ -122,6 +122,19 @@ prefix_toggle_sidebar = ["ctrl+shift+h"]
 goto_picker = ["ctrl+shift+p"]
 # ctrl+p back to zsh (up-line-or-beginning-search) and Neotree; the palette stays on ctrl+t P.
 command_palette = []
+# Move the pane to workspace N and follow it (tuios's default is opt+shift+N, which aerospace takes). ctrl+t space
+# shift+N moves it without following.
+move_and_follow_1 = ["ctrl+shift+1"]
+move_and_follow_2 = ["ctrl+shift+2"]
+move_and_follow_3 = ["ctrl+shift+3"]
+move_and_follow_4 = ["ctrl+shift+4"]
+move_and_follow_5 = ["ctrl+shift+5"]
+move_and_follow_6 = ["ctrl+shift+6"]
+move_and_follow_7 = ["ctrl+shift+7"]
+move_and_follow_8 = ["ctrl+shift+8"]
+move_and_follow_9 = ["ctrl+shift+9"]
+# The launcher stays on ctrl+t a; alt+space is aerospace's side of the keyboard.
+launcher = []
 
 [keybindings.prefix_mode]
 # herdr split_vertical was prefix+/; ctrl+shift+p covers choose_tree's pane search.
@@ -153,6 +166,63 @@ terminal_focus_up = ["up", "k"]
 terminal_focus_right = ["right", "l"]
 prefix_jump_notif = ["J"]
 prefix_keybinds = ["K"]
+# ctrl+t ctrl+t sends ctrl+t to the pane: Claude Code's task checklist, nvim's tag jump back.
+send_prefix = ["ctrl+t"]
+
+# tuios is ctrl only: alt belongs to aerospace (ALT+ aerospace, CTRL+ tuios, CMD+ macOS, Space+ nvim). Every opt/alt
+# default moves to a ctrl key or goes where a ctrl key or the prefix already does the job.
+[keybindings.terminal_mode]
+# Without the prefix: ctrl+tab / ctrl+shift+tab cycle windows (Ghostty's tab keys are unbound), ctrl+shift+arrows
+# move focus. ctrl+t esc leaves terminal mode.
+terminal_next_window = ["ctrl+tab"]
+terminal_prev_window = ["ctrl+shift+tab"]
+terminal_focus_left = ["ctrl+shift+left"]
+terminal_focus_down = ["ctrl+shift+down"]
+terminal_focus_up = ["ctrl+shift+up"]
+terminal_focus_right = ["ctrl+shift+right"]
+terminal_exit_mode = []
+
+[keybindings.window_management]
+# ctrl+shift+j/k switch sessions.
+next_session = []
+prev_session = []
+
+[keybindings.workspaces]
+# ctrl+1..9 switch, ctrl+shift+1..9 move and follow, ctrl+t space shift+1..9 move.
+switch_workspace_1 = []
+switch_workspace_2 = []
+switch_workspace_3 = []
+switch_workspace_4 = []
+switch_workspace_5 = []
+switch_workspace_6 = []
+switch_workspace_7 = []
+switch_workspace_8 = []
+switch_workspace_9 = []
+move_and_follow_1 = []
+move_and_follow_2 = []
+move_and_follow_3 = []
+move_and_follow_4 = []
+move_and_follow_5 = []
+move_and_follow_6 = []
+move_and_follow_7 = []
+move_and_follow_8 = []
+move_and_follow_9 = []
+send_to_workspace_1 = []
+send_to_workspace_2 = []
+send_to_workspace_3 = []
+send_to_workspace_4 = []
+send_to_workspace_5 = []
+send_to_workspace_6 = []
+send_to_workspace_7 = []
+send_to_workspace_8 = []
+send_to_workspace_9 = []
+
+[keybindings.layout]
+# Preselect (opt+hjkl) has no ctrl key left that nvim and the shell do not use; split with ctrl+t - or ctrl+t |.
+preselect_left = []
+preselect_down = []
+preselect_up = []
+preselect_right = []
 
 [[keybindings.command]]
 key = "prefix+g"
