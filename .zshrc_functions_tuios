@@ -57,12 +57,50 @@ _tuios_attach() {
   fi
 }
 
+# Starts the daemon when it is down. `tuios ls` never starts it, so after a reboot every session looked missing, and
+# the first `tuios new` started the daemon, which restored the saved sessions, and then failed with "session already
+# exists". start-server exits 1 when the daemon already runs; the wait covers the sessions it restores at start.
+_tuios_daemon_up() {
+  local i=0
+  _tuios_cmd ls --json >/dev/null 2>&1 && return 0
+  _tuios_cmd start-server >/dev/null 2>&1
+  until _tuios_cmd ls --json >/dev/null 2>&1 || [ "$i" -ge 25 ]; do
+    sleep 0.2
+    i=$((i + 1))
+  done
+}
+
+# tuios restores a session's window names, directories and history, but each window gets a fresh shell. Types nvim
+# into session $1's nvim window when a shell is in its foreground (after a restore, or after you quit nvim there).
+# A shell still drawing its prompt shows starship in the foreground, so wait up to 3s for that to settle.
+_tuios_restore_nvim() {
+  local s="$1" wid tty fg i
+  _tuios_cmd list-windows -s "$s" --json 2>/dev/null |
+    jq -r '.windows[] | select(.custom_name == "nvim") | "\(.window_id) \(.tty)"' |
+    while read -r wid tty; do
+      i=0
+      fg=$(_tuios_fg "$tty")
+      while { [ -z "$fg" ] || [ "$fg" = starship ]; } && [ "$i" -lt 15 ]; do
+        sleep 0.2
+        fg=$(_tuios_fg "$tty")
+        i=$((i + 1))
+      done
+      case "$fg" in
+        zsh | bash | sh) _tuios_cmd send-text -s "$s" -w "$wid" $'nvim\n' >/dev/null ;;
+      esac
+    done
+}
+
 # Session $1 for directory $2, the dev layout: workspace 1 "dev" with nvim, workspace 2 "zsh". The pane `tuios new`
 # opens becomes nvim. Commands are typed into a shell, as herdr's `pane run` did, so quitting nvim leaves the pane at
-# a prompt.
+# a prompt. A session that exists (still running, or restored by the daemon) keeps its layout and only gets nvim back.
 _tuios_devlayout() {
   local s="$1" dir="$2" first
-  _tuios_session_exists "$s" && return 0
+  _tuios_daemon_up
+  if _tuios_session_exists "$s"; then
+    _tuios_restore_nvim "$s"
+    return 0
+  fi
   _tuios_cmd new "$s" -d --cwd "$dir" >/dev/null || return 1
   first=$(_tuios_cmd list-windows -s "$s" --json | jq -r '.windows[0].window_id')
   _tuios_cmd set-window -s "$s" -w "$first" --name nvim >/dev/null
