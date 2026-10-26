@@ -65,6 +65,15 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -74,6 +83,15 @@
           {
             "type": "command",
             "command": "if [ -f \"$HOME/nix-darwin/scripts/herdr-nvim-open-edited.sh\" ]; then \"$HOME/nix-darwin/scripts/herdr-nvim-open-edited.sh\"; fi"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
           }
         ]
       }
@@ -88,6 +106,136 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 310,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "ElicitationResult": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
+            "type": "command"
+          }
+        ]
       }
     ]
   },
@@ -96,7 +244,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "claudetui statusline --compact",
+    "command": "tuios agent-statusline claude-code --integration 1 --then 'claudetui statusline --compact'",
     "refreshInterval": 10
   },
   "enabledPlugins": {
