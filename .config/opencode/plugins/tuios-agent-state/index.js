@@ -8,8 +8,6 @@
 // started outside tuios, or inherited a different pane's environment.
 export default {
   id: "tuios-agent-state",
-  async server() {
-    return {};
-  },
+  async server() { return {}; },
   setup() {},
 };

@@ -55,10 +55,7 @@ const ended = new Set();
 
 function remember(callID, tool, args) {
   if (!callID || !tool) return;
-  calls.set(callID, {
-    tool,
-    args: args && typeof args === "object" ? args : {},
-  });
+  calls.set(callID, { tool, args: args && typeof args === "object" ? args : {} });
   while (calls.size > CALLS_MAX) {
     calls.delete(calls.keys().next().value);
   }
@@ -104,12 +101,7 @@ function noteUsage(info) {
     }
   }
   const id = text(info.id);
-  if (
-    id &&
-    typeof info.cost === "number" &&
-    Number.isFinite(info.cost) &&
-    info.cost >= 0
-  ) {
+  if (id && typeof info.cost === "number" && Number.isFinite(info.cost) && info.cost >= 0) {
     u.costs.set(id, info.cost);
   }
   if (text(info.modelID)) u.model = text(info.modelID);
@@ -128,17 +120,11 @@ function sendUsage(sessionID, turnEnd) {
     for (const c of u.costs.values()) cost += c;
     payload.cost = cost;
   }
-  const key =
-    (payload.modelID || "") +
-    "|" +
-    (payload.cost === undefined ? "" : payload.cost.toFixed(2));
+  const key = (payload.modelID || "") + "|" + (payload.cost === undefined ? "" : payload.cost.toFixed(2));
   if (!turnEnd && key === u.sent) return;
   if (key === "|") return;
   u.sent = key;
-  run(
-    turnEnd ? [...STATUS_ARGS, "--turn-end"] : STATUS_ARGS,
-    JSON.stringify(payload),
-  );
+  run(turnEnd ? [...STATUS_ARGS, "--turn-end"] : STATUS_ARGS, JSON.stringify(payload));
 }
 
 // ask runs the hook for a permission request and resolves to the reply it
@@ -158,9 +144,7 @@ function ask(event, sessionID, extra, signal) {
     };
     let child;
     const abort = () => {
-      try {
-        child?.kill();
-      } catch {}
+      try { child?.kill(); } catch {}
       done(null);
     };
     if (signal?.aborted) {
@@ -206,9 +190,7 @@ function ask(event, sessionID, extra, signal) {
 // reply sends the person's answer to opencode: the permission reply route of
 // opencode 1.x, then the SDK method, then the older per-session route.
 async function reply(client, sessionID, requestID, answer) {
-  const body = answer.message
-    ? { reply: answer.reply, message: answer.message }
-    : { reply: answer.reply };
+  const body = answer.message ? { reply: answer.reply, message: answer.message } : { reply: answer.reply };
   const raw = client?._client || client?.client;
   if (raw && typeof raw.post === "function") {
     try {
@@ -228,10 +210,7 @@ async function reply(client, sessionID, requestID, answer) {
       return;
     } catch {}
   }
-  if (
-    sessionID &&
-    typeof client?.postSessionIdPermissionsPermissionId === "function"
-  ) {
+  if (sessionID && typeof client?.postSessionIdPermissionsPermissionId === "function") {
     try {
       await client.postSessionIdPermissionsPermissionId({
         path: { id: sessionID, permissionID: requestID },
@@ -278,12 +257,8 @@ export const TuiosAgentState = async (ctx) => {
             ? props.status
             : text(props.status?.type)
           : "";
-      if (statusType === "busy" || statusType === "retry")
-        ended.delete(sessionID);
-      if (
-        (type === "session.idle" || statusType === "idle") &&
-        !ended.has(sessionID)
-      ) {
+      if (statusType === "busy" || statusType === "retry") ended.delete(sessionID);
+      if ((type === "session.idle" || statusType === "idle") && !ended.has(sessionID)) {
         ended.add(sessionID);
         while (ended.size > USAGE_MAX) {
           ended.delete(ended.values().next().value);
@@ -302,26 +277,20 @@ export const TuiosAgentState = async (ctx) => {
         case "session.status": {
           const extra = { status: statusType };
           if (statusType === "retry") {
-            extra.retry_message =
-              text(props.status?.action?.title) || text(props.status?.message);
+            extra.retry_message = text(props.status?.action?.title) || text(props.status?.message);
           }
           report(type, sessionID, extra);
           break;
         }
         case "permission.asked":
         case "permission.updated": {
-          const title =
-            text(props.title) || text(props.permission) || text(props.type);
+          const title = text(props.title) || text(props.permission) || text(props.type);
           const requestID = text(props.id);
           if (type !== "permission.asked" || !requestID) {
             report(type, sessionID, { title });
             break;
           }
-          const extra = {
-            title,
-            permission_id: requestID,
-            permission: text(props.permission),
-          };
+          const extra = { title, permission_id: requestID, permission: text(props.permission) };
           const call = calls.get(text(props.tool?.callID));
           if (call) {
             extra.tool = call.tool;
@@ -331,22 +300,16 @@ export const TuiosAgentState = async (ctx) => {
             extra.always = props.always.filter((p) => typeof p === "string");
           }
           // Not awaited: opencode's event loop must not wait on the person.
-          ask(type, sessionID, extra, ctx?.signal)
-            .then((answer) => {
-              if (answer) return reply(client, sessionID, requestID, answer);
-            })
-            .catch(() => {});
+          ask(type, sessionID, extra, ctx?.signal).then((answer) => {
+            if (answer) return reply(client, sessionID, requestID, answer);
+          }).catch(() => {});
           break;
         }
         case "question.asked":
-          report(type, sessionID, {
-            title: text(props.question) || text(props.title),
-          });
+          report(type, sessionID, { title: text(props.question) || text(props.title) });
           break;
         case "session.error":
-          report(type, sessionID, {
-            error: text(props.error?.name) || text(props.error?.data?.message),
-          });
+          report(type, sessionID, { error: text(props.error?.name) || text(props.error?.data?.message) });
           break;
         default:
           break;
