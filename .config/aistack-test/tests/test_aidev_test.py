@@ -248,6 +248,7 @@ def main():
     bs = json.load(open(ccfg["claude_backbone"]))
     check("its settings keep tuios's hooks and allow the helpers",
           bs.get("hooks") == {"x": 1} and any("aidev_test.py" in x for x in bs["permissions"]["allow"]))
+    check("it runs in the default output style, not Advisor", bs.get("outputStyle") == "default")
     sysp = open(os.path.join(hr.dir, "bin", "claude.system.md")).read()
     check("its prompt names the helpers and has no placeholder left", "ask-lumo" in sysp and "@@" not in sysp)
     check("the builder holds less than Claude, so it cannot type into Claude's pane",

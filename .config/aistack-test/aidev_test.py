@@ -367,16 +367,25 @@ def pane_configs(project):
             "pi_lumo": os.path.join(d, "pi-lumo"), "pi_build": os.path.join(d, "pi-build"), "opencode_dir": oc_dir}
 
 
-def write_backbone_settings(cfg):
-    """The Claude pane's settings: tuios's hooks (mail notices, agent state) plus an allowlist for the helpers and
-    the mail commands, so coordinating the other panes does not stop for a permission prompt every time."""
+def write_working_settings(cfg, path, allow=()):
+    """Settings for a Claude pane that does the work itself: tuios's hooks (mail notices, agent state), the default
+    output style (CLAUDE_ADVISOR=off stops only the advisor hook; the Advisor style in ~/.claude/settings.json would
+    still hand every change to the user as a command, and --settings overrides it), and `allow` in the allowlist."""
     s = rj(cfg["claude_settings"], {}) or {}
+    s["outputStyle"] = "default"
+    if allow:
+        perms = s.setdefault("permissions", {})
+        perms["allow"] = sorted(set(perms.get("allow") or []) | set(allow))
+    wj(path, s)
+    return path
+
+
+def write_backbone_settings(cfg):
+    """The Claude pane's settings, with the helpers and the mail commands allowed, so coordinating the other panes
+    does not stop for a permission prompt every time."""
     allow = [f"Bash({HELPER}:*)", "Bash(tuios read-agent-messages:*)", "Bash(tuios wait-for:*)",
              "Bash(tuios send-agent-message:*)", "Bash(tuios list-agents:*)", "Bash(tuios capture-pane:*)"]
-    perms = s.setdefault("permissions", {})
-    perms["allow"] = sorted(set(perms.get("allow") or []) | set(allow))
-    wj(cfg["claude_backbone"], s)
-    return cfg["claude_backbone"]
+    return write_working_settings(cfg, cfg["claude_backbone"], allow)
 
 
 def write_lumo_pi(cfg, lumo):
@@ -517,7 +526,8 @@ def build_body(run, cfg, kind):
     pane = run.data["panes"].setdefault(name, {})
     if kind == "claude":
         pane["builder"] = f"Claude Code {CLAUDE_MODEL} (billed)"
-        return claude_body(run, cfg, name, system, "Wait for the first task.", wd, advisor=False)
+        settings = write_working_settings(cfg, os.path.join(os.path.dirname(cfg["claude_backbone"]), "builder.json"))
+        return claude_body(run, cfg, name, system, "Wait for the first task.", wd, advisor=False, settings=settings)
     sysp = write_text(os.path.join(run.dir, "bin", f"{name}.system.md"), system)
     if kind == "30b":
         if not os.path.isfile(CODER_FILE):
