@@ -648,7 +648,7 @@
           # system env vars can both change on their own).
           #
           # Applies to every live pane, not just ones labeled "zsh" -- a pane
-          # can have nvim/tuicr/btop/an AI agent running in it, and the goal is
+          # can have nvim/btop/an AI agent running in it, and the goal is
           # to source the dotfiles in its underlying shell and leave whatever
           # was running exactly where it was, not skip the pane or replace what
           # it was doing. `herdr pane process-info` reports the real foreground

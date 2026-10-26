@@ -21,9 +21,8 @@ close_pane = "prefix+w"
 # switch_tab below, now that aidev lives in its own tab (see .zshrc_aliases).
 #
 # j/k cycle agents down/up. h/l cycle panes in the dev tab's traversal order
-# (nvim -> tuicr -> zsh -> nvim...) -- with nvim as a full-height left pane and
-# tuicr/zsh stacked to its right, that order visually runs clockwise, so
-# h = counterclockwise (previous), l = clockwise (next). This shadows the
+# (nvim -> zsh -> nvim...) -- nvim is the full-height left pane and zsh the
+# right one, so h = previous, l = next. This shadows the
 # shell's own Ctrl+L (clear-screen) and Ctrl+J (newline) readline bindings while
 # a herdr pane has focus -- accepted tradeoff for a single-key scheme.
 next_agent = "ctrl+j"

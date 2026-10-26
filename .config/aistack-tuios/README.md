@@ -6,7 +6,7 @@ talks to by tuios mail. The commands are in `.zshrc_functions_tuios`. The herdr 
 
 | Command                            | What it does                                                                                         |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `dev`                              | one tuios session per repo under `~` (`dev-<repo>`): workspace 1 nvim and tuicr, workspace 2 zsh     |
+| `dev`                              | one tuios session per repo under `~` (`dev-<repo>`): workspace 1 nvim, workspace 2 zsh               |
 | `devim [name]`                     | that layout for the current directory, always a new session                                          |
 | `nxvim`, `psvim`, `hivim`, `itvim` | the session of one project, skipped where it is not cloned                                           |
 | `hiwt <branch>`                    | a new home-infrastructure worktree and branch in `.worktrees/`, with a session of its own            |
@@ -20,8 +20,12 @@ talks to by tuios mail. The commands are in `.zshrc_functions_tuios`. The herdr 
 | `aidev_status`                     | the latest run's work dir, builder and tasks                                                         |
 | `ai_tuios [-c] [message]`          | one Claude Code pane in session `ai_tuios-<dir>` (`-c` continues the last one here)                  |
 
-gpr points the current session's `nvim`, `tuicr` and `zsh` windows at its new worktree. gpa's manual-fix choices open
-nvim and aidev on a free workspace of the current session.
+gpr points the current session's `nvim` and `zsh` windows at its new worktree. gpa's manual-fix choices open nvim
+and aidev on a free workspace of the current session.
+
+Review: `ctrl+t v` opens the tuios review view of the focused pane's changes, against the branch's upstream (a pushed
+gpr branch shows only unpushed and uncommitted work). `c` notes a line, `C` a hunk, `S` sends the notes to the pane's
+agent. `prdiff` prints the whole PR's diff against origin's default branch.
 
 Run them from a plain Ghostty window, not inside herdr. Keys: `ctrl+t` is tuios's prefix. `ctrl+t 1`..`9` switch
 workspaces, `ctrl+t s` sessions, `ctrl+t i` the agents and the Inbox, `ctrl+t d` detach. tuios's `opt+` keys never
@@ -34,13 +38,13 @@ web lookups for it, and a free model edits the code. Started inside tuios, the p
 its lowest free workspaces (three are needed). Outside tuios, or with `AIDEV_TUIOS_OWN_SESSION=1`, they get session
 `aidev-<repo>` with the workspace numbers below and a dev workspace. One run per session.
 
-| Workspace | Pane                               | Model                                                                 | Grants                  |
-| --------- | ---------------------------------- | --------------------------------------------------------------------- | ----------------------- |
-| 1         | `claude`                           | Claude Code, advisor off: plans, sends tasks, verifies, reviews       | read, write, fan, files |
-| 2         | `lumo`                             | pi on Lumo through lumo-tamer, no tools: web lookups                  | read                    |
-| 3         | `build`                            | pi on the on-device 30B; Claude opens it when the plan is approved    | read, write             |
-| 3         | `build-pickle`, `build-claude`     | escalation: a free Zen model, or Claude Code (billed, asks you first) | read, write             |
-| 4         | `dev-nvim`, `dev-tuicr`, `dev-zsh` | your editor and diff, only in a session of its own                    | default                 |
+| Workspace | Pane                           | Model                                                                 | Grants                  |
+| --------- | ------------------------------ | --------------------------------------------------------------------- | ----------------------- |
+| 1         | `claude`                       | Claude Code, advisor off: plans, sends tasks, verifies, reviews       | read, write, fan, files |
+| 2         | `lumo`                         | pi on Lumo through lumo-tamer, no tools: web lookups                  | read                    |
+| 3         | `build`                        | pi on the on-device 30B; Claude opens it when the plan is approved    | read, write             |
+| 3         | `build-pickle`, `build-claude` | escalation: a free Zen model, or Claude Code (billed, asks you first) | read, write             |
+| 4         | `dev-nvim`, `dev-zsh`          | your editor and shell, only in a session of its own                   | default                 |
 
 1. You describe the work to Claude. It reads the code and asks Lumo (`ask-lumo`) for current docs, API changes and known
    bugs. Lumo is the first lumo-tamer that answers (this machine, MacMiniM1, then lumo.rollet.family); with none, there

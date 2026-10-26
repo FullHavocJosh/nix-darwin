@@ -1,7 +1,7 @@
 # The daily terminal and AI stack, on tuios. The herdr versions of these commands are in .zshrc_aliases and
 # .zshrc_functions_ai as <name>_herdr (dev_herdr, nxvim_herdr, aidev_herdr, ...).
 #
-#   dev                  one tuios session per repo under ~ (dev-<repo>: nvim | tuicr, then zsh), attach
+#   dev                  one tuios session per repo under ~ (dev-<repo>: nvim, then zsh), attach
 #   devim [name]         the same layout for the current directory, always a new session
 #   nxvim, psvim, hivim, itvim   the session of one project (skipped where it is not cloned)
 #   hiwt <branch>        a new home-infrastructure worktree and branch, with a session of its own
@@ -15,8 +15,12 @@
 #   aidev --direct [words]        a free builder, interactive, in this terminal
 #   ai_tuios [-c] [msg]  one Claude Code pane in session ai_tuios-<dir>
 #
-# gpr points this session's nvim, tuicr and zsh windows at a new worktree (_tuios_sync_dev_panes), and gpa's
-# manual-fix choices open nvim and aidev in a free workspace (_tuios_ai_edit_workspace).
+# gpr points this session's nvim and zsh windows at a new worktree (_tuios_sync_dev_panes), and gpa's manual-fix
+# choices open nvim and aidev in a free workspace (_tuios_ai_edit_workspace).
+#
+# Review: ctrl+t v opens tuios's review view of the focused pane's changes, against the branch's upstream (a pushed gpr
+# branch shows only unpushed and uncommitted work). c notes a line, C a hunk, S sends the notes to the pane's agent.
+# prdiff prints the whole PR's diff against origin's default branch.
 #
 # Run these from a plain Ghostty window, not from inside herdr: two multiplexers nested in one terminal is untested.
 # Keys: ctrl+t is tuios's prefix; ctrl+t 1..9 workspaces, ctrl+t s sessions, ctrl+t i agents and the Inbox, ctrl+t d
@@ -52,9 +56,9 @@ _tuios_attach() {
   fi
 }
 
-# Session $1 for directory $2, the dev layout: workspace 1 "dev" with nvim and tuicr side by side (BSP tiling
-# splits them), workspace 2 "zsh". The pane `tuios new` opens becomes nvim. Commands are typed into a shell, as
-# herdr's `pane run` did, so quitting nvim or tuicr leaves the pane at a prompt.
+# Session $1 for directory $2, the dev layout: workspace 1 "dev" with nvim, workspace 2 "zsh". The pane `tuios new`
+# opens becomes nvim. Commands are typed into a shell, as herdr's `pane run` did, so quitting nvim leaves the pane at
+# a prompt.
 _tuios_devlayout() {
   local s="$1" dir="$2" first
   _tuios_session_exists "$s" && return 0
@@ -62,8 +66,6 @@ _tuios_devlayout() {
   first=$(_tuios_cmd list-windows -s "$s" --json | jq -r '.windows[0].window_id')
   _tuios_cmd set-window -s "$s" -w "$first" --name nvim >/dev/null
   _tuios_cmd send-text -s "$s" -w nvim $'nvim\n' >/dev/null
-  _tuios_cmd new-window tuicr -s "$s" --workspace 1 --cwd "$dir" --no-focus >/dev/null
-  _tuios_cmd send-text -s "$s" -w tuicr $'_tuicr_current_pr_tuios\n' >/dev/null
   _tuios_cmd new-window zsh -s "$s" --workspace 2 --cwd "$dir" --no-focus >/dev/null
   _tuios_cmd send-text -s "$s" -w zsh $'git status\n' >/dev/null
   _tuios_cmd set-workspace-name 1 dev -s "$s" >/dev/null
@@ -165,14 +167,14 @@ _tuios_fg() {
 }
 
 # Points this session's dev windows at $1: gpr passes its new worktree, pr-merged-reset the repo root. nvim gets
-# `:cd $1 | Neotree git_status` (open buffers survive), tuicr restarts there, zsh gets `cd $1`. A window is typed into
+# `:cd $1 | Neotree git_status` (open buffers survive), zsh gets `cd $1`. A window is typed into
 # only when the program it is named after is in its foreground, so a busy pane or a bare shell never gets keystrokes
 # meant for something else.
 _tuios_sync_dev_panes() {
   local dir="$1" s="$TUIOS_SESSION" name wid tty
   [ -n "$s" ] || return 0
   _tuios_cmd list-windows -s "$s" --json 2>/dev/null |
-    jq -r '.windows[] | select(.custom_name == "nvim" or .custom_name == "tuicr" or .custom_name == "zsh")
+    jq -r '.windows[] | select(.custom_name == "nvim" or .custom_name == "zsh")
       | "\(.custom_name) \(.window_id) \(.tty)"' |
     while read -r name wid tty; do
       [ "$wid" = "$TUIOS_PANE_ID" ] && continue
@@ -186,7 +188,6 @@ _tuios_sync_dev_panes() {
           _tuios_cmd send-text -s "$s" -w "$wid" ":cd $dir | Neotree git_status" >/dev/null 2>&1
           _tuios_cmd send-keys -s "$s" -w "$wid" enter >/dev/null 2>&1
           ;;
-        tuicr) _tuicr_restart_tuios "$wid" "$dir" ;;
         zsh)
           [ "$(_tuios_fg "$tty")" = zsh ] || continue
           _tuios_cmd send-text -s "$s" -w "$wid" "cd $dir"$'\n' >/dev/null 2>&1
@@ -245,9 +246,8 @@ ai_tuios() {
   python3 "$HOME/.config/aistack-tuios/aidev_tuios.py" ai "$@"
 }
 
-# ---- tuicr in a tuios pane: copies of the _tuicr_* helpers in .zshrc_aliases with tuios in place of herdr --------
-# Same behaviour (see the comments there): the tuicr pane shows the current PR's diff, and a watcher restarts tuicr
-# whenever the repo's content changes. Pane ids come from $TUIOS_PANE_ID instead of $HERDR_PANE_ID.
+# Waits for window $1's visible content to go still (three identical, non-empty reads; about 6s at most) before keys
+# are typed into it. Same as _herdr_wait_pane_stable in .zshrc_aliases.
 
 _tuios_wait_pane_stable() {
   local pane_id="$1" prev_content="" cur_content stable_count=0 tries=0
@@ -265,66 +265,12 @@ _tuios_wait_pane_stable() {
   done
 }
 
-_tuicr_restart_tuios() {
-  local pane_id="$1" dir="$2"
-  local lock="/tmp/.tuicr-restart-lock-$pane_id"
-  if [ -f "$lock" ]; then
-    local lock_age=$(( $(date +%s) - $(stat -f %m "$lock" 2>/dev/null || echo 0) ))
-    [ "$lock_age" -lt 30 ] && return 0
-  fi
-  : > "$lock"
-  local marker="/tmp/.tuicr-restart-$pane_id"
-  : > "$marker"
-  _tuios_cmd send-keys -w "$pane_id" esc >/dev/null 2>&1
-  _tuios_cmd send-text -w "$pane_id" ":q" >/dev/null 2>&1
-  _tuios_cmd send-keys -w "$pane_id" enter >/dev/null 2>&1
-  _tuios_wait_pane_stable "$pane_id"
-  if [ -n "$dir" ]; then
-    _tuios_cmd send-text -w "$pane_id" "cd $dir && _tuicr_current_pr_tuios" >/dev/null 2>&1
-  else
-    _tuios_cmd send-text -w "$pane_id" "_tuicr_current_pr_tuios" >/dev/null 2>&1
-  fi
-  _tuios_cmd send-keys -w "$pane_id" enter >/dev/null 2>&1
-  rm -f "$marker" "$lock"
-}
-
-_tuicr_finish_tuios() {
-  local watcher_pid="$1" pane_id="$TUIOS_PANE_ID"
-  if [ -n "$pane_id" ] && [ -f "/tmp/.tuicr-restart-$pane_id" ]; then
-    return
-  fi
-  kill "$watcher_pid" 2>/dev/null
-}
-
-_tuicr_watch_and_refresh_tuios() {
-  local pane_id="$TUIOS_PANE_ID"
-  [ -n "$pane_id" ] || return 0
-  local last_state state
-  last_state=$(_tuicr_repo_fingerprint)
-  while true; do
-    sleep 5
-    state=$(_tuicr_repo_fingerprint)
-    if [ "$state" != "$last_state" ]; then
-      _tuicr_restart_tuios "$pane_id"
-      return
-    fi
-  done
-}
-
-_tuicr_current_pr_tuios() {
-  local pr_num
-  pr_num=$(gh pr view --json number -q .number 2>/dev/null)
-  _tuicr_watch_and_refresh_tuios &
-  local watcher_pid=$!
-  disown
-  if [ -n "$pr_num" ] && tuicr pr "$pr_num" --working-tree; then
-    _tuicr_finish_tuios "$watcher_pid"
-    return
-  fi
-  if tuicr -w; then
-    _tuicr_finish_tuios "$watcher_pid"
-    return
-  fi
-  tuicr -A
-  _tuicr_finish_tuios "$watcher_pid"
+# prdiff [tuios review flags]: the whole PR of the current branch, as text. tuios review of this pane against the
+# merge base with origin's default branch, where ctrl+t v diffs against the branch's upstream.
+prdiff() {
+  local base mb
+  [ -n "$TUIOS_PANE_ID" ] || { echo "prdiff: run it in a tuios pane" >&2; return 1; }
+  base=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null) || base=origin/main
+  mb=$(git merge-base HEAD "$base") || return 1
+  _tuios_cmd review -w "$TUIOS_PANE_ID" --base "$mb" "$@"
 }

@@ -27,7 +27,7 @@ Panes, one workspace each:
     claude   Claude Code: talks with you, reads the code, plans, sends tasks, verifies, reviews   read,write,fan,files
     lumo     pi on Lumo through lumo-tamer, no tools: web lookups on what Claude sends it        read
     build    pi on the on-device 30B, else OpenCode on a free Zen model; Claude opens it          read,write
-    dev      nvim / tuicr / zsh, only in a session of its own (in your session you have yours)  default
+    dev      nvim / zsh, only in a session of its own (in your session you have yours)          default
 
 Rules the design rests on:
   - Claude decides; Lumo and the builder answer it. What they send is data to Claude, not instructions.
@@ -594,7 +594,7 @@ def start_builder(run, kind, name, ws, cwd):
 
 
 def start_dev_workspace(run, session, wd):
-    for name, cmd in (("dev-nvim", "nvim"), ("dev-tuicr", "_tuicr_current_pr_tuios"), ("dev-zsh", "git status")):
+    for name, cmd in (("dev-nvim", "nvim"), ("dev-zsh", "git status")):
         if window_named(session, name):
             continue
         tuios("new-window", name, "-s", session, "--workspace", str(WS["dev"]), "--cwd", wd, "--no-focus")
