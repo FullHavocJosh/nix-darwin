@@ -1,7 +1,7 @@
 # The daily terminal and AI stack, on tuios. The herdr versions of these commands are in .zshrc_aliases and
 # .zshrc_functions_ai as <name>_herdr (dev_herdr, nxvim_herdr, aidev_herdr, ...).
 #
-#   dev                  one tuios session per repo under ~ (dev-<repo>: nvim, then zsh), attach
+#   dev                  one tuios session per repo under ~, named after it (nvim, then zsh), attach
 #   devim [name]         the same layout for the current directory, always a new session
 #   nxvim, psvim, hivim, itvim   the session of one project (skipped where it is not cloned)
 #   hiwt <branch>        a new home-infrastructure worktree and branch, with a session of its own
@@ -83,14 +83,14 @@ dev() {
     repo="${repo%/}"
     base="$(basename "$repo")"
     [ -e "$repo/.git" ] || continue
-    _tuios_devlayout "dev-$base" "$repo" || continue
-    [ -z "$first" ] && first="dev-$base"
+    _tuios_devlayout "$base" "$repo" || continue
+    [ -z "$first" ] && first="$base"
   done
   if [ -d ~/pscloudops/terraform-infrastructure ]; then
-    _tuios_devlayout dev-terraform-infrastructure ~/pscloudops/terraform-infrastructure
+    _tuios_devlayout terraform-infrastructure ~/pscloudops/terraform-infrastructure
   fi
-  if _tuios_session_exists dev-nix-darwin; then
-    _tuios_attach dev-nix-darwin
+  if _tuios_session_exists nix-darwin; then
+    _tuios_attach nix-darwin
   elif [ -n "$first" ]; then
     _tuios_attach "$first"
   fi
@@ -99,7 +99,7 @@ dev() {
 # Like devim: the current directory, named after it (or $1), always a new session (-2, -3... when the name is taken).
 devim() {
   _tuios_guard || return 1
-  local name="dev-${1:-${PWD:t}}" s n=2
+  local name="${1:-${PWD:t}}" s n=2
   s="$name"
   while _tuios_session_exists "$s"; do
     s="$name-$n"
@@ -108,13 +108,13 @@ devim() {
   _tuios_devlayout "$s" "$PWD" && _tuios_attach "$s"
 }
 
-# The session of one project, dev-$1 for directory $2 (nxvim, psvim, hivim, itvim). Skipped on a machine where the
+# The session of one project, $1 for directory $2 (nxvim, psvim, hivim, itvim). Skipped on a machine where the
 # project is not cloned (~/home-infrastructure is not on the work laptop).
 _tuios_project() {
   _tuios_guard || return 1
   local name="$1" dir="$2"
   [ -d "$dir" ] || { echo "tuios: $dir does not exist on this machine, skipping $name" >&2; return 1; }
-  cd "$dir" && _tuios_devlayout "dev-$name" "$dir" && _tuios_attach "dev-$name"
+  cd "$dir" && _tuios_devlayout "$name" "$dir" && _tuios_attach "$name"
 }
 alias nxvim='_tuios_project nix-darwin ~/nix-darwin'
 alias psvim='_tuios_project pscloudops ~/pscloudops'
@@ -128,7 +128,7 @@ _tuios_worktree() {
   _tuios_guard || return 1
   local repo_name="$1" repo_dir="$2" branch="$3"
   [ -n "$branch" ] || { echo "usage: hiwt <branch-name>" >&2; return 1; }
-  local wt="$repo_dir/.worktrees/$branch" s="dev-$repo_name-${branch//\//-}"
+  local wt="$repo_dir/.worktrees/$branch" s="$repo_name-${branch//\//-}"
   if [ ! -d "$wt" ]; then
     git -C "$repo_dir" worktree add -b "$branch" "$wt" HEAD || return 1
   fi
@@ -136,12 +136,12 @@ _tuios_worktree() {
 }
 alias hiwt='_tuios_worktree home-infrastructure ~/home-infrastructure'
 
-# Session dev-$1 whose windows ssh to $2 and work in $3 there: workspace 1 nvim | zsh, workspace 2 ai (a remote
+# Session $1 whose windows ssh to $2 and work in $3 there: workspace 1 nvim | zsh, workspace 2 ai (a remote
 # shell). Nothing of tuios runs on the remote end. Each command runs through `zsh -ic` there: a plain ssh command is
 # not interactive, so the remote .zshrc (and its homebrew PATH) would not load.
 _tuios_remote_space() {
   _tuios_guard || return 1
-  local s="dev-$1" host="$2" rdir="$3" first
+  local s="$1" host="$2" rdir="$3" first
   local ssh="ssh -t -i ~/.ssh/id_ed25519 $host"
   if ! _tuios_session_exists "$s"; then
     _tuios_cmd new "$s" -d --cwd "$HOME" >/dev/null || return 1

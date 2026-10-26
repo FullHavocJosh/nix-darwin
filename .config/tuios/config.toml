@@ -202,6 +202,8 @@ width = 39
 sections = "sessions:30,terminals:15,files:20,agents:35"
 files_style = "tree"
 header_case = "uppercase"
+# No window count on session rows: every dev session has the same few windows.
+show_counts = false
 row_style = "underline"
 header_style = "pill"
 show_numbers = false

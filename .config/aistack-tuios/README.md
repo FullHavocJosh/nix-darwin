@@ -6,7 +6,7 @@ talks to by tuios mail. The commands are in `.zshrc_functions_tuios`. The herdr 
 
 | Command                            | What it does                                                                                         |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `dev`                              | one tuios session per repo under `~` (`dev-<repo>`): workspace 1 nvim, workspace 2 zsh               |
+| `dev`                              | one tuios session per repo under `~`, named after it: workspace 1 nvim, workspace 2 zsh              |
 | `devim [name]`                     | that layout for the current directory, always a new session                                          |
 | `nxvim`, `psvim`, `hivim`, `itvim` | the session of one project, skipped where it is not cloned                                           |
 | `hiwt <branch>`                    | a new home-infrastructure worktree and branch in `.worktrees/`, with a session of its own            |
