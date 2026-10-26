@@ -25,7 +25,7 @@
 # Run these from a plain Ghostty window, not from inside herdr: two multiplexers nested in one terminal is untested.
 # Keys (.config/tuios/config.toml): ctrl+t is tuios's prefix. ctrl+1..9 workspaces, ctrl+shift+j/k next/previous
 # session, ctrl+shift+p go to an agent, session or pane, ctrl+shift+h sidebar; ctrl+t i agents and the Inbox, ctrl+t g
-# lazygit, ctrl+t d detach. tuios's opt+ keys collide with aerospace and never arrive.
+# lazygit, ctrl+t s scratch terminal, ctrl+t d detach. tuios's opt+ keys collide with aerospace and never arrive.
 
 # tuios with the stowed config (~/.config/tuios; on macOS tuios otherwise reads ~/Library/Application
 # Support/tuios) and without herdr's variables, which a daemon started from a herdr pane would pass to every pane.

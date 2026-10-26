@@ -30,8 +30,8 @@ agent. `prdiff` prints the whole PR's diff against origin's default branch.
 Run them from a plain Ghostty window, not inside herdr. Keys (`.config/tuios/config.toml`, the herdr keys where tuios
 can take them): `ctrl+t` is tuios's prefix. `ctrl+1`..`9` switch workspaces, `ctrl+shift+j`/`k` the next and previous
 session, `ctrl+shift+p` goes to an agent, session or pane, `ctrl+shift+h` shows the sidebar. `ctrl+t i` opens the
-agents and the Inbox, `ctrl+t g` lazygit, `ctrl+t d` detaches. tuios's `opt+` keys never arrive, because aerospace
-owns alt.
+agents and the Inbox, `ctrl+t g` lazygit, `ctrl+t s` the scratch terminal, `ctrl+t d` detaches. tuios's `opt+` keys
+never arrive, because aerospace owns alt.
 
 ## aidev
 
