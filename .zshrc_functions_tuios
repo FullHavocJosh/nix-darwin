@@ -1,7 +1,9 @@
 # The daily terminal and AI stack, on tuios. The herdr versions of these commands are in .zshrc_aliases and
 # .zshrc_functions_ai as <name>_herdr (dev_herdr, nxvim_herdr, aidev_herdr, ...).
 #
-#   dev                  one tuios session per repo under ~, named after it (nvim, then zsh), attach
+#   dev                  reattach the daemon's sessions; with none, create nix-darwin, terraform-infrastructure and
+#                        home-infrastructure where cloned. Layout: workspace dev (nvim + aidev's Claude), ai (Lumo,
+#                        builders)
 #   devim [name]         the same layout for the current directory, always a new session
 #   nxvim, psvim, hivim, itvim   the session of one project (skipped where it is not cloned)
 #   hiwt <branch>        a new home-infrastructure worktree and branch, with a session of its own
@@ -94,41 +96,53 @@ _tuios_restore_nvim() {
     done
 }
 
-# Session $1 for directory $2, the dev layout: workspace 1 "dev" with nvim, workspace 2 "zsh". The pane `tuios new`
-# opens becomes nvim. Commands are typed into a shell, as herdr's `pane run` did, so quitting nvim leaves the pane at
-# a prompt. A session that exists (still running, or restored by the daemon) keeps its layout and only gets nvim back.
+# Session $1 for directory $2, the dev layout: workspace 1 "dev" with nvim and aidev's Claude beside it, workspace 2
+# "ai" with Lumo, where the builders open too (aidev_tuios.py, started with AIDEV_TUIOS_SESSION=$1). The pane
+# `tuios new` opens becomes nvim; its command is typed into a shell, as herdr's `pane run` did, so quitting nvim leaves
+# the pane at a prompt. A session that exists (still running, or restored by the daemon) keeps its layout and only
+# gets nvim, Claude and Lumo back (_tuios_restore).
 _tuios_devlayout() {
   local s="$1" dir="$2" first
   _tuios_daemon_up
   if _tuios_session_exists "$s"; then
-    _tuios_restore_nvim "$s"
+    _tuios_restore "$s"
     return 0
   fi
   _tuios_cmd new "$s" -d --cwd "$dir" >/dev/null || return 1
   first=$(_tuios_cmd list-windows -s "$s" --json | jq -r '.windows[0].window_id')
   _tuios_cmd set-window -s "$s" -w "$first" --name nvim >/dev/null
   _tuios_cmd send-text -s "$s" -w nvim $'nvim\n' >/dev/null
-  _tuios_cmd new-window zsh -s "$s" --workspace 2 --cwd "$dir" --no-focus >/dev/null
-  _tuios_cmd send-text -s "$s" -w zsh $'git status\n' >/dev/null
+  (cd "$dir" && AIDEV_TUIOS_SESSION="$s" AIDEV_TUIOS_NO_ATTACH=1 python3 "$HOME/.config/aistack-tuios/aidev_tuios.py" start >/dev/null)
   _tuios_cmd set-workspace-name 1 dev -s "$s" >/dev/null
-  _tuios_cmd set-workspace-name 2 zsh -s "$s" >/dev/null
+  _tuios_cmd select-workspace 1 -s "$s" >/dev/null
   _tuios_cmd focus-window nvim -s "$s" >/dev/null
 }
 
-# Like dev: a session per git repo directly under ~ (and ~/pscloudops/terraform-infrastructure on the work laptop),
-# created only when missing, then attach to nix-darwin's (else the first one).
+# A restored session's nvim, Claude and Lumo (tuios brings the windows back with fresh shells): nvim is typed in
+# again, Claude and Lumo start again from their launchers with their conversations (aidev_tuios.py restore).
+_tuios_restore() {
+  _tuios_restore_nvim "$1"
+  python3 "$HOME/.config/aistack-tuios/aidev_tuios.py" restore "$1"
+}
+
+# Reattaches to the sessions the daemon holds (each gets nvim, Claude and Lumo back), to nix-darwin's when there is
+# one. With no session at all it creates the dev layout for ~/nix-darwin, ~/pscloudops/terraform-infrastructure and
+# ~/home-infrastructure, each only where it is cloned, then attaches to nix-darwin's (else the first one).
 dev() {
   _tuios_guard || return 1
-  local repo base first=""
-  for repo in "$HOME"/*/; do
-    repo="${repo%/}"
-    base="$(basename "$repo")"
-    [ -e "$repo/.git" ] || continue
-    _tuios_devlayout "$base" "$repo" || continue
-    [ -z "$first" ] && first="$base"
+  local s first="" spec
+  _tuios_daemon_up
+  for s in $(_tuios_cmd ls --json 2>/dev/null | jq -r '.[]?.name'); do
+    _tuios_restore "$s"
+    [ -z "$first" ] && first="$s"
   done
-  if [ -d ~/pscloudops/terraform-infrastructure ]; then
-    _tuios_devlayout terraform-infrastructure ~/pscloudops/terraform-infrastructure
+  if [ -z "$first" ]; then
+    for spec in nix-darwin:"$HOME/nix-darwin" terraform-infrastructure:"$HOME/pscloudops/terraform-infrastructure" \
+      home-infrastructure:"$HOME/home-infrastructure"; do
+      [ -d "${spec#*:}" ] || continue
+      _tuios_devlayout "${spec%%:*}" "${spec#*:}" || continue
+      [ -z "$first" ] && first="${spec%%:*}"
+    done
   fi
   if _tuios_session_exists nix-darwin; then
     _tuios_attach nix-darwin

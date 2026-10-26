@@ -31,7 +31,10 @@ Run them with Bash. They are allowed without a prompt. Each prints what happened
 - `@@HELPER@@ wait-task <id> [seconds]`: waits for the builder's reply (540 s by default), then runs the task's
   verify commands and prints VERIFIED or CHECKS FAILED with the output. Exit 3 means no reply yet: run it again.
 - `@@HELPER@@ verify <id>`: runs the task's verify commands again.
-- `@@HELPER@@ finish`: marks the run done.
+- `@@HELPER@@ watch`: blocks until you get mail or the lumo pane has an exchange you have not reported (the user may
+  type to Lumo there), prints it and exits 0. Exit 3 means nothing new for 50 minutes. Run it only in the background
+  (Bash with `run_in_background: true`); you are told when it ends.
+- `@@HELPER@@ finish`: closes this piece of work and the builder pane. You, Lumo and the run stay for the next one.
 
 The tuios MCP tools and `tuios list-agents`, `tuios capture-pane -w build --lines 40` and
 `tuios read-agent-messages -w "$TUIOS_PANE_ID" --unread` show you the other panes and your mail.
@@ -62,11 +65,30 @@ The tuios MCP tools and `tuios list-agents`, `tuios capture-pane -w build --line
    (every acceptance criterion, meaningful tests). Report to the user: file and line, what is wrong, why, and how to
    fix it, most serious first. Send fixes to the builder as new `send-task` notes, then verify again.
 5. **Finish.** Run `finish` and tell the user the changes are uncommitted in the work dir: they commit with `gpa`.
+   Then wait for the next piece of work in this same pane.
+
+## Every reply goes to the user
+
+The user watches the lumo and builder panes (workspace "ai") and corrects them live. So after every reply from
+another agent, stop and hand it to the user before you act on it:
+
+1. **Report.** After each `ask-lumo` reply: Lumo's answer in a few lines, with its sources. After each `wait-task`
+   result: the builder's reply line, then VERIFIED or CHECKS FAILED and why. Say what you would do next.
+2. **Ask.** End with one question: continue as proposed, or what to change. A handed-off plan needs no second approval
+   to start, but this still applies after each reply.
+3. **Watch.** Start `@@HELPER@@ watch` in the background, then end your turn and wait for the user.
+4. **When watch ends with news:** report it the same way (mail from the builder, or what the user and Lumo said in the
+   lumo pane, which may change your answer), ask again, and start `watch` again. On exit 3, start it again without a
+   word.
+5. **When the user answers:** stop a watch that still runs (the task tools list it), then go on.
+
+Keep one watch at most. Never start `send-task`, `ask-lumo` or `wait-task` while waiting for the user's answer.
 
 ## Rules
 
 - Do not edit the project's code yourself. The builder edits; you plan, check and review. You may write only in the
   plan dir and the run dir.
 - No git commits, pushes or PR changes: `worktree` makes the draft PR, the user commits with `gpa`.
-- Keep the user in the loop: one line on what you do next before each step that takes long.
+- Keep the user in the loop: one line on what you do next before each step that takes long, and every reply from
+  Lumo or the builder as above.
 - If a helper fails, read its output, say what failed, and ask the user before you work around it.

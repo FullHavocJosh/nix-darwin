@@ -6,7 +6,8 @@ talks to by tuios mail. The commands are in `.zshrc_functions_tuios`. The herdr 
 
 | Command                            | What it does                                                                                         |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `dev`                              | one tuios session per repo under `~`, named after it: workspace 1 nvim, workspace 2 zsh              |
+| `dev`                              | reattach the daemon's sessions; with none, create nix-darwin, terraform-infrastructure and           |
+|                                    | home-infrastructure where cloned. Layout: workspace `dev` nvim + aidev's Claude, `ai` Lumo           |
 | `devim [name]`                     | that layout for the current directory, always a new session                                          |
 | `nxvim`, `psvim`, `hivim`, `itvim` | the session of one project, skipped where it is not cloned                                           |
 | `hiwt <branch>`                    | a new home-infrastructure worktree and branch in `.worktrees/`, with a session of its own            |
@@ -39,17 +40,20 @@ aerospace.
 ## aidev
 
 Claude Code is the backbone: you talk to it, it reads the code, plans, sends tasks, checks them and reviews. Lumo does
-web lookups for it, and a free model edits the code. Started inside tuios, the panes open in the session you are in, on
-its lowest free workspaces (three are needed). Outside tuios, or with `AIDEV_TUIOS_OWN_SESSION=1`, they get session
-`aidev-<repo>` with the workspace numbers below and a dev workspace. One run per session.
+web lookups for it, and a free model edits the code. Every dev session (`dev`, `devim`, `nxvim`, ...) starts one with
+`AIDEV_TUIOS_SESSION=<session>`: Claude beside nvim on workspace `dev`, Lumo on workspace `ai`, where every builder
+opens too (`aidev -p` edits included), so you can watch each agent and type into it. Started by hand inside another
+tuios session, Claude joins the workspace of a window named `nvim`, else the lowest free one, and the rest share the
+next free one. Outside tuios, or with `AIDEV_TUIOS_OWN_SESSION=1`, they get session `aidev-<repo>` with the numbers
+below and a `dev-nvim` window. One run per session; `finish` closes a piece of work, and the panes stay for the next.
 
 | Workspace | Pane                           | Model                                                                 | Grants                  |
 | --------- | ------------------------------ | --------------------------------------------------------------------- | ----------------------- |
-| 1         | `claude`                       | Claude Code, advisor off: plans, sends tasks, verifies, reviews       | read, write, fan, files |
-| 2         | `lumo`                         | pi on Lumo through lumo-tamer, no tools: web lookups                  | read                    |
-| 3         | `build`                        | pi on the on-device 30B; Claude opens it when the plan is approved    | read, write             |
-| 3         | `build-pickle`, `build-claude` | escalation: a free Zen model, or Claude Code (billed, asks you first) | read, write             |
-| 4         | `dev-nvim`, `dev-zsh`          | your editor and shell, only in a session of its own                   | default                 |
+| 1 `dev`   | `claude`                       | Claude Code, advisor off: plans, sends tasks, verifies, reviews       | read, write, fan, files |
+| 1 `dev`   | `nvim` (`dev-nvim`)            | your editor (`dev-nvim` only in a session of its own)                 | default                 |
+| 2 `ai`    | `lumo`                         | pi on Lumo through lumo-tamer, no tools: web lookups                  | read                    |
+| 2 `ai`    | `build`                        | pi on the on-device 30B; Claude opens it when the plan is approved    | read, write             |
+| 2 `ai`    | `build-pickle`, `build-claude` | escalation: a free Zen model, or Claude Code (billed, asks you first) | read, write             |
 
 1. You describe the work to Claude. It reads the code and asks Lumo (`ask-lumo`) for current docs, API changes and known
    bugs. Lumo is the first lumo-tamer that answers (this machine, MacMiniM1, then lumo.rollet.family); with none, there
@@ -62,6 +66,13 @@ its lowest free workspaces (three are needed). Outside tuios, or with `AIDEV_TUI
    task again with a note; after two failures it asks you: retry, escalate or skip.
 4. Claude reviews the whole diff and reports findings to you; fixes go back to the builder as tasks.
 5. The changes stay uncommitted in the work dir. Commit with `gpa`.
+
+After every Lumo answer and every builder result, Claude tells you what came back and asks before it goes on. While it
+waits for you it runs `watch` in the background: new mail, or an exchange you have with Lumo in the lumo pane, wakes it,
+and it reports that too. So you can correct Lumo or the builder in their panes and Claude picks it up.
+
+After a daemon restart, `dev` (or any dev command for an existing session) runs `aidev_tuios.py restore <session>`: the
+claude and lumo windows that came back holding a shell start again, conversations included.
 
 How the panes talk:
 
