@@ -128,3 +128,8 @@ enabled = true
 [appearance]
 scrollback_lines = 100000
 zoom_size = 95
+window_title_align = "left"
+window_button_style = "pill"
+
+[spotlight]
+enabled = false
