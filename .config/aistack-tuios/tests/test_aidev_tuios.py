@@ -45,6 +45,7 @@ def project():
 
 def main():
     os.environ["AIDEV_TUIOS_HOME"] = os.path.realpath(tempfile.mkdtemp(prefix="aidev-test-home-"))
+    os.environ.pop("AIDEV_TUIOS_BUILDER", None)  # the suite tests cmd_edit's refusal itself, whatever pane runs it
     a = load("aidev", os.path.join(ROOT, "aidev_tuios.py"))
 
     print("task order")
@@ -157,6 +158,8 @@ def main():
         calls.append(args)
         if args[0] == "send-agent-message":
             return 0, "message 7 queued for build (abcd1234)\n", ""
+        if args[0] == "capture-pane":
+            return 0, "New session started\n", ""
         return 0, "", ""
 
     real_t = (a.tuios, a.window_named, a.agent_state, a.tuios_json)
@@ -181,6 +184,113 @@ def main():
     os.environ["AIDEV_TUIOS_WORKTREE_MODE"] = "none"
     check("worktree outside a main checkout works in the project",
           a.cmd_worktree(hr, []) == 0 and hr.data["work_dir"] == p)
+    print("builder reset")
+    real_sleep, real_tuios = a.time.sleep, a.tuios
+    a.time.sleep = lambda s: None
+    reset_calls, captured = [], ["New session started\n"]
+
+    def reset_tuios(*args, timeout=60):
+        reset_calls.append(args)
+        if args[0] == "capture-pane":
+            return 0, captured[0], ""
+        if args[0] == "send-agent-message":
+            return 0, "message 21 queued for build (abcd1234)\n", ""
+        return 0, "", ""
+
+    def reset_texts():
+        return [c[-1] for c in reset_calls if c[0] == "send-text"]
+
+    def reset_before_mail():
+        kinds = [c[0] for c in reset_calls]
+        return ("send-text" in kinds and "send-agent-message" in kinds
+                and kinds.index("send-text") < kinds.index("send-agent-message"))
+
+    def mailed():
+        return any(c[0] == "send-agent-message" for c in reset_calls)
+
+    a.tuios = reset_tuios
+    hr.data["builder"] = "build"
+    os.environ.pop("AIDEV_NO_RESET", None)
+    a.agent_state = lambda s, n: "idle"
+    real_stdout, sys.stdout = sys.stdout, io.StringIO()
+    try:
+        rc = a.cmd_send_task(hr, ["T1"])
+    finally:
+        sys.stdout = real_stdout
+    check("send-task resets an idle builder with /new, before mailing the task",
+          rc == 0 and reset_texts() == ["/new"] and reset_before_mail(), reset_calls)
+    reset_calls.clear()
+    a.agent_state = lambda s, n: "working"
+    real_stdout, sys.stdout = sys.stdout, io.StringIO()
+    try:
+        rc = a.cmd_send_task(hr, ["T1"])
+        printed = sys.stdout.getvalue()
+    finally:
+        sys.stdout = real_stdout
+    check("a working builder is not reset, and the task is still mailed",
+          rc == 0 and not reset_texts() and mailed() and "working, not reset" in printed, (reset_calls, printed))
+    reset_calls.clear()
+    captured[0] = "still working...\n"
+    a.agent_state = lambda s, n: "none"
+    real_stdout, sys.stdout = sys.stdout, io.StringIO()
+    try:
+        rc = a.cmd_send_task(hr, ["T1"])
+        printed = sys.stdout.getvalue()
+    finally:
+        sys.stdout = real_stdout
+    check("an unconfirmed reset prints a warning, and the task is still mailed",
+          rc == 0 and reset_texts() == ["/new"] and mailed() and "reset not confirmed" in printed
+          and len([c for c in reset_calls if c[0] == "capture-pane"]) == 10, (reset_calls, printed))
+    reset_calls.clear()
+    captured[0] = "context 0.0%/128k tokens\n"
+    hr.data["builder"] = "build-claude"
+    a.agent_state = lambda s, n: "done"
+    real_stdout, sys.stdout = sys.stdout, io.StringIO()
+    try:
+        rc = a.cmd_send_task(hr, ["T1"])
+        printed = sys.stdout.getvalue()
+    finally:
+        sys.stdout = real_stdout
+    check("a done Claude builder is cleared with /clear and 0.0% context confirms it",
+          rc == 0 and reset_texts() == ["/clear"] and "reset not confirmed" not in printed, (reset_calls, printed))
+    reset_calls.clear()
+    hr.data["builder"] = "build"
+    a.agent_state = lambda s, n: "idle"
+    os.environ["AIDEV_NO_RESET"] = "1"
+    real_stdout, sys.stdout = sys.stdout, io.StringIO()
+    try:
+        rc = a.cmd_send_task(hr, ["T1"])
+    finally:
+        sys.stdout = real_stdout
+        os.environ.pop("AIDEV_NO_RESET", None)
+    check("AIDEV_NO_RESET=1 skips the reset and still mails the task",
+          rc == 0 and not reset_texts() and mailed(), reset_calls)
+    reset_calls.clear()
+    captured[0] = "80.0%/33k (auto)\n"
+    hr.data["builder"] = "build-claude"
+    a.agent_state = lambda s, n: "none"
+    real_stdout, sys.stdout = sys.stdout, io.StringIO()
+    try:
+        rc = a.cmd_send_task(hr, ["T1"])
+        printed = sys.stdout.getvalue()
+    finally:
+        sys.stdout = real_stdout
+    check("80.0% context does not confirm the reset",
+          rc == 0 and "reset not confirmed" in printed
+          and len([c for c in reset_calls if c[0] == "capture-pane"]) == 10, (reset_calls, printed))
+    reset_calls.clear()
+    captured[0] = "new session ses_abc\n"
+    hr.data["builder"] = "build"
+    a.agent_state = lambda s, n: "none"
+    real_stdout, sys.stdout = sys.stdout, io.StringIO()
+    try:
+        rc = a.cmd_send_task(hr, ["T1"])
+        printed = sys.stdout.getvalue()
+    finally:
+        sys.stdout = real_stdout
+    check("a lowercase 'new session' confirms the reset",
+          rc == 0 and "reset not confirmed" not in printed, (reset_calls, printed))
+    a.tuios, a.time.sleep, a.agent_state = real_tuios, real_sleep, (lambda s, n: "idle")
     hr.data["builder"] = "build"
     check("send-task succeeds", a.cmd_send_task(hr, ["T1", "use the same style"]) == 0)
     sends = [c for c in calls if c[0] == "send-agent-message"]

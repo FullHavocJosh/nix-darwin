@@ -21,7 +21,8 @@ Helpers the Claude pane runs from its own pane (so with its grants; AIDEV_TUIOS_
     check-plan                    check plan/prd.json and plan/verify.json with aistack's rules
     worktree                      create the gpr worktree and draft PR for the plan (main checkout only)
     builder [30b|pickle|claude]   open a builder pane in the work dir; claude is billed and asks you first
-    send-task <id> [note...]      write the task file, mail it to the builder and tell it to start
+    send-task <id> [note...]      reset the builder's context (AIDEV_NO_RESET=1 skips), write the task file,
+                                  mail it to the builder and tell it to start
     wait-task <id> [seconds]      wait for the builder's reply, then run the task's verify commands
     verify <id>                   run the task's verify commands again
     watch [seconds]               block until new mail or a new Lumo exchange arrives, print it (run in background)
@@ -91,6 +92,8 @@ WS_OWN = {PLAN: 1, RESEARCH: 2, "build": 2, "build-pickle": 2, "build-claude": 2
 WS = dict(WS_OWN)
 WS_NAMES = {PLAN: "dev", "dev": "dev", RESEARCH: "ai", "build": "ai"}
 BUILDERS = {"30b": "build", "pickle": "build-pickle", "claude": "build-claude"}
+# How each builder clears its conversation before a new task: pi starts a new session, Claude Code clears the context.
+RESET_CMD = {"30b": "/new", "pickle": "/new", "claude": "/clear"}
 SHELLS = ("zsh", "bash", "sh")
 
 
@@ -877,9 +880,30 @@ def wait_reply(session, me, thread, builder, limit):
     return "timeout", ""
 
 
+def reset_builder(run, builder):
+    """Clear the builder's context when it is at rest, so the next task starts fresh. False when it is working or the
+    reset is not confirmed; the task is sent anyway."""
+    kind = next((k for k, v in BUILDERS.items() if v == builder), None)
+    st = agent_state(run.session, builder)
+    if kind is None or st not in ("idle", "done", "none"):
+        print(f"builder {builder} is {st}, not reset")
+        return False
+    tuios("send-text", "-s", run.session, "-w", builder, RESET_CMD[kind])
+    time.sleep(1)
+    tuios("send-keys", "-s", run.session, "-w", builder, "enter")
+    for _ in range(10):  # about one capture a second, for up to 10 s
+        time.sleep(1)
+        _code, out, _err = tuios("capture-pane", "-s", run.session, "-w", builder, "--lines", "20")
+        if re.search(r"new session", out, re.IGNORECASE) or re.search(r"(?<![\d.])0\.0%\s*/", out):
+            return True
+    print(f"builder {builder}: reset not confirmed")
+    return False
+
+
 def cmd_send_task(run, argv):
     if not argv:
-        print("usage: send-task <id> [note for the builder]")
+        print("usage: send-task <id> [note for the builder]; resets the builder's context first unless "
+              "AIDEV_NO_RESET=1")
         return 2
     tid, note = argv[0], " ".join(argv[1:]).strip()
     ralph = load_ralph(run.project)
@@ -898,6 +922,8 @@ def cmd_send_task(run, argv):
         t["notes"].append(f"- Before attempt {t['attempts']}: {note}")
     path = write_text(os.path.join(run.dir, "tasks", f"{tid}.md"),
                       task_prompt(prd, stories[tid], verify[tid], t["notes"]))
+    if not os.environ.get("AIDEV_NO_RESET"):
+        reset_builder(run, builder)
     mid = mail_task(run, builder, f"task {tid}", f"Task {tid}, attempt {t['attempts']}: do the task in {path}, in {wd}.",
                     f"aidev task {tid}: read {path} and do exactly that task in {wd}. {reply_line(run, '@@MID@@')}")
     if not mid:
