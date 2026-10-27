@@ -11,7 +11,7 @@ A comprehensive, declarative development environment configuration for **macOS**
 - **Complete Dev Environment** - Shell (zsh), editor (Neovim), terminal (tuios), window management, and more
 - **Security-First Approach** - Smart gitignore patterns, secrets detection, environment variable management
 - **Local LLM Integration** - llama.cpp (Qwen3.5-9B) served on 127.0.0.1 only, kept running by a launchd daemon
-- **CI** : GitHub Actions workflow .github/workflows/validate.yml evaluates every darwin configuration, runs shellcheck and gitleaks
+- **CI** - GitHub Actions (`.github/workflows/validate.yml`) evaluates every darwin configuration, runs shellcheck and gitleaks
 - **MCP Server Ecosystem** - Auto-registered Claude Code MCP servers for GitHub, Terraform, AWS, Slack, and more
 
 ## 📋 Quick Start
@@ -43,14 +43,14 @@ nix-darwin/
 │   ├── llamacpp-local.nix              # llama-server launchd daemon
 │   ├── lumo.nix                        # lumo-tamer daemons
 │   ├── timemachine-exclusions.nix      # applies timemachine-exclusions.txt, laptop and desktop
-│   └── claude-tui-usage-patch.py       # patches claude-tui for better usage reporting
+│   └── claude-tui-usage-patch.py       # idempotent patch of the claude-tui brew formula, run on activation
 │
 ├── scripts/                            # Utility scripts
 │   ├── truenas-smb-monitor.sh          # TrueNAS SMB service monitor
 │   ├── install-nerd-fonts.sh           # Nerd Fonts installer
 │   ├── setup-ssh-keys.sh               # SSH key setup automation
 │   ├── check-timemachine-exclusions.sh # validates timemachine-exclusions.txt
-│   ├── opnsense-routing.sh             # OPNsense routing rules
+│   ├── opnsense-routing.sh             # routing fix after plugging in the OPNsense LAN cable
 │   └── herdr-nvim-open-edited.sh       # legacy herdr helper
 │
 ├── .config/                            # Application configurations (deployed via stow)
@@ -60,7 +60,7 @@ nix-darwin/
 │   ├── atuin/                          # Atuin shell history config
 │   ├── btop/                           # btop system monitor
 │   ├── ghostty/                        # Ghostty terminal config
-│   ├── herdr/                          # herdr terminal workspace manager config
+│   ├── herdr/                          # herdr config (legacy *_herdr commands)
 │   ├── lumo/                           # lumo-tamer scripts and Lumo MCP
 │   ├── mcp/                            # MCP server definitions (claude-desktop-mcp.json)
 │   ├── nvim/                           # Neovim (LazyVim) configuration (incl. claudecode.nvim)
@@ -102,16 +102,6 @@ This repository uses a **two-file system** for environment variables:
    - Path settings
    - Safe to commit
 
-### Zed Editor Configuration
-
-The `.config/zed/settings.json` file is **gitignored** because it contains hardcoded tokens:
-
-- GitHub Personal Access Token (for MCP server extension)
-- AI conversation history
-- Prompt database (unencrypted LMDB)
-
-**Why gitignored?** Zed's MCP extension system does NOT support environment variable interpolation.
-
 ### Gitignore Patterns
 
 See `.gitignore` for comprehensive patterns that protect:
@@ -136,6 +126,8 @@ Defined in `flake.nix`:
 - Gaming and entertainment apps (Steam, Battle.net, Whisky, Plex)
 - Personal productivity tools (Obsidian, Proton Drive/Mail/VPN, Element)
 - Local LLM via llama.cpp (`llamacpp-local.nix`)
+- Test targets for web, mobile and native work (`packages-devtest.nix`): browser engines, Xcode and simulator tooling, Linux/macOS VMs
+- Time Machine exclusions from `timemachine-exclusions.txt` (`timemachine-exclusions.nix`)
 - Custom wallpaper (set via activation script)
 - User: `/Users/havoc`
 
@@ -143,6 +135,7 @@ Defined in `flake.nix`:
 
 - Personal development environment (no laptop-only packages, no GUI app bundle)
 - Local LLM via llama.cpp (`llamacpp-local.nix`) plus Ollama for the AzerothCore bot chat (`desktop.nix`)
+- Time Machine exclusions from `timemachine-exclusions.txt` (`timemachine-exclusions.nix`)
 - User: `/Users/havoc`
 
 #### `macos_work`
@@ -155,14 +148,13 @@ Defined in `flake.nix`:
 
 #### Shared (all macOS profiles, via `packages-tui.nix`)
 
-- **llama-server** launchd daemon (`llamacpp-local.nix`, every host) — serves `qwen/qwen3.5-9b` (Qwen3.5-9B Q4_K_M GGUF, 128K context) on `127.0.0.1:8080` only; the bind address is hard-coded and `_validate_llamacpp` rejects any other `LLAMA_CPP_HOST`. Used for gpc/gpa/gpr, aistack tier 1 and opencode. The GGUF is downloaded to `~/models` (sha256-verified) on `darwin-rebuild switch`. No LM Studio, no LM Link: no device calls another device's model.
+- **llama-server** launchd daemon: serves `qwen/qwen3.5-9b` (Qwen3.5-9B Q4_K_M GGUF, 128K context) on `127.0.0.1:8080` only; the bind address is hard-coded and `_validate_llamacpp` rejects any other `LLAMA_CPP_HOST`. Used for gpc/gpa/gpr, aistack tier 1 and opencode. The GGUF is downloaded to `~/models` (sha256-verified) on `darwin-rebuild switch`. No LM Studio, no LM Link: no device calls another device's model.
 
 #### aistack (merged into aidev)
 
-`aistack` and `aidev` are one stack now, and `aidev` is the command; `aistack` is an alias for it. The older flow, in
-which the local model wrote the plan and Claude Code reviewed it, is gone: Claude writes the plan. See
-[`aidev`](#aidev---planner-stack-that-spends-as-little-on-claude-code-as-possible) below. Settings keep their
-`AISTACK_*` names and state stays in `~/.ai/aidev/<project>-<hash>/`.
+`aistack` is an alias of `aidev_herdr`, the herdr-era pi + ralph aidev (`.zshrc_aliases`); the daily `aidev` is the
+tuios one, see [`aidev`](#aidev---claude-code-with-free-builders-on-tuios) below. Its settings keep their `AISTACK_*`
+names and its state stays in `~/.ai/aidev/<project>-<hash>/`.
 
 Lumo is reached through lumo-tamer, tried in this order, each only when the one before does not answer:
 
@@ -171,7 +163,7 @@ Lumo is reached through lumo-tamer, tried in this order, each only when the one 
 3. the public endpoint, `https://lumo.rollet.family/v1` (key from Doppler `root_hetzner-cluster`), for when the
    machine is away from home
 
-Lumo can ask for more files while it drafts; those requests are answered on the machine running `aidev`, from the
+Lumo can ask for more files while it drafts; those requests are answered on the machine running `aidev_herdr`, from the
 project it was started in (secrets refused), by direct lookup or by the local model.
 
 #### Lumo (lumo-tamer, on every personal Mac)
@@ -248,6 +240,50 @@ Single profile focused on personal development and desktop environment.
 
 - Deployed via GNU Stow
 
+## Terminal: tuios
+
+tuios is the daily terminal multiplexer, installed by brew (`packages-tui.nix`), config in `.config/tuios/config.toml`, commands in `.zshrc_functions_tuios`. The herdr versions stay as `<name>_herdr` (`dev_herdr`, `nxvim_herdr`, `aidev_herdr`).
+
+| Command                            | What it does                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------------ |
+| `dev`                              | reattach the daemon's sessions; with none, create nix-darwin, terraform-infrastructure and |
+|                                    | home-infrastructure where cloned. Layout: workspace `dev` nvim + aidev's Claude, `ai` Lumo |
+| `devim [name]`                     | that layout for the current directory, always a new session                                |
+| `nxvim`, `psvim`, `hivim`, `itvim` | the session of one project, skipped where it is not cloned                                 |
+| `hiwt <branch>`                    | a new home-infrastructure worktree and branch in `.worktrees/`, with a session of its own  |
+| `peerdev <session>`                | a session on the peer Mac through tuios host link                                          |
+| `nxpeer`, `hipeer`                 | peerdev for nix-darwin and home-infrastructure sessions                                    |
+| `mmdev`, `himmdev`, `nxmmdev`      | old names, kept as aliases of `peerdev`, `hipeer`, `nxpeer`                                |
+| `ai_tuios [-c] [message]`          | one Claude Code pane in session `ai_tuios-<dir>` (`-c` continues the last one here)        |
+
+Review: `ctrl+t v` opens the tuios review view of the focused pane's changes, against the branch's upstream (a pushed
+`gpr` branch shows only unpushed and uncommitted work). `c` notes a line, `C` a hunk, `S` sends the notes to the pane's
+agent. `prdiff` prints the whole PR's diff against origin's default branch.
+
+Run them from a plain Ghostty window, not inside herdr. Keys (`.config/tuios/config.toml`, the herdr keys where tuios
+can take them): `ctrl+t` is tuios's prefix. `ctrl+1`..`9` switch workspaces, `ctrl+shift+j`/`k` the next and previous
+session, `ctrl+shift+p` goes to an agent, session or pane, `ctrl+shift+h` shows the sidebar. `ctrl+t i` opens the
+agents and the Inbox, `ctrl+t g` lazygit, `ctrl+t s` the scratch terminal. `ctrl+t n`/`w`/`W` open a window, close it
+and close the session, `ctrl+t h`/`j`/`k`/`l` move focus, `ctrl+t space` is the workspace prefix and `ctrl+t q`
+detaches, `ctrl+t ctrl+t` sends `ctrl+t` to the pane. Without the prefix, `ctrl+tab`/`ctrl+shift+tab` cycle windows,
+`ctrl+shift+arrows` move focus and `ctrl+shift+1`..`9` move the pane to a workspace. tuios is ctrl only: alt belongs to
+aerospace.
+
+### Two Macs
+
+The host entries `mini` (MacMiniM1) and `macbook` (MacBookM2Pro) are in `.config/tuios/config.toml`. After a pull,
+run `tuios config apply` once per machine, in a terminal outside tuios.
+
+`dev` ensures the other Mac's nix-darwin and home-infrastructure sessions exist, but only when ssh answers within
+3 seconds. When it does not, `dev` prints one line and carries on. `TUIOS_DEV_NO_PEER=1` turns the peer step off.
+
+The sessions run on their own Mac. You only see and attach them from this one. The `*_ssh` commands (`mmdev_ssh`,
+`himmdev_ssh`, `nxmmdev_ssh`) are the old ssh-window versions.
+
+On `darwin-rebuild switch`, idle tuios panes are refreshed with the new dotfiles and env vars. When brew upgraded tuios under a running daemon, activation says so: run `tuios restart-server` when the panes can stop (it restarts every program in every pane). Activation also installs tuios agent integrations for every agent on PATH (`tuiosAgentSetup` in `nix-modules/macos/packages-tui.nix`).
+
+Details: [.config/aistack-tuios/README.md](.config/aistack-tuios/README.md)
+
 ## 🤖 AI-Powered Git Workflow
 
 This repository includes powerful shell functions for AI-assisted development.
@@ -256,9 +292,9 @@ This repository includes powerful shell functions for AI-assisted development.
 
 Each role has one fixed tool; there is no provider picker:
 
-- **gpa / gpc / gpr** - llama.cpp (local llama-server on 127.0.0.1:8080) through aider
-- **aidev / ainfo** - the local llama.cpp model in pi
-- **Coding and editing** - OpenCode Zen with Big Pickle (`aidev --direct`, `aidev -p`)
+- **gpa / gpc** - llama.cpp (local llama-server on 127.0.0.1:8080) through aider; gpr uses no AI
+- **ainfo** - the local llama.cpp model in pi
+- **aidev** - on tuios: Claude Code as backbone that plans and reviews, Lumo in a pane for web lookups, a builder that edits (the on-device Qwen3-Coder-30B where present, else a free OpenCode Zen model), talking by tuios mail
 - **Review and approval** - Claude Code with Sonnet/Opus (gpa `--tier=<model>` and critical-finding escalation)
 
 ### Key Git Functions
@@ -268,9 +304,9 @@ Each role has one fixed tool; there is no provider picker:
 Interactive staging with comprehensive checks:
 
 1. **Secrets detection** - Scans for API keys, passwords, tokens
-2. **Linting** - Auto-runs nixfmt, prettier, ruff on staged files
+2. **Linting** - the repo's formatter (oxfmt or prettier), nixfmt, ruff, shellcheck (errors only) for sh/bash and `zsh -n` for zsh
 3. **Batched AI review** - Reviews code in ~300 line batches
-4. **Interactive fixes** - Edit issues with AI assistance in herdr workspace
+4. **Interactive fixes** - open nvim and aidev on a free workspace of the current tuios session
 
 ```bash
 gpa                   # Select files, lint, and get AI code review
@@ -282,15 +318,15 @@ Automatically generates conventional commit messages:
 
 ```bash
 gpc                   # AI generates commit message and pushes
-gpc --skip-readme     # Skip README update check
+gpc -m "subject" -d "body"  # Commit with your message and push
 ```
 
-#### `gpr_func` - Git Pull Request
+#### `gpr` - Git Pull Request
 
-Creates draft PR with auto-generated README if missing:
+Opens a new branch, a worktree and a draft PR. In tuios it points the session's nvim and zsh windows at the new worktree. `gpr` is an alias of `gpr_func`.
 
 ```bash
-gpr_func              # Interactive PR creation with AI-generated description
+gpr                   # Interactive: pick feat or fix and a branch name (no AI call)
 ```
 
 #### Calling `gpr` / `gpa` / `gpc` from AI agents (aistack, aidev, Claude Code, opencode, pi)
@@ -343,28 +379,36 @@ A person can let one confirmed finding through, on the record:
 `gpa --waive <fingerprint> --reason "<why>" -m "<subject>"` adds a `Review-waived:` line to the commit message.
 It is refused together with `--auto`. Tests: `python3 .config/aistack/tests/test_review_guard.py`.
 
-#### `aidev` - planner stack that spends as little on Claude Code as possible
+#### `aidev` - Claude Code with free builders on tuios
 
-```bash
-aidev add a --json flag to the report command   # or `aidev`, then describe the work in pi
-aidev --direct                                  # the plain session of the selected provider (what aidev used to be)
-aidev -p "prompt"                               # one headless call to the selected provider (any flag means --direct)
-```
+| Command                       | What it does                                                                          |
+| ----------------------------- | ------------------------------------------------------------------------------------- |
+| `aidev [task]`                | Claude, Lumo and a builder in the current tuios session (else session `aidev-<repo>`) |
+| `aidev --resume`              | reopen the Claude and Lumo panes of an unfinished run after a daemon restart          |
+| `aidev -p "<change>" [files]` | one edit by a free builder in a pane, blocking; `AIDEV_TEST_CMD` must pass            |
+| `aidev --handoff <dir>`       | a run for a plan another session wrote (`/aidev-handoff`); one JSON line, no attach   |
+| `aidev --rfc <name> [words]`  | a run whose Claude plans from an RFC in `~/.ai/rfcs`                                  |
+| `aidev --direct [words]`      | a free builder, interactive, in this terminal (gpa's fix windows use it)              |
+| `aidev_status`                | the latest run's work dir, builder and tasks                                          |
 
-`aidev` is `aistack` with one difference: Claude Code writes the plan instead of reviewing one. Same run driver,
-verify gates, worktree + draft PR and state directory (`~/.ai/aidev/<project>-<hash>/`). Who does what:
+The panes talk by tuios mail (session commands: [Terminal: tuios](#terminal-tuios)):
 
-- research and coordination: the local `qwen/qwen3.5-9b` in pi talks to you, finds the code, and follows the run (free).
-  When MacMiniM1 is reachable, Lumo adds a draft that includes what it found online (free)
-- plan: Claude Code, ONE billed call (`ralph_plan`). The local model passes a brief, the files that matter (whole, or a
-  line range such as `lib/a.py:40-120`; the bridge inlines them and refuses secrets) and Lumo's draft. Claude returns
-  the finished `prd.json` and `verify.json`. `claude-plan.sh` gives that call only Read, Grep and Glob, no MCP servers
-  and no skills, and caps it with `AISTACK_CLAUDE_BUDGET_PLAN` (USD, default 1.5)
-- build: the free OpenCode Zen model, as in aistack
-- review: Claude Code, one billed call for the whole run; it builds a task only when that task keeps failing
+- `plan`: Claude Code is the backbone. You describe the work; it reads the code, writes `plan/prd.json` and
+  `plan/verify.json`, builds only when you approve, sends each task to the builder, runs the task's verify commands
+  itself and reviews the whole diff.
+- `research`: Lumo (pi on lumo-tamer, no tools) for web lookups: current docs, API changes, known bugs.
+- `build`: the builder edits the code: the on-device Qwen3-Coder-30B where present, else a free OpenCode Zen model.
+  Escalation to Big Pickle (`build-pickle`) or to billed Claude Code (`build-claude`) asks you first.
 
-A normal run therefore has two billed calls. A second `ralph_plan` returns the existing plan without a call unless
-the user asks for a new one. `aidev -p` and `aidev --direct` skip all of this; the gpa/gpc fix helpers use them.
+Plan, tasks, check output and events are files under `~/.ai/aidev_tuios/<project>-<hash>/` (`plan/`, `runs/<id>/`).
+The changes stay uncommitted in the work dir; you commit with `gpa`. Details:
+[.config/aistack-tuios/README.md](.config/aistack-tuios/README.md).
+Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_aidev_tuios.py` (tests dir
+`.config/aistack-tuios/tests`).
+
+The older pi-based planner flow remains as `aidev_herdr` (alias `aistack`): the local `qwen/qwen3.5-9b` in pi
+coordinates the run, Lumo adds a draft, and Claude Code writes `prd.json` and `verify.json` in one billed `ralph_plan`
+call (capped by `AISTACK_CLAUDE_BUDGET_PLAN`); state in `~/.ai/aidev/<project>-<hash>/`.
 Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_plan.py`.
 
 ### Required Packages
@@ -378,17 +422,19 @@ All automatically installed via nix-darwin/package managers:
 - `opencode` - AI code assistant
 - `llama-cpp` - Local LLM inference (llama-server)
 - `gh` - GitHub CLI
-- `herdr` - Terminal workspace manager
+- `tuios` - Terminal multiplexer (daily stack)
+- `herdr` - legacy multiplexer for *_herdr commands
 - `neovim` - Text editor
 
 ## 🤖 Claude Code & MCP Integration
 
 `config.nix` automatically sets up Claude Code on activation:
 
-- **Skills symlink** — `~/.claude/skills` → `~/nix-darwin/.claude/skills`
-- **Settings symlink** — `~/.claude/settings.local.json` → `~/nix-darwin/.claude/settings.local.json`
-- **MCP server auto-registration** — reads `~/.config/mcp/claude-desktop-mcp.json` and registers all servers via `claude mcp add`
-- **Custom MCP servers** — any `~/mcp-*/` directory with a `package.json` is auto-built and registered
+- **Skills**: links each skill (a directory with `SKILL.md`) from `~/model-skills-fullhavoc` and `~/model-skills-perfectserve` into `~/.claude/skills`, and removes stale skill links
+- **Settings symlink**: `~/.claude/settings.local.json` → `~/nix-darwin/.claude/settings.local.json`
+- **MCP server auto-registration**: reads `~/.config/mcp/claude-desktop-mcp.json` and registers all servers via `claude mcp add`
+- **Custom MCP servers**: any `~/mcp-*/` directory with a `package.json` is auto-built and registered
+- **tuios agent integrations**: state hooks for every installed agent harness, plus the read-only `tuios mcp` server for Claude Code, installed on activation (`packages-tui.nix`)
 
 ### MCP Servers (`.config/mcp/claude-desktop-mcp.json`)
 
@@ -418,14 +464,13 @@ All automatically installed via nix-darwin/package managers:
 
 - **Neovim** - Primary editor (LazyVim configuration, with `claudecode.nvim`)
 - **Neovide** - GPU-accelerated Neovim GUI
-- **Zed** - Modern collaborative editor (with nixd/nil LSP)
 - **Sublime Text** - GUI text editor
 - **GoLand** - JetBrains Go IDE (macOS)
 
 ### Terminals
 
 - **Ghostty** - Fast, native GPU-accelerated terminal
-- **Kitty** - Feature-rich terminal
+- **tuios** - Terminal multiplexer (daily stack)
 
 ### Window Management
 
@@ -530,6 +575,14 @@ stow -D . -t ~
 - `.gitignore` - Git configuration
 - Other non-dotfile directories
 
+## ✅ CI
+
+`.github/workflows/validate.yml` runs on pushes and pull requests to `main`, with three jobs:
+
+- **Evaluate darwin configurations** (macOS): `nix eval` of `system.drvPath` for `macos_laptop`, `macos_desktop` and `macos_work`
+- **ShellCheck** (Ubuntu): `shellcheck --severity=error scripts/*.sh`
+- **Secret scan** (Ubuntu): gitleaks over only the commits the push or pull request adds (`gitleaks detect --redact --log-opts=<range>`)
+
 ## 🔧 Troubleshooting
 
 ### macOS Issues
@@ -549,12 +602,6 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 ```bash
 darwin-rebuild switch --flake ~/nix-darwin#macos_laptop --show-trace
 ```
-
-**Zed LSP issues:**
-
-- Ensure absolute paths in `~/.config/zed/settings.json`:
-  - `"path": "/run/current-system/sw/bin/nixd"`
-  - `"command": ["/opt/homebrew/bin/nixfmt"]`
 
 ### Linux Issues
 
@@ -595,6 +642,8 @@ stow -R . -t ~  # Re-stow (replaces existing symlinks)
 
 - **[macOS Setup Guide](README_MACOS.md)** - Detailed macOS installation steps
 - **[TrueNAS SMB Monitor](scripts/README_TRUENAS.md)** - TrueNAS service monitoring
+- **[aidev on tuios](.config/aistack-tuios/README.md)** - Claude Code planner with free builders in tuios panes
+- **[aidev (pi)](.config/aistack/AIDEV.md)** - pi-based planner and runner stack in `.config/aistack/`
 
 ## 🤝 Contributing
 
@@ -619,4 +668,4 @@ This repository is provided as-is for personal and educational use.
 
 **Repository:** [FullHavocJosh/nix-darwin](https://github.com/FullHavocJosh/nix-darwin)  
 **Author:** Josh Rollet (havoc)  
-**Last Updated:** April 15, 2026
+**Last Updated:** October 27, 2026
