@@ -141,7 +141,7 @@ def main():
           f"--session-id {sid}" in body and f"--resume {sid}" in body)
     check("the first prompt is only on the first start", body.count("'first prompt'") == 1)
     check("advisor stays on for plan/review", "CLAUDE_ADVISOR=off" not in body)
-    body2 = a.claude_body(run, cfg, "build-claude", "S", "go", p, advisor=False)
+    body2 = a.claude_body(run, cfg, "build-billed", "S", "go", p, advisor=False)
     check("the billed builder runs with advisor off", "export CLAUDE_ADVISOR=off" in body2)
     script = a.write_script(run, "plan", body)
     check("the launcher ends in a shell, so the pane survives the agent", open(script).read().rstrip().endswith(
@@ -167,12 +167,12 @@ def main():
     r2 = a.Run(p, "20260101-000001")
     ws = r2.data.get("ws") if a.assign_workspaces(r2, "dev-x", own=False) is None else None
     check("without an nvim window Claude takes the first free workspace, Lumo and the builders the next",
-          ws and ws[a.PLAN] == 4 and ws[a.RESEARCH] == ws["build"] == ws["build-claude"] == 5 and "dev" not in ws, ws)
+          ws and ws[a.PLAN] == 4 and ws[a.RESEARCH] == ws["build-local"] == ws["build-billed"] == 5 and "dev" not in ws, ws)
     a.windows = lambda s: [{"workspace": 1, "custom_name": "nvim"}, {"workspace": 3}]
     r4 = a.Run(p, "20260101-000004")
     ws = r4.data.get("ws") if a.assign_workspaces(r4, "dev-x", own=False) is None else None
     check("in the dev layout Claude joins nvim's workspace, Lumo and the builders share the next free one",
-          ws and ws[a.PLAN] == 1 and ws[a.RESEARCH] == ws["build"] == ws["build-pickle"] == 2, ws)
+          ws and ws[a.PLAN] == 1 and ws[a.RESEARCH] == ws["build-local"] == ws["build-free"] == 2, ws)
     a.windows = lambda s: [{"workspace": n} for n in range(1, 9)]
     check("too few free workspaces is refused", a.assign_workspaces(a.Run(p, "20260101-000002"), "s", own=False))
     a.windows = lambda s: [{"workspace": 1, "custom_name": "nvim"}] + [{"workspace": n} for n in range(2, 10)]
@@ -242,7 +242,7 @@ def main():
         return any(c[0] == "send-agent-message" for c in reset_calls)
 
     a.tuios = reset_tuios
-    hr.data["builder"] = "build"
+    hr.data["builder"] = "build-local"
     os.environ.pop("AIDEV_NO_RESET", None)
     a.agent_state = lambda s, n: "idle"
     real_stdout, sys.stdout = sys.stdout, io.StringIO()
@@ -276,7 +276,7 @@ def main():
           and len([c for c in reset_calls if c[0] == "capture-pane"]) == 10, (reset_calls, printed))
     reset_calls.clear()
     captured[0] = "context 0.0%/128k tokens\n"
-    hr.data["builder"] = "build-claude"
+    hr.data["builder"] = "build-billed"
     a.agent_state = lambda s, n: "done"
     real_stdout, sys.stdout = sys.stdout, io.StringIO()
     try:
@@ -287,7 +287,7 @@ def main():
     check("a done Claude builder is cleared with /clear and 0.0% context confirms it",
           rc == 0 and reset_texts() == ["/clear"] and "reset not confirmed" not in printed, (reset_calls, printed))
     reset_calls.clear()
-    hr.data["builder"] = "build"
+    hr.data["builder"] = "build-local"
     a.agent_state = lambda s, n: "idle"
     os.environ["AIDEV_NO_RESET"] = "1"
     real_stdout, sys.stdout = sys.stdout, io.StringIO()
@@ -300,7 +300,7 @@ def main():
           rc == 0 and not reset_texts() and mailed(), reset_calls)
     reset_calls.clear()
     captured[0] = "80.0%/33k (auto)\n"
-    hr.data["builder"] = "build-claude"
+    hr.data["builder"] = "build-billed"
     a.agent_state = lambda s, n: "none"
     real_stdout, sys.stdout = sys.stdout, io.StringIO()
     try:
@@ -313,7 +313,7 @@ def main():
           and len([c for c in reset_calls if c[0] == "capture-pane"]) == 10, (reset_calls, printed))
     reset_calls.clear()
     captured[0] = "new session ses_abc\n"
-    hr.data["builder"] = "build"
+    hr.data["builder"] = "build-local"
     a.agent_state = lambda s, n: "none"
     real_stdout, sys.stdout = sys.stdout, io.StringIO()
     try:
@@ -324,16 +324,16 @@ def main():
     check("a lowercase 'new session' confirms the reset",
           rc == 0 and "reset not confirmed" not in printed, (reset_calls, printed))
     a.tuios, a.time.sleep, a.agent_state = real_tuios, real_sleep, (lambda s, n: "idle")
-    hr.data["builder"] = "build"
+    hr.data["builder"] = "build-local"
     check("send-task succeeds", a.cmd_send_task(hr, ["T1", "use the same style"]) == 0)
     sends = [c for c in calls if c[0] == "send-agent-message"]
     queues = [c for c in calls if c[0] == "queue"]
-    check("the task is mailed to the builder", sends and "build" in sends[-1] and "task T1" in sends[-1], sends)
+    check("the task is mailed to the builder", sends and "build-local" in sends[-1] and "task T1" in sends[-1], sends)
     check("the typed prompt names the mail to reply to", queues and "--reply-to 7" in queues[-1][-1], queues)
     tfile = open(os.path.join(hr.dir, "tasks", "T1.md")).read()
     check("Claude's note reaches the task file", "use the same style" in tfile)
     a.tuios_json = lambda *args, **kw: {"messages": [{"id": 7, "from": "plan (11111111)", "text": "task"},
-                                                    {"id": 8, "from": "build (abcd1234)", "text": "done: sub"}]}
+                                                    {"id": 8, "from": "build-local (abcd1234)", "text": "done: sub"}]}
     a.agent_state = lambda s, n: "idle"
     check("wait-task takes the reply, then the checks fail while sub is missing",
           a.cmd_wait_task(hr, ["T1", "5"]) == 1 and hr.data["tasks"]["T1"]["status"] == "failed")
@@ -341,7 +341,7 @@ def main():
         fh.write("\n\ndef sub(a, b):\n    return a - b\n")
     check("verify passes once the code is there",
           a.cmd_verify(hr, ["T1"]) == 0 and hr.data["tasks"]["T1"]["status"] == "verified")
-    mail = {"messages": [{"id": 9, "from": "build (abcd1234)", "text": "blocked: need the spec"}]}
+    mail = {"messages": [{"id": 9, "from": "build-local (abcd1234)", "text": "blocked: need the spec"}]}
     a.tuios_json = lambda *args, **kw: mail if "--unread" in args else {}
     hr.save()
     real_stdout, sys.stdout = sys.stdout, io.StringIO()
@@ -388,7 +388,7 @@ def main():
     mr = a.Run(p, "20260101-000010")
     mr.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}, a.RESEARCH: {"cwd": p}}, tasks={"T1": {"status": "verified"}, "T2": {"status": "sent"}})
     mr.save()
-    a.window_named = lambda s, n: {"custom_name": n, "cwd": p} if n in (a.PLAN, a.RESEARCH, "build", "build-claude", "build-pickle") else None
+    a.window_named = lambda s, n: {"custom_name": n, "cwd": p} if n in (a.PLAN, a.RESEARCH, "build-local", "build-billed", "build-free") else None
     a.agent_state = lambda s, n: "idle"
     merged_calls.clear()
     real_stdout, sys.stdout = sys.stdout, io.StringIO()
@@ -401,17 +401,17 @@ def main():
 
     # Case 2
     mr2 = a.Run(p, "20260101-000011")
-    mr2.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}, a.RESEARCH: {"cwd": p}}, tasks={"T1": {"status": "verified"}, "T2": {"status": "verified"}}, builder="build", work_dir=p)
+    mr2.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}, a.RESEARCH: {"cwd": p}}, tasks={"T1": {"status": "verified"}, "T2": {"status": "verified"}}, builder="build-local", work_dir=p)
     mr2.save()
     def merged_win2(s, n):
         if n == a.PLAN: return {"custom_name": n, "cwd": p}
         if n == a.RESEARCH: return {"custom_name": n, "cwd": p}
-        if n == "build": return {"custom_name": n, "cwd": p}
+        if n == "build-local": return {"custom_name": n, "cwd": p}
         return None
     a.window_named = merged_win2
     def merged_state2(s, n):
         if n == a.RESEARCH: return "idle"
-        if n == "build": return "done"
+        if n == "build-local": return "done"
         return "idle"
     a.agent_state = merged_state2
     merged_calls.clear()
@@ -423,19 +423,19 @@ def main():
     finally:
         sys.stdout = real_stdout
     texts = [c for c in merged_calls if c[0] == "send-text"]
-    check("merged resets Lumo and builder when all verified, not Claude", rc == 0 and "compact" in printed and len([t for t in texts if len(t) > 4 and t[4] == a.RESEARCH and t[5] == "/new"]) >= 1 and len([t for t in texts if len(t) > 4 and t[4] == "build" and t[5] == "/new"]) >= 1, (printed, texts))
+    check("merged resets Lumo and builder when all verified, not Claude", rc == 0 and "compact" in printed and len([t for t in texts if len(t) > 4 and t[4] == a.RESEARCH and t[5] == "/new"]) >= 1 and len([t for t in texts if len(t) > 4 and t[4] == "build-local" and t[5] == "/new"]) >= 1, (printed, texts))
 
     # Case 3
     mr3 = a.Run(p, "20260101-000012")
-    mr3.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}, a.RESEARCH: {"cwd": p}}, tasks={"T1": {"status": "verified"}}, builder="build", work_dir=None)
+    mr3.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}, a.RESEARCH: {"cwd": p}}, tasks={"T1": {"status": "verified"}}, builder="build-local", work_dir=None)
     mr3.save()
     def merged_win3(s, n):
-        if n in (a.PLAN, a.RESEARCH, "build"): return {"custom_name": n, "cwd": p}
+        if n in (a.PLAN, a.RESEARCH, "build-local"): return {"custom_name": n, "cwd": p}
         return None
     a.window_named = merged_win3
     def merged_state3(s, n):
         if n == a.RESEARCH: return "working"
-        if n == "build": return "idle"
+        if n == "build-local": return "idle"
         return "idle"
     a.agent_state = merged_state3
     merged_calls.clear()
@@ -446,14 +446,14 @@ def main():
         printed = sys.stdout.getvalue()
     finally:
         sys.stdout = real_stdout
-    check("merged does not reset working Lumo", rc == 0 and "not reset" in printed and len([t for t in merged_calls if t[0] == "send-text" and len(t) > 4 and t[4] == "build"]) >= 1 and not any(t[0] == "send-text" and len(t) > 4 and t[4] == a.RESEARCH for t in merged_calls), (printed, merged_calls))
+    check("merged does not reset working Lumo", rc == 0 and "not reset" in printed and len([t for t in merged_calls if t[0] == "send-text" and len(t) > 4 and t[4] == "build-local"]) >= 1 and not any(t[0] == "send-text" and len(t) > 4 and t[4] == a.RESEARCH for t in merged_calls), (printed, merged_calls))
 
     # Case 4
     mr4 = a.Run(p, "20260101-000013")
     mr4.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}, a.RESEARCH: {"cwd": p}}, tasks={"T1": {"status": "verified"}}, work_dir=None)
     mr4.save()
     def merged_win4(s, n):
-        if n in (a.PLAN, a.RESEARCH, "build", "build-pickle", "build-claude"): return {"custom_name": n, "cwd": p}
+        if n in (a.PLAN, a.RESEARCH, "build-local", "build-free", "build-billed"): return {"custom_name": n, "cwd": p}
         return None
     a.window_named = merged_win4
     a.agent_state = lambda s, n: "idle"
@@ -467,16 +467,16 @@ def main():
         sys.stdout = real_stdout
     texts = [c for c in merged_calls if c[0] == "send-text"]
     check("merged resets different builders with correct commands", rc == 0 and 
-          any(len(t) > 5 and t[4] == "build" and t[5] == "/new" for t in texts) and
-          any(len(t) > 5 and t[4] == "build-pickle" and t[5] == "/new" for t in texts) and
-          any(len(t) > 5 and t[4] == "build-claude" and t[5] == "/clear" for t in texts), (texts, printed))
+          any(len(t) > 5 and t[4] == "build-local" and t[5] == "/new" for t in texts) and
+          any(len(t) > 5 and t[4] == "build-free" and t[5] == "/new" for t in texts) and
+          any(len(t) > 5 and t[4] == "build-billed" and t[5] == "/clear" for t in texts), (texts, printed))
 
     # Case 5
     mr5 = a.Run(p, "20260101-000014")
-    mr5.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}, a.RESEARCH: {"cwd": p}}, tasks={"T1": {"status": "verified"}}, work_dir=p, builder="build")
+    mr5.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}, a.RESEARCH: {"cwd": p}}, tasks={"T1": {"status": "verified"}}, work_dir=p, builder="build-local")
     mr5.save()
     def merged_win5(s, n):
-        if n in (a.PLAN, a.RESEARCH, "build"): return {"custom_name": n, "cwd": p}
+        if n in (a.PLAN, a.RESEARCH, "build-local"): return {"custom_name": n, "cwd": p}
         return None
     a.window_named = merged_win5
     a.agent_state = lambda s, n: "idle"
@@ -488,18 +488,18 @@ def main():
         printed = sys.stdout.getvalue()
     finally:
         sys.stdout = real_stdout
-    check("merged closes builders if work_dir exists before resets", rc == 0 and any(c[0] == "close-window" and "build" in str(c) for c in merged_calls), (merged_calls, printed))
+    check("merged closes builders if work_dir exists before resets", rc == 0 and any(c[0] == "close-window" and "build-local" in str(c) for c in merged_calls), (merged_calls, printed))
     mr5r = a.Run(p, "20260101-000014")
     check("merged removes work_dir via finish", mr5r.data.get("work_dir") is None)
 
     # Case 6
     mr6 = a.Run(p, "20260101-000015")
-    mr6.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}, a.RESEARCH: {"cwd": p}}, tasks={"T1": {"status": "verified"}}, builder="build", work_dir=None)
+    mr6.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}, a.RESEARCH: {"cwd": p}}, tasks={"T1": {"status": "verified"}}, builder="build-local", work_dir=None)
     mr6.save()
     def merged_win6(s, n):
         if n == a.PLAN: return {"custom_name": n, "cwd": p}
         if n == a.RESEARCH: return {"custom_name": n, "cwd": p}
-        if n == "build": return {"custom_name": n, "cwd": "/no/such/dir/that/does/not/exist"}
+        if n == "build-local": return {"custom_name": n, "cwd": "/no/such/dir/that/does/not/exist"}
         return None
     a.window_named = merged_win6
     a.agent_state = lambda s, n: "idle"
@@ -511,14 +511,14 @@ def main():
         printed = sys.stdout.getvalue()
     finally:
         sys.stdout = real_stdout
-    check("merged warns when cwd gone but still resets", rc == 0 and "its directory" in printed and "is gone" in printed and any(t[0] == "send-text" and len(t) > 4 and t[4] == "build" for t in merged_calls), (printed, merged_calls))
+    check("merged warns when cwd gone but still resets", rc == 0 and "its directory" in printed and "is gone" in printed and any(t[0] == "send-text" and len(t) > 4 and t[4] == "build-local" for t in merged_calls), (printed, merged_calls))
 
     # Case 7
     mr7 = a.Run(p, "20260101-000016")
-    mr7.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}, a.RESEARCH: {"cwd": p}}, tasks={"T1": {"status": "verified"}}, builder="build", work_dir=None)
+    mr7.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}, a.RESEARCH: {"cwd": p}}, tasks={"T1": {"status": "verified"}}, builder="build-local", work_dir=None)
     mr7.save()
     def merged_win7(s, n):
-        if n in (a.PLAN, a.RESEARCH, "build"): return {"custom_name": n, "cwd": p}
+        if n in (a.PLAN, a.RESEARCH, "build-local"): return {"custom_name": n, "cwd": p}
         return None
     a.window_named = merged_win7
     a.agent_state = lambda s, n: "idle"
@@ -535,11 +535,11 @@ def main():
 
     # Case 8
     hr2 = a.Run(p, "20260101-000017")
-    hr2.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}}, work_dir=p, builder="build")
+    hr2.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}}, work_dir=p, builder="build-local")
     hr2.save()
     calls_finish = []
     a.tuios = lambda *args, timeout=60: (calls_finish.append(args), (0, "", ""))[1]
-    a.window_named = lambda s, n: {"custom_name": n, "cwd": p} if n == "build" else None
+    a.window_named = lambda s, n: {"custom_name": n, "cwd": p} if n == "build-local" else None
     real_stdout, sys.stdout = sys.stdout, io.StringIO()
     try:
         rc = a.cmd_finish(hr2, [])
@@ -555,7 +555,7 @@ def main():
             tr = a.Run(p, rid)
             tr.data["phase"] = "done"
             tr.save()
-        except:
+        except Exception:
             pass
 
     a.tuios, a.time.sleep, a.window_named, a.agent_state = real_tuios_m, real_sleep_m, real_wn_m, real_as_m
@@ -583,7 +583,8 @@ def main():
         calls.append(args)
         if args[0] == "ask-agent":
             say("u2", "user", args[-1])
-            say("a2", "assistant", "Use X 2.0; see https://example.org")
+            say("a2", "assistant", "Use X 2.0; see https://example.org\n"
+                "SEARCH-CONFIRMATION: searched=yes; queries=x release notes; sources=1")
         return 0, "", ""
 
     a.tuios = lumo_turn
@@ -596,7 +597,7 @@ def main():
     check("ask-lumo prints the new reply only", rc == 0 and "X 2.0" in printed and "old answer" not in printed,
           printed)
     asks = [c for c in calls if c[0] == "ask-agent"]
-    check("the question goes to the research pane", asks and a.RESEARCH in asks[-1] and asks[-1][-1] == "which X?", asks)
+    check("the question goes to the research pane", asks and a.RESEARCH in asks[-1] and asks[-1][-1].endswith("which X?"), asks)
     say("u3", "user", "typed by you in the lumo pane")
     say("a3", "assistant", "Lumo answer three")
     a.tuios_json = lambda *args, **kw: {}
@@ -625,10 +626,10 @@ def main():
     check("the builder holds less than Claude, so it cannot type into Claude's pane",
           set(a.GRANTS["build"].split(",")) < set(a.GRANTS[a.PLAN].split(",")))
     a.window_named = lambda s, n: {"custom_name": n}
-    hr.data.update(work_dir=p, builder="build")
+    hr.data.update(work_dir=p, builder="build-local")
     check("finish closes the builder pane and keeps the run open for the next piece of work",
           a.cmd_finish(hr, []) == 0 and hr.data.get("phase") != "done" and not hr.data.get("work_dir")
-          and hr.data["finished"][-1]["work_dir"] == p and any(c[:2] == ("close-window", "build") for c in calls))
+          and hr.data["finished"][-1]["work_dir"] == p and any(c[:2] == ("close-window", "build-local") for c in calls))
     rr = a.Run(p, "20260101-000006")
     rr.data.update(session="dev-r", phase="done", panes={a.PLAN: {"script": script, "cwd": p}})
     rr.save()
@@ -662,7 +663,7 @@ def main():
 
     def fake_headless(run, kind, task_text, limit):
         attempts.append(kind)
-        if kind == "pickle":
+        if kind == "free":
             with open(os.path.join(run.data["work_dir"], "calc.py"), "a") as fh:
                 fh.write("\n\ndef sub(a, b):\n    return a - b\n")
         return f"{kind} did its turn", ""
@@ -681,7 +682,7 @@ def main():
     finally:
         sys.stdout = real_stdout
     check("-p tries the 30B, then the Zen builder when the check still fails",
-          rc == 0 and attempts == ["30b", "pickle"] and "aidev -p: done" in printed, (rc, attempts, printed[-400:]))
+          rc == 0 and attempts == ["local", "free"] and "aidev -p: done" in printed, (rc, attempts, printed[-400:]))
     check("-p never becomes the project's run", a.Run(ep).id.startswith("edit-") is False)
     os.environ["AIDEV_TUIOS_BUILDER"] = "1"
     check("-p is refused inside a builder pane", a.cmd_edit(["x"]) == 2)
@@ -718,7 +719,7 @@ def main():
     er.data.update(phase="edit", work_dir=p, reply_to="abcd-pane")
     body = a.build_body(er, {"pi_build": os.path.join(d, "pi-b"), "opencode_dir": d,
                              "claude_backbone": os.path.join(d, "b.json"), "claude_settings": ccfg["claude_settings"],
-                             "claude_mcp": "/m.json"}, "claude", "edit-claude-x")
+                             "claude_mcp": "/m.json"}, "billed", "edit-claude-x")
     sp = open(os.path.join(er.dir, "bin", "edit-claude-x.system.md")).read()
     check("an edit's builder replies to the caller's pane, and cannot run aidev itself",
           "-w abcd-pane" in sp and "AIDEV_TUIOS_BUILDER=1" in body, sp[:300])

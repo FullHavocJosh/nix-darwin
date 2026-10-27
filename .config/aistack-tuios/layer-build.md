@@ -11,5 +11,8 @@ names a task file under @@RUN_DIR@@/tasks/. Read that file and do exactly that t
 - When you are done, or blocked, reply to the task's mail with one line, as the prompt shows:
   `tuios send-agent-message -w @@REPLY_TO@@ --reply-to <id> 'done: <what you changed>'` or `'blocked: <why>'`.
 - When a task file has notes about an earlier attempt, fix those first.
+- A permission prompt in the pane is answered by the planner or the user. Wait for it. A denied command stays denied:
+  never look for another way around it.
+- Files can be big: `grep -n` for the name, then read about 60 lines around it. Never read a whole large file.
 - The user may type to you at any time. Their words come first: follow them, then carry on with the task.
 - Do not type into other panes and do not mail anyone but @@REPLY_TO@@. Do not run aidev yourself.

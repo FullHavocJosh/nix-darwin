@@ -3,8 +3,9 @@
 .config/mcp/claude-desktop-mcp.json; not on the work laptop (no Zen key there, and the server is excluded for that
 host) and not given to OpenCode itself.
 
-One tool:
+Two tools:
   oczen_edit(instruction, file, start_line, end_line, test_cmd)   same request and result as local_edit
+  zen_free_models(private, probe, all, refresh)   read-only: which free Zen models this account can use now (zen_models.py)
 
 local_edit (on-device, nothing leaves the machine) stays the first choice; oczen_edit is for when local_edit is
 unavailable (the 30B is not on this host) or failed. It runs `opencode run --standalone --auto` (a private server, so
@@ -37,7 +38,8 @@ INSTRUCTIONS = (
     "oczen_edit hands one file edit to OpenCode Zen's free Big Pickle model (cloud). Prefer local_edit (on this "
     "machine); use oczen_edit when local_edit is unavailable or failed. Same request as local_edit: one file per "
     "call, ideally start_line/end_line, an exact instruction ending with 'Change nothing else.', a test_cmd; changes "
-    "outside the range are reverted. Review the returned diff. It needs a gpr worktree, not a main checkout."
+    "outside the range are reverted. Review the returned diff. It needs a gpr worktree, not a main checkout. "
+    "zen_free_models is read-only: it lists the free Zen models this account can use now and the best one."
 )
 
 
@@ -143,6 +145,32 @@ def oczen_edit(a):
     return out
 
 
+def load_zen_models():
+    spec = importlib.util.spec_from_file_location("zen_models", os.path.join(HERE, "zen_models.py"))
+    zm = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(zm)
+    return zm
+
+
+def zen_free_models(a):
+    if not zen_key_present():
+        return {"ok": False, "error": "no OpenCode Zen key on this host"}
+    zm = load_zen_models()
+    try:
+        policy = json.load(open(os.path.join(HERE, "zen-policy.json")))
+    except (OSError, ValueError):
+        policy = {}
+    try:
+        catalog, _source, _age = zm.load_catalog()
+    except Exception as exc:
+        return {"ok": False, "error": f"model catalog unavailable: {exc}"}
+    st = zm.status(catalog, zm.offered_ids(), policy, bool(a.get("private", False)),
+                   do_probe=bool(a.get("probe", True)), refresh=bool(a.get("refresh", False)),
+                   probe_all=bool(a.get("all", False)))
+    return {"ok": True, "best": st["best"], "all_exhausted": st["all_exhausted"], "models": st["models"],
+            "warnings": st["warnings"]}
+
+
 TOOLS = {
     "oczen_edit": (
         oczen_edit,
@@ -161,6 +189,22 @@ TOOLS = {
                 "test_cmd": {"type": "string", "description": "Optional shell command that exits 0 when the edit is right."},
             },
             "required": ["instruction", "file"],
+        },
+    ),
+    "zen_free_models": (
+        zen_free_models,
+        (
+            "Read-only: which free OpenCode Zen models this account can use now (probes them, cached), and the best "
+            "one. No file or worktree needed."
+        ),
+        {
+            "type": "object",
+            "properties": {
+                "private": {"type": "boolean", "default": False, "description": "The work is private: only models that do not train on prompts."},
+                "probe": {"type": "boolean", "default": True, "description": "Probe models whose cached state is stale."},
+                "all": {"type": "boolean", "default": False, "description": "Probe every candidate, not only up to the first available."},
+                "refresh": {"type": "boolean", "default": False, "description": "Ignore cached results."},
+            },
         },
     ),
 }

@@ -3,11 +3,18 @@
 
   zen_models.py choose --private yes|no   JSON: the model to use, why, and any warnings
   zen_models.py best                      the best free model's id (for other callers); exit 1 when there is none
+  zen_models.py status --private yes|no   the candidate free models with a state (available, exhausted, unknown,
+                                          unprobed); --probe asks opencode, --all probes every candidate, --refresh
+                                          ignores the cache; exit 0 best is available, 3 unknown or unprobed, 1 none
+  zen_models.py choose --available        also probe, and use the first model that answers (None when all are used up)
 
 What is "free" comes from the models.dev catalog (the same data opencode caches in ~/.cache/opencode/models.json):
 cost 0/0, tool calls, not deprecated. What this account is offered comes from `opencode models`. Which free models are
 zero-retention comes from zen-policy.json (taken from the Zen docs, with the date it was verified), because the
 catalog does not carry data-handling terms.
+
+Probe results are cached for ten minutes in STATUS_CACHE (AISTACK_ZEN_STATUS_CACHE overrides the path), because Zen has
+no balance API and a probe costs a model call.
 
 Private repos only get zero-retention free models. Public repos prefer policy.public_preferred (Big Pickle) and say so
 loudly when it stops being a free option, instead of failing later in the middle of a run.
@@ -18,6 +25,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 
@@ -27,6 +35,14 @@ OPENCODE_CACHE = os.path.expanduser("~/.cache/opencode/models.json")
 OWN_CACHE = os.path.expanduser("~/.cache/aistack/models-dev.json")
 MAX_AGE_H = 24
 POLICY_STALE_DAYS = 60
+PROBE_PROMPT = "Reply with the single word ok."
+PROBE_TIMEOUT_S = 60
+# Zen has no balance API: an exhausted free model makes opencode print "Free usage exceeded, add credits  retrying in
+# 10h 37m attempt 1" or a 429 error, then keep retrying, so a probe that times out still carries the answer.
+EXHAUSTED_RE = re.compile(r"free usage exceeded|usage exceeded|rate.?limit|\b429\b|add credits|insufficient|quota", re.IGNORECASE)
+STATUS_CACHE = os.environ.get("AISTACK_ZEN_STATUS_CACHE") or os.path.expanduser("~/.cache/aistack/zen-status.json")
+STATUS_TTL_S = 600
+RETRY_RE = re.compile(r"retrying in ([^\n]*?)(?: attempt|$)", re.IGNORECASE | re.MULTILINE)
 
 
 def _age_h(path):
@@ -85,6 +101,47 @@ def offered_ids():
     return ids or None
 
 
+def strip_ansi(text):
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
+def classify(text, code):
+    """(state, detail) for an opencode answer: exhausted, available or unknown."""
+    text = strip_ansi(text or "")
+    m = EXHAUSTED_RE.search(text)
+    if m:
+        line = next(l for l in text.splitlines() if EXHAUSTED_RE.search(l))
+        detail = line.strip()[:160]
+        r = RETRY_RE.search(text)
+        if r:
+            detail += f" (retry in {r.group(1).strip()})"
+        return "exhausted", detail
+    if code == 0 and text.strip():
+        return "available", ""
+    first = next((l.strip() for l in text.splitlines() if l.strip()), "")
+    return "unknown", first[:160] or "no output"
+
+
+def _text(x):
+    if x is None:
+        return ""
+    return x.decode("utf-8", "replace") if isinstance(x, bytes) else x
+
+
+def probe(mid, runner=subprocess.run):
+    """State record for one free model: ask opencode one trivial question and classify what comes back."""
+    cmd = ["opencode", "run", "--standalone", "--model", "opencode/" + mid, PROBE_PROMPT]
+    try:
+        r = runner(cmd, cwd=tempfile.mkdtemp(), capture_output=True, text=True, timeout=PROBE_TIMEOUT_S,
+                   stdin=subprocess.DEVNULL, check=False)
+        state, detail = classify(_text(r.stdout) + _text(r.stderr), r.returncode)
+    except subprocess.TimeoutExpired as e:
+        state, detail = classify(_text(e.stdout) + _text(e.stderr), 124)
+    except OSError as e:
+        state, detail = "unknown", str(e)
+    return {"model": mid, "state": state, "detail": detail, "checked": time.time()}
+
+
 def zen_models(catalog):
     return (catalog.get("opencode") or {}).get("models") or {}
 
@@ -112,6 +169,57 @@ def free_models(catalog, offered):
         if free_reason(mid, catalog, offered) is None:
             out.append(mid)
     return sorted(out, key=lambda i: zen_models(catalog)[i].get("release_date", ""), reverse=True)
+
+
+def candidates(catalog, offered, policy, private, limit=9):
+    """Free model ids in the order to try them: zero-retention only for a private repo, else Big Pickle first."""
+    free = free_models(catalog, offered)
+    if private:
+        out = [m for m in policy.get("zero_retention", []) if m in free]
+    else:
+        preferred = policy.get("public_preferred", "big-pickle")
+        out = ([preferred] if preferred in free else []) + [m for m in free if m != preferred]
+    return out[:limit]
+
+
+def _load_status_cache():
+    try:
+        data = json.load(open(STATUS_CACHE))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def status(catalog, offered, policy, private, do_probe=False, refresh=False, probe_all=False, limit=9,
+           runner=subprocess.run, now=None):
+    """State of each candidate: a fresh cached answer, a new probe, or "unprobed"."""
+    now = time.time() if now is None else now
+    cache = _load_status_cache()
+    records, dirty, have_available = [], False, False
+    for mid in candidates(catalog, offered, policy, private, limit):
+        rec = cache.get(mid)
+        fresh = (not refresh and isinstance(rec, dict) and rec.get("state") in ("available", "exhausted")
+                 and isinstance(rec.get("checked"), (int, float)) and now - rec["checked"] < STATUS_TTL_S)
+        if not fresh:
+            if do_probe and (probe_all or not have_available):
+                rec = probe(mid, runner=runner)
+                cache[mid] = rec
+                dirty = True
+            else:
+                rec = {"model": mid, "state": "unprobed", "detail": "", "checked": None}
+        have_available = have_available or rec["state"] == "available"
+        records.append(rec)
+    if dirty:
+        try:
+            os.makedirs(os.path.dirname(STATUS_CACHE), exist_ok=True)
+            json.dump(cache, open(STATUS_CACHE, "w"))
+        except OSError:
+            pass
+    usable = [r["model"] for r in records if r["state"] in ("available", "unknown")]
+    best = next((r["model"] for r in records if r["state"] == "available"), None)
+    best = best or next((r["model"] for r in records if r["state"] == "unknown"), None)
+    return {"private": private, "models": records, "usable": usable, "best": best,
+            "all_exhausted": bool(records) and all(r["state"] == "exhausted" for r in records), "warnings": []}
 
 
 def choose(catalog, offered, policy, private, source="", age_h=None, today=None):
@@ -159,14 +267,22 @@ def choose(catalog, offered, policy, private, source="", age_h=None, today=None)
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("choose", "best"):
+    for name in ("choose", "best", "status"):
         sp = sub.add_parser(name)
         sp.add_argument("--catalog", help="catalog JSON file (tests)")
         sp.add_argument("--offered", help="comma separated ids this account is offered (tests); 'unknown' = could not list")
         sp.add_argument("--policy", default=os.path.join(HERE, "zen-policy.json"))
         sp.add_argument("--no-fetch", action="store_true")
-        if name == "choose":
+        if name in ("choose", "status"):
             sp.add_argument("--private", choices=("yes", "no"), required=True)
+        if name == "choose":
+            sp.add_argument("--available", action="store_true", help="probe and use the first model that answers")
+        if name == "status":
+            sp.add_argument("--probe", action="store_true")
+            sp.add_argument("--all", action="store_true", help="probe every candidate, not only up to the first available")
+            sp.add_argument("--refresh", action="store_true", help="ignore cached results")
+            sp.add_argument("--limit", type=int, default=9)
+            sp.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
     # test hooks for shell-level tests: a fixed catalog and a fixed list of offered models
     a.catalog = a.catalog or os.environ.get("AISTACK_ZEN_CATALOG")
@@ -191,7 +307,28 @@ def main(argv=None):
             return 0
         print("\n".join(res["warnings"]), file=sys.stderr)
         return 1
-    res = choose(catalog, offered, policy, private=(a.private == "yes"), source=source, age_h=age)
+    private = a.private == "yes"
+    if a.cmd == "status":
+        st = status(catalog, offered, policy, private, do_probe=a.probe, refresh=a.refresh, probe_all=a.all, limit=a.limit)
+        if a.json:
+            print(json.dumps(st))
+        else:
+            for r in st["models"]:
+                print(f"{r['model']}  {r['state']}  {r['detail']}".rstrip())
+            print(f"best: {st['best'] or 'none'}")
+        if not st["models"] or st["all_exhausted"]:
+            return 1
+        best = next((r for r in st["models"] if r["model"] == st["best"]), None)
+        return 0 if best and best["state"] == "available" else 3
+    res = choose(catalog, offered, policy, private=private, source=source, age_h=age)
+    if a.available:
+        st = status(catalog, offered, policy, private, do_probe=True)
+        if st["best"]:
+            res["model"] = st["best"]
+            res["notes"].append(f"probed: {st['best']} is available")
+        elif st["all_exhausted"]:
+            res["model"] = None
+            res["warnings"].append("every free Zen model is exhausted")
     print(json.dumps(res))
     return 0
 
