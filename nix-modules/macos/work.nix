@@ -82,6 +82,12 @@ in
     else
       echo "Warning: jq failed while removing monthly_cost from $cfg; the budget bar may still show." >&2
     fi
+    # Tanium is the company's endpoint agent and not wanted here; drop its client directory on every switch.
+    # Non-fatal: a failure must not abort the rest of postActivation.
+    if [ -d /Library/Tanium ]; then
+      echo "Removing /Library/Tanium..."
+      rm -rf /Library/Tanium || echo "Warning: could not remove /Library/Tanium" >&2
+    fi
   '';
 
   networking.hostName = "MacBookM3Pro";
