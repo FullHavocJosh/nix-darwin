@@ -69,7 +69,8 @@ def reset():
 
 r = subprocess.run([sys.executable, SERVER], input='{"jsonrpc":"2.0","id":1,"method":"tools/list"}\n', capture_output=True, text=True)
 tools = json.loads(r.stdout)["result"]["tools"]
-check("tools/list: oczen_edit, loaded upfront", [t["name"] for t in tools] == ["oczen_edit"] and tools[0]["_meta"]["anthropic/alwaysLoad"] is True, tools)
+check("tools/list: oczen_edit and zen_free_models, loaded upfront",
+      [t["name"] for t in tools] == ["oczen_edit", "zen_free_models"] and all(t["_meta"]["anthropic/alwaysLoad"] is True for t in tools), tools)
 check("the schema takes one file and a line range", set(tools[0]["inputSchema"]["properties"]) == {"instruction", "file", "start_line", "end_line", "test_cmd"}, tools[0]["inputSchema"])
 
 err, out = call({"instruction": "INSIDE", "file": "src/a.py", "start_line": 8, "end_line": 12, "test_cmd": "grep -q 'v10 = 100' src/a.py"})
@@ -103,6 +104,38 @@ err, out = call({"instruction": "INSIDE", "files": ["src/a.py", "src/b.py"]})
 check("several files in one call are refused (one file per call)", err and "one file per call" in out["error"], out)
 err, out = call({"instruction": "NOTHING", "file": "src/a.py"})
 check("no change is an error", err and "changed nothing" in out.get("error", ""), out)
+
+# zen_free_models: in-process, zen_models.status patched
+import importlib.util
+from unittest import mock
+
+_spec = importlib.util.spec_from_file_location("oczen_mcp_t", SERVER)
+oczen = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(oczen)
+_zspec = importlib.util.spec_from_file_location("zen_models", os.path.join(os.path.dirname(HERE), "zen_models.py"))
+_zm = importlib.util.module_from_spec(_zspec)
+_zspec.loader.exec_module(_zm)
+FAKE = {"private": False, "models": [{"model": "opencode/m1", "state": "available", "detail": "", "checked": 1}],
+        "usable": ["opencode/m1"], "best": "opencode/m1", "all_exhausted": False, "warnings": []}
+
+
+def zcall(args):
+    res = oczen.handle({"method": "tools/call", "params": {"name": "zen_free_models", "arguments": args}})
+    return res["isError"], json.loads(res["content"][0]["text"])
+
+
+with mock.patch.object(oczen, "zen_key_present", return_value=True), \
+        mock.patch.object(oczen, "load_zen_models", return_value=_zm), \
+        mock.patch.object(_zm, "load_catalog", return_value=({}, "test", 0)), \
+        mock.patch.object(_zm, "offered_ids", return_value=None), \
+        mock.patch.object(_zm, "status", return_value=FAKE) as st:
+    err, out = zcall({"probe": False})
+check("zen_free_models returns the models and the best one", not err and out["best"] == "opencode/m1"
+      and out["models"][0]["model"] == "opencode/m1" and out["warnings"] == [], out)
+check("zen_free_models passes the flags on", st.call_args.kwargs["do_probe"] is False and st.call_args.kwargs["probe_all"] is False, st.call_args)
+with mock.patch.object(oczen, "zen_key_present", return_value=False):
+    err, out = zcall({})
+check("zen_free_models without a Zen key is an error", err and "no OpenCode Zen key" in out["error"], out)
 
 print("\nFAILED: %s" % FAILS if FAILS else "\nALL PASSED")
 sys.exit(1 if FAILS else 0)

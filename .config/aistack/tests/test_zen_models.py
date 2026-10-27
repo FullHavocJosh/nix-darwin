@@ -82,5 +82,78 @@ check("best prints Big Pickle for other callers", rc == 0 and out.strip() == "bi
 rc, out, err = run("best", "--catalog", cf, "--offered", "paid-one", "--policy", pf)
 check("best exits 1 with the reason when nothing is free", rc == 1 and "not a free Zen option anymore" in err, err)
 
-print("\nFAILED: %s" % FAILS if FAILS else "\nALL PASSED")
+print("probing")
+EXH = "Free usage exceeded, add credits  retrying in 10h 37m attempt 1"
+st, det = z.classify("\x1b[31m" + EXH + "\x1b[0m", 1)
+check("a Free usage exceeded line is exhausted with the retry time", st == "exhausted" and "10h 37m" in det, (st, det))
+st, det = z.classify("Error: 429 Too Many Requests", 1)
+check("a 429 line is exhausted", st == "exhausted", (st, det))
+check("ok with code 0 is available", z.classify("ok\n", 0) == ("available", ""))
+check("empty text with code 1 is unknown", z.classify("", 1) == ("unknown", "no output"))
+def timeout_runner(cmd, **kw):
+    raise z.subprocess.TimeoutExpired(cmd, 60, output=EXH.encode(), stderr=None)
+rec = z.probe("big-pickle", runner=timeout_runner)
+check("a timeout with exhausted partial output is exhausted", rec["state"] == "exhausted" and "10h 37m" in rec["detail"], rec)
+seen = {}
+def ok_runner(cmd, **kw):
+    seen["cmd"] = cmd
+    return z.subprocess.CompletedProcess(cmd, 0, stdout="ok\n", stderr="")
+rec = z.probe("big-pickle", runner=ok_runner)
+check("an ok answer is available and the model is passed as opencode/<id>",
+      rec["state"] == "available" and rec["model"] == "big-pickle" and "opencode/big-pickle" in seen["cmd"], (rec, seen))
+
+print("status")
+sd = tempfile.mkdtemp(); z.STATUS_CACHE = os.path.join(sd, "sub", "status.json")
+calls = []
+def fake(states):
+    def runner(cmd, **kw):
+        mid = cmd[cmd.index("--model") + 1].split("/", 1)[1]
+        calls.append(mid)
+        if states.get(mid) == "exhausted":
+            return z.subprocess.CompletedProcess(cmd, 1, stdout=EXH, stderr="")
+        return z.subprocess.CompletedProcess(cmd, 0, stdout="ok\n", stderr="")
+    return runner
+check("private candidates are the free zero-retention models in policy order",
+      z.candidates(BASE, ALL, POLICY, True) == ["space-bunny-free", "longcat-2.5-preview-free"])
+check("public candidates start with Big Pickle, then the newest free",
+      z.candidates(BASE, ALL, POLICY, False, limit=3) == ["big-pickle", "other-free", "space-bunny-free"])
+r = z.status(BASE, ALL, POLICY, False, do_probe=False, runner=fake({}))
+check("do_probe False never calls the runner", not calls and all(m["state"] == "unprobed" for m in r["models"]) and r["best"] is None, (calls, r))
+r = z.status(BASE, ALL, POLICY, False, do_probe=True, runner=fake({}))
+check("probing stops after the first available", calls == ["big-pickle"] and r["best"] == "big-pickle"
+      and [m["state"] for m in r["models"]][1:] == ["unprobed"] * 3, (calls, r))
+n = len(calls)
+r = z.status(BASE, ALL, POLICY, False, do_probe=True, runner=fake({}), now=time.time() + 5)
+check("a fresh cache record is reused", len(calls) == n, calls)
+calls.clear()
+z.status(BASE, ALL, POLICY, False, do_probe=True, refresh=True, runner=fake({}))
+check("refresh calls the runner again", calls == ["big-pickle"], calls)
+calls.clear()
+z.status(BASE, ALL, POLICY, False, do_probe=True, refresh=True, probe_all=True, limit=3, runner=fake({}))
+check("probe_all probes every candidate", len(calls) == 3, calls)
+os.remove(z.STATUS_CACHE); calls.clear()
+r = z.status(BASE, ALL, POLICY, True, do_probe=True, runner=fake({"space-bunny-free": "exhausted", "longcat-2.5-preview-free": "exhausted"}))
+check("all exhausted is reported", r["all_exhausted"] and r["best"] is None and len(calls) == 2, r)
+os.remove(z.STATUS_CACHE)
+SIX = [f"free-{i}" for i in range(6)]
+C6 = cat(**{m: model() for m in SIX})
+check("default candidate limit returns all six free models, limit=4 returns four",
+      len(z.candidates(C6, set(SIX), POLICY, False)) == 6 and len(z.candidates(C6, set(SIX), POLICY, False, limit=4)) == 4)
+calls.clear()
+r = z.status(C6, set(SIX), POLICY, False, do_probe=True, runner=fake({m: "exhausted" for m in SIX}))
+check("six exhausted candidates are all probed and all_exhausted is true", len(calls) == 6 and r["all_exhausted"], (calls, r))
+os.remove(z.STATUS_CACHE)
+def mixed(cmd, **kw):
+    if "opencode/space-bunny-free" in cmd:
+        return z.subprocess.CompletedProcess(cmd, 1, stdout="boom", stderr="")
+    return z.subprocess.CompletedProcess(cmd, 0, stdout="ok\n", stderr="")
+r = z.status(BASE, ALL, POLICY, True, do_probe=True, runner=mixed)
+check("best prefers available over unknown", r["best"] == "longcat-2.5-preview-free" and "space-bunny-free" in r["usable"], r)
+os.remove(z.STATUS_CACHE)
+rc, out, _ = run("status", "--catalog", cf, "--offered", ",".join(sorted(ALL)), "--policy", pf, "--private", "yes", "--json")
+check("status without --probe exits 3 with unprobed models", rc == 3 and json.loads(out)["models"][0]["state"] == "unprobed", (rc, out))
+rc, out, _ = run("status", "--catalog", cf, "--offered", "paid-one", "--policy", pf, "--private", "yes")
+check("status exits 1 with no candidate", rc == 1 and "best: none" in out, (rc, out))
+
+print("\nFAILED:%s" % FAILS if FAILS else "\nALL PASSED")
 sys.exit(1 if FAILS else 0)

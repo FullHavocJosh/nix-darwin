@@ -60,13 +60,19 @@ tuios session, Claude joins the workspace of a window named `nvim`, else the low
 next free one. Outside tuios, or with `AIDEV_TUIOS_OWN_SESSION=1`, they get session `aidev-<repo>` with the numbers
 below and a `dev-nvim` window. One run per session; `finish` closes a piece of work, and the panes stay for the next.
 
-| Workspace | Pane                           | Model                                                                 | Grants                  |
-| --------- | ------------------------------ | --------------------------------------------------------------------- | ----------------------- |
-| 1 `dev`   | `plan`                         | Claude Code, advisor off: plans, sends tasks, verifies, reviews       | read, write, fan, files |
-| 1 `dev`   | `nvim` (`dev-nvim`)            | your editor (`dev-nvim` only in a session of its own)                 | default                 |
-| 2 `ai`    | `research`                     | pi on Lumo through lumo-tamer, no tools: web lookups                  | read                    |
-| 2 `ai`    | `build`                        | pi on the on-device 30B; Claude opens it when the plan is approved    | read, write             |
-| 2 `ai`    | `build-pickle`, `build-claude` | escalation: a free Zen model, or Claude Code (billed, asks you first) | read, write             |
+| Workspace | Pane                | Model                                                              | Grants                  |
+| --------- | ------------------- | ------------------------------------------------------------------ | ----------------------- |
+| 1 `dev`   | `plan`              | Claude Code, advisor off: plans, sends tasks, verifies, reviews    | read, write, fan, files |
+| 1 `dev`   | `nvim` (`dev-nvim`) | your editor (`dev-nvim` only in a session of its own)              | default                 |
+| 2 `ai`    | `research`          | pi on Lumo through lumo-tamer, no tools: web lookups               | read                    |
+| 2 `ai`    | `build-local`       | pi on the on-device 30B; Claude opens it when the plan is approved | read, write             |
+| 2 `ai`    | `build-free`        | escalation: pi on a free Zen model                                 | read, write             |
+| 2 `ai`    | `build-billed`      | escalation: Claude Code (billed, asks you first)                   | read, write             |
+
+The billed builder's settings use `acceptEdits`, allow the plan's verify commands by exact text and the read-only
+commands, and deny git writes, `gh`, `rm -rf` and `sudo` (deny wins over allow). Edits to the plan directory and to the run's `state.json` and `events.jsonl` are denied too.
+Tasks added after the builder opened
+still prompt.
 
 1. You describe the work to Claude. It reads the code and asks Lumo (`ask-lumo`) for current docs, API changes and known
    bugs. Lumo is the first lumo-tamer that answers (this machine, MacMiniM1, then lumo.rollet.family); with none, there
@@ -92,16 +98,33 @@ How the panes talk:
 - Claude and the builder use tuios mail. The builder holds read and write: it can mail Claude, but tuios lets a pane
   type only into panes that hold no grant it lacks, so it cannot type into Claude. Mail is marked as data, not
   instructions.
+- Every `ask-lumo` question is wrapped with a forced-search preamble. A reply is accepted only with a
+  `SEARCH-CONFIRMATION` line (searched=yes, the queries, at least one source link). Lumo is asked again twice if it
+  is missing, then the reply is rejected (exit 4, REJECTED) and Claude must not use it. The confirmation is Lumo's own
+  statement: lumo-tamer does not pass search calls through, so it cannot be checked. Each lumo-tamer needs
+  `enableWebSearch: true` in its config.
 - Claude types questions into the Lumo pane (`tuios ask-agent`) and reads the reply from Lumo's pi session file. Lumo
   holds read alone and has no tools: it cannot see the project, so Claude sends each question self-contained.
 - Plan, tasks, check output and events are files under `~/.ai/aidev_tuios/<project>-<hash>/` (`plan/`, `runs/<id>/`).
   tuios keeps mail in memory only, so those files are the source of truth.
+- Remaining permission prompts surface in `wait-task` and `watch`. Plan answers them with `approvals`, which uses
+  `tuios respond`. That needs the person to give plan the respond grant once, outside any pane, with
+  `tuios set-pane-grants -w plan --grants read,write,fan,files,respond`, and again after the pane is recreated.
 - A billed builder starts only after you say yes in the tuios Inbox (`ctrl+t i`).
 
 Cost: Claude is interactive, so no per-call budget cap applies. `AIDEV_TUIOS_CLAUDE_MODEL` and
 `AIDEV_TUIOS_CLAUDE_EFFORT` set its model and effort (default: `AISTACK_CLAUDE_MODEL` / `AISTACK_CLAUDE_EFFORT`, else
 sonnet / medium). Lumo and the 30B are free; a free Zen model is used only when one fits the repo (a private repo needs
 a zero-retention one).
+
+### Escalation and Zen credits
+
+Zen has no balance API, so `zen_models.py status` probes each candidate free model with one tiny `opencode run` (the
+oczen MCP tool `zen_free_models` reports the same to any Claude session). Results are cached for ten minutes. The free
+builder opens on the first available free model, and an exhausted or missing free tier is skipped by `builder free`,
+`aidev -p` and `escalate`. `escalate` moves a task from local to free to billed after `AIDEV_TUIOS_ESCALATE_AFTER`
+failures at a tier (default 2), and from local straight to billed when no free model is usable. Billed always asks in
+the Inbox.
 
 ### Script forms
 

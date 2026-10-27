@@ -397,8 +397,9 @@ The panes talk by tuios mail (session commands: [Terminal: tuios](#terminal-tuio
   `plan/verify.json`, builds only when you approve, sends each task to the builder, runs the task's verify commands
   itself and reviews the whole diff.
 - `research`: Lumo (pi on lumo-tamer, no tools) for web lookups: current docs, API changes, known bugs.
-- `build`: the builder edits the code: the on-device Qwen3-Coder-30B where present, else a free OpenCode Zen model.
-  Escalation to Big Pickle (`build-pickle`) or to billed Claude Code (`build-claude`) asks you first.
+- `build-local`, `build-free`, `build-billed`: the builder edits the code in three tiers: the on-device
+  Qwen3-Coder-30B, a free OpenCode Zen model, billed Claude Code. A task escalates from `build-local` to `build-free`
+  to `build-billed`; the billed step asks you first.
 
 Plan, tasks, check output and events are files under `~/.ai/aidev_tuios/<project>-<hash>/` (`plan/`, `runs/<id>/`).
 The changes stay uncommitted in the work dir; you commit with `gpa`. Details:
