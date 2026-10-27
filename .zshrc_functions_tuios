@@ -26,10 +26,11 @@
 #
 # Run these from a plain Ghostty window, not from inside herdr: two multiplexers nested in one terminal is untested.
 # Keys (.config/tuios/config.toml): ctrl+t is tuios's prefix. ctrl+1..9 workspaces, ctrl+shift+j/k next/previous
-# session, ctrl+shift+p go to an agent, session or pane, ctrl+shift+h sidebar; ctrl+t i agents and the Inbox, ctrl+t g
-# lazygit, ctrl+t s scratch terminal, ctrl+t n/w/W new window/close window/close session, ctrl+t hjkl focus,
-# ctrl+t space workspace prefix, ctrl+t q detach, ctrl+t ctrl+t sends ctrl+t to the pane. Without the prefix:
-# ctrl+tab/ctrl+shift+tab cycle windows, ctrl+shift+arrows move focus, ctrl+shift+1..9 move the pane to a workspace.
+# session, ctrl+shift+p go to an agent, session or pane, ctrl+shift+h sidebar, ctrl+h/l previous/next window, ctrl+j/k
+# next/previous agent in every session; ctrl+t i agents and the Inbox, ctrl+t g lazygit, ctrl+t s scratch terminal,
+# ctrl+t n/w/W new window/close window/close session, ctrl+t hjkl focus, ctrl+t space workspace prefix, ctrl+t q
+# detach, ctrl+t ctrl+t sends ctrl+t to the pane. Without the prefix: ctrl+tab/ctrl+shift+tab cycle windows,
+# ctrl+shift+arrows move focus, ctrl+shift+1..9 move the pane to a workspace.
 # tuios is ctrl only; alt belongs to aerospace.
 
 # tuios with the stowed config (~/.config/tuios; on macOS tuios otherwise reads ~/Library/Application

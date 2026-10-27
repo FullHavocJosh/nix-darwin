@@ -97,12 +97,9 @@ leader_key = "ctrl+t"
 
 # The herdr keys (.config/herdr/config.toml), on ctrl and ctrl+shift: aerospace owns alt, so tuios's default opt+
 # keys (opt+1..9 workspaces, alt+arrows focus, opt+tab windows) never arrive. Global keys act in window and terminal
-# mode and do not reach the pane. Not carried over from herdr:
-#   ctrl+j/k next/previous agent: tuios has no agent cycle (ctrl+t o oldest needing you, ctrl+t O newest finished),
-#     and both keys belong to LazyVim's window moves and zsh's accept-line/kill-line.
-#   ctrl+h/l pane cycle: LazyVim moves between Neotree and the editor with them; the dev layout puts nvim and zsh on
-#     workspaces 1 and 2, so ctrl+1/ctrl+2 do the same.
-#   prefix+w close pane: ctrl+t w is the workspace prefix; ctrl+t x closes.
+# mode and do not reach the pane. ctrl+h/l cycle windows and ctrl+j/k cycle agents (agent_cycle.py), with ctrl+t o and
+# ctrl+t O still jumping to the agent that needs you and the newest finished turn. The pane no longer gets ctrl+h
+# (in some terminals also Backspace) or ctrl+l (zsh clear-screen, LazyVim window moves).
 [keybindings.global]
 # herdr switch_tab: workspaces by number.
 switch_workspace_1 = ["ctrl+1"]
@@ -135,6 +132,11 @@ move_and_follow_8 = ["ctrl+shift+8"]
 move_and_follow_9 = ["ctrl+shift+9"]
 # The launcher stays on ctrl+t a; alt+space is aerospace's side of the keyboard.
 launcher = []
+
+# Like herdr's cycle_pane, ctrl+h/l cycle windows in both modes. The pane no longer gets ctrl+h (in some terminals
+# also Backspace) or ctrl+l (zsh clear-screen, LazyVim window moves).
+prev_window = ["ctrl+h"]
+next_window = ["ctrl+l"]
 
 [keybindings.prefix_mode]
 # herdr split_vertical was prefix+/; ctrl+shift+p covers choose_tree's pane search.
@@ -187,6 +189,16 @@ terminal_exit_mode = []
 next_session = []
 prev_session = []
 
+# Window mode creates and destroys nothing on one key: ctrl+t w closes a window, ctrl+t n opens one, ctrl+t W closes
+# the session, the sidebar's n or + makes a session.
+close_window = []
+new_window = []
+new_session = []
+
+[keybindings.mode_control]
+# A q in window mode quit tuios on one key; ctrl+t q detaches and everything keeps running.
+quit = []
+
 [keybindings.workspaces]
 # ctrl+1..9 switch, ctrl+shift+1..9 move and follow, ctrl+t space shift+1..9 move.
 switch_workspace_1 = []
@@ -224,11 +236,29 @@ preselect_down = []
 preselect_up = []
 preselect_right = []
 
+# Splits only behind the prefix: ctrl+t - and ctrl+t |.
+split_horizontal = []
+split_vertical = []
+
 [[keybindings.command]]
 key = "prefix+g"
 type = "shell"
 command = "tuios popup --width 90% --height 90% --cwd \"$TUIOS_ACTIVE_PANE_CWD\" -- lazygit"
 description = "lazygit in a popup"
+
+# Like herdr's next/previous_agent. A command key without prefix+ works in window and terminal mode. The pane no
+# longer gets ctrl+j (zsh accept-line, Claude Code newline) or ctrl+k (zsh kill-line).
+[[keybindings.command]]
+key = "ctrl+j"
+type = "shell"
+command = 'python3 "$HOME/.config/tuios/agent_cycle.py" next'
+description = "Next agent, every session"
+
+[[keybindings.command]]
+key = "ctrl+k"
+type = "shell"
+command = 'python3 "$HOME/.config/tuios/agent_cycle.py" prev'
+description = "Previous agent, every session"
 
 # ============================================================================
 # DOCK COMPONENTS
@@ -282,6 +312,11 @@ show_ram = true
 clock_format = "3:004PM"
 show_clock = true
 dock_prefix_indicator = "pill"
+
+# The focused border is red in window mode, where single keys act on panes, and blue in terminal mode, where keys go
+# to the program.
+border_focused_color_window = "#f38ba8"
+border_focused_color_terminal = "#89b4fa"
 
 [spotlight]
 enabled = false
