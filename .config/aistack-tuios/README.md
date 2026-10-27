@@ -49,9 +49,9 @@ below and a `dev-nvim` window. One run per session; `finish` closes a piece of w
 
 | Workspace | Pane                           | Model                                                                 | Grants                  |
 | --------- | ------------------------------ | --------------------------------------------------------------------- | ----------------------- |
-| 1 `dev`   | `claude`                       | Claude Code, advisor off: plans, sends tasks, verifies, reviews       | read, write, fan, files |
+| 1 `dev`   | `plan`                         | Claude Code, advisor off: plans, sends tasks, verifies, reviews       | read, write, fan, files |
 | 1 `dev`   | `nvim` (`dev-nvim`)            | your editor (`dev-nvim` only in a session of its own)                 | default                 |
-| 2 `ai`    | `lumo`                         | pi on Lumo through lumo-tamer, no tools: web lookups                  | read                    |
+| 2 `ai`    | `research`                     | pi on Lumo through lumo-tamer, no tools: web lookups                  | read                    |
 | 2 `ai`    | `build`                        | pi on the on-device 30B; Claude opens it when the plan is approved    | read, write             |
 | 2 `ai`    | `build-pickle`, `build-claude` | escalation: a free Zen model, or Claude Code (billed, asks you first) | read, write             |
 
@@ -68,11 +68,11 @@ below and a `dev-nvim` window. One run per session; `finish` closes a piece of w
 5. The changes stay uncommitted in the work dir. Commit with `gpa`.
 
 After every Lumo answer and every builder result, Claude tells you what came back and asks before it goes on. While it
-waits for you it runs `watch` in the background: new mail, or an exchange you have with Lumo in the lumo pane, wakes it,
+waits for you it runs `watch` in the background: new mail, or an exchange you have with Lumo in the research pane, wakes it,
 and it reports that too. So you can correct Lumo or the builder in their panes and Claude picks it up.
 
 After a daemon restart, `dev` (or any dev command for an existing session) runs `aidev_tuios.py restore <session>`: the
-claude and lumo windows that came back holding a shell start again, conversations included.
+plan and research windows that came back holding a shell start again, conversations included.
 
 How the panes talk:
 

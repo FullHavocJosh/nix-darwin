@@ -27,10 +27,10 @@ Helpers the Claude pane runs from its own pane (so with its grants; AIDEV_TUIOS_
     watch [seconds]               block until new mail or a new Lumo exchange arrives, print it (run in background)
     finish                        close this piece of work; the panes stay for the next one
 
-Panes, on two workspaces: "dev" (your nvim and Claude) and "ai" (Lumo and every builder):
+Panes, on two workspaces: "dev" (your nvim and Claude) and "ai" (Lumo and every builder), each named after its role:
 
-    claude   Claude Code: talks with you, reads the code, plans, sends tasks, verifies, reviews   read,write,fan,files
-    lumo     pi on Lumo through lumo-tamer, no tools: web lookups on what Claude sends it        read
+    plan     Claude Code: talks with you, reads the code, plans, sends tasks, verifies, reviews   read,write,fan,files
+    research pi on Lumo through lumo-tamer, no tools: web lookups on what Claude sends it        read
     build    pi on the on-device 30B, else OpenCode on a free Zen model; Claude opens it          read,write
     dev-nvim nvim, only in a session of its own (in your session you have yours)                default
 
@@ -79,15 +79,17 @@ ASK_TIMEOUT_MS = 3_600_000  # the most ask-human waits
 ASK_MAX_BYTES = 160  # tuios refuses a longer ask-human question (invalid_params)
 AT_REST = ("idle", "done", "errored")
 
+# Pane names, which are also the panes' tuios agent addresses: each agent is named after its role.
+PLAN, RESEARCH = "plan", "research"
 # What each pane may do through tuios (tuios --skill grants). The builder can mail Claude but not type into its pane:
 # a pane types only into panes that hold nothing it does not, and Claude holds fan and files.
-GRANTS = {"claude": "read,write,fan,files", "lumo": "read", "build": "read,write"}
+GRANTS = {PLAN: "read,write,fan,files", RESEARCH: "read", "build": "read,write"}
 # Each layer's workspace: Claude beside your nvim on "dev", Lumo and every builder on "ai". A session of its own uses
 # these numbers; in another session Claude joins the nvim window's workspace and the rest take one free workspace
 # (assign_workspaces). The map is kept in the run's state.json as "ws".
-WS_OWN = {"claude": 1, "lumo": 2, "build": 2, "build-pickle": 2, "build-claude": 2, "dev": 1}
+WS_OWN = {PLAN: 1, RESEARCH: 2, "build": 2, "build-pickle": 2, "build-claude": 2, "dev": 1}
 WS = dict(WS_OWN)
-WS_NAMES = {"claude": "dev", "dev": "dev", "lumo": "ai", "build": "ai"}
+WS_NAMES = {PLAN: "dev", "dev": "dev", RESEARCH: "ai", "build": "ai"}
 BUILDERS = {"30b": "build", "pickle": "build-pickle", "claude": "build-claude"}
 SHELLS = ("zsh", "bash", "sh")
 
@@ -311,7 +313,7 @@ def assign_workspaces(run, session, own):
         if len(slots) < 2:
             return (f"{session} has {len(free)} free workspaces and aidev needs two (one beside a window named nvim "
                     "counts). Close some, or run with AIDEV_TUIOS_OWN_SESSION=1 for a session of its own.")
-        ws = {"claude": slots[0], "lumo": slots[1], "build": slots[1], "build-pickle": slots[1],
+        ws = {PLAN: slots[0], RESEARCH: slots[1], "build": slots[1], "build-pickle": slots[1],
               "build-claude": slots[1]}
     run.data["ws"] = ws
     WS.update(ws)
@@ -319,8 +321,8 @@ def assign_workspaces(run, session, own):
 
 
 def ai_workspace(session):
-    """The workspace of the window named lumo (the ai workspace), else the lowest free one, else None."""
-    lumo = window_named(session, "lumo")
+    """The workspace of the research window (the ai workspace), else the lowest free one, else None."""
+    lumo = window_named(session, RESEARCH)
     return lumo.get("workspace") if lumo else free_workspace(session)
 
 
@@ -531,15 +533,15 @@ def lumo_sessions(run):
 
 
 def claude_pane_body(run, cfg, task, has_lumo):
-    lumo_note = ("The lumo pane is Lumo: ask it with `ask-lumo`." if has_lumo else
-                 "There is no lumo pane in this run (no lumo-tamer answered at start): do web lookups yourself.")
+    lumo_note = ("The research pane is Lumo: ask it with `ask-lumo`." if has_lumo else
+                 "There is no research pane in this run (no lumo-tamer answered at start): do web lookups yourself.")
     system = prompt_text("claude", PROJECT=run.project, PLAN_DIR=run.plan_dir, RUN_DIR=run.dir, HELPER=HELPER,
                          LUMO=lumo_note)
     first = task or "The user will describe the work. Greet them in one line and wait."
     env = {"AIDEV_TUIOS_RUN": run.id, "AIDEV_TUIOS_PROJECT": run.project}
     env.update({k: v for k, v in os.environ.items() if k.startswith("AIDEV_TUIOS_") and k not in
                 ("AIDEV_TUIOS_NO_ATTACH", "AIDEV_TUIOS_ALLOW_NESTED", "AIDEV_TUIOS_RUN", "AIDEV_TUIOS_PROJECT")})
-    return claude_body(run, cfg, "claude", system, first, run.project, advisor=False,
+    return claude_body(run, cfg, PLAN, system, first, run.project, advisor=False,
                        settings=write_backbone_settings(cfg), env=env)
 
 
@@ -547,9 +549,9 @@ def lumo_body(run, cfg, lumo):
     """Lumo in pi with no tools (lumo-tamer has custom tools off). Its replies land in a session file under the run,
     which ask-lumo reads."""
     write_lumo_pi(cfg, lumo)
-    sid = run.data["panes"].setdefault("lumo", {}).setdefault("session_id", str(uuid.uuid4()))
+    sid = run.data["panes"].setdefault(RESEARCH, {}).setdefault("session_id", str(uuid.uuid4()))
     sysp = write_text(os.path.join(run.dir, "bin", "lumo.system.md"), prompt_text("lumo"))
-    argv = ["pi", "--provider", "lumo", "--model", LUMO_MODEL, "--name", "aidev lumo", "--no-skills",
+    argv = ["pi", "--provider", "lumo", "--model", LUMO_MODEL, "--name", f"aidev {RESEARCH}", "--no-skills",
             "--no-tools", "--session-id", sid, "--session-dir", lumo_sessions(run)]
     return (f"cd {shlex.quote(run.project)}\nexport PI_CODING_AGENT_DIR={shlex.quote(cfg['pi_lumo'])}\n"
             + with_system_prompt(argv, sysp))
@@ -557,11 +559,11 @@ def lumo_body(run, cfg, lumo):
 
 def build_body(run, cfg, kind, name=None):
     """The launcher body of builder `kind` (30b, pickle, claude) in pane `name`, or None when that builder does not
-    exist here. It replies by mail to run.data["reply_to"]: the claude pane in a run, the caller of `aidev -p` in an
+    exist here. It replies by mail to run.data["reply_to"]: the plan pane in a run, the caller of `aidev -p` in an
     edit. AIDEV_TUIOS_BUILDER=1 in its environment stops it from starting aidev -p or --handoff itself (a loop)."""
     wd = run.data.get("work_dir") or run.project
     name = name or BUILDERS[kind]
-    system = prompt_text("build", WORK_DIR=wd, RUN_DIR=run.dir, REPLY_TO=run.data.get("reply_to") or "claude")
+    system = prompt_text("build", WORK_DIR=wd, RUN_DIR=run.dir, REPLY_TO=run.data.get("reply_to") or PLAN)
     pane = run.data["panes"].setdefault(name, {})
     if kind == "claude":
         pane["builder"] = f"Claude Code {CLAUDE_MODEL} (billed)"
@@ -684,7 +686,7 @@ def task_prompt(prd, story, verify_cmds, notes):
 
 def lumo_messages(run):
     """[(entry id, role, text)] of the user and assistant messages in the Lumo pane's pi session file."""
-    sid = run.data["panes"].get("lumo", {}).get("session_id")
+    sid = run.data["panes"].get(RESEARCH, {}).get("session_id")
     d = lumo_sessions(run)
     files = sorted(f for f in (os.listdir(d) if os.path.isdir(d) else []) if sid and f.endswith(f"_{sid}.jsonl"))
     out = []
@@ -717,7 +719,7 @@ def thread_replies(session, me, thread):
     data = tuios_json("read-agent-messages", "-s", session, "-w", me, "--thread", str(thread))
     out = []
     for m in data.get("messages") or []:
-        if str(m.get("id")) == str(thread) or str(m.get("from", "")).startswith(("claude", me[:8])):
+        if str(m.get("id")) == str(thread) or str(m.get("from", "")).startswith((PLAN, me[:8])):
             continue
         out.append((m.get("id"), m.get("from"), m.get("text") or ""))
     return out
@@ -737,15 +739,15 @@ def cmd_ask_lumo(run, argv):
     if not question:
         print("usage: ask-lumo <question>: self-contained, with the excerpts and versions it needs")
         return 2
-    if not run.data["panes"].get("lumo"):
+    if not run.data["panes"].get(RESEARCH):
         print("no Lumo pane in this run (no lumo-tamer answered at start): do the web lookup yourself")
         return 1
     for _ in range(60):  # pi reports idle once it is up; asked earlier, ask-agent returns on its start screen
-        if agent_state(run.session, "lumo") in AT_REST:
+        if agent_state(run.session, RESEARCH) in AT_REST:
             break
         time.sleep(1)
     seen = {i for i, role, _t in lumo_messages(run) if role == "assistant"}
-    args = ["ask-agent", "-s", run.session, "-w", "lumo", "--timeout", str(LUMO_TIMEOUT_S * 1000)]
+    args = ["ask-agent", "-s", run.session, "-w", RESEARCH, "--timeout", str(LUMO_TIMEOUT_S * 1000)]
     if os.environ.get("TUIOS_PANE_ID"):
         args += ["--from", os.environ["TUIOS_PANE_ID"]]
     code, out, err = tuios(*args, question, timeout=LUMO_TIMEOUT_S + 30)
@@ -851,7 +853,7 @@ def mail_task(run, builder, subject, mail_text, prompt):
 
 def reply_line(run, mid):
     return (f"When you are done or blocked, reply to mail #{mid}: tuios send-agent-message -w "
-            f"{run.data.get('reply_to') or 'claude'} --reply-to {mid} 'done: <one line>' (or 'blocked: <why>').")
+            f"{run.data.get('reply_to') or PLAN} --reply-to {mid} 'done: <one line>' (or 'blocked: <why>').")
 
 
 def wait_reply(session, me, thread, builder, limit):
@@ -932,7 +934,7 @@ def cmd_wait_task(run, argv):
     tid = argv[0]
     limit = int(argv[1]) if len(argv) > 1 else 540
     t = run.data["tasks"].get(tid) or {}
-    me, builder = os.environ.get("TUIOS_PANE_ID") or "claude", run.data.get("builder")
+    me, builder = os.environ.get("TUIOS_PANE_ID") or PLAN, run.data.get("builder")
     if not t.get("thread"):
         print(f"{tid} was not sent: run send-task {tid}")
         return 1
@@ -976,9 +978,9 @@ def watch_mail(run, me):
 
 
 def watch_lumo(run):
-    """A block with the Lumo exchanges not reported yet (one the user typed into the lumo pane, say), once Lumo has
+    """A block with the Lumo exchanges not reported yet (one the user typed into the research pane, say), once Lumo has
     answered and is at rest."""
-    if not run.data["panes"].get("lumo") or agent_state(run.session, "lumo") not in AT_REST:
+    if not run.data["panes"].get(RESEARCH) or agent_state(run.session, RESEARCH) not in AT_REST:
         return []
     msgs = lumo_messages(run)
     seen = set(run.data.get("lumo_seen") or [])
@@ -987,7 +989,7 @@ def watch_lumo(run):
         return []
     run.data["lumo_seen"] = [i for i, _r, _t in msgs]
     run.save()
-    return ["--- the lumo pane ---\n" + "\n".join(f"{'Lumo' if role == 'assistant' else 'Asked'}: {t.strip()[:3000]}"
+    return ["--- the research pane ---\n" + "\n".join(f"{'Lumo' if role == 'assistant' else 'Asked'}: {t.strip()[:3000]}"
                                                   for role, t in new)]
 
 
@@ -995,7 +997,7 @@ def cmd_watch(run, argv):
     """watch [seconds]: block until this pane gets mail or the lumo pane has a new exchange, print it and exit 0; exit
     3 after `seconds` (3000) with nothing new. Claude runs it in the background while it waits for the user."""
     limit = int(argv[0]) if argv else 3000
-    me = os.environ.get("TUIOS_PANE_ID") or "claude"
+    me = os.environ.get("TUIOS_PANE_ID") or PLAN
     if "lumo_seen" not in run.data:  # the first watch starts from now, not from Lumo's whole history
         run.data["lumo_seen"] = [i for i, _r, _t in lumo_messages(run)]
         run.save()
@@ -1065,7 +1067,7 @@ def where_to_run(project, resume=False):
     in; a new run opens in this tuios session, else in aidev-<repo> (start_session). One run per session."""
     session = (Run(project).data.get("session") if resume else None) or start_session(project)
     own = session == session_name(project)
-    claude_w = None if own else window_named(session, "claude")
+    claude_w = None if own else window_named(session, PLAN)
     if claude_w and os.path.realpath(claude_w.get("cwd") or "") != project:
         return session, own, True, (f"{session} already holds a run for {claude_w.get('cwd')}; one run per session. "
                                     "Use AIDEV_TUIOS_OWN_SESSION=1 for a session of its own.")
@@ -1073,33 +1075,33 @@ def where_to_run(project, resume=False):
 
 
 def session_run(project, session):
-    """The newest run of `project` whose claude pane was opened in `session`, or None."""
+    """The newest run of `project` whose plan pane was opened in `session`, or None."""
     runs = os.path.join(state_dir(project), "runs")
     for rid in sorted(os.listdir(runs) if os.path.isdir(runs) else [], reverse=True):
         data = rj(os.path.join(runs, rid, "state.json"), {}) or {}
-        if data.get("session") == session and "claude" in (data.get("panes") or {}) and data.get("phase") != "edit":
+        if data.get("session") == session and PLAN in (data.get("panes") or {}) and data.get("phase") != "edit":
             return Run(project, rid)
     return None
 
 
 def cmd_restore(argv):
     """restore <session>: after a daemon restart tuios brings windows back with fresh shells. Starts the session's
-    claude and lumo panes again from their launchers, which resume the conversations; a window that holds only a
-    shell is closed first, one whose agent still runs is left alone. Nothing to do without a claude window."""
+    plan and research panes again from their launchers, which resume the conversations; a window that holds only a
+    shell is closed first, one whose agent still runs is left alone. Nothing to do without a plan window."""
     if not argv:
         print("usage: restore <session>", file=sys.stderr)
         return 2
     session = argv[0]
-    claude_w = window_named(session, "claude")
+    claude_w = window_named(session, PLAN)
     if not claude_w:
         return 0
     project = project_root(claude_w.get("cwd") or HOME)
     run = session_run(project, session)
     if not run:
-        print(f"aidev restore: no run of {project} owns the claude pane in {session}", file=sys.stderr)
+        print(f"aidev restore: no run of {project} owns the plan pane in {session}", file=sys.stderr)
         return 1
     WS.update(run.data.get("ws") or {})
-    for name in ("claude", "lumo"):
+    for name in (PLAN, RESEARCH):
         pane = run.data["panes"].get(name) or {}
         if not pane.get("script") or not os.path.exists(pane["script"]):
             continue
@@ -1115,7 +1117,7 @@ def cmd_restore(argv):
 
 
 def open_run(run, session, own, running, task, resume=False):
-    """Open the claude and lumo panes of `run` in `session` (with `resume`, again from their stored launchers, which
+    """Open the plan and research panes of `run` in `session` (with `resume`, again from their stored launchers, which
     resume the conversations). Returns an error text, or None."""
     os.makedirs(run.dir, exist_ok=True)
     run.data["session"] = session
@@ -1128,25 +1130,25 @@ def open_run(run, session, own, running, task, resume=False):
         lumo = find_lumo()
         if lumo:
             run.data["lumo_url"] = lumo[0]
-            scripts["lumo"] = write_script(run, "lumo", lumo_body(run, cfg, lumo))
-        scripts["claude"] = write_script(run, "claude", claude_pane_body(run, cfg, task, bool(lumo)))
+            scripts[RESEARCH] = write_script(run, RESEARCH, lumo_body(run, cfg, lumo))
+        scripts[PLAN] = write_script(run, PLAN, claude_pane_body(run, cfg, task, bool(lumo)))
         print(f"aidev: Claude {CLAUDE_MODEL}; " + (f"Lumo via {lumo[0]}" if lumo else "no Lumo (no tamer)"),
               file=sys.stderr)
     else:
         scripts = {n: p["script"] for n, p in run.data["panes"].items()
-                   if n in ("claude", "lumo") and p.get("script") and os.path.exists(p["script"])}
+                   if n in (PLAN, RESEARCH) and p.get("script") and os.path.exists(p["script"])}
     run.save()
     if own and not running:
         err = new_session(session, run.project)
         if err:
             return err
-    for name in ("claude", "lumo"):
+    for name in (PLAN, RESEARCH):
         if name in scripts:
             open_pane(run, session, name, scripts[name], run.project, GRANTS[name])
         name_ws(session, name)  # "ai" is named even without Lumo: the builders open there
     if own:
         start_dev_workspace(run, session, run.data.get("work_dir") or run.project)
-    tuios("select-workspace", str(WS["claude"]), "-s", session)
+    tuios("select-workspace", str(WS[PLAN]), "-s", session)
     run.save()
     return None
 
@@ -1229,11 +1231,11 @@ def cmd_handoff(argv):
     session, own, running, err = where_to_run(project)
     if err:
         return done(problem=err)
-    # A dev session keeps its claude pane open: the plan goes to that pane when it has finished its last one.
-    live = session_run(project, session) if window_named(session, "claude") else None
-    if window_named(session, "claude") and (not live or live.data.get("work_dir")):
-        return done(problem=f"the claude pane in {session} is still on a plan: finish it first (aidev_status)"
-                    if live else f"{session} has a claude pane that no aidev run owns")
+    # A dev session keeps its plan pane open: the plan goes to that pane when it has finished its last one.
+    live = session_run(project, session) if window_named(session, PLAN) else None
+    if window_named(session, PLAN) and (not live or live.data.get("work_dir")):
+        return done(problem=f"the plan pane in {session} is still on a plan: finish it first (aidev_status)"
+                    if live else f"{session} has a plan pane that no aidev run owns")
     problems = preflight()
     if problems:
         return done(problem="; ".join(problems))
@@ -1256,8 +1258,8 @@ def cmd_handoff(argv):
             "change at the end and report to the user.")
     if live:
         run.save()
-        if not queue(session, "claude", task):
-            return done(problem=f"typing the plan into the claude pane of {session} failed")
+        if not queue(session, PLAN, task):
+            return done(problem=f"typing the plan into the plan pane of {session} failed")
     else:
         err = open_run(run, session, own, running, task)
         if err:

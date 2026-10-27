@@ -8,9 +8,10 @@ A comprehensive, declarative development environment configuration for **macOS**
 - **Cross-Platform Support** - macOS (nix-darwin) and Linux
 - **AI-Powered Git Workflows** - Automated code review, commit messages, and PR generation
 - **Multiple Profile Support** - Personal and work configurations with profile-specific packages
-- **Complete Dev Environment** - Shell (zsh), editor (Neovim), terminal (herdr), window management, and more
+- **Complete Dev Environment** - Shell (zsh), editor (Neovim), terminal (tuios), window management, and more
 - **Security-First Approach** - Smart gitignore patterns, secrets detection, environment variable management
 - **Local LLM Integration** - llama.cpp (Qwen3.5-9B) served on 127.0.0.1 only, kept running by a launchd daemon
+- **CI** : GitHub Actions workflow .github/workflows/validate.yml evaluates every darwin configuration, runs shellcheck and gitleaks
 - **MCP Server Ecosystem** - Auto-registered Claude Code MCP servers for GitHub, Terraform, AWS, Slack, and more
 
 ## 📋 Quick Start
@@ -33,39 +34,53 @@ nix-darwin/
 │   ├── packages-tui.nix                # Shared CLI packages (all profiles)
 │   ├── packages-gui.nix                # Shared GUI apps (laptop/work profiles)
 │   ├── packages-laptop-only.nix        # Laptop-only packages
+│   ├── packages-devtest.nix            # Laptop only: browser engines, simulator tooling, VMs
 │   ├── config.nix                      # System configuration & scripts
 │   ├── personal.nix                    # Personal (laptop/desktop) profile packages/services
 │   ├── work.nix                        # Work profile packages/services
 │   ├── laptop.nix                      # Laptop-specific config
-│   └── desktop.nix                     # Desktop-specific config
+│   ├── desktop.nix                     # Desktop-specific config
+│   ├── llamacpp-local.nix              # llama-server launchd daemon
+│   ├── lumo.nix                        # lumo-tamer daemons
+│   ├── timemachine-exclusions.nix      # applies timemachine-exclusions.txt, laptop and desktop
+│   └── claude-tui-usage-patch.py       # patches claude-tui for better usage reporting
 │
 ├── scripts/                            # Utility scripts
 │   ├── truenas-smb-monitor.sh          # TrueNAS SMB service monitor
-│   ├── install-nerd-fonts.sh          # Nerd Fonts installer
-│   └── setup-ssh-keys.sh               # SSH key setup automation
+│   ├── install-nerd-fonts.sh           # Nerd Fonts installer
+│   ├── setup-ssh-keys.sh               # SSH key setup automation
+│   ├── check-timemachine-exclusions.sh # validates timemachine-exclusions.txt
+│   ├── opnsense-routing.sh             # OPNsense routing rules
+│   └── herdr-nvim-open-edited.sh       # legacy herdr helper
 │
 ├── .config/                            # Application configurations (deployed via stow)
 │   ├── aerospace/                      # AeroSpace (macOS tiling WM)
+│   ├── aistack/                        # aidev and gpa helpers, MCP servers for local-edit and oczen
+│   ├── aistack-tuios/                  # aidev on tuios: aidev_tuios.py
 │   ├── atuin/                          # Atuin shell history config
 │   ├── btop/                           # btop system monitor
 │   ├── ghostty/                        # Ghostty terminal config
-│   ├── kitty/                          # Kitty terminal config
+│   ├── herdr/                          # herdr terminal workspace manager config
+│   ├── lumo/                           # lumo-tamer scripts and Lumo MCP
 │   ├── mcp/                            # MCP server definitions (claude-desktop-mcp.json)
 │   ├── nvim/                           # Neovim (LazyVim) configuration (incl. claudecode.nvim)
 │   ├── opencode/                       # OpenCode AI assistant config
+│   ├── pi/                             # pi config
 │   ├── superfile/                      # Superfile TUI file manager config
-│   ├── herdr/                          # herdr terminal workspace manager config
-│   ├── zed/                            # Zed editor config (gitignored - see security section)
+│   ├── tuios/                          # tuios config.toml
 │   └── ...                             # Many more application configs
 │
 ├── .zshrc                              # Main zsh configuration
 ├── .zshrc_aliases                      # Shell aliases
 ├── .zshrc_functions_git                # Git workflow automation functions
 ├── .zshrc_functions_ai                 # AI provider selection & management
+├── .zshrc_functions_tuios              # tuios session and aidev commands
 ├── .zshrc_os_macos                     # macOS-specific shell config
 ├── .zshrc_os_linux                     # Linux-specific shell config
 ├── .zshrc_os_linux_omarchy_*           # Linux shell configs
 ├── .zshrc_envvars_insecure             # Non-sensitive environment variables (tracked)
+├── .github/workflows/validate.yml      # GitHub Actions workflow
+├── timemachine-exclusions.txt          # Time Machine exclusions
 └── .zshrc_envvars                      # Sensitive environment variables (gitignored)
 ```
 
