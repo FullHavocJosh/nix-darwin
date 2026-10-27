@@ -11,7 +11,9 @@ talks to by tuios mail. The commands are in `.zshrc_functions_tuios`. The herdr 
 | `devim [name]`                     | that layout for the current directory, always a new session                                          |
 | `nxvim`, `psvim`, `hivim`, `itvim` | the session of one project, skipped where it is not cloned                                           |
 | `hiwt <branch>`                    | a new home-infrastructure worktree and branch in `.worktrees/`, with a session of its own            |
-| `mmdev`, `himmdev`, `nxmmdev`      | a session whose windows ssh to MacMiniM1                                                             |
+| `peerdev <session>`                | a session on the peer Mac through tuios host link                                                    |
+| `nxpeer`, `hipeer`                 | peerdev for nix-darwin and home-infrastructure sessions                                              |
+| `mmdev`, `himmdev`, `nxmmdev`      | old names, kept as aliases of `peerdev`, `hipeer`, `nxpeer`                                          |
 | `aidev [task]`                     | Claude, Lumo and a builder, in the current tuios session (else session `aidev-<repo>`)               |
 | `aidev --resume`                   | reopen the Claude and Lumo panes of an unfinished run after a daemon restart, conversations included |
 | `aidev -p "<change>" [files]`      | one edit by a free builder, blocking; `AIDEV_TEST_CMD` must pass                                     |
@@ -36,6 +38,17 @@ and close the session, `ctrl+t h`/`j`/`k`/`l` move focus, `ctrl+t space` is the 
 detaches, `ctrl+t ctrl+t` sends `ctrl+t` to the pane. Without the prefix, `ctrl+tab`/`ctrl+shift+tab` cycle windows,
 `ctrl+shift+arrows` move focus and `ctrl+shift+1`..`9` move the pane to a workspace. tuios is ctrl only: alt belongs to
 aerospace.
+
+## Two Macs
+
+The host entries `mini` (MacMiniM1) and `macbook` (MacBookM2Pro) are in `.config/tuios/config.toml`. After a pull,
+run `tuios config apply` once per machine, in a terminal outside tuios.
+
+`dev` ensures the other Mac's nix-darwin and home-infrastructure sessions exist, but only when ssh answers within
+3 seconds. When it does not, `dev` prints one line and carries on. `TUIOS_DEV_NO_PEER=1` turns the peer step off.
+
+The sessions run on their own Mac. You only see and attach them from this one. The `*_ssh` commands (`mmdev_ssh`,
+`himmdev_ssh`, `nxmmdev_ssh`) are the old ssh-window versions.
 
 ## aidev
 

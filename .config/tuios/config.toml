@@ -304,3 +304,10 @@ show_numbers = false
 marquee = true
 tooltips = true
 subagent_collapse = "collapsed"
+
+# The two Macs link to each other (dev, peerdev); each Mac also lists itself, which tuios only holds as an idle link.
+[hosts.mini]
+addr = "havoc@macminim1.rollet.family"
+
+[hosts.macbook]
+addr = "havoc@macbookm2pro.rollet.family"
