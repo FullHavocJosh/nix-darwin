@@ -640,7 +640,10 @@ def main():
     check("the Claude panes load only the tuios MCP", "--strict-mcp-config" in body)
     bs = json.load(open(ccfg["claude_backbone"]))
     check("its settings keep tuios's hooks and allow the helpers",
-          bs.get("hooks") == {"x": 1} and any("aidev_tuios.py" in x for x in bs["permissions"]["allow"]))
+          bs["hooks"].get("x") == 1
+          and any("plan_mcp_guard" in h.get("command", "")
+                  for e in bs["hooks"].get("PreToolUse", []) for h in e.get("hooks", []))
+          and any("aidev_tuios.py" in x for x in bs["permissions"]["allow"]))
     check("it runs in the default output style, not Advisor", bs.get("outputStyle") == "default")
     sysp = open(os.path.join(hr.dir, "bin", "plan.system.md")).read()
     check("its prompt names the helpers and has no placeholder left", "ask-lumo" in sysp and "@@" not in sysp)

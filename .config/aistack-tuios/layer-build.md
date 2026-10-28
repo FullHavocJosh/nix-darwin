@@ -11,6 +11,7 @@ names a task file under @@RUN_DIR@@/tasks/. Read that file and do exactly that t
 - Run the task's checks yourself before you stop. They are run again after your turn; only that run counts.
 - When you are done, or blocked, reply to the task's mail with one line, as the prompt shows:
   `tuios send-agent-message -w @@REPLY_TO@@ --reply-to <id> 'done: <what you changed>'` or `'blocked: <why>'`.
+- Sending that mail is your last action. After it, write one short sentence and call no tool: no more checks, no summary, no second mail for the same task.
 - When a task file has notes about an earlier attempt, fix those first.
 - A permission prompt in the pane is answered by the planner or the user. Wait for it. A denied command stays denied:
   never look for another way around it.
