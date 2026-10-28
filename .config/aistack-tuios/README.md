@@ -7,7 +7,8 @@ talks to by tuios mail. The commands are in `.zshrc_functions_tuios`. The herdr 
 | Command                            | What it does                                                                                         |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `dev`                              | reattach the daemon's sessions; with none, create nix-darwin, terraform-infrastructure and           |
-|                                    | home-infrastructure where cloned. Layout: workspace `dev` nvim + aidev's Claude, `ai` Lumo           |
+|                                    | home-infrastructure where cloned. Layout: workspace 1 holds nvim, aidev's Claude, Lumo and           |
+|                                    | the builders.                                                                                        |
 | `devim [name]`                     | that layout for the current directory, always a new session                                          |
 | `nxvim`, `psvim`, `hivim`, `itvim` | the session of one project, skipped where it is not cloned                                           |
 | `hiwt <branch>`                    | a new home-infrastructure worktree and branch in `.worktrees/`, with a session of its own            |
@@ -54,20 +55,22 @@ The sessions run on their own Mac. You only see and attach them from this one. T
 
 Claude Code is the backbone: you talk to it, it reads the code, plans, sends tasks, checks them and reviews. Lumo does
 web lookups for it, and a free model edits the code. Every dev session (`dev`, `devim`, `nxvim`, ...) starts one with
-`AIDEV_TUIOS_SESSION=<session>`: Claude beside nvim on workspace `dev`, Lumo on workspace `ai`, where every builder
-opens too (`aidev -p` edits included), so you can watch each agent and type into it. Started by hand inside another
-tuios session, Claude joins the workspace of a window named `nvim`, else the lowest free one, and the rest share the
-next free one. Outside tuios, or with `AIDEV_TUIOS_OWN_SESSION=1`, they get session `aidev-<repo>` with the numbers
-below and a `dev-nvim` window. One run per session; `finish` closes a piece of work, and the panes stay for the next.
+`AIDEV_TUIOS_SESSION=<session>`: Claude, Lumo and every builder open on workspace 1 beside nvim (`aidev -p` edits
+included), so you can watch each agent and type into it. Started by hand inside another tuios session, Claude joins
+the workspace of a window named `nvim`, else the lowest free one, and the rest share it. Outside tuios, or with
+`AIDEV_TUIOS_OWN_SESSION=1`, they get session `aidev-<repo>` with the numbers below and a `dev-nvim` window. One run
+per session; `finish` closes a piece of work, and the panes stay for the next. Plan and the billed builder start with
+`--strict-mcp-config`, so they load only the tuios MCP; the global lumo, local-edit and oczen MCP servers stay for
+gpr, gpa and other sessions.
 
 | Workspace | Pane                | Model                                                              | Grants                  |
 | --------- | ------------------- | ------------------------------------------------------------------ | ----------------------- |
-| 1 `dev`   | `plan`              | Claude Code, advisor off: plans, sends tasks, verifies, reviews    | read, write, fan, files |
-| 1 `dev`   | `nvim` (`dev-nvim`) | your editor (`dev-nvim` only in a session of its own)              | default                 |
-| 2 `ai`    | `research`          | pi on Lumo through lumo-tamer, no tools: web lookups               | read                    |
-| 2 `ai`    | `build-local`       | pi on the on-device 30B; Claude opens it when the plan is approved | read, write             |
-| 2 `ai`    | `build-free`        | escalation: pi on a free Zen model                                 | read, write             |
-| 2 `ai`    | `build-billed`      | escalation: Claude Code (billed, asks you first)                   | read, write             |
+| 1         | `plan`              | Claude Code, advisor off: plans, sends tasks, verifies, reviews    | read, write, fan, files |
+| 1         | `nvim` (`dev-nvim`) | your editor (`dev-nvim` only in a session of its own)              | default                 |
+| 1         | `research`          | pi on Lumo through lumo-tamer, no tools: web lookups               | read                    |
+| 1         | `build-local`       | pi on the on-device 30B; Claude opens it when the plan is approved | read, write             |
+| 1         | `build-free`        | escalation: pi on a free Zen model                                 | read, write             |
+| 1         | `build-billed`      | escalation: Claude Code (billed, asks you first)                   | read, write             |
 
 The billed builder's settings use `acceptEdits`, allow the plan's verify commands by exact text and the read-only
 commands, and deny git writes, `gh`, `rm -rf` and `sudo` (deny wins over allow). Edits to the plan directory and to the run's `state.json` and `events.jsonl` are denied too.

@@ -83,7 +83,7 @@ The tuios MCP tools and `tuios list-agents`, `tuios capture-pane -w build-local 
 
 ## Every reply goes to the user
 
-The user watches the research and builder panes (workspace "ai") and corrects them live. So after every reply from
+The user watches the research and builder panes (workspace 1) and corrects them live. So after every reply from
 another agent, stop and hand it to the user before you act on it:
 
 1. **Report.** After each `ask-lumo` reply: Lumo's answer in a few lines, with its sources and the queries it confirmed. After a REJECTED reply, tell the user and ask whether to ask again later

@@ -46,9 +46,8 @@ def main():
 
     print("workspaces")
     names = list(a.BUILDERS.values())
-    check("WS_OWN has the builder panes on 2", all(a.WS_OWN.get(n) == 2 for n in names), a.WS_OWN)
+    check("WS_OWN has the builder panes on 1", all(a.WS_OWN.get(n) == 1 for n in names), a.WS_OWN)
     check("WS_OWN has no key build", "build" not in a.WS_OWN)
-    check("WS_NAMES names the builder panes", all(a.WS_NAMES.get(n) == "ai" for n in names), a.WS_NAMES)
     p = os.path.realpath(tempfile.mkdtemp(prefix="aidev-test-proj-"))
     run = a.Run(p, "20260101-000001")
     run.data["ws"] = {a.PLAN: 3, a.RESEARCH: 4, "build": 4}

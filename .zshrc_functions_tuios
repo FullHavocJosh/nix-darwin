@@ -2,8 +2,8 @@
 # .zshrc_functions_ai as <name>_herdr (dev_herdr, nxvim_herdr, aidev_herdr, ...).
 #
 #   dev                  reattach the daemon's sessions; with none, create nix-darwin, terraform-infrastructure and
-#                        home-infrastructure where cloned. Layout: workspace dev (nvim + aidev's Claude), ai (Lumo,
-#                        builders)
+#                        home-infrastructure where cloned. Layout: workspace 1 holds nvim, aidev's Claude, Lumo
+#                        and the builders
 #   devim [name]         the same layout for the current directory, always a new session
 #   nxvim, psvim, hivim, itvim   the session of one project (skipped where it is not cloned)
 #   hiwt <branch>        a new home-infrastructure worktree and branch, with a session of its own
@@ -97,8 +97,7 @@ _tuios_restore_nvim() {
     done
 }
 
-# Session $1 for directory $2, the dev layout: workspace 1 "dev" with nvim and aidev's Claude beside it, workspace 2
-# "ai" with Lumo, where the builders open too (aidev_tuios.py, started with AIDEV_TUIOS_SESSION=$1). The pane
+# Session $1 for directory $2, the dev layout: workspace 1 holds nvim, aidev's Claude, Lumo and the builders. The pane
 # `tuios new` opens becomes nvim; its command is typed into a shell, as herdr's `pane run` did, so quitting nvim leaves
 # the pane at a prompt. A session that exists (still running, or restored by the daemon) keeps its layout and only
 # gets nvim, Claude and Lumo back (_tuios_restore).
@@ -114,7 +113,6 @@ _tuios_devlayout() {
   _tuios_cmd set-window -s "$s" -w "$first" --name nvim >/dev/null
   _tuios_cmd send-text -s "$s" -w nvim $'nvim\n' >/dev/null
   (cd "$dir" && AIDEV_TUIOS_SESSION="$s" AIDEV_TUIOS_NO_ATTACH=1 python3 "$HOME/.config/aistack-tuios/aidev_tuios.py" start >/dev/null)
-  _tuios_cmd set-workspace-name 1 dev -s "$s" >/dev/null
   _tuios_cmd select-workspace 1 -s "$s" >/dev/null
   _tuios_cmd focus-window nvim -s "$s" >/dev/null
 }
@@ -205,8 +203,8 @@ _tuios_worktree() {
 }
 alias hiwt='_tuios_worktree home-infrastructure ~/home-infrastructure'
 
-# Session $1 whose windows ssh to $2 and work in $3 there: workspace 1 nvim | zsh, workspace 2 ai (a remote
-# shell). Nothing of tuios runs on the remote end. Each command runs through `zsh -ic` there: a plain ssh command is
+# Session $1 whose windows ssh to $2 and work in $3 there: the peer layout uses workspaces 1 and 2 (nvim | zsh on 1, a remote
+# shell on 2). Nothing of tuios runs on the remote end. Each command runs through `zsh -ic` there: a plain ssh command is
 # not interactive, so the remote .zshrc (and its homebrew PATH) would not load.
 _tuios_remote_space_ssh() {
   _tuios_guard || return 1
@@ -221,8 +219,6 @@ _tuios_remote_space_ssh() {
     _tuios_cmd send-text -s "$s" -w zsh "$ssh \"zsh -ic 'cd $rdir && git status; exec zsh -l'\""$'\n' >/dev/null
     _tuios_cmd new-window ai -s "$s" --workspace 2 --cwd "$HOME" --no-focus >/dev/null
     _tuios_cmd send-text -s "$s" -w ai "$ssh \"zsh -ic 'cd $rdir; exec zsh -l'\""$'\n' >/dev/null
-    _tuios_cmd set-workspace-name 1 dev -s "$s" >/dev/null
-    _tuios_cmd set-workspace-name 2 ai -s "$s" >/dev/null
     _tuios_cmd focus-window nvim -s "$s" >/dev/null
   fi
   _tuios_attach "$s"
@@ -277,7 +273,6 @@ _tuios_ai_edit_workspace() {
     [ -n "$ws" ] || { echo "tuios: no free workspace in $s for $name" >&2; return 1; }
     _tuios_cmd new-window "ai-$name" -s "$s" --workspace "$ws" --cwd "$dir" --no-focus >/dev/null || return 1
     _tuios_cmd new-window "nvim-$name" -s "$s" --workspace "$ws" --cwd "$dir" >/dev/null || return 1
-    _tuios_cmd set-workspace-name "$ws" "$name" -s "$s" >/dev/null
     [ -n "$cmd_aidev" ] && _tuios_cmd send-text -s "$s" -w "ai-$name" "$cmd_aidev"$'\n' >/dev/null
     [ -n "$cmd_nvim" ] && _tuios_cmd send-text -s "$s" -w "nvim-$name" "$cmd_nvim"$'\n' >/dev/null
     _tuios_cmd select-workspace "$ws" -s "$s" >/dev/null

@@ -32,7 +32,7 @@ Helpers the Claude pane runs from its own pane (so with its grants; AIDEV_TUIOS_
     finish                        close this piece of work; the panes stay for the next one
     merged                        after PR merged: close work if open, reset Lumo and idle builders
 
-Panes, on two workspaces: "dev" (your nvim and Claude) and "ai" (Lumo and every builder), each named after its role:
+Panes, all on one workspace (nvim's, else the lowest free one), each named after its role:
 
     plan     Claude Code: talks with you, reads the code, plans, sends tasks, verifies, reviews   read,write,fan,files
     research pi on Lumo through lumo-tamer, no tools: web lookups on what Claude sends it        read
@@ -100,12 +100,11 @@ PLAN, RESEARCH = "plan", "research"
 # What each pane may do through tuios (tuios --skill grants). The builder can mail Claude but not type into its pane:
 # a pane types only into panes that hold nothing it does not, and Claude holds fan and files.
 GRANTS = {PLAN: "read,write,fan,files", RESEARCH: "read", "build": "read,write"}
-# Each layer's workspace: Claude beside your nvim on "dev", Lumo and every builder on "ai". A session of its own uses
-# these numbers; in another session Claude joins the nvim window's workspace and the rest take one free workspace
-# (assign_workspaces). The map is kept in the run's state.json as "ws".
-WS_OWN = {PLAN: 1, RESEARCH: 2, "build-local": 2, "build-free": 2, "build-billed": 2, "dev": 1}
+# Each pane's workspace: every aidev pane is on workspace 1 in a session of its own. In another session they all
+# share the nvim window's workspace, else the lowest free one (assign_workspaces). The map is kept in the run's
+# state.json as "ws".
+WS_OWN = {PLAN: 1, RESEARCH: 1, "build-local": 1, "build-free": 1, "build-billed": 1, "dev": 1}
 WS = dict(WS_OWN)
-WS_NAMES = {PLAN: "dev", "dev": "dev", RESEARCH: "ai", "build-local": "ai", "build-free": "ai", "build-billed": "ai"}
 # Builder kinds: local (the on-device 30B), free (a free Zen model), billed (Claude Code). Old names stay as aliases.
 BUILDERS = {"local": "build-local", "free": "build-free", "billed": "build-billed"}
 ESCALATE_AFTER = int(os.environ.get("AIDEV_TUIOS_ESCALATE_AFTER", "2"))
@@ -218,11 +217,24 @@ def short(text, limit=ASK_MAX_BYTES):
     return text if len(data) <= limit else data[: limit - 3].decode(errors="ignore") + "..."
 
 
+def notify_local(text):
+    """A local macOS notification so the person sees an ask-human waiting. No network, no shell."""
+    if sys.platform != "darwin" or os.environ.get("AIDEV_TUIOS_NO_NOTIFY") == "1":
+        return
+    try:
+        subprocess.run(["osascript", "-e", "on run argv", "-e",
+                        'display notification (item 1 of argv) with title "aidev" sound name "Glass"',
+                        "-e", "end run", text], capture_output=True, check=False, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 def ask_human(session, question, options):
-    """The person's answer from the tuios Inbox (Ctrl+B i). Only an attached client can answer, so a model cannot
+    """The person's answer from the tuios Inbox (ctrl+t i). Only an attached client can answer, so a model cannot
     answer for the person. AIDEV_TUIOS_FAKE_HUMAN (tests) reads answers from a file instead."""
     if os.environ.get("AIDEV_TUIOS_FAKE_HUMAN"):
         return fake_human(question, options)
+    notify_local(f"{short(question)} - answer in the tuios Inbox (ctrl+t i)")
     opts = [x for o in options for x in ("-o", o)]
     _code, out, err = tuios("ask-human", "-s", session, short(question), *opts, "--timeout", str(ASK_TIMEOUT_MS),
                             "--json", timeout=ASK_TIMEOUT_MS / 1000 + 30)
@@ -272,10 +284,6 @@ def nested_in_herdr():
     if os.environ.get("AIDEV_TUIOS_ALLOW_NESTED") == "1" or os.environ.get("TUIOS_ENV"):
         return False
     return bool(os.environ.get("HERDR_ENV") or os.environ.get("HERDR_PANE_ID"))
-
-
-def name_ws(session, name):
-    tuios("set-workspace-name", str(WS[name]), WS_NAMES[name], "-s", session)
 
 
 def foreground(tty):
@@ -336,9 +344,9 @@ def start_session(project):
 
 def assign_workspaces(run, session, own):
     """Fill WS for this run and keep it in the run. A session of its own uses WS_OWN. In a shared session Claude joins
-    the workspace of the window named nvim (the dev layout's), else takes the lowest free one, and Lumo and the
-    builders share the lowest free workspace after that; there is no dev-nvim (you have your own windows). Returns an
-    error text when too few workspaces are free."""
+    the workspace of the window named nvim (the dev layout's), else takes the lowest free one; all aidev panes
+    (plan, research, builders and dev) share that workspace. Returns an
+    error text when no workspace is free and no nvim window exists."""
     ws = run.data.get("ws")
     if not ws and own:
         ws = dict(WS_OWN)
@@ -348,10 +356,10 @@ def assign_workspaces(run, session, own):
         free = [n for n in range(1, 10) if n not in used]
         nvim = next((w.get("workspace") for w in wins if w.get("custom_name") == "nvim"), None)
         slots = ([nvim] if nvim in range(1, 10) else []) + free
-        if len(slots) < 2:
-            return (f"{session} has {len(free)} free workspaces and aidev needs two (one beside a window named nvim "
-                    "counts). Close some, or run with AIDEV_TUIOS_OWN_SESSION=1 for a session of its own.")
-        ws = {PLAN: slots[0], RESEARCH: slots[1], **{name: slots[1] for name in BUILDERS.values()}}
+        if len(slots) < 1:
+            return (f"{session} has no free workspace and aidev needs one; close some, or run with "
+                    "AIDEV_TUIOS_OWN_SESSION=1 for a session of its own.")
+        ws = {PLAN: slots[0], RESEARCH: slots[0], **{name: slots[0] for name in BUILDERS.values()}}
     for name in BUILDERS.values():
         ws.setdefault(name, ws[RESEARCH])
     run.data["ws"] = ws
@@ -360,7 +368,7 @@ def assign_workspaces(run, session, own):
 
 
 def ai_workspace(session):
-    """The workspace of the research window (the ai workspace), else the lowest free one, else None."""
+    """The workspace of the research window, else the lowest free one, else None."""
     lumo = window_named(session, RESEARCH)
     return lumo.get("workspace") if lumo else free_workspace(session)
 
@@ -603,7 +611,9 @@ def claude_body(run, cfg, name, system, first, cwd, advisor=True, settings=None,
     sid = run.data["panes"].setdefault(name, {}).setdefault("session_id", str(uuid.uuid4()))
     sysp = write_text(os.path.join(run.dir, "bin", f"{name}.system.md"), system)
     marker = os.path.join(run.dir, "bin", f"{name}.started")
+    # the global lumo, local-edit and oczen tools and their instructions conflict with ask-lumo and the builders
     base = ["claude", "--settings", settings or cfg["claude_settings"], "--mcp-config", cfg["claude_mcp"],
+            "--strict-mcp-config",
             "--model", CLAUDE_MODEL, "--effort", CLAUDE_EFFORT, "--add-dir", run.state, "-n", f"aidev {name}"]
     first_line = with_system_prompt(base + ["--session-id", sid], sysp) + " " + shlex.quote(first)
     again_line = with_system_prompt(base + ["--resume", sid], sysp)
@@ -744,7 +754,6 @@ def start_dev_workspace(run, session, wd):
     if not window_named(session, "dev-nvim"):
         tuios("new-window", "dev-nvim", "-s", session, "--workspace", str(WS["dev"]), "--cwd", wd, "--no-focus")
         tuios("send-text", "-s", session, "-w", "dev-nvim", "nvim\n")
-    name_ws(session, "dev")
 
 
 # ---- tasks and checks -----------------------------------------------------------------------------------------
@@ -1114,8 +1123,6 @@ def cmd_builder(run, argv):
         print(f"free Zen is not usable: {s['detail']}. Use `builder billed` (asks the user first).")
         return 1
     ok, msg = start_builder(run, kind, name, WS[name], wd)
-    if ok:
-        name_ws(run.session, name)
     if ok or name in run.data["panes"]:
         run.data["builder"] = name
         run.save()
@@ -1640,7 +1647,6 @@ def open_run(run, session, own, running, task, resume=False):
     for name in (PLAN, RESEARCH):
         if name in scripts:
             open_pane(run, session, name, scripts[name], run.project, GRANTS[name])
-        name_ws(session, name)  # "ai" is named even without Lumo: the builders open there
     if own:
         start_dev_workspace(run, session, run.data.get("work_dir") or run.project)
     tuios("select-workspace", str(WS[PLAN]), "-s", session)
@@ -1787,8 +1793,7 @@ def check_edit(cwd, before, test_cmd):
 
 
 def edit_in_pane(run, kind, task_path, limit):
-    """One attempt of `aidev -p` in a builder pane on the ai workspace of this session (beside Lumo), else a free
-    one. (reply, error)."""
+    """One attempt of `aidev -p` in a builder pane in this session (beside Lumo), else a free one. (reply, error)."""
     ws = ai_workspace(run.session)
     if not ws:
         return "", "no free workspace in this session"

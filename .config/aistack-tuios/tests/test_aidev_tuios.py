@@ -166,18 +166,35 @@ def main():
     a.windows = lambda s: [{"workspace": 1}, {"workspace": 2}, {"workspace": 2}, {"workspace": 3}]
     r2 = a.Run(p, "20260101-000001")
     ws = r2.data.get("ws") if a.assign_workspaces(r2, "dev-x", own=False) is None else None
-    check("without an nvim window Claude takes the first free workspace, Lumo and the builders the next",
-          ws and ws[a.PLAN] == 4 and ws[a.RESEARCH] == ws["build-local"] == ws["build-billed"] == 5 and "dev" not in ws, ws)
+    check("without an nvim window plan, research and every builder get workspace 4",
+          ws and ws[a.PLAN] == 4 and ws[a.RESEARCH] == ws["build-local"] == ws["build-billed"] == 4 and "dev" not in ws, ws)
     a.windows = lambda s: [{"workspace": 1, "custom_name": "nvim"}, {"workspace": 3}]
     r4 = a.Run(p, "20260101-000004")
     ws = r4.data.get("ws") if a.assign_workspaces(r4, "dev-x", own=False) is None else None
-    check("in the dev layout Claude joins nvim's workspace, Lumo and the builders share the next free one",
-          ws and ws[a.PLAN] == 1 and ws[a.RESEARCH] == ws["build-local"] == ws["build-free"] == 2, ws)
-    a.windows = lambda s: [{"workspace": n} for n in range(1, 9)]
-    check("too few free workspaces is refused", a.assign_workspaces(a.Run(p, "20260101-000002"), "s", own=False))
+    check("in the dev layout Claude joins nvim's workspace, Lumo and the builders all use the same workspace",
+          ws and ws[a.PLAN] == ws[a.RESEARCH] == ws["build-local"] == ws["build-free"] == ws["build-billed"] == 1, ws)
+    a.windows = lambda s: [{"workspace": n} for n in range(1, 10)]
+    check("with every workspace used and no nvim window the run is refused", a.assign_workspaces(a.Run(p, "20260101-000002"), "s", own=False))
     a.windows = lambda s: [{"workspace": 1, "custom_name": "nvim"}] + [{"workspace": n} for n in range(2, 10)]
-    check("nvim's workspace alone is not enough", a.assign_workspaces(a.Run(p, "20260101-000007"), "s", own=False))
+    check("nvim workspace alone is enough", a.assign_workspaces(a.Run(p, "20260101-000007"), "s", own=False) is None)
     a.windows = real_windows
+    real_run, real_platform = a.subprocess.run, a.sys.platform
+    saved_notify = os.environ.pop("AIDEV_TUIOS_NO_NOTIFY", None)
+    notified = []
+    a.subprocess.run = lambda argv, **kw: notified.append(argv)
+    a.sys.platform = "darwin"
+    try:
+        a.notify_local("x")
+        check("notify_local runs osascript with the text last",
+              len(notified) == 1 and notified[0][0] == "osascript" and notified[0][-1] == "x", notified)
+        os.environ["AIDEV_TUIOS_NO_NOTIFY"] = "1"
+        a.notify_local("y")
+        check("AIDEV_TUIOS_NO_NOTIFY=1 silences notify_local", len(notified) == 1, notified)
+    finally:
+        a.subprocess.run, a.sys.platform = real_run, real_platform
+        os.environ.pop("AIDEV_TUIOS_NO_NOTIFY", None)
+        if saved_notify is not None:
+            os.environ["AIDEV_TUIOS_NO_NOTIFY"] = saved_notify
     r3 = a.Run(p, "20260101-000003")
     a.assign_workspaces(r3, a.session_name(p), own=True)
     check("a session of its own uses the fixed numbers", r3.data["ws"] == a.WS_OWN)
@@ -617,6 +634,7 @@ def main():
     body = a.claude_pane_body(hr, ccfg, "add subtract", True)
     check("the backbone runs with advisor off and knows its run",
           "export CLAUDE_ADVISOR=off" in body and f"AIDEV_TUIOS_RUN={hr.id}" in body)
+    check("the Claude panes load only the tuios MCP", "--strict-mcp-config" in body)
     bs = json.load(open(ccfg["claude_backbone"]))
     check("its settings keep tuios's hooks and allow the helpers",
           bs.get("hooks") == {"x": 1} and any("aidev_tuios.py" in x for x in bs["permissions"]["allow"]))
