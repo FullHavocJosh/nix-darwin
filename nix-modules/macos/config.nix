@@ -243,8 +243,9 @@
             fi
 
             git -C "$repo_path" pull \
-              && git -C "$repo_path" submodule update --init --recursive \
               || echo "  Warning: pull failed for $repo_name (SSH agent may not be available)."
+            git -C "$repo_path" submodule update --init --recursive \
+              || echo "  Warning: submodule update failed for $repo_name (private or inaccessible submodule?)."
 
             if [ "$current_branch" != "$main_branch" ]; then
               git -C "$repo_path" checkout "$current_branch" \
