@@ -643,6 +643,7 @@ def main():
     check("its prompt names the helpers and has no placeholder left", "ask-lumo" in sysp and "@@" not in sysp)
     check("the builder holds less than Claude, so it cannot type into Claude's pane",
           set(a.GRANTS["build"].split(",")) < set(a.GRANTS[a.PLAN].split(",")))
+    check("claude_body includes --strict-mcp-config flag", "--strict-mcp-config" in body)
     a.window_named = lambda s, n: {"custom_name": n}
     hr.data.update(work_dir=p, builder="build-local")
     check("finish closes the builder pane and keeps the run open for the next piece of work",
