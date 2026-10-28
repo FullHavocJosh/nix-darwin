@@ -673,11 +673,38 @@ def claude_body(run, cfg, name, system, first, cwd, advisor=True, settings=None,
             f"  touch {shlex.quote(marker)}\n  {first_line}\nfi")
 
 
+def held_grants():
+    """The grants the pane aidev runs in holds (admin implies read, write, fan and files), or None outside a pane."""
+    data = tuios_json("pane-grants")
+    if not data.get("pane"):
+        return None
+    held = set(data.get("grants") or [])
+    if "admin" in held:
+        held |= {"read", "write", "fan", "files"}
+    return held
+
+
+def grantable(session, name, grants):
+    """`grants` without the ones this pane does not hold: tuios refuses new-window when a pane would give more than
+    it holds. Prints what was left out and how to add it."""
+    held = held_grants()
+    if held is None:
+        return grants
+    want = grants.split(",")
+    missing = [g for g in want if g not in held]
+    if missing:
+        print(f"aidev: the {name} pane opens without {','.join(missing)}: this pane does not hold it. To add it, put "
+              f"it in [agents.permissions] grants, or run outside any pane: "
+              f"tuios set-pane-grants -w {name} -s {session} --grants {grants}", file=sys.stderr)
+    return ",".join(g for g in want if g in held)
+
+
 def open_pane(run, session, name, script, cwd, grants):
     """A window for one layer on its workspace, opened by the launcher (it needs the admin grant your shell holds);
     does nothing when the window is already there."""
     if window_named(session, name):
         return False
+    grants = grantable(session, name, grants)
     code, _out, err = tuios("new-window", name, "-s", session, "--workspace", str(WS[name]), "--cwd", cwd,
                             "--grants", grants, "--no-focus", "--", "/bin/zsh", script)
     if code:

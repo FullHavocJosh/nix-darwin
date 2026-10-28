@@ -49,10 +49,26 @@ def main():
     check("respond is not in build grants", "respond" not in a.GRANTS["build"].split(","))
     check("respond is not in research grants", "respond" not in a.GRANTS[a.RESEARCH].split(","))
 
-    print("pane grants")
-    check("respond is in plan grants", "respond" in a.GRANTS[a.PLAN].split(","))
-    check("respond is not in build grants", "respond" not in a.GRANTS["build"].split(","))
-    check("respond is not in research grants", "respond" not in a.GRANTS[a.RESEARCH].split(","))
+    print("grants the launcher can give")
+    held = [{"pane": True, "grants": ["read", "write", "files", "admin"]}]
+    real = a.tuios_json
+    a.tuios_json = lambda *args, **kw: held[0]
+    try:
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            got = a.grantable("s", a.PLAN, a.GRANTS[a.PLAN])
+        check("admin gives fan, respond is left out", got == "read,write,fan,files", got)
+        check("left-out grant is named with the fix", "respond" in err.getvalue()
+              and "set-pane-grants -w plan -s s" in err.getvalue(), err.getvalue())
+        held[0] = {"pane": True, "grants": ["read", "write", "files", "admin", "respond"]}
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            got = a.grantable("s", a.PLAN, a.GRANTS[a.PLAN])
+        check("all held: grants unchanged and silent", got == a.GRANTS[a.PLAN] and not err.getvalue(), got)
+        held[0] = {"pane": False}
+        check("outside a pane: grants unchanged", a.grantable("s", a.PLAN, a.GRANTS[a.PLAN]) == a.GRANTS[a.PLAN])
+    finally:
+        a.tuios_json = real
 
     print("workspaces")
     names = list(a.BUILDERS.values())
