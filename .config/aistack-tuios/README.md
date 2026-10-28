@@ -111,8 +111,10 @@ How the panes talk:
 - Plan, tasks, check output and events are files under `~/.ai/aidev_tuios/<project>-<hash>/` (`plan/`, `runs/<id>/`).
   tuios keeps mail in memory only, so those files are the source of truth.
 - Remaining permission prompts surface in `wait-task` and `watch`. Plan answers them with `approvals`, which uses
-  `tuios respond`. That needs the person to give plan the respond grant once, outside any pane, with
-  `tuios set-pane-grants -w plan --grants read,write,fan,files,respond`, and again after the pane is recreated.
+  `tuios respond`. aidev opens the plan pane with the respond grant, so the user saying yes in the conversation is the
+  only gate. tuios still refuses an allow of a risky prompt (recursive delete, force push, pipe to a shell, a write
+  outside the worktree): the user answers those in the Inbox (`ctrl+t i`). If a plan pane was opened without the grant,
+  the person runs `tuios set-pane-grants -w plan --grants read,write,fan,files,respond` outside any pane.
 - A billed builder starts only after you say yes in the tuios Inbox (`ctrl+t i`).
 
 Cost: Claude is interactive, so no per-call budget cap applies. `AIDEV_TUIOS_CLAUDE_MODEL` and

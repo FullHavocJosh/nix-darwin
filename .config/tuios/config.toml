@@ -349,3 +349,17 @@ addr = "havoc@macbookm2pro.rollet.family"
 
 [appearance.sidebar.left]
 enabled = true
+
+# The daemon runs this with nobody attached to the pane, so a pane that needs an answer still reaches you when no
+# client is watching. Changing hooks needs `tuios restart-server` to take effect.
+[hooks]
+after-agent-state = ["sh ~/.config/tuios/hooks/agent-attention.sh"]
+
+# A pane you already have in front of you does not also raise a notification; only panes elsewhere do.
+[notifications.agent]
+suppress_focused = true
+
+# A workspace whose tab is out of view turns this colour while one of its panes waits, so the wait is visible without
+# focusing it first.
+[dock.tabs]
+attention_fg = "#f38ba8"
