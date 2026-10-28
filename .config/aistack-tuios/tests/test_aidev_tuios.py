@@ -271,26 +271,27 @@ def main():
           rc == 0 and reset_texts() == ["/new"] and reset_before_mail(), reset_calls)
     reset_calls.clear()
     a.agent_state = lambda s, n: "working"
+    a.RESET_WAIT = 0
     real_stdout, sys.stdout = sys.stdout, io.StringIO()
     try:
         rc = a.cmd_send_task(hr, ["T1"])
         printed = sys.stdout.getvalue()
     finally:
         sys.stdout = real_stdout
-    check("a working builder is not reset, and the task is still mailed",
-          rc == 0 and not reset_texts() and mailed() and "working, not reset" in printed, (reset_calls, printed))
+    check("a working builder is not reset and the task is refused",
+          rc == 1 and not mailed() and "refusing" in printed, (reset_calls, printed))
     reset_calls.clear()
     captured[0] = "still working...\n"
     a.agent_state = lambda s, n: "none"
+    a.RESET_WAIT = 0
     real_stdout, sys.stdout = sys.stdout, io.StringIO()
     try:
         rc = a.cmd_send_task(hr, ["T1"])
         printed = sys.stdout.getvalue()
     finally:
         sys.stdout = real_stdout
-    check("an unconfirmed reset prints a warning, and the task is still mailed",
-          rc == 0 and reset_texts() == ["/new"] and mailed() and "reset not confirmed" in printed
-          and len([c for c in reset_calls if c[0] == "capture-pane"]) == 10, (reset_calls, printed))
+    check("an unconfirmed reset refuses to send the task and mails nothing",
+          rc == 1 and not mailed() and "refusing" in printed and len([c for c in reset_calls if c[0] == "capture-pane"]) == 10, (reset_calls, printed))
     reset_calls.clear()
     captured[0] = "context 0.0%/128k tokens\n"
     hr.data["builder"] = "build-billed"
@@ -319,6 +320,7 @@ def main():
     captured[0] = "80.0%/33k (auto)\n"
     hr.data["builder"] = "build-billed"
     a.agent_state = lambda s, n: "none"
+    a.RESET_WAIT = 0
     real_stdout, sys.stdout = sys.stdout, io.StringIO()
     try:
         rc = a.cmd_send_task(hr, ["T1"])
@@ -326,8 +328,7 @@ def main():
     finally:
         sys.stdout = real_stdout
     check("80.0% context does not confirm the reset",
-          rc == 0 and "reset not confirmed" in printed
-          and len([c for c in reset_calls if c[0] == "capture-pane"]) == 10, (reset_calls, printed))
+          rc == 1 and "refusing" in printed and len([c for c in reset_calls if c[0] == "capture-pane"]) == 10, (reset_calls, printed))
     reset_calls.clear()
     captured[0] = "new session ses_abc\n"
     hr.data["builder"] = "build-local"

@@ -61,19 +61,28 @@ The tuios MCP tools and `tuios list-agents`, `tuios capture-pane -w build-local 
    - `title` is the PR title: imperative, at most 72 characters, no `feat:` prefix. `description` is two to four
      sentences.
    - Each task fits one session of the builder, a weaker model. Its description names the files to create or change
-     and the exact behaviour: function names, signatures, callers, edge cases. At most 6 tasks.
+     and the exact behaviour: function names, signatures, callers, edge cases. Prefer many small tasks to few big ones.
    - Size every task for the on-device 30B (33k token context): at most about 2500 characters of description, at most
      3 files, function names and line regions instead of whole files; check-plan refuses a task that is too big, so
-     split it.
+     split it. The builder's own prompt, rules and tool output use about 10k of the 33k tokens, so a task has about
+     20k tokens (about 80 KB) for reading and editing, and a read of a big file is the usual overflow. check-plan
+     also refuses a task whose named files add up to more than 36 KB unless it names a line region. For a file over
+     20 KB, name the function and its line region; name a test file only when the task changes it; and when a task
+     needs more than that, split it: a new task per file is better than one big task. There is no limit of six tasks
+     when the tasks are small.
    - Every task has at least one verify command that exits 0 only when the task is really done. Commands run without
      a shell: no `; & | < >`, backticks or `$()`.
    - Run `check-plan` and fix what it reports. Show the user the tasks and verify commands, and change them as they
      say. Start building only when the user says so.
 3. **Build.** Run `worktree`, then `builder`. For each task in the order `check-plan` printed: `send-task`, then
-   `wait-task`. On CHECKS FAILED, read the output, then `send-task` the same id with a note that says what to fix.
-   After the failed attempts at one tier that `escalate` accepts (two by default), run `escalate <id>`, tell the user
-   which builder is next and why (billed asks the user in the Inbox), then `send-task` the same id with a note. When
-   `escalate` says there is no higher builder, ask the user: retry with guidance or skip.
+   `wait-task`. On CHECKS FAILED, read the output, then `send-task` the same id with a note that says what to fix. After
+   the failed attempts at one tier that `escalate` accepts (two by default), run `escalate <id>`, tell the user which
+   builder is next and why (billed asks the user in the Inbox), then `send-task` the same id with a note. When
+   wait-task says the free builder hit its usage limit, run fallback <id>, tell the user which builder is next, then
+   send-task again. When
+   `escalate` says there is no higher builder, ask the user: retry with guidance or skip. Never send-task while the
+   builder works; send-task waits for rest, resets the context with /new or /clear and refuses when it cannot; then wait
+   for idle and run it again; never set AIDEV_NO_RESET.
 4. **Review.** When every task is verified, review the whole change yourself: `git -C <work dir> status` and
    `git -C <work dir> diff`, plus the untracked files. Judge security, accuracy against each task, and completeness
    (every acceptance criterion, meaningful tests). Report to the user: file and line, what is wrong, why, and how to
@@ -108,6 +117,9 @@ When `wait-task` or `watch` reports that a builder waits on an approval:
 - Run `approvals deny` for anything outside the task's files or checks, any git write, any network or install
   command, and anything the user says no to.
 - Never approve a prompt you have not read in this turn.
+- If `approvals approve` is refused because the prompt matches a tuios risk rule (recursive delete, force push, pipe to
+  a shell, write outside the worktree), do not retry. Tell the user the pane name and that they answer it in the Inbox
+  (`ctrl+t i`).
 - If `approvals` reports the missing respond grant, tell the user the command it prints.
 
 ## Rules

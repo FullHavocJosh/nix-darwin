@@ -39,7 +39,7 @@ PROBE_PROMPT = "Reply with the single word ok."
 PROBE_TIMEOUT_S = 60
 # Zen has no balance API: an exhausted free model makes opencode print "Free usage exceeded, add credits  retrying in
 # 10h 37m attempt 1" or a 429 error, then keep retrying, so a probe that times out still carries the answer.
-EXHAUSTED_RE = re.compile(r"free usage exceeded|usage exceeded|rate.?limit|\b429\b|add credits|insufficient|quota", re.IGNORECASE)
+EXHAUSTED_RE = re.compile(r"free usage exceeded|usage exceeded|rate.?limit|\b429\b|add credits|insufficient|quota|free usage limit|usage limit|limit reached", re.IGNORECASE)
 STATUS_CACHE = os.environ.get("AISTACK_ZEN_STATUS_CACHE") or os.path.expanduser("~/.cache/aistack/zen-status.json")
 STATUS_TTL_S = 600
 RETRY_RE = re.compile(r"retrying in ([^\n]*?)(?: attempt|$)", re.IGNORECASE | re.MULTILINE)
@@ -82,8 +82,8 @@ def load_catalog(path=None, url=CATALOG_URL, fetch=True):
     raise RuntimeError("no model catalog: offline and nothing cached")
 
 
-def offered_ids():
-    """Zen model ids this account can use (`opencode models` lists provider/model), or None if that fails."""
+def _offered(prefix):
+    """Model ids under `prefix` this account can use (`opencode models` lists provider/model), or None if that fails."""
     r = None
     for _ in range(2):   # opencode's background service can be busy for a moment
         try:
@@ -97,8 +97,18 @@ def offered_ids():
     if r is None:
         return None
     text = re.sub(r"\x1b\[[0-9;]*m", "", r.stdout)
-    ids = {l.split("/", 1)[1].strip() for l in text.splitlines() if l.startswith("opencode/")}
+    ids = {l.split("/", 1)[1].strip() for l in text.splitlines() if l.startswith(prefix)}
     return ids or None
+
+
+def offered_ids():
+    """Zen model ids this account can use (`opencode models` lists provider/model), or None if that fails."""
+    return _offered("opencode/")
+
+
+def offered_go_ids():
+    """OpenCode Go model ids this account can use, or None if that fails."""
+    return _offered("opencode-go/")
 
 
 def strip_ansi(text):
@@ -130,7 +140,8 @@ def _text(x):
 
 def probe(mid, runner=subprocess.run):
     """State record for one free model: ask opencode one trivial question and classify what comes back."""
-    cmd = ["opencode", "run", "--standalone", "--model", "opencode/" + mid, PROBE_PROMPT]
+    model_arg = mid if "/" in mid else "opencode/" + mid
+    cmd = ["opencode", "run", "--standalone", "--model", model_arg, PROBE_PROMPT]
     try:
         r = runner(cmd, cwd=tempfile.mkdtemp(), capture_output=True, text=True, timeout=PROBE_TIMEOUT_S,
                    stdin=subprocess.DEVNULL, check=False)
@@ -171,7 +182,7 @@ def free_models(catalog, offered):
     return sorted(out, key=lambda i: zen_models(catalog)[i].get("release_date", ""), reverse=True)
 
 
-def candidates(catalog, offered, policy, private, limit=9):
+def candidates(catalog, offered, policy, private, limit=9, go_offered=None):
     """Free model ids in the order to try them: zero-retention only for a private repo, else Big Pickle first."""
     free = free_models(catalog, offered)
     if private:
@@ -179,7 +190,19 @@ def candidates(catalog, offered, policy, private, limit=9):
     else:
         preferred = policy.get("public_preferred", "big-pickle")
         out = ([preferred] if preferred in free else []) + [m for m in free if m != preferred]
-    return out[:limit]
+    out = out[:limit]
+    if go_offered is None:
+        go_offered = set()
+    if private:
+        go_list = policy.get("go_zero_retention", [])
+    else:
+        go_list = policy.get("go_preferred", [])
+    for m in go_list:
+        if m in go_offered:
+            gid = "opencode-go/" + m
+            if gid not in out:
+                out.append(gid)
+    return out
 
 
 def _load_status_cache():
@@ -191,12 +214,12 @@ def _load_status_cache():
 
 
 def status(catalog, offered, policy, private, do_probe=False, refresh=False, probe_all=False, limit=9,
-           runner=subprocess.run, now=None):
+           runner=subprocess.run, now=None, go_offered=None):
     """State of each candidate: a fresh cached answer, a new probe, or "unprobed"."""
     now = time.time() if now is None else now
     cache = _load_status_cache()
     records, dirty, have_available = [], False, False
-    for mid in candidates(catalog, offered, policy, private, limit):
+    for mid in candidates(catalog, offered, policy, private, limit, go_offered=go_offered):
         rec = cache.get(mid)
         fresh = (not refresh and isinstance(rec, dict) and rec.get("state") in ("available", "exhausted")
                  and isinstance(rec.get("checked"), (int, float)) and now - rec["checked"] < STATUS_TTL_S)
@@ -309,7 +332,12 @@ def main(argv=None):
         return 1
     private = a.private == "yes"
     if a.cmd == "status":
-        st = status(catalog, offered, policy, private, do_probe=a.probe, refresh=a.refresh, probe_all=a.all, limit=a.limit)
+        go_offered_env = os.environ.get("AISTACK_ZEN_GO_OFFERED")
+        if go_offered_env is None:
+            go_offered = offered_go_ids()
+        else:
+            go_offered = {x for x in go_offered_env.split(",") if x}
+        st = status(catalog, offered, policy, private, do_probe=a.probe, refresh=a.refresh, probe_all=a.all, limit=a.limit, go_offered=go_offered)
         if a.json:
             print(json.dumps(st))
         else:

@@ -25,7 +25,9 @@ def model(cost=0, tool=True, rel="2026-01-01", status=None):
     return m
 
 POLICY = {"verified": "2026-10-06", "source": "https://opencode.ai/docs/zen/", "public_preferred": "big-pickle",
-          "zero_retention": ["space-bunny-free", "longcat-2.5-preview-free"]}
+          "zero_retention": ["space-bunny-free", "longcat-2.5-preview-free"],
+          "go_preferred": ["glm-5.3", "kimi-k2.7-code", "deepseek-v4-pro", "qwen3.8-max", "minimax-m3"],
+          "go_zero_retention": []}
 def cat(**models): return {"opencode": {"models": models}}
 ALL = {"big-pickle", "space-bunny-free", "longcat-2.5-preview-free", "other-free", "paid-one"}
 BASE = cat(**{"big-pickle": model(), "space-bunny-free": model(), "longcat-2.5-preview-free": model(),
@@ -90,6 +92,8 @@ st, det = z.classify("Error: 429 Too Many Requests", 1)
 check("a 429 line is exhausted", st == "exhausted", (st, det))
 check("ok with code 0 is available", z.classify("ok\n", 0) == ("available", ""))
 check("empty text with code 1 is unknown", z.classify("", 1) == ("unknown", "no output"))
+st, det = z.classify("Free usage limit reached. Connect a provider...", 1)
+check("Free usage limit reached is exhausted", st == "exhausted", (st, det))
 def timeout_runner(cmd, **kw):
     raise z.subprocess.TimeoutExpired(cmd, 60, output=EXH.encode(), stderr=None)
 rec = z.probe("big-pickle", runner=timeout_runner)
@@ -101,6 +105,17 @@ def ok_runner(cmd, **kw):
 rec = z.probe("big-pickle", runner=ok_runner)
 check("an ok answer is available and the model is passed as opencode/<id>",
       rec["state"] == "available" and rec["model"] == "big-pickle" and "opencode/big-pickle" in seen["cmd"], (rec, seen))
+seen = {}
+def go_runner(cmd, **kw):
+    seen["cmd"] = list(cmd)
+    return z.subprocess.CompletedProcess(cmd, 0, stdout="ok\n", stderr="")
+rec = z.probe("opencode-go/glm-5.3", runner=go_runner)
+check("probe builds --model opencode-go/glm-5.3 for that id",
+      rec["state"] == "available" and "opencode-go/glm-5.3" in seen["cmd"], (rec, seen))
+seen.clear()
+rec = z.probe("big-pickle", runner=go_runner)
+check("probe builds --model opencode/big-pickle for a bare id",
+      rec["state"] == "available" and "opencode/big-pickle" in seen["cmd"], (rec, seen))
 
 print("status")
 sd = tempfile.mkdtemp(); z.STATUS_CACHE = os.path.join(sd, "sub", "status.json")
@@ -117,6 +132,12 @@ check("private candidates are the free zero-retention models in policy order",
       z.candidates(BASE, ALL, POLICY, True) == ["space-bunny-free", "longcat-2.5-preview-free"])
 check("public candidates start with Big Pickle, then the newest free",
       z.candidates(BASE, ALL, POLICY, False, limit=3) == ["big-pickle", "other-free", "space-bunny-free"])
+check("candidates puts opencode-go/ ids after the Zen ids for a public repo",
+      z.candidates(BASE, ALL, POLICY, False, go_offered={"glm-5.3", "kimi-k2.7-code"}) == ["big-pickle", "other-free", "space-bunny-free", "longcat-2.5-preview-free", "opencode-go/glm-5.3", "opencode-go/kimi-k2.7-code"])
+check("no Go ids for a private repo with an empty go_zero_retention",
+      z.candidates(BASE, ALL, POLICY, True, go_offered={"glm-5.3"}) == ["space-bunny-free", "longcat-2.5-preview-free"])
+check("skips a Go id missing from go_offered",
+      z.candidates(BASE, ALL, POLICY, False, go_offered={"kimi-k2.7-code"}) == ["big-pickle", "other-free", "space-bunny-free", "longcat-2.5-preview-free", "opencode-go/kimi-k2.7-code"])
 r = z.status(BASE, ALL, POLICY, False, do_probe=False, runner=fake({}))
 check("do_probe False never calls the runner", not calls and all(m["state"] == "unprobed" for m in r["models"]) and r["best"] is None, (calls, r))
 r = z.status(BASE, ALL, POLICY, False, do_probe=True, runner=fake({}))

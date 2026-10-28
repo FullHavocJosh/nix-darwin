@@ -44,6 +44,16 @@ def main():
           a.BUILDERS)
     check("reset commands cover every kind", set(a.RESET_CMD) == set(a.BUILDERS), a.RESET_CMD)
 
+    print("pane grants")
+    check("respond is in plan grants", "respond" in a.GRANTS[a.PLAN].split(","))
+    check("respond is not in build grants", "respond" not in a.GRANTS["build"].split(","))
+    check("respond is not in research grants", "respond" not in a.GRANTS[a.RESEARCH].split(","))
+
+    print("pane grants")
+    check("respond is in plan grants", "respond" in a.GRANTS[a.PLAN].split(","))
+    check("respond is not in build grants", "respond" not in a.GRANTS["build"].split(","))
+    check("respond is not in research grants", "respond" not in a.GRANTS[a.RESEARCH].split(","))
+
     print("workspaces")
     names = list(a.BUILDERS.values())
     check("WS_OWN has the builder panes on 1", all(a.WS_OWN.get(n) == 1 for n in names), a.WS_OWN)
@@ -96,11 +106,53 @@ def main():
           small.TASK_MAX_CHARS == 100 and any("characters" in x for x in small.size_problems(story("x" * 150))))
     check("task_prompt tells the builder to read by region",
           "Never read a whole large file" in a.task_prompt({"name": "p"}, story("d")["userStories"][0], "true", []))
+    check("task_prompt tells the builder to read only named files",
+          "- Read only the files this task names" in
+          a.task_prompt({"name": "p"}, story("d")["userStories"][0], "true", []))
+    with_wd = a.task_prompt({"name": "p"}, story("d")["userStories"][0], "true", [], wd="/w/x")
+    check("task_prompt names the work dir when wd is given",
+          "/w/x" in with_wd and "Never use ~" in with_wd)
+    without_wd = a.task_prompt({"name": "p"}, story("d")["userStories"][0], "true", [])
+    check("task_prompt without wd has no work dir section",
+          "/w/x" not in without_wd and "Never use ~" not in without_wd)
+    root = tempfile.mkdtemp(prefix="aidev-test-read-")
+    with open(os.path.join(root, "a.py"), "w") as fh:
+        fh.write("x" * 50000)
+    deep = a.size_problems(story("change a.py to add a counter"), root)
+    check("a task naming a 50000-byte file with no region is flagged",
+          len(deep) == 1 and "bytes" in deep[0] and "line region" in deep[0], deep)
+    deep = a.size_problems(story("change a.py in function foo() (line ~10)"), root)
+    check("a line region caps the file at 6000 bytes", deep == [], deep)
+    deep = a.size_problems(story("change a.py to add a counter"))
+    check("no root keeps the old behaviour", deep == [], deep)
 
     print("free builder agent")
     with open(os.path.join(ROOT, "aidev_tuios.py")) as f:
         src = f.read()
     check("the free body runs opencode mini with --agent build", "opencode mini --agent build --model" in src)
+
+    print("free builder mini progress")
+    d = tempfile.mkdtemp(prefix="aidev-test-oc-")
+    path = a.show_mini_progress(d)
+    data = json.load(open(path))
+    check("no cli.json: it is created with the three mini keys",
+          data.get("mini") == {"thinking": "show", "tools": "show", "shell_output": "show"}, data)
+    d = tempfile.mkdtemp(prefix="aidev-test-oc-")
+    with open(os.path.join(d, "cli.json"), "w") as f:
+        json.dump({"session": "keep", "mini": {"mono": True}}, f)
+    path = a.show_mini_progress(d)
+    data = json.load(open(path))
+    check("an existing cli.json keeps its other keys",
+          data.get("session") == "keep" and data.get("mini", {}).get("mono") is True, data)
+    check("an existing cli.json gets the three mini keys",
+          data.get("mini") == {"mono": True, "thinking": "show", "tools": "show", "shell_output": "show"}, data)
+    d = tempfile.mkdtemp(prefix="aidev-test-oc-")
+    with open(os.path.join(d, "cli.json"), "w") as f:
+        f.write("{not json")
+    path = a.show_mini_progress(d)
+    data = json.load(open(path))
+    check("invalid cli.json is replaced, not crashed on",
+          data.get("mini") == {"thinking": "show", "tools": "show", "shell_output": "show"}, data)
 
     print("no old kind literals")
     bad = [f"{i}: {ln.strip()}" for i, ln in enumerate(src.splitlines(), 1)
@@ -109,6 +161,78 @@ def main():
                     or "CODER_FILE" in ln or 'prompt_text("claude"' in ln or 'os.path.join(d, "claude")' in ln
                     or '("tuios", "claude", "pi"' in ln)]
     check("30b, pickle and claude appear as kinds only in KIND_ALIASES", not bad, "; ".join(bad))
+
+    print("prepare_builder")
+    class Stub:
+        def __init__(self):
+            self.reset_calls = []
+            self.sleep_calls = []
+            self.agent_states = []
+            self.session = "s"
+            self.data = {}
+        def reset_pane(self, run, builder, cmd):
+            self.reset_calls.append((run, builder, cmd))
+            return True
+    stub = Stub()
+    real_agent = a.agent_state
+    real_reset = getattr(a, "reset_pane", None)
+    real_sleep = a.time.sleep
+    try:
+        a.agent_state = lambda s, n: stub.agent_states.pop(0) if stub.agent_states else "idle"
+        a.reset_pane = lambda runb, builder, cmd: stub.reset_pane(runb, builder, cmd)
+        a.time.sleep = lambda s: stub.sleep_calls.append(s)
+        runb = type("R", (), {"session": "s", "data": {}})()
+        a.RESET_WAIT = 90
+        stub.agent_states = ["working", "working", "idle"]
+        stub.reset_calls = []
+        rc = a.prepare_builder(runb, "build-local")
+        check("working,working,idle -> prepare_builder(run,'build-local') True", rc is True and len(stub.reset_calls) == 1)
+        stub.agent_states = ["working"]
+        stub.reset_calls = []
+        a.RESET_WAIT = 0
+        rc = a.prepare_builder(runb, "build-local")
+        check("always working with a.RESET_WAIT = 0 -> False", rc is False and len(stub.reset_calls) == 0)
+        stub.agent_states = ["idle"]
+        stub.reset_calls = []
+        def reset_false(runb2, builder, cmd):
+            stub.reset_calls.append((runb2, builder, cmd))
+            return False
+        a.reset_pane = reset_false
+        a.RESET_WAIT = 90
+        rc = a.prepare_builder(runb, "build-local")
+        check("idle but reset_pane False -> False", rc is False and len(stub.reset_calls) == 1)
+        os.environ["AIDEV_NO_RESET"] = "1"
+        try:
+            stub.reset_calls = []
+            rc = a.prepare_builder(runb, "build-local")
+            check("AIDEV_NO_RESET=1 -> True without calling reset_pane", rc is True and len(stub.reset_calls) == 0)
+        finally:
+            os.environ.pop("AIDEV_NO_RESET", None)
+    finally:
+        a.agent_state = real_agent
+        if real_reset is not None:
+            a.reset_pane = real_reset
+        else:
+            try:
+                del a.reset_pane
+            except Exception:
+                pass
+        a.time.sleep = real_sleep
+
+    print("wait_rest")
+    real_agent = a.agent_state
+    real_sleep = a.time.sleep
+    states = ["working", "idle"]
+    try:
+        a.agent_state = lambda s, n: states.pop(0) if states else "working"
+        a.time.sleep = lambda s: None
+        check("wait_rest waits through working then idle",
+              a.wait_rest("s", "build-local", 30) is True and not states)
+        states = ["working"]
+        check("wait_rest returns False while the builder always works", a.wait_rest("s", "build-local", 0) is False)
+    finally:
+        a.agent_state = real_agent
+        a.time.sleep = real_sleep
 
     print("builder permissions")
     fixed = a.builder_permissions(None)
@@ -306,8 +430,9 @@ def main():
     a.tuios = lambda *args, **kw: (eclosed.append(args[1]) if args[0] == "close-window" else None) or (0, "", "")
     ecode = [0]
 
-    def esc(status, by, builder="build-local"):
-        erun.data.update(builder=builder, tasks={"T1": {"status": status, "attempts": sum(by.values()), "by": by}})
+    def esc(status, by, builder="build-local", **extra):
+        erun.data.update(builder=builder,
+                         tasks={"T1": {"status": status, "attempts": sum(by.values()), "by": by, **extra}})
         ecalls.clear()
         eclosed.clear()
         buf = io.StringIO()
@@ -320,6 +445,10 @@ def main():
         check("escalate refuses a pending task", code == 1 and not ecalls, (code, out))
         code, out = esc("failed", {"build-local": 1})
         check("escalate refuses after one failure", code == 1 and not ecalls, (code, out))
+        code, out = esc("failed", {"build-local": 1}, compacted=True)
+        check("escalate accepts a compacted failure after one attempt",
+              code == 0 and ecalls == [["free"]] and "attempts used" not in out
+              and "compacted" not in erun.data["tasks"]["T1"], (code, ecalls, out, erun.data["tasks"]["T1"]))
         code, out = esc("failed", {"build-local": 2})
         check("escalate local to free", code == 0 and ecalls == [["free"]] and eclosed == ["build-local"]
               and "build-local -> build-free" in out, (code, ecalls, eclosed, out))
@@ -335,6 +464,16 @@ def main():
         check("escalate with cmd_builder failing closes nothing", code == 1 and not eclosed, (code, eclosed, out))
     finally:
         a.zen_status, a.cmd_builder, a.tuios = ereal
+
+    print("compaction")
+    real_tuios = a.tuios
+    try:
+        a.tuios = lambda *args, **kw: (0, "[compaction]\nCompacted from 12,345 tokens\n", "")
+        check("compaction_count counts two markers", a.compaction_count("s", "build-local") == 2)
+        a.tuios = lambda *args, **kw: (1, "[compaction]", "error")
+        check("compaction_count is 0 on a non-zero exit", a.compaction_count("s", "build-local") == 0)
+    finally:
+        a.tuios = real_tuios
 
     print("lumo confirmation")
     link = "See https://example.com/doc for details.\n"
@@ -461,6 +600,156 @@ def main():
         check("finish prints nothing when no builder pane is open", "still open" not in buf.getvalue(), buf.getvalue())
     finally:
         a.tuios, a.tuios_json, a.window_named, a.agent_state, a.cmd_builder, a.zen_status = freal
+
+    print("free usage limit")
+    real_tuios = a.tuios
+    try:
+        a.tuios = lambda *args, **kw: (0, "Free usage limit reached. Connect a provider...", "")
+        check("free_limit_hit true on the sentence", a.free_limit_hit("s", "build-free") is True)
+        a.tuios = lambda *args, **kw: (0, "free usage limit reached", "")
+        check("free_limit_hit is case-insensitive", a.free_limit_hit("s", "build-free") is True)
+        a.tuios = lambda *args, **kw: (0, "normal screen", "")
+        check("free_limit_hit false on a normal screen", a.free_limit_hit("s", "build-free") is False)
+        a.tuios = lambda *args, **kw: (1, "Free usage limit reached", "")
+        check("free_limit_hit false when capture fails", a.free_limit_hit("s", "build-free") is False)
+    finally:
+        a.tuios = real_tuios
+
+    real = (a.tuios, a.tuios_json, a.window_named, a.agent_state, a.thread_replies)
+    a.tuios = lambda *args, **kw: (0, "Free usage limit reached. Connect...", "")
+    a.tuios_json = lambda *args, **kw: {"agents": []}
+    a.window_named = lambda s, n: {"custom_name": n}
+    a.agent_state = lambda s, n: "idle"
+    a.thread_replies = lambda *args, **kw: []
+    try:
+        check("wait_reply returns limit for build-free",
+              a.wait_reply("s", "plan", "t1", "build-free", 1) == ("limit", ""))
+        check("wait_reply never returns limit for build-local",
+              a.wait_reply("s", "plan", "t1", "build-local", 1)[0] != "limit")
+    finally:
+        a.tuios, a.tuios_json, a.window_named, a.agent_state, a.thread_replies = real
+
+    brun.data["builder"] = "build-free"
+    brun.data["tasks"] = {"T1": {"thread": "t1"}}
+    a.wait_reply = lambda *x, **y: ("limit", "")
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        rc = a.cmd_wait_task(brun, ["T1", "5"])
+    check("wait-task limit prints the fallback hint and returns 3",
+          rc == 3 and "hit its free usage limit" in out.getvalue() and "fallback T1" in out.getvalue(),
+          out.getvalue())
+    del a.wait_reply
+
+    print("set_script_model and restart_free_pane")
+    d = tempfile.mkdtemp(prefix="aidev-test-script-")
+    spath = os.path.join(d, "free.sh")
+    with open(spath, "w") as f:
+        f.write("#!/bin/zsh\nopencode mini --agent build --model opencode/big-pickle --prompt x\necho hi\n")
+    check("set_script_model rewrites model",
+          a.set_script_model(spath, "flint-40b-free") is True)
+    with open(spath) as f:
+        content = f.read()
+    check("set_script_model keeps other lines",
+          "opencode mini --agent build --model opencode/flint-40b-free --prompt x" in content and "echo hi" in content,
+          content)
+    nopath = os.path.join(d, "nomodel.sh")
+    with open(nopath, "w") as f:
+        f.write("echo hi\n")
+    check("set_script_model False without --model", a.set_script_model(nopath, "x") is False)
+    check("set_script_model False missing file", a.set_script_model(os.path.join(d, "nope.sh"), "x") is False)
+
+    script_path = os.path.join(d, "restart.sh")
+    with open(script_path, "w") as f:
+        f.write("x\n")
+    rrun = type("R", (), {})()
+    rrun.session = "s"
+    rrun.data = {"panes": {"build-free": {"script": script_path}}, "zen_model": None}
+    rrun.save = lambda self=None: None
+    calls = []
+    real_tuios = a.tuios
+    real_pane_text = getattr(a, "pane_text", None)
+    real_sleep = a.time.sleep
+    texts = iter(["exited", "ctrl+p menu"])
+    def pane_text_stub(session, name, lines=15):
+        return next(texts, "ctrl+p menu")
+    try:
+        a.tuios = lambda *args, **kw: (calls.append(args) or (0, "", ""))
+        a.pane_text = pane_text_stub
+        a.time.sleep = lambda s: None
+        rc = a.restart_free_pane(rrun, model="flint-40b-free", wait=1)
+        check("restart_free_pane returns True", rc is True, rc)
+        check("restart sets zen_model", rrun.data.get("zen_model") == "flint-40b-free", rrun.data)
+        joined = [" ".join(c) for c in calls]
+        check("restart sends /exit", any("/exit" in c for c in joined), joined)
+        check("restart sends the script", any("zsh " + script_path in c for c in joined), joined)
+    finally:
+        a.tuios = real_tuios
+        if real_pane_text is not None:
+            a.pane_text = real_pane_text
+        else:
+            try:
+                del a.pane_text
+            except Exception:
+                pass
+        a.time.sleep = real_sleep
+
+    print("fallback")
+    frun = a.Run(p, "20260101-000004")
+    frun.data["builder"] = "build-local"
+    frun.data["zen_model"] = "m1"
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        code = a.cmd_fallback(frun, ["T1"])
+    check("fallback non-free builder returns 1", code == 1 and "fallback only applies to build-free" in buf.getvalue(),
+          (code, buf.getvalue()))
+
+    frun = a.Run(p, "20260101-000005")
+    frun.data["builder"] = "build-free"
+    frun.data["zen_model"] = "m1"
+    frun.data["zen_tried"] = []
+    frestarted = []
+    fzen = [{"state": "available", "model": "m2"}]
+    fcb = []
+    ftuios = []
+    freal = (a.zen_status, a.restart_free_pane, a.cmd_builder, a.tuios)
+    a.zen_status = lambda r, refresh=False: fzen[0]
+    a.restart_free_pane = lambda r, model=None, wait=90: (frestarted.append(model) or True)
+    a.cmd_builder = lambda r, argv: (fcb.append(argv) or 0)
+    a.tuios = lambda *args, **kw: (ftuios.append(args) or (0, "", ""))
+    try:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = a.cmd_fallback(frun, ["T1"])
+        text = buf.getvalue()
+        check("fallback usable untried restarts the free pane", code == 0 and frestarted == ["m2"]
+              and "m2" in text and "restarted" in text, (code, text, frestarted))
+        check("fallback usable prints Next send-task", "Next: send-task T1 with a note" in text, text)
+        check("fallback records zen_tried", frun.data.get("zen_tried") == ["m1"], frun.data.get("zen_tried"))
+    finally:
+        a.zen_status, a.restart_free_pane, a.cmd_builder, a.tuios = freal
+
+    frun = a.Run(p, "20260101-000006")
+    frun.data["builder"] = "build-free"
+    frun.data["zen_model"] = "m1"
+    frun.data["zen_tried"] = []
+    fzen = [{"state": "available", "model": "m1"}]
+    fcb = []
+    ftuios = []
+    freal = (a.zen_status, a.restart_free_pane, a.cmd_builder, a.tuios)
+    a.zen_status = lambda r, refresh=False: fzen[0]
+    a.restart_free_pane = lambda r, model=None, wait=90: True
+    a.cmd_builder = lambda r, argv: (fcb.append(argv) or 0)
+    a.tuios = lambda *args, **kw: (ftuios.append(args) or (0, "", ""))
+    try:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = a.cmd_fallback(frun, ["T2"])
+        text = buf.getvalue()
+        check("fallback tried model goes to billed", code == 0 and fcb and fcb[-1] == ["billed"]
+              and "no free model left" in text, (code, text, fcb))
+        check("fallback types /exit into free pane", any("/exit" in " ".join(c) for c in ftuios), ftuios)
+    finally:
+        a.zen_status, a.restart_free_pane, a.cmd_builder, a.tuios = freal
 
     if FAILS:
         print("FAILED: " + ", ".join(FAILS))
