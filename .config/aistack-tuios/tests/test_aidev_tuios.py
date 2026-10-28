@@ -146,6 +146,8 @@ def main():
     script = a.write_script(run, "plan", body)
     check("the launcher ends in a shell, so the pane survives the agent", open(script).read().rstrip().endswith(
         "exec zsh -i"))
+    check("the launcher pins the caller's PATH (nix-darwin's zshenv resets it)",
+          f"export PATH={a.shlex.quote(os.environ['PATH'])}\n" in open(script).read())
     r = subprocess.run(["zsh", "-n", script], capture_output=True, text=True, check=False)
     check("the launcher is valid zsh", r.returncode == 0, r.stderr)
     check("session names are safe", a.session_name("/x/my repo.v2") == "aidev-my-repo-v2")
