@@ -77,6 +77,7 @@ ansible-linux/inventory/staging
 !/.pi/agent/extensions/
 /.pi/agent/extensions/*
 !/.pi/agent/extensions/lumo-first.ts
+!/.pi/agent/extensions/worktree-guard.ts
 !/.pi/agent/AGENTS.md
 !/.pi/agent/prompts/
 

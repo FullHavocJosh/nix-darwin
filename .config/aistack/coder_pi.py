@@ -28,6 +28,7 @@ import threading
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 PI = os.environ.get("CODER_PI_BIN") or shutil.which("pi") or "pi"
+WORKTREE_GUARD = os.path.join(HERE, "..", "..", ".pi", "agent", "extensions", "worktree-guard.ts")
 AGENT_DIR = os.environ.get("CODER_PI_AGENT_DIR") or os.path.join(os.path.expanduser(os.environ.get("AI_HOME") or "~/.ai"), "cache", "aistack-pi-coder")
 
 _spec = importlib.util.spec_from_file_location("local_edit_mcp", os.path.join(HERE, "local_edit_mcp.py"))
@@ -56,7 +57,7 @@ def start_idle_watcher():
 
 def main(argv):
     hold = argv[:2] == ["--hold", "--"]
-    cmd = argv[2:] if hold else [PI, *argv]
+    cmd = argv[2:] if hold else [PI, "-e", WORKTREE_GUARD, *argv]
     if hold and not cmd:
         print("usage: coder_pi.py --hold -- <command...>", file=sys.stderr)
         return 2
