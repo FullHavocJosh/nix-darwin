@@ -202,6 +202,11 @@ def agent_info(session, name):
     return next((x for x in (data or {}).get("agents") or [] if x.get("name") == name), {})
 
 
+def agent_session_id(session, name):
+    """The agent session id tuios reports for pane `name`, or "". Claude Code gets a new one on /clear."""
+    return str(tuios_json("get-agent-state", "-s", session, "-w", name).get("agent_session_id") or "")
+
+
 def queue(session, name, text):
     """Type `text` as the next prompt of the agent in pane `name` once it is at rest (tuios queue). tuios queues only
     for an agent it recognises; for any other pane (OpenCode's `mini` TUI is one) the text is typed now, then Enter."""
@@ -470,6 +475,17 @@ def show_mini_progress(oc_dir):
     return path
 
 
+PLAN_MCP_SERVERS = {"atlassian": {"type": "http", "url": "https://mcp.atlassian.com/v1/mcp"},
+                    "github": {"command": "npx", "args": ["-y", "@edjl/github-mcp@1.0.8"]}}
+
+
+def write_plan_mcp(path):
+    """The plan pane's MCP servers: tuios, Atlassian and GitHub; a PreToolUse hook keeps Atlassian and GitHub
+    read-only."""
+    wj(path, {"mcpServers": {"tuios": {"command": "tuios", "args": ["mcp"]}, **PLAN_MCP_SERVERS}})
+    return path
+
+
 def pane_configs(project):
     """tuios hooks and MCP for this project's panes, generated under ~/.ai/cache/aidev_tuios, never in the stowed
     ~/.claude, ~/.pi or ~/.config/opencode (herdr's hooks live there)."""
@@ -481,6 +497,7 @@ def pane_configs(project):
                        env={**TENV, "CLAUDE_CONFIG_DIR": claude_dir}, capture_output=True, text=True, check=False)
     mcp = os.path.join(d, "claude-mcp.json")
     wj(mcp, {"mcpServers": {"tuios": {"command": "tuios", "args": ["mcp"]}}})
+    plan_mcp = write_plan_mcp(os.path.join(d, "plan-mcp.json"))
     for name in ("pi-lumo", "pi-build"):
         pdir = os.path.join(d, name)
         os.makedirs(pdir, exist_ok=True)
@@ -495,7 +512,7 @@ def pane_configs(project):
                        check=False)
     show_mini_progress(oc_dir)
     return {"dir": d, "claude_settings": os.path.join(claude_dir, "settings.json"), "claude_mcp": mcp,
-            "claude_backbone": os.path.join(claude_dir, "backbone.json"),
+            "claude_plan_mcp": plan_mcp, "claude_backbone": os.path.join(claude_dir, "backbone.json"),
             "pi_lumo": os.path.join(d, "pi-lumo"), "pi_build": os.path.join(d, "pi-build"), "opencode_dir": oc_dir}
 
 
@@ -523,13 +540,18 @@ def builder_permissions(verify, state_dir=None):
     return {"defaultMode": "acceptEdits", "allow": sorted(allow), "deny": sorted(deny)}
 
 
-def write_working_settings(cfg, path, allow=(), deny=(), mode=None):
+def write_working_settings(cfg, path, allow=(), deny=(), mode=None, pre_tool_hooks=()):
     """Settings for a Claude pane that does the work itself: tuios's hooks (mail notices, agent state), the default
     output style (CLAUDE_ADVISOR=off stops only the advisor hook; the Advisor style in ~/.claude/settings.json would
     still hand every change to the user as a command, and --settings overrides it), `allow` and `deny` in the
-    permission lists and `mode` as the default permission mode."""
+    permission lists, `mode` as the default permission mode and `pre_tool_hooks` added to the PreToolUse hooks."""
     s = rj(cfg["claude_settings"], {}) or {}
     s["outputStyle"] = "default"
+    if pre_tool_hooks:
+        pre = s.setdefault("hooks", {}).setdefault("PreToolUse", [])
+        for entry in pre_tool_hooks:
+            if entry not in pre:
+                pre.append(entry)
     if allow or deny or mode:
         perms = s.setdefault("permissions", {})
         if allow:
@@ -542,12 +564,19 @@ def write_working_settings(cfg, path, allow=(), deny=(), mode=None):
     return path
 
 
+PLAN_MCP_WRITES = ["mcp__github__github_pr_create", "mcp__github__github_pr_approve",
+                   "mcp__github__github_pr_suggest_change"]
+
+
 def write_backbone_settings(cfg):
     """The Claude pane's settings, with the helpers and the mail commands allowed, so coordinating the other panes
-    does not stop for a permission prompt every time."""
+    does not stop for a permission prompt every time. The Atlassian and GitHub MCP tools stay read-only through the
+    guard hook."""
     allow = [f"Bash({HELPER}:*)", "Bash(tuios read-agent-messages:*)", "Bash(tuios wait-for:*)",
              "Bash(tuios send-agent-message:*)", "Bash(tuios list-agents:*)", "Bash(tuios capture-pane:*)"]
-    return write_working_settings(cfg, cfg["claude_backbone"], allow)
+    hook = {"matcher": "mcp__atlassian__.*|mcp__github__.*", "hooks": [{"type": "command", "command":
+            shlex.quote(sys.executable) + " " + shlex.quote(os.path.join(HERE, "plan_mcp_guard" + ".py"))}]}
+    return write_working_settings(cfg, cfg["claude_backbone"], allow, deny=PLAN_MCP_WRITES, pre_tool_hooks=[hook])
 
 
 def write_lumo_pi(cfg, lumo):
@@ -563,13 +592,22 @@ def write_lumo_pi(cfg, lumo):
         "models": [{"id": LUMO_MODEL, "reasoning": False}]}}})
 
 
+PI_BUILD_EXTENSIONS = ("pi-stop-after-reply.ts",)
+
+
 def write_build_pi(cfg):
+    """The local builder's pi model list, plus aidev's pi extensions beside the tuios one (they stop the builder
+    after its reply mail)."""
     spec = importlib.util.spec_from_file_location("local_edit_mcp", os.path.join(AISTACK, "local_edit_mcp.py"))
     le = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(le)
     wj(os.path.join(cfg["pi_build"], "models.json"), {"providers": {"coder": {
         "baseUrl": le.BASE + "/v1", "api": "openai-completions", "apiKey": "sk-local",
         "models": [{"id": le.ALIAS, "reasoning": False, "contextWindow": le.CTX, "maxTokens": 8192}]}}})
+    ext = os.path.join(cfg["pi_build"], "extensions")
+    os.makedirs(ext, exist_ok=True)
+    for name in PI_BUILD_EXTENSIONS:
+        shutil.copyfile(os.path.join(HERE, name), os.path.join(ext, name))
     return f"coder/{le.ALIAS}"
 
 
@@ -654,13 +692,13 @@ def with_system_prompt(argv, sysp):
     return " ".join(map(shlex.quote, argv)) + ' --append-system-prompt "$(<' + shlex.quote(sysp) + ')"'
 
 
-def claude_body(run, cfg, name, system, first, cwd, advisor=True, settings=None, env=None):
+def claude_body(run, cfg, name, system, first, cwd, advisor=True, settings=None, env=None, mcp=None):
     """An interactive Claude Code pane that keeps one conversation: --session-id the first time, --resume after."""
     sid = run.data["panes"].setdefault(name, {}).setdefault("session_id", str(uuid.uuid4()))
     sysp = write_text(os.path.join(run.dir, "bin", f"{name}.system.md"), system)
     marker = os.path.join(run.dir, "bin", f"{name}.started")
     # the global lumo, local-edit and oczen tools and their instructions conflict with ask-lumo and the builders
-    base = ["claude", "--settings", settings or cfg["claude_settings"], "--mcp-config", cfg["claude_mcp"],
+    base = ["claude", "--settings", settings or cfg["claude_settings"], "--mcp-config", mcp or cfg["claude_mcp"],
             "--strict-mcp-config",
             "--model", CLAUDE_MODEL, "--effort", CLAUDE_EFFORT, "--add-dir", run.state, "-n", f"aidev {name}"]
     first_line = with_system_prompt(base + ["--session-id", sid], sysp) + " " + shlex.quote(first)
@@ -731,7 +769,7 @@ def claude_pane_body(run, cfg, task, has_lumo):
     env.update({k: v for k, v in os.environ.items() if k.startswith("AIDEV_TUIOS_") and k not in
                 ("AIDEV_TUIOS_NO_ATTACH", "AIDEV_TUIOS_ALLOW_NESTED", "AIDEV_TUIOS_RUN", "AIDEV_TUIOS_PROJECT")})
     return claude_body(run, cfg, PLAN, system, first, run.project, advisor=False,
-                       settings=write_backbone_settings(cfg), env=env)
+                       settings=write_backbone_settings(cfg), env=env, mcp=cfg.get("claude_plan_mcp"))
 
 
 def lumo_body(run, cfg, lumo):
@@ -900,12 +938,28 @@ fi
 exec "$real" "$@"
 """
 
+RM_GUARD = """#!/bin/sh
+# generated by aidev_tuios.py: builder panes find this rm first on PATH; no recursive deletes
+MSG="rm -r is blocked in the builder panes: delete single files only, and only files this task created."
+for a in "$@"; do
+  case "$a" in
+    --) break;;
+    --recursive) echo "$MSG" >&2; exit 1;;
+    --*) ;;
+    -*[rR]*) echo "$MSG" >&2; exit 1;;
+  esac
+done
+exec /bin/rm "$@"
+"""
+
 
 def write_git_guard(run):
     """run.dir/bin/guard/git: blocks the git subcommands that undo or publish work, passes every other call to the
-    real git. Builder panes put its folder first on PATH."""
+    real git. Builder panes put its folder first on PATH. The folder also gets an rm that refuses recursive deletes."""
     path = write_text(os.path.join(run.dir, "bin", "guard", "git"), GIT_GUARD)
     os.chmod(path, 0o755)
+    rm = write_text(os.path.join(run.dir, "bin", "guard", "rm"), RM_GUARD)
+    os.chmod(rm, 0o755)
     return path
 
 
@@ -1456,8 +1510,9 @@ def wait_rest(session, builder, limit):
 
 
 def reset_pane(run, name, cmd):
-    """Type the reset command `cmd` into pane `name` and wait for the pane to show a fresh session. False when not
-    confirmed; prints nothing."""
+    """Type the reset command `cmd` into pane `name` and wait for the pane to show a fresh session or, for Claude
+    Code, a new agent session id. False when not confirmed; prints nothing."""
+    before = agent_session_id(run.session, name)
     tuios("send-text", "-s", run.session, "-w", name, cmd)
     time.sleep(1)
     tuios("send-keys", "-s", run.session, "-w", name, "enter")
@@ -1465,6 +1520,9 @@ def reset_pane(run, name, cmd):
         time.sleep(1)
         _code, out, _err = tuios("capture-pane", "-s", run.session, "-w", name, "--lines", "20")
         if re.search(r"new session", out, re.IGNORECASE) or re.search(r"(?<![\d.])0\.0%\s*/", out):
+            return True
+        now = agent_session_id(run.session, name)
+        if before and now and now != before:
             return True
     return False
 
@@ -1722,13 +1780,75 @@ def finish_work(run):
 
 
 def cmd_finish(run, _argv):
+    wd0 = run.data.get("work_dir")
+    dirty = bool(git_out(wd0, "status", "--porcelain").strip()) if wd0 else True
     wd = finish_work(run)
     left = [n for n in list(BUILDERS.values()) + list(LEGACY_BUILDER_PANES) if window_named(run.session, n)]
     if left:
         print(f"builder panes still open, close them by hand: {', '.join(left)}")
-    print(f"finished. Changes are uncommitted in {wd}: the user commits with gpa. The panes stay open for the next "
-          "piece of work.")
+    if dirty:
+        print(f"finished. Changes are uncommitted in {wd}: run commit, or the user commits with gpa. The panes stay "
+              "open for the next piece of work.")
+    else:
+        print(f"finished. The work in {wd} is committed. The panes stay open for the next piece of work.")
     return 0
+
+
+GPA_TIMEOUT = int(os.environ.get("AIDEV_TUIOS_GPA_TIMEOUT", "1200"))
+GPA_CMD = 'source ~/.zshrc_functions_git 2>/dev/null; gpa --auto -m "$AIDEV_COMMIT_SUBJECT" -d "$AIDEV_COMMIT_BODY" --json'
+
+
+def cmd_commit(run, argv):
+    """commit ['<subject>'] ['<body>']: gpa --auto in the work dir once every task of the plan is verified; the
+    message defaults to the plan's title and description."""
+    wd = run.data.get("work_dir")
+    if not wd:
+        print("commit: no work dir: run worktree first")
+        return 1
+    prd = rj(os.path.join(run.plan_dir, "prd.json"), {}) or {}
+    ids = [s["id"] for s in prd.get("userStories", [])]
+    tasks = run.data.get("tasks") or {}
+    pending = [i for i in ids if (tasks.get(i) or {}).get("status") != "verified"]
+    if not ids or pending:
+        print("commit: tasks not verified: " + (", ".join(pending) if pending else "no plan"))
+        return 1
+    if not git_out(wd, "status", "--porcelain").strip():
+        print(f"commit: nothing to commit in {wd}")
+        return 1
+    subject = (argv[0] if argv else "") or str(prd.get("title") or "").strip()
+    body = (argv[1] if len(argv) > 1 else "") or str(prd.get("description") or "").strip()
+    if not subject:
+        print("commit: no subject")
+        return 2
+    try:
+        # Without the guard, nix-darwin's /etc/zshenv re-sources set-environment in this non-interactive
+        # zsh and replaces PATH (no /opt/homebrew/bin: gh missing, system python3), which breaks gpa.
+        r = subprocess.run(["zsh", "-c", GPA_CMD], cwd=wd,
+                           env={**os.environ, "__NIX_DARWIN_SET_ENVIRONMENT_DONE": "1",
+                                "AIDEV_COMMIT_SUBJECT": subject, "AIDEV_COMMIT_BODY": body},
+                           capture_output=True, text=True, timeout=GPA_TIMEOUT, stdin=subprocess.DEVNULL, check=False)
+    except subprocess.TimeoutExpired:
+        print(f"commit: gpa did not finish in {GPA_TIMEOUT} s")
+        return 1
+    data = {}
+    for line in reversed((r.stdout or "").splitlines()):
+        if line.startswith("{"):
+            try:
+                data = json.loads(line)
+            except ValueError:
+                data = {}
+            break
+    if not isinstance(data, dict):
+        data = {}
+    run.event("commit", ok=bool(data.get("ok")), commit=data.get("commit"), pushed=data.get("pushed"),
+              exit_code=r.returncode)
+    run.save()
+    if data.get("ok"):
+        print(f"committed {data.get('commit')} on {data.get('branch')}; pushed: {data.get('pushed')}")
+        return 0
+    print(f"commit failed (gpa exit {r.returncode}):")
+    print(data.get("output_tail") or ((r.stdout or "") + (r.stderr or ""))[-3000:])
+    return 1
 
 
 def cmd_merged(run, _argv):
@@ -1801,7 +1921,8 @@ def cmd_approvals(run, argv):
 HELPERS = {"ask-lumo": cmd_ask_lumo, "check-plan": cmd_check_plan, "worktree": cmd_worktree, "builder": cmd_builder,
            "escalate": cmd_escalate, "fallback": cmd_fallback,
            "send-task": cmd_send_task, "wait-task": cmd_wait_task, "verify": cmd_verify, "watch": cmd_watch,
-           "approvals": cmd_approvals, "zen-check": cmd_zen_check, "finish": cmd_finish, "merged": cmd_merged}
+           "approvals": cmd_approvals, "zen-check": cmd_zen_check, "finish": cmd_finish, "commit": cmd_commit,
+           "merged": cmd_merged}
 
 
 # ---- entry points ---------------------------------------------------------------------------------------------

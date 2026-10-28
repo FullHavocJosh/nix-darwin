@@ -61,16 +61,19 @@ the workspace of a window named `nvim`, else the lowest free one, and the rest s
 `AIDEV_TUIOS_OWN_SESSION=1`, they get session `aidev-<repo>` with the numbers below and a `dev-nvim` window. One run
 per session; `finish` closes a piece of work, and the panes stay for the next. Plan and the billed builder start with
 `--strict-mcp-config`, so they load only the tuios MCP; the global lumo, local-edit and oczen MCP servers stay for
-gpr, gpa and other sessions.
+gpr, gpa and other sessions. The plan pane also loads the Atlassian remote MCP (https://mcp.atlassian.com/v1/mcp,
+OAuth once through `/mcp`) and the GitHub MCP (`@edjl/github-mcp`, through the logged-in `gh`) from `plan-mcp.json`.
+`plan_mcp_guard.py`, a PreToolUse hook judged by ainfo's guard, allows only their read tools, and builder panes keep
+the tuios MCP only.
 
-| Workspace | Pane                | Model                                                              | Grants                  |
-| --------- | ------------------- | ------------------------------------------------------------------ | ----------------------- |
-| 1         | `plan`              | Claude Code, advisor off: plans, sends tasks, verifies, reviews    | read, write, fan, files |
-| 1         | `nvim` (`dev-nvim`) | your editor (`dev-nvim` only in a session of its own)              | default                 |
-| 1         | `research`          | pi on Lumo through lumo-tamer, no tools: web lookups               | read                    |
-| 1         | `build-local`       | pi on the on-device 30B; Claude opens it when the plan is approved | read, write             |
-| 1         | `build-free`        | escalation: pi on a free Zen model                                 | read, write             |
-| 1         | `build-billed`      | escalation: Claude Code (billed, asks you first)                   | read, write             |
+| Workspace | Pane                | Model                                                              | Grants                           |
+| --------- | ------------------- | ------------------------------------------------------------------ | -------------------------------- |
+| 1         | `plan`              | Claude Code, advisor off: plans, sends tasks, verifies, reviews    | read, write, fan, files, respond |
+| 1         | `nvim` (`dev-nvim`) | your editor (`dev-nvim` only in a session of its own)              | default                          |
+| 1         | `research`          | pi on Lumo through lumo-tamer, no tools: web lookups               | read                             |
+| 1         | `build-local`       | pi on the on-device 30B; Claude opens it when the plan is approved | read, write                      |
+| 1         | `build-free`        | escalation: pi on a free Zen model                                 | read, write                      |
+| 1         | `build-billed`      | escalation: Claude Code (billed, asks you first)                   | read, write                      |
 
 The billed builder's settings use `acceptEdits`, allow the plan's verify commands by exact text and the read-only
 commands, and deny git writes, `gh`, `rm -rf` and `sudo` (deny wins over allow). Edits to the plan directory and to the run's `state.json` and `events.jsonl` are denied too.
@@ -87,7 +90,8 @@ still prompt.
    reply mail, then runs the task's verify commands itself, without a shell (`wait-task`). On a failure it sends the
    task again with a note; after two failures it asks you: retry, escalate or skip.
 4. Claude reviews the whole diff and reports findings to you; fixes go back to the builder as tasks.
-5. The changes stay uncommitted in the work dir. Commit with `gpa`.
+5. When the review is clean, Claude commits and pushes with `commit` (`gpa --auto`); gpa's findings go back to the
+   builder as tasks.
 
 After every Lumo answer and every builder result, Claude tells you what came back and asks before it goes on. While it
 waits for you it runs `watch` in the background: new mail, or an exchange you have with Lumo in the research pane, wakes it,
@@ -113,8 +117,9 @@ How the panes talk:
 - Remaining permission prompts surface in `wait-task` and `watch`. Plan answers them with `approvals`, which uses
   `tuios respond`. aidev opens the plan pane with the respond grant, so the user saying yes in the conversation is the
   only gate. tuios still refuses an allow of a risky prompt (recursive delete, force push, pipe to a shell, a write
-  outside the worktree): the user answers those in the Inbox (`ctrl+t i`). If a plan pane was opened without the grant,
-  the person runs `tuios set-pane-grants -w plan --grants read,write,fan,files,respond` outside any pane.
+  outside the worktree): the user answers those in the Inbox (`ctrl+t i`). The shell grants in `.config/tuios/config.toml`
+  include respond so the launcher can pass it on; only a plan pane opened from a pane without respond needs
+  `tuios set-pane-grants -w plan --grants read,write,fan,files,respond` run outside any pane.
 - A billed builder starts only after you say yes in the tuios Inbox (`ctrl+t i`).
 
 Cost: Claude is interactive, so no per-call budget cap applies. `AIDEV_TUIOS_CLAUDE_MODEL` and
