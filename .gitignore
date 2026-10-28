@@ -181,11 +181,12 @@ stow-uninstall-local-ignore
 /.config/herdr/plugins/
 /.config/herdr/.plugins.lock
 
-# tuios (test stack): keep config.toml, agent_cycle.py and its tests, ignore what tuios writes beside it (themes,
+# tuios (test stack): keep config.toml, agent_cycle.py, hooks and its tests, ignore what tuios writes beside it (themes,
 # harnesses, keys, state)
 /.config/tuios/*
 !/.config/tuios/config.toml
 !/.config/tuios/agent_cycle.py
+!/.config/tuios/hooks/
 !/.config/tuios/tests/
 
 # Ignore AWS VPN configs
