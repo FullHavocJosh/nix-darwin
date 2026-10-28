@@ -155,6 +155,25 @@ function checkCommandSafety(command) {
   return { safe: true };
 }
 
+// Mirrors _BASH_WRITE_RE in pretooluse_gate.py: shell forms that write files. Redirects to /dev/null, fd
+// duplication (2>&1) and /tmp targets are not writes here.
+const BASH_WRITE_RE =
+  /\bsed\s+(?:-[A-Za-z]*\s+)*-[A-Za-z]*i|\bperl\s+-[A-Za-z]*i|\btee\b|\bgit\s+apply\b|\bpatch\b|(?<![>&\d])\d?>>?\s*(?!&|\/dev\/null|\/tmp\/|\/private\/tmp\/)[^\s&|;]/;
+
+// Blocks file-writing shell commands run from a repo's main checkout. Fails open on git errors: a command's
+// cwd is a weaker signal than an edit's target path.
+async function checkBashWrite(command, cwd) {
+  if (!cwd || !BASH_WRITE_RE.test(command)) return undefined;
+  const found = await findGitRoot(path.join(cwd, "x"));
+  if (found.error || !found.root) return undefined;
+  const mainCheck = await isMainWorktree(found.root);
+  if (mainCheck.error || !mainCheck.isMain) return undefined;
+  return (
+    `File-writing command in the primary repo checkout (${found.root}) is not allowed. ` +
+    `Run 'gpr' to create a worktree for this work, then run it there.`
+  );
+}
+
 const EDIT_TOOLS = new Set([
   "edit",
   "write",
@@ -178,6 +197,10 @@ export default {
         const result = checkCommandSafety(command);
         if (!result.safe)
           throw new Error(`[git-workflow-guard] ${result.reason}`);
+        // args.workdir is the shell tool's per-call directory; ctx.directory is the session's project directory.
+        const cwd = args.workdir ?? args.cwd ?? ctx.directory ?? process.cwd();
+        const writeBlock = await checkBashWrite(command, cwd);
+        if (writeBlock) throw new Error(`[git-workflow-guard] ${writeBlock}`);
         return;
       }
 

@@ -84,7 +84,7 @@ def serving():
 print("pi on the 30B")
 r = run(["--print", "--mode", "json", "--model", "coder/qwen3-coder-30b"])
 rec = json.load(open(REC))
-check("pi runs with Ralph's arguments", r.returncode == 0 and rec["argv"] == ["--print", "--mode", "json", "--model", "coder/qwen3-coder-30b"], (r.returncode, r.stderr, rec))
+check("pi runs with Ralph's arguments", r.returncode == 0 and rec["argv"][0] == "-e" and rec["argv"][1].endswith("worktree-guard.ts") and os.path.isfile(rec["argv"][1]) and rec["argv"][2:] == ["--print", "--mode", "json", "--model", "coder/qwen3-coder-30b"], (r.returncode, r.stderr, rec))
 check("the task prompt reaches pi on stdin", rec["stdin"] == "build task T1")
 check("pi's JSON output passes through to Ralph", '"agent_end"' in r.stdout, r.stdout)
 prov = (rec["models"] or {}).get("providers", {}).get("coder", {})
