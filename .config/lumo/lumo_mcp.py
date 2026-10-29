@@ -110,7 +110,7 @@ def lumo_search(a):
             try:
                 reply = ask(base, key, messages + [{"role": "assistant", "content": reply},
                                                    {"role": "user", "content": RETRY}])
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110
                 pass  # keep the first answer
         if len(reply) > REPLY_MAX:
             reply = reply[:REPLY_MAX] + "\n[reply cut at LUMO_MCP_REPLY_CHARS]"
