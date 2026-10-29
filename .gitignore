@@ -68,7 +68,7 @@ ansible-linux/inventory/staging
 
 # Ignore pi folders (auth.json, sessions, skills, catalog cache) but keep
 # agent/models.json tracked so the local llama.cpp provider syncs across machines,
-# agent/extensions/lumo-first.ts (herdr installs its own extension beside it, untracked), and the aidev
+# agent/extensions/lumo-first.ts, and the aidev
 # instructions (agent/AGENTS.md, agent/prompts/aidev-handoff.md)
 /.pi/*
 !/.pi/agent/
@@ -173,13 +173,6 @@ stow-uninstall-local-ignore
 # Ignore Git
 /.git
 /.config/gh/hosts.yml
-
-# Ignore herdr runtime state (session sockets, etc.) but keep config.toml tracked
-/.config/herdr/sessions/
-/.config/herdr/release-notes.json
-# Plugin install cache (nested git checkouts, lock files): herdr rebuilds it
-/.config/herdr/plugins/
-/.config/herdr/.plugins.lock
 
 # tuios (test stack): keep config.toml, agent_cycle.py, hooks and its tests, ignore what tuios writes beside it (themes,
 # harnesses, keys, state)

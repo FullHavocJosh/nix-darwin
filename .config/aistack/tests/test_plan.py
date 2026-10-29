@@ -1,4 +1,4 @@
-"""Tests for aidev's planning path: ralph_plan in ralph_mcp.py (Claude writes the plan) and the aidev dispatcher.
+"""Tests for aidev's planning path: ralph_plan in ralph_mcp.py (Claude writes the plan).
 Claude is replaced by AISTACK_PLAN_CMD (a shell command that prints a canned reply); nothing here is billed.
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_plan.py
 """
@@ -1048,46 +1048,6 @@ check(
     {"ralph_plan", "ralph_update_task", "repo_tree", "repo_read", "repo_grep"}
     <= set(names)
     and "ralph_review_plan" not in names,
-)
-
-print("aidev dispatcher")
-
-
-def aidev(args):
-    cmd = (
-        f"source {ROOT}/.zshrc_functions_ai 2>/dev/null; "
-        '_aidev_stack() { print -r -- "stack args=$*"; }; '
-        '_aidev_direct() { print -r -- "direct args=$*"; }; '
-        + args
-        + '; print -r -- "aistack is: $(whence -w aistack 2>/dev/null)"'
-    )
-    return (
-        subprocess.run(
-            ["zsh", "-c", cmd],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            stdin=subprocess.DEVNULL,
-        )
-        .stdout.strip()
-        .splitlines()
-    )
-
-
-out = aidev("aidev add a flag")
-check("task words go to the one stack", out[:1] == ["stack args=add a flag"], str(out))
-check("no arguments also starts the stack", aidev("aidev")[:1] == ["stack args="])
-check(
-    "--direct goes to the direct session without the flag",
-    aidev("aidev --direct fix it")[:1] == ["direct args=fix it"],
-)
-check(
-    "-p goes to the direct session with the flag",
-    aidev("aidev -p 'fix it'")[:1] == ["direct args=-p fix it"],
-)
-check(
-    "any other flag goes to the direct session",
-    aidev("aidev --model x")[:1] == ["direct args=--model x"],
 )
 
 print(f"\n{len(FAILS)} failed" if FAILS else "\nall passed")

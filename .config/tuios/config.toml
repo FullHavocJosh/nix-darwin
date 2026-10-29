@@ -95,13 +95,13 @@ leader_key = "ctrl+t"
 # scrolllock, a spare letter) avoids that. Unbound by default.
 # ============================================================================
 
-# The herdr keys (.config/herdr/config.toml), on ctrl and ctrl+shift: aerospace owns alt, so tuios's default opt+
+# Keys on ctrl and ctrl+shift: aerospace owns alt, so tuios's default opt+
 # keys (opt+1..9 workspaces, alt+arrows focus, opt+tab windows) never arrive. Global keys act in window and terminal
 # mode and do not reach the pane. ctrl+h/l cycle windows and ctrl+j/k cycle agents (agent_cycle.py), with ctrl+t o and
 # ctrl+t O still jumping to the agent that needs you and the newest finished turn. The pane no longer gets ctrl+h
 # (in some terminals also Backspace) or ctrl+l (zsh clear-screen, LazyVim window moves).
 [keybindings.global]
-# herdr switch_tab: workspaces by number.
+# Workspaces by number.
 switch_workspace_1 = ["ctrl+1"]
 switch_workspace_2 = ["ctrl+2"]
 switch_workspace_3 = ["ctrl+3"]
@@ -111,11 +111,11 @@ switch_workspace_6 = ["ctrl+6"]
 switch_workspace_7 = ["ctrl+7"]
 switch_workspace_8 = ["ctrl+8"]
 switch_workspace_9 = ["ctrl+9"]
-# herdr next/previous_workspace: a herdr workspace per repo is a tuios session per repo (dev-<repo>).
+# One tuios session per repo (dev-<repo>).
 next_session = ["ctrl+shift+j"]
 prev_session = ["ctrl+shift+k"]
 prefix_toggle_sidebar = ["ctrl+shift+h"]
-# herdr workspace_picker: agents, sessions, workspaces and panes in one picker.
+# Agents, sessions, workspaces and panes in one picker.
 goto_picker = ["ctrl+shift+p"]
 # ctrl+p back to zsh (up-line-or-beginning-search) and Neotree; the palette stays on ctrl+t P.
 command_palette = []
@@ -133,16 +133,16 @@ move_and_follow_9 = ["ctrl+shift+9"]
 # The launcher stays on ctrl+t a; alt+space is aerospace's side of the keyboard.
 launcher = []
 
-# Like herdr's cycle_pane, ctrl+h/l cycle windows in both modes. The pane no longer gets ctrl+h (in some terminals
+# ctrl+h/l cycle windows in both modes. The pane no longer gets ctrl+h (in some terminals
 # also Backspace) or ctrl+l (zsh clear-screen, LazyVim window moves).
 prev_window = ["ctrl+h"]
 next_window = ["ctrl+l"]
 
 [keybindings.prefix_mode]
-# herdr split_vertical was prefix+/; ctrl+shift+p covers choose_tree's pane search.
+# prefix+/ splits vertically; ctrl+shift+p covers choose_tree's pane search.
 prefix_split_vertical = ["|", "\\", "/"]
 choose_tree = []
-# ctrl+t g is lazygit below, the herdr gitview key. The scratch terminal takes s from the scrollback browser:
+# ctrl+t g is lazygit below. The scratch terminal takes s from the scrollback browser:
 # ctrl+t [ (copy mode) and ctrl+t E (scrollback in nvim) read pane output, atuin covers typed commands, and the
 # browser stays in the command palette (ctrl+t P).
 toggle_scratch = ["s"]
@@ -153,7 +153,7 @@ prefix_close_window = ["w"]
 prefix_close_session = ["W"]
 prefix_next_window = ["tab"]
 prefix_prev_window = ["shift+tab"]
-# The workspace prefix leaves w for space (herdr's "spaces"): ctrl+t space 1..9 switch, shift+1..9 move the window,
+# The workspace prefix leaves w for space: ctrl+t space 1..9 switch, shift+1..9 move the window,
 # r rename. Tiling stays on ctrl+t t t; the workspace switcher is in ctrl+shift+p / ctrl+t G and the palette.
 prefix_workspace = ["space"]
 prefix_toggle_tiling = []
@@ -246,7 +246,7 @@ type = "shell"
 command = "tuios popup --width 90% --height 90% --cwd \"$TUIOS_ACTIVE_PANE_CWD\" -- lazygit"
 description = "lazygit in a popup"
 
-# Like herdr's next/previous_agent. A command key without prefix+ works in window and terminal mode. The pane no
+# A command key without prefix+ works in window and terminal mode. The pane no
 # longer gets ctrl+j (zsh accept-line, Claude Code newline) or ctrl+k (zsh kill-line).
 [[keybindings.command]]
 key = "ctrl+j"
@@ -290,9 +290,7 @@ daemon = true
 [agents]
 # on: aidev_test's Claude pane mails the builder, asks the Lumo pane (ask-agent) and asks you (ask-human).
 enabled = true
-# off: tuios panes get no HERDR_* variables, so herdr-era code (gpr's _herdr_sync_dev_panes, the herdr Claude and
-# OpenCode hooks, herdr's pi extension) treats a tuios pane as a plain terminal instead of driving it through
-# tuios's herdr emulation. State reporting comes from tuios's own hooks, installed per pane by aidev_test.py.
+# off: tuios does not emulate herdr's protocol in its panes; state reporting comes from tuios's own hooks.
 herdr_protocol = "off"
 
 [agents.permissions]

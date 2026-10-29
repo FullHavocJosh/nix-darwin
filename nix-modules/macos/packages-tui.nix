@@ -470,7 +470,6 @@ in
       "graphviz"
       "hadolint"
       "helm"
-      "herdr"
       "jq"
       "jsonlint"
       "k9s"
@@ -514,7 +513,7 @@ in
       "typescript"
       "tree"
       "tree-sitter"
-      "tuios" # the daily multiplexer (.zshrc_functions_tuios); herdr stays for the *_herdr commands
+      "tuios" # the daily multiplexer (.zshrc_functions_tuios)
       "typescript-language-server"
       "uv"
       "vscode-langservers-extracted"

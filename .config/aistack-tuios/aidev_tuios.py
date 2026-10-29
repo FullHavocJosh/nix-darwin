@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """aidev on tuios with Claude Code as the backbone (RFC ~/.ai/rfcs/2026-10-25-aidev-tuios-test.md). The `aidev`
-shell function runs it; the pi + ralph stack it replaced is aidev_herdr, and its state (~/.ai/aidev) stays separate.
+shell function runs it.
 
     aidev_tuios.py start [--resume] [task words...]   open the panes: in this tuios session, else aidev-<repo>
     aidev_tuios.py start --rfc <name> [words...]       the same, with Claude told to carry out an RFC (~/.ai/rfcs)
@@ -70,9 +70,8 @@ TEST_HOME = os.path.expanduser(os.environ.get("AIDEV_TUIOS_HOME") or os.path.joi
 CACHE = os.path.join(AI_HOME, "cache", "aidev_tuios")
 HELPER = f"{sys.executable} {os.path.realpath(__file__)}"
 # tuios on macOS reads ~/Library/Application Support/tuios unless XDG_CONFIG_HOME is set; the stowed config is in
-# ~/.config/tuios. Every tuios call here sets it, so the daemon always starts on that config. HERDR_*
-# is dropped: a daemon started from a herdr pane would hand herdr's variables on to every tuios pane.
-TENV = {**{k: v for k, v in os.environ.items() if not k.startswith("HERDR_")},
+# ~/.config/tuios. Every tuios call here sets it, so the daemon always starts on that config.
+TENV = {**os.environ,
         "XDG_CONFIG_HOME": os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config")}
 
 CLAUDE_MODEL = os.environ.get("AIDEV_TUIOS_CLAUDE_MODEL") or os.environ.get("AISTACK_CLAUDE_MODEL") or "sonnet"
@@ -325,13 +324,6 @@ def attach(session):
     os.execvpe("tuios", ["tuios", "attach", session], TENV)
 
 
-def nested_in_herdr():
-    """Inside a herdr pane (and not in tuios). AIDEV_TUIOS_ALLOW_NESTED=1 lets a script run anyway."""
-    if os.environ.get("AIDEV_TUIOS_ALLOW_NESTED") == "1" or os.environ.get("TUIOS_ENV"):
-        return False
-    return bool(os.environ.get("HERDR_ENV") or os.environ.get("HERDR_PANE_ID"))
-
-
 def foreground(tty):
     """The foreground programs of terminal `tty` (a window's tty from list-windows): the processes ps marks "+". A
     launcher's zsh shares the foreground with the agent it runs, so there can be several."""
@@ -504,7 +496,7 @@ def write_plan_mcp(path):
 
 def pane_configs(project):
     """tuios hooks and MCP for this project's panes, generated under ~/.ai/cache/aidev_tuios, never in the stowed
-    ~/.claude, ~/.pi or ~/.config/opencode (herdr's hooks live there)."""
+    ~/.claude, ~/.pi or ~/.config/opencode."""
     d = os.path.join(CACHE, project_key(project))
     claude_dir = os.path.join(d, "claude")
     os.makedirs(claude_dir, exist_ok=True)
@@ -2139,10 +2131,6 @@ def cmd_start(argv):
         if err:
             print(f"aidev --rfc: {err}", file=sys.stderr)
             return 1
-    if nested_in_herdr():
-        print("aidev: run it from a plain Ghostty window, not inside herdr (no nested multiplexers).",
-              file=sys.stderr)
-        return 1
     project = project_root(os.getcwd())
     session, own, running, err = where_to_run(project, resume)
     if err:
@@ -2243,7 +2231,7 @@ def tree_state(cwd):
 
 def check_edit(cwd, before, test_cmd):
     """Why the edit is not done, or "" when it is: the tree must have changed and AIDEV_TEST_CMD (a shell command
-    the caller set, as in aidev_herdr) must exit 0."""
+    the caller set) must exit 0."""
     if tree_state(cwd) == before:
         return "it changed nothing"
     if test_cmd:
@@ -2381,9 +2369,6 @@ def cmd_direct(argv):
 def cmd_ai(argv):
     cont = "-c" in argv
     msg = " ".join(a for a in argv if a != "-c").strip()
-    if nested_in_herdr():
-        print("ai_tuios: run it from a plain Ghostty window, not inside herdr.", file=sys.stderr)
-        return 1
     cwd = os.path.realpath(os.getcwd())
     session = "ai_tuios-" + safe_name(os.path.basename(cwd))
     if session_exists(session) and not msg and not cont:
@@ -2428,7 +2413,7 @@ def cmd_status(argv):
 def main(argv):
     cmd, rest = (argv[0], argv[1:]) if argv else ("", [])
     if cmd == "start":
-        # as in aidev_herdr: -p anywhere means one headless edit
+        # -p anywhere means one headless edit
         if "-p" in rest or "--print" in rest:
             return cmd_edit(rest)
         if rest[:1] == ["--handoff"]:

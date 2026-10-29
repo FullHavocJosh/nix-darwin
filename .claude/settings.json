@@ -78,15 +78,6 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ -f \"$HOME/nix-darwin/scripts/herdr-nvim-open-edited.sh\" ]; then \"$HOME/nix-darwin/scripts/herdr-nvim-open-edited.sh\"; fi"
-          }
-        ]
-      },
-      {
         "hooks": [
           {
             "command": "tuios agent-hook claude-code --integration 3",
@@ -97,16 +88,6 @@
       }
     ],
     "SessionStart": [
-      {
-        "matcher": "^(startup|resume|clear|compact|fork)$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ -f \"$HOME/.claude/hooks/herdr-agent-state.sh\" ]; then bash \"$HOME/.claude/hooks/herdr-agent-state.sh\" session; fi",
-            "timeout": 10
-          }
-        ]
-      },
       {
         "hooks": [
           {

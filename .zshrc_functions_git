@@ -3,22 +3,6 @@
 # Helper functions and main workflow commands for git operations
 # =============================================================================
 
-# Several functions below (_herdr_sync_dev_panes -> _herdr_wait_pane_stable,
-# devlite/aidevlite -> _herdr_ai_edit_workspace) call functions that live in
-# .zshrc_aliases. .zshrc sources that file before this one in a normal
-# interactive shell, but anything that sources only this file directly — an
-# agent's tool call running `source .zshrc_functions_git` on its own, a
-# script, a non-interactive subshell — hits "command not found" instead.
-# Confirmed live: gpr calls into _herdr_sync_dev_panes even when HERDR_ENV is
-# only ambiently inherited (not from a full interactive shell), and the
-# failure is silent from gpr's own output: the dev panes just never get
-# pointed at the new worktree. Self-heal instead of relying on load order that
-# nothing enforces. _herdr_wait_pane_stable is the canary: if it's missing,
-# none of .zshrc_aliases loaded, so (re-)source the whole file.
-if ! command -v _herdr_wait_pane_stable >/dev/null 2>&1; then
-  [[ -f "$HOME/.zshrc_aliases" ]] && source "$HOME/.zshrc_aliases" 2>/dev/null
-fi
-
 # Helper function: Launch a script in a new terminal window (macOS + Linux)
 # Usage: _launch_terminal_window <script_path> <label>
 # Returns 0 on success, 1 if no terminal could be found
@@ -93,13 +77,9 @@ function asc() {
   fi
 }
 
-# gpa's manual-fix workspace: tuios unless this runs in a herdr pane.
+# gpa's manual-fix workspace (tuios).
 _ai_edit_workspace() {
-  if [ -n "$HERDR_ENV" ] && [ -z "$TUIOS_ENV" ]; then
-    _herdr_ai_edit_workspace "$@"
-  else
-    _tuios_ai_edit_workspace "$@"
-  fi
+  _tuios_ai_edit_workspace "$@"
 }
 
 # Helper function: Open a workspace (nvim + aidev tabs) for linting fixes
@@ -1740,12 +1720,10 @@ function _gpa_send_all_to_aidev() {
   echo ""
   echo "=== aidev: Fix All Issues ==="
   echo ""
-  # Inline and blocking (gpa re-reviews afterwards), so the pi + ralph stack, not the tuios panes.
-  # aidev's opencode path cannot take the issues (opencode v2 has no top-level --model), and the issues are
-  # review findings to evaluate and plan, so hand them to aistack's planner as its first message.
-  (cd "$repo_root" && aidev_herdr "The staged changes in this repository failed code review. Evaluate each finding below (some may be false positives), plan the fixes for the real ones, and fix them in the working tree.
+  # Blocking (gpa re-reviews afterwards): one aidev -p edit by a free builder, limited to the staged files.
+  (cd "$repo_root" && aidev -p "The staged changes in this repository failed code review. Evaluate each finding below (some may be false positives) and fix the real ones in the working tree. Change nothing else.
 
-$(cat "$prompt_file")")
+$(cat "$prompt_file")" "${staged_files[@]}")
   rm -f "$prompt_file"
 
   echo ""
@@ -3570,86 +3548,7 @@ $type_prefix: $branch_name"
   # nvim/zsh panes over in the workspace's dev tab should still follow the
   # worktree -- that's where the actual file changes are happening, so they
   # should be showing it even though aidev's cwd doesn't move. Push them there
-  # when running in herdr.
-  [ -n "$HERDR_ENV" ] && _herdr_sync_dev_panes "$worktree_dir"
+  # when running in tuios.
   [ -n "$TUIOS_ENV" ] && _tuios_sync_dev_panes "$worktree_dir"
   return 0
 }
-
-# Pushes every pane in the workspace's dev tab (nvim/zsh -- see
-# _herdr_populate_panes) to $1 -- whatever directory that is. Called from
-# gpr_func with a freshly created worktree (gpr's own `cd` only affects the
-# calling pane, see gpr_func above), and from the pr-merged-reset skill
-# (~/model-skills-fullhavoc/pr-merged-reset) with the repo root instead, to pull
-# the dev tab back once that worktree's PR has merged and gone stale. Same
-# mechanics either direction -- it's just a directory to point the panes at.
-# Resolves the dev tab explicitly by tab label ("dev", optionally suffixed) rather
-# than scanning
-# every pane in $HERDR_WORKSPACE_ID and matching by pane label -- that would also
-# catch any OTHER tab the user happens to have open in this workspace if a pane
-# in it were ever labeled nvim/zsh too. Scoping to the resolved dev tab_id
-# instead means only that tab's panes are ever touched, full stop. Per pane kind,
-# by label:
-#   - nvim: `:cd $1` repoints file ops (netrw, :e, fuzzy-finders) without
-#     restarting nvim, so open buffers/undo history survive untouched, chained
-#     with `| Neotree git_status` (same view as <leader>gs, see keymaps.lua) so
-#     the changed-files list is what's on screen without touching the pane.
-#   - zsh: plain `cd $1`, but ONLY if the pane is sitting at an idle shell prompt
-#     (checked via process-info) -- never inject a command into a pane that's
-#     actively running something else.
-_herdr_sync_dev_panes() {
-  local dir="$1"
-  [ -n "$HERDR_WORKSPACE_ID" ] || return 0
-
-  local dev_tab
-  dev_tab=$(herdr tab list --workspace "$HERDR_WORKSPACE_ID" 2>/dev/null | jq -r '.result.tabs[] | select(.label | startswith("dev")) | .tab_id' | head -1)
-  [ -n "$dev_tab" ] || return 0
-
-  local panes_json
-  panes_json=$(herdr pane list --workspace "$HERDR_WORKSPACE_ID" 2>/dev/null)
-  [ -n "$panes_json" ] || return 0
-
-  local pane_line pane_id label
-  echo "$panes_json" | jq -c --arg tab "$dev_tab" '.result.panes[] | select(.tab_id==$tab)' | while IFS= read -r pane_line; do
-    pane_id=$(echo "$pane_line" | jq -r '.pane_id')
-    label=$(echo "$pane_line" | jq -r '.label')
-    [ "$pane_id" = "$HERDR_PANE_ID" ] && continue
-
-    case "$label" in
-      nvim*)
-        # Confirm nvim is actually the foreground process before injecting
-        # Ex-command keystrokes -- if nvim already exited (crashed, :q'd by
-        # hand, whatever) this pane is a bare shell, and blindly firing
-        # `esc esc :cd $dir | Neotree git_status` at it types that text
-        # (plus two no-op Esc bytes) straight onto the shell's command line.
-        # Whatever was already sitting there un-submitted gets glued onto the
-        # front of it -- observed in the wild as a stray `sudo` prefix turning
-        # the injected text into a real sudo invocation and blocking the pane
-        # on a password prompt. Same guard the zsh* case below already uses.
-        local fg
-        fg=$(herdr pane process-info --pane "$pane_id" 2>/dev/null | jq -r '.result.process_info.foreground_processes[0].name // ""')
-        if [ "$fg" = "nvim" ]; then
-          # Two escs, not one: a single esc only backs out of insert/visual
-          # mode or a one-level popup (completion menu, telescope prompt) --
-          # it doesn't close a floating window that's ALSO showing on top of
-          # that, which a second esc does. Then wait for whatever's rendering
-          # to settle before typing an Ex command at it, instead of firing
-          # the instant gpr runs regardless of what nvim is doing.
-          herdr pane send-keys "$pane_id" esc >/dev/null 2>&1
-          herdr pane send-keys "$pane_id" esc >/dev/null 2>&1
-          _herdr_wait_pane_stable "$pane_id"
-          herdr pane send-text "$pane_id" ":cd $dir | Neotree git_status" >/dev/null 2>&1
-          herdr pane send-keys "$pane_id" enter >/dev/null 2>&1
-        fi
-        ;;
-      zsh*)
-        local fg
-        fg=$(herdr pane process-info --pane "$pane_id" 2>/dev/null | jq -r '.result.process_info.foreground_processes[0].name // ""')
-        if [ "$fg" = "zsh" ] || [ "$fg" = "-zsh" ]; then
-          herdr pane run "$pane_id" "cd $dir" >/dev/null 2>&1
-        fi
-        ;;
-    esac
-  done
-}
-

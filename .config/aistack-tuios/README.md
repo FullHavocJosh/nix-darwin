@@ -1,8 +1,8 @@
 # aistack-tuios: aidev on tuios
 
 The daily terminal and AI stack, on tuios, with Claude Code as the backbone of aidev and the other models in panes it
-talks to by tuios mail. The commands are in `.zshrc_functions_tuios`. The herdr versions stay available as
-`<name>_herdr` (`dev_herdr`, `nxvim_herdr`, `aidev_herdr`, ...). `ai` and `ainfo` use no multiplexer and are unchanged.
+talks to by tuios mail. The commands are in `.zshrc_functions_tuios`. `ai` and `ainfo` use no multiplexer and are
+unchanged.
 
 | Command                            | What it does                                                                                         |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -31,14 +31,13 @@ Review: `ctrl+t v` opens the tuios review view of the focused pane's changes, ag
 gpr branch shows only unpushed and uncommitted work). `c` notes a line, `C` a hunk, `S` sends the notes to the pane's
 agent. `prdiff` prints the whole PR's diff against origin's default branch.
 
-Run them from a plain Ghostty window, not inside herdr. Keys (`.config/tuios/config.toml`, the herdr keys where tuios
-can take them): `ctrl+t` is tuios's prefix. `ctrl+1`..`9` switch workspaces, `ctrl+shift+j`/`k` the next and previous
-session, `ctrl+shift+p` goes to an agent, session or pane, `ctrl+shift+h` shows the sidebar. `ctrl+t i` opens the
-agents and the Inbox, `ctrl+t g` lazygit, `ctrl+t s` the scratch terminal. `ctrl+t n`/`w`/`W` open a window, close it
-and close the session, `ctrl+t h`/`j`/`k`/`l` move focus, `ctrl+t space` is the workspace prefix and `ctrl+t q`
-detaches, `ctrl+t ctrl+t` sends `ctrl+t` to the pane. Without the prefix, `ctrl+tab`/`ctrl+shift+tab` cycle windows,
-`ctrl+shift+arrows` move focus and `ctrl+shift+1`..`9` move the pane to a workspace. tuios is ctrl only: alt belongs to
-aerospace.
+Keys (`.config/tuios/config.toml`): `ctrl+t` is tuios's prefix. `ctrl+1`..`9` switch workspaces,
+`ctrl+shift+j`/`k` the next and previous session, `ctrl+shift+p` goes to an agent, session or pane,
+`ctrl+shift+h` shows the sidebar. `ctrl+t i` opens the agents and the Inbox, `ctrl+t g` lazygit, `ctrl+t s` the
+scratch terminal. `ctrl+t n`/`w`/`W` open a window, close it and close the session, `ctrl+t h`/`j`/`k`/`l` move
+focus, `ctrl+t space` is the workspace prefix and `ctrl+t q` detaches, `ctrl+t ctrl+t` sends `ctrl+t` to the pane.
+Without the prefix, `ctrl+tab`/`ctrl+shift+tab` cycle windows, `ctrl+shift+arrows` move focus and
+`ctrl+shift+1`..`9` move the pane to a workspace. tuios is ctrl only: alt belongs to aerospace.
 
 ## Two Macs
 
@@ -138,7 +137,7 @@ the Inbox.
 
 ### Script forms
 
-These replace the pi + ralph stack's forms (still there as `aidev_herdr`). Agents reach them through
+These replace the pi + ralph stack's forms. Agents reach them through
 `~/.local/bin/aidev` (`../aistack/aidev-cli`), which allows only `-p` and `--handoff`.
 
 - `aidev -p "<change>" [files]`: one edit in this directory. Inside tuios the on-device 30B opens in a pane on a free
@@ -164,20 +163,14 @@ tuios agent features must be on: `[agents] enabled = true` in `../tuios/config.t
   `~/.config/aistack/ralph_mcp.py`, unchanged.
 - `layer-claude.md`, `layer-lumo.md`, `layer-build.md`: each pane's system prompt.
 - `tests/test_aidev_tuios.py`: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_aidev_tuios.py`.
-- `../tuios/config.toml`: tuios config (agents on, herdr variables off, strict pane grants). The functions in
+- `../tuios/config.toml`: tuios config (agents on, herdr protocol emulation off, strict pane grants). The functions in
   `.zshrc_functions_tuios` set `XDG_CONFIG_HOME` so tuios reads it; check with `tuios config files`.
 - Per-pane tuios hooks (Claude Code settings, the pi extension, the OpenCode plugin) are generated under
   `~/.ai/cache/aidev_tuios/` and passed per launch (`--settings`, `PI_CODING_AGENT_DIR`, `OPENCODE_CONFIG_DIR`). The
   stowed `~/.claude`, `~/.pi` and `~/.config/opencode` are never changed.
 
 Settings for scripts and tests: `AIDEV_TUIOS_HOME` (state dir), `AIDEV_TUIOS_LUMO=off` (no Lumo pane),
-`AIDEV_TUIOS_NO_ATTACH=1` (print the session, do not attach), `AIDEV_TUIOS_ALLOW_NESTED=1` (allow a start from inside
-herdr), `AIDEV_TUIOS_WORKTREE_MODE=none`, `AIDEV_TUIOS_REPO_PRIVATE=yes|no`, and `AIDEV_TUIOS_FAKE_HUMAN=<file>`. The
+`AIDEV_TUIOS_NO_ATTACH=1` (print the session, do not attach), `AIDEV_TUIOS_WORKTREE_MODE=none`,
+`AIDEV_TUIOS_REPO_PRIVATE=yes|no`, and `AIDEV_TUIOS_FAKE_HUMAN=<file>`. The
 last one is for tests only: tuios lets only an attached client answer an Inbox question, so the helpers read their
 answers from lines in that file.
-
-## Back to herdr
-
-The herdr stack is intact under `<name>_herdr`. To make it the default again, rename the tuios commands in
-`.zshrc_functions_tuios` and the `_herdr` aliases in `.zshrc_aliases` back. The tuios state is in `~/.ai/aidev_tuios`
-and `~/.ai/cache/aidev_tuios`.

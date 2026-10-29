@@ -19,7 +19,7 @@ def check(name, cond, extra=""):
 
 def sh(cmd, cwd, env=None, timeout=120):
     e = dict(os.environ, **(env or {}))
-    for k in ("AI_LOCAL_DEFAULT", "AI_LOCAL_ONLY", "HERDR_ENV"): e.pop(k, None)
+    for k in ("AI_LOCAL_DEFAULT", "AI_LOCAL_ONLY"): e.pop(k, None)
     return subprocess.run(["zsh", "-c", cmd], cwd=cwd, env=e, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
 
 def git(cwd, *a): return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=test@example.com", *a], cwd=cwd, capture_output=True, text=True).stdout.strip()

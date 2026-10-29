@@ -10,12 +10,8 @@
 #                                                              approved (prd.json + verify.json); prints one JSON line
 #
 # Plain `aidev`, --rfc and --direct belong in the user's terminal. Never inside a run's builder (the script refuses
-# there too: AIDEV_TUIOS_BUILDER) or a pi + ralph run (AISTACK_STATE_DIR): building with aidev again would loop.
+# there too: AIDEV_TUIOS_BUILDER): building with aidev again would loop.
 
-if [[ -n "${AISTACK_STATE_DIR:-}" ]]; then
-  echo "aidev: refusing to start inside an aidev_herdr run (AISTACK_STATE_DIR is set)" >&2
-  exit 2
-fi
 if [[ "${1:-}" != "--handoff" && " $* " != *" -p "* && " $* " != *" --print "* ]]; then
   echo "aidev (from an agent): use  aidev -p \"<exact change>\" <files>  or  aidev --handoff <plan dir>." >&2
   echo "Plain aidev, --rfc and --direct are interactive: give the user the command to run in their terminal." >&2

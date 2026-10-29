@@ -50,8 +50,7 @@ nix-darwin/
 │   ├── install-nerd-fonts.sh           # Nerd Fonts installer
 │   ├── setup-ssh-keys.sh               # SSH key setup automation
 │   ├── check-timemachine-exclusions.sh # validates timemachine-exclusions.txt
-│   ├── opnsense-routing.sh             # routing fix after plugging in the OPNsense LAN cable
-│   └── herdr-nvim-open-edited.sh       # legacy herdr helper
+│   └── opnsense-routing.sh             # routing fix after plugging in the OPNsense LAN cable
 │
 ├── .config/                            # Application configurations (deployed via stow)
 │   ├── aerospace/                      # AeroSpace (macOS tiling WM)
@@ -60,7 +59,6 @@ nix-darwin/
 │   ├── atuin/                          # Atuin shell history config
 │   ├── btop/                           # btop system monitor
 │   ├── ghostty/                        # Ghostty terminal config
-│   ├── herdr/                          # herdr config (legacy *_herdr commands)
 │   ├── lumo/                           # lumo-tamer scripts and Lumo MCP
 │   ├── mcp/                            # MCP server definitions (claude-desktop-mcp.json)
 │   ├── nvim/                           # Neovim (LazyVim) configuration (incl. claudecode.nvim)
@@ -148,23 +146,7 @@ Defined in `flake.nix`:
 
 #### Shared (all macOS profiles, via `packages-tui.nix`)
 
-- **llama-server** launchd daemon: serves `qwen/qwen3.5-9b` (Qwen3.5-9B Q4_K_M GGUF, 128K context) on `127.0.0.1:8080` only; the bind address is hard-coded and `_validate_llamacpp` rejects any other `LLAMA_CPP_HOST`. Used for gpc/gpa/gpr, aistack tier 1 and opencode. The GGUF is downloaded to `~/models` (sha256-verified) on `darwin-rebuild switch`. No LM Studio, no LM Link: no device calls another device's model.
-
-#### aistack (merged into aidev)
-
-`aistack` is an alias of `aidev_herdr`, the herdr-era pi + ralph aidev (`.zshrc_aliases`); the daily `aidev` is the
-tuios one, see [`aidev`](#aidev---claude-code-with-free-builders-on-tuios) below. Its settings keep their `AISTACK_*`
-names and its state stays in `~/.ai/aidev/<project>-<hash>/`.
-
-Lumo is reached through lumo-tamer, tried in this order, each only when the one before does not answer:
-
-1. this machine's own tamer, `http://127.0.0.1:3003/v1`
-2. MacMiniM1's tamer on the home network, `http://macminim1.rollet.family:3003/v1`
-3. the public endpoint, `https://lumo.rollet.family/v1` (key from Doppler `root_hetzner-cluster`), for when the
-   machine is away from home
-
-Lumo can ask for more files while it drafts; those requests are answered on the machine running `aidev_herdr`, from the
-project it was started in (secrets refused), by direct lookup or by the local model.
+- **llama-server** launchd daemon: serves `qwen/qwen3.5-9b` (Qwen3.5-9B Q4_K_M GGUF, 128K context) on `127.0.0.1:8080` only; the bind address is hard-coded and `_validate_llamacpp` rejects any other `LLAMA_CPP_HOST`. Used for gpc/gpa/gpr and opencode. The GGUF is downloaded to `~/models` (sha256-verified) on `darwin-rebuild switch`. No LM Studio, no LM Link: no device calls another device's model.
 
 #### Lumo (lumo-tamer, on every personal Mac)
 
@@ -193,13 +175,6 @@ What follows describes the daemons. Two LaunchDaemons run as `havoc`, so nothing
   Using it may violate Proton's terms of service (its README says so).
 - `lumo-watchdog` (every 5 min): checks `tamer auth status`, the server, and every 30 min a real one-word Lumo
   request; alerts through ntfy on failure and on recovery; optionally re-authenticates by itself.
-
-Inside `aidev`, `ralph_plan` (`.config/aistack/ralph_mcp.py`) asks Lumo for a draft before Claude plans. It talks to
-lumo-tamer directly (this machine's, then MacMiniM1's, then `https://lumo.rollet.family/v1`) and runs the `NEED` loop
-itself, with `lumo_planner.py` as a library and the current project as root, so Lumo can ask for more files in any
-repository. Paths, `ls`, `find` and `grep` are answered directly; vaguer requests go to the local model. Secrets, keys
-and env files are refused (a name-based deny list: `.env`, keys, tfvars, kubeconfig, `*secret*`, ...), 4 rounds and 480 s at most. A draft over 12,000 characters is
-sent back to Lumo once to be shortened. If no tamer answers, planning continues without a draft.
 
 There used to be a third daemon, `lumo-planner` (port 8765), a proxy that ran this loop against one fixed repository,
 and a `lumoplan` command that used it. Both are removed; `lumo_planner.py` remains as the library `aidev` loads.
@@ -242,7 +217,7 @@ Single profile focused on personal development and desktop environment.
 
 ## Terminal: tuios
 
-tuios is the daily terminal multiplexer, installed by brew (`packages-tui.nix`), config in `.config/tuios/config.toml`, commands in `.zshrc_functions_tuios`. The herdr versions stay as `<name>_herdr` (`dev_herdr`, `nxvim_herdr`, `aidev_herdr`).
+tuios is the daily terminal multiplexer, installed by brew (`packages-tui.nix`), config in `.config/tuios/config.toml`, commands in `.zshrc_functions_tuios`.
 
 | Command                            | What it does                                                                               |
 | ---------------------------------- | ------------------------------------------------------------------------------------------ |
@@ -260,8 +235,7 @@ Review: `ctrl+t v` opens the tuios review view of the focused pane's changes, ag
 `gpr` branch shows only unpushed and uncommitted work). `c` notes a line, `C` a hunk, `S` sends the notes to the pane's
 agent. `prdiff` prints the whole PR's diff against origin's default branch.
 
-Run them from a plain Ghostty window, not inside herdr. Keys (`.config/tuios/config.toml`, the herdr keys where tuios
-can take them): `ctrl+t` is tuios's prefix. `ctrl+1`..`9` switch workspaces, `ctrl+shift+j`/`k` the next and previous
+Run them from a plain Ghostty window. Keys (`.config/tuios/config.toml`): `ctrl+t` is tuios's prefix. `ctrl+1`..`9` switch workspaces, `ctrl+shift+j`/`k` the next and previous
 session, `ctrl+shift+p` goes to an agent, session or pane, `ctrl+shift+h` shows the sidebar. `ctrl+t i` opens the
 agents and the Inbox, `ctrl+t g` lazygit, `ctrl+t s` the scratch terminal. `ctrl+t n`/`w`/`W` open a window, close it
 and close the session, `ctrl+t h`/`j`/`k`/`l` move focus, `ctrl+t space` is the workspace prefix and `ctrl+t q`
@@ -323,13 +297,13 @@ gpc -m "subject" -d "body"  # Commit with your message and push
 
 #### `gpr` - Git Pull Request
 
-Opens a new branch, a worktree and a draft PR. In tuios it points the session's nvim and zsh windows at the new worktree. `gpr` is an alias of `gpr_func`.
+Opens a new branch, a worktree and a draft PR. In tuios it points the session's nvim and zsh windows at the new worktree. `gpr` is an alias for `gpr_func`.
 
 ```bash
 gpr                   # Interactive: pick feat or fix and a branch name (no AI call)
 ```
 
-#### Calling `gpr` / `gpa` / `gpc` from AI agents (aistack, aidev, Claude Code, opencode, pi)
+#### Calling `gpr` / `gpa` / `gpc` from AI agents (aidev, Claude Code, opencode, pi)
 
 The caller writes the text; the helpers do the git and GitHub work and never prompt. No flags means the interactive
 behavior above, unchanged.
@@ -351,7 +325,7 @@ gpc -m "subject" -d "body"                  # commit what is staged with your me
 
 `-m`/`-d` make the commit subject and body yours (`gpa` hands them to `gpc` through `AI_COMMIT_MESSAGE` /
 `AI_COMMIT_BODY`); without `-m` the local model still writes the message. `gpa -m ... --no-review` needs no AI provider
-at all. `gpr` still never enters the worktree; use the returned `worktree` path. aistack uses this: when you confirm a
+at all. `gpr` still never enters the worktree; use the returned `worktree` path. aidev uses this: when you confirm a
 plan it opens the draft PR with the plan's `title` (as `feat: <title>`, at most 72 characters) and a body built from
 the plan (summary, each task with its acceptance criteria and verify command, the tiers).
 Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_git_auto.py`.
@@ -407,11 +381,6 @@ The changes stay uncommitted in the work dir; you commit with `gpa`. Details:
 Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_aidev_tuios.py` (tests dir
 `.config/aistack-tuios/tests`).
 
-The older pi-based planner flow remains as `aidev_herdr` (alias `aistack`): the local `qwen/qwen3.5-9b` in pi
-coordinates the run, Lumo adds a draft, and Claude Code writes `prd.json` and `verify.json` in one billed `ralph_plan`
-call (capped by `AISTACK_CLAUDE_BUDGET_PLAN`); state in `~/.ai/aidev/<project>-<hash>/`.
-Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_plan.py`.
-
 ### Required Packages
 
 All automatically installed via nix-darwin/package managers:
@@ -424,7 +393,6 @@ All automatically installed via nix-darwin/package managers:
 - `llama-cpp` - Local LLM inference (llama-server)
 - `gh` - GitHub CLI
 - `tuios` - Terminal multiplexer (daily stack)
-- `herdr` - legacy multiplexer for *_herdr commands
 - `neovim` - Text editor
 
 ## 🤖 Claude Code & MCP Integration
@@ -644,7 +612,6 @@ stow -R . -t ~  # Re-stow (replaces existing symlinks)
 - **[macOS Setup Guide](README_MACOS.md)** - Detailed macOS installation steps
 - **[TrueNAS SMB Monitor](scripts/README_TRUENAS.md)** - TrueNAS service monitoring
 - **[aidev on tuios](.config/aistack-tuios/README.md)** - Claude Code planner with free builders in tuios panes
-- **[aidev (pi)](.config/aistack/AIDEV.md)** - pi-based planner and runner stack in `.config/aistack/`
 
 ## 🤝 Contributing
 

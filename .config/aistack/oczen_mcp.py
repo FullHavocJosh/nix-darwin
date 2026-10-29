@@ -115,9 +115,8 @@ def oczen_edit(a):
               + (f"When done, run `{req['test_cmd']}` and fix the region until it passes.\n" if req["test_cmd"] else "")
               + "Do not change any other file, do not commit, and do not ask questions.")
     status_before = git_status(root)
-    # Keep OpenCode's herdr plugin away from the Claude pane this server runs in, and its formatter off: a reformat
-    # of the whole file would break the line-range rule.
-    env = {k: v for k, v in os.environ.items() if not k.startswith("HERDR_")}
+    # Keep OpenCode's formatter off: a reformat of the whole file would break the line-range rule.
+    env = dict(os.environ)
     env["OPENCODE_CONFIG_CONTENT"] = json.dumps({"formatter": False})
     t0 = time.time()
     try:
