@@ -76,7 +76,7 @@ the tuios MCP only.
 | 1         | `build-billed`      | escalation: Claude Code (billed, asks you first)                   | read, write                      |
 
 The billed builder's settings use `acceptEdits`, allow the plan's verify commands by exact text and the read-only
-commands, and deny git writes, `gh`, `rm -rf` and `sudo` (deny wins over allow). Edits to the plan directory and to the run's `state.json` and `events.jsonl` are denied too.
+commands, and deny git writes, `gh`, `rm -rf` and `sudo` (deny wins over allow). Edits to the plan directory and to the run's `state.json` and `events.jsonl` are denied too. Each run has its own plan directory and worktree record (`meta_path`) under `runs/<id>/`, so concurrent runs of one project never share a plan, worktree or PR; finish archives the plan to `runs/<id>/plan-done-<time>`.
 Tasks added after the builder opened
 still prompt.
 

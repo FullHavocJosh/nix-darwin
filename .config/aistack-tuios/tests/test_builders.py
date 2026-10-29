@@ -70,6 +70,25 @@ def main():
     finally:
         a.tuios_json = real
 
+    print("preflight and respond")
+    held = [["read", "write", "files", "admin"]]
+    real = (a.tuios_json, a.shutil.which, a.tuios)
+    a.tuios_json = lambda *args, **kw: {"pane": True, "grants": held[0]} if args and args[0] == "pane-grants" else {}
+    a.shutil.which = lambda t: "/bin/x"
+    a.tuios = lambda *args, **kw: (0, "", "")
+    try:
+        got = a.preflight()
+        check("lacking respond: refused with the fix",
+              any("respond" in p and "set-pane-grants" in p for p in got), got)
+        held[0] = ["read", "write", "files", "admin", "respond"]
+        got = a.preflight()
+        check("holding respond: no respond problem", not any("respond" in p for p in got), got)
+        held[0] = ["read", "write", "files", "admin"]
+        got = a.preflight(opens_plan=False)
+        check("no plan pane opens: no respond problem", not any("respond" in p for p in got), got)
+    finally:
+        a.tuios_json, a.shutil.which, a.tuios = real
+
     print("workspaces")
     names = list(a.BUILDERS.values())
     check("WS_OWN has the builder panes on 1", all(a.WS_OWN.get(n) == 1 for n in names), a.WS_OWN)
@@ -277,7 +296,7 @@ def main():
             "claude_backbone": os.path.join(bdir, "backbone.json")}
     brun = a.Run(p, "20260101-000002")
     real_ld, real_gg = a.load_ralph, a.write_git_guard
-    a.load_ralph = lambda project=None: type("R", (), {"load_plan": lambda self, proj: (None, {"T1": ["python3 t.py"]}, "h")})()
+    a.load_ralph = lambda project=None, run=None: type("R", (), {"load_plan": lambda self, proj: (None, {"T1": ["python3 t.py"]}, "h")})()
     a.write_git_guard = lambda r: a.write_text(os.path.join(r.dir, "bin", "guard", "git"), "")
     try:
         a.build_body(brun, bcfg, "billed")

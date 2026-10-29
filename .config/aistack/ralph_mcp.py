@@ -67,6 +67,11 @@ def rj(path, default=None):
         return default
 
 
+# aidev on tuios points each run at its own plan dir and worktree record (load_ralph sets these on its instance)
+PLAN_DIR = os.environ.get("AISTACK_PLAN_DIR") or None
+PROJECT_META = os.environ.get("AISTACK_PROJECT_META") or None
+
+
 def state_dir(project):
     """Where aistack keeps everything for this project, outside the repository."""
     d = os.environ.get("AISTACK_STATE_DIR")
@@ -80,7 +85,12 @@ def state_dir(project):
 
 
 def plan_dir(project):
-    return os.path.join(state_dir(project), "plan")
+    return PLAN_DIR or os.path.join(state_dir(project), "plan")
+
+
+def meta_path(project):
+    """project.json: the work dir, branch and PR of the current plan."""
+    return PROJECT_META or os.path.join(state_dir(project), "project.json")
 
 
 def runs_dir(project):
@@ -350,7 +360,7 @@ def pr_title_and_body(prd, verify):
 def ensure_workdir(project, prd, verify=None):
     """Where the agents work. In a main checkout (AISTACK_WORKTREE_MODE=create) the first confirmed plan creates a gpr
     worktree + draft PR, later runs reuse it while it exists. Elsewhere the project itself is the work dir."""
-    meta_p = os.path.join(state_dir(project), "project.json")
+    meta_p = meta_path(project)
     meta = rj(meta_p, {})
     if meta.get("work_dir") and os.path.isdir(meta["work_dir"]):
         return meta["work_dir"], False, None
@@ -409,7 +419,7 @@ def ensure_workdir(project, prd, verify=None):
         pr_number=result.get("pr_number"),
         pr_title=title,
     )
-    os.makedirs(state_dir(project), exist_ok=True)
+    os.makedirs(os.path.dirname(meta_p), exist_ok=True)
     json.dump(meta, open(meta_p, "w"), indent=2)
     return wd, True, None
 
@@ -1431,9 +1441,7 @@ def tool_run(a):
         "run_id": rid,
         "work_dir": workdir,
         "worktree_created": created,
-        "pr_url": rj(os.path.join(state_dir(project), "project.json"), {}).get(
-            "pr_url"
-        ),
+        "pr_url": rj(meta_path(project), {}).get("pr_url"),
         "worker": cfg["worker_agent"],
         "escalate": cfg["escalate_agent"] or None,
         "fallback": cfg["fallback_agent"],
