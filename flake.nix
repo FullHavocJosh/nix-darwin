@@ -27,6 +27,7 @@
           ./nix-modules/macos/packages-laptop-only.nix
           ./nix-modules/macos/packages-devtest.nix
           ./nix-modules/macos/config.nix
+          ./nix-modules/macos/launchd-ensure.nix
           ./nix-modules/macos/personal.nix
           ./nix-modules/macos/laptop.nix
           ./nix-modules/macos/timemachine-exclusions.nix
@@ -42,6 +43,7 @@
         modules = [
           ./nix-modules/macos/packages-tui.nix
           ./nix-modules/macos/config.nix
+          ./nix-modules/macos/launchd-ensure.nix
           ./nix-modules/macos/personal.nix
           ./nix-modules/macos/desktop.nix
           ./nix-modules/macos/timemachine-exclusions.nix
@@ -59,6 +61,7 @@
           ./nix-modules/macos/packages-tui.nix
           ./nix-modules/macos/packages-gui.nix
           ./nix-modules/macos/config.nix
+          ./nix-modules/macos/launchd-ensure.nix
           ./nix-modules/macos/work.nix
           ./nix-modules/macos/llamacpp-local.nix
           nix-homebrew.darwinModules.nix-homebrew

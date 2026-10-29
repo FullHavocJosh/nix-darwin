@@ -47,6 +47,20 @@ def write_models():
     with open(path + ".tmp", "w") as fh:
         json.dump(cfg, fh, indent=1)
     os.replace(path + ".tmp", path)
+    # a builder that runs out of context must fail its attempt, not compact and lose the task (pi's overflow
+    # recovery honours compaction.enabled too)
+    path = os.path.join(AGENT_DIR, "settings.json")
+    try:
+        with open(path) as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    data["compaction"] = {**(data.get("compaction") or {}), "enabled": False}
+    with open(path + ".tmp", "w") as fh:
+        json.dump(data, fh, indent=1)
+    os.replace(path + ".tmp", path)
 
 
 def start_idle_watcher():

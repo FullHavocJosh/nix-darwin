@@ -221,7 +221,7 @@ def main():
     hr = a.Run(p, "20260101-000005")
     os.makedirs(hr.dir, exist_ok=True)
     hr.data.update(session="s", ws=dict(a.WS_OWN))
-    ralph = a.load_ralph(p)
+    ralph = a.load_ralph(p, hr)
     plan_dir = ralph.plan_dir(p)
     check("aistack's plan dir is the run's", plan_dir == hr.plan_dir, (plan_dir, hr.plan_dir))
     os.makedirs(plan_dir, exist_ok=True)

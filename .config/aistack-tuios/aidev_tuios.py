@@ -101,8 +101,9 @@ LUMO_CONFIRM_RE = re.compile(r"^[ \t*>`]*SEARCH-CONFIRMATION:[ \t*]*searched=(ye
 PLAN, RESEARCH = "plan", "research"
 # What each pane may do through tuios (tuios --skill grants). The builder can mail Claude but not type into its pane:
 # a pane types only into panes that hold nothing it does not, and Claude holds fan and files. plan holds respond so
-# `approvals` can answer a builder prompt for the user; tuios still refuses to let a pane allow a risky prompt.
-GRANTS = {PLAN: "read,write,fan,files,respond", RESEARCH: "read", "build": "read,write"}
+# `approvals` can answer a builder prompt for the user; tuios still refuses to let a pane allow a risky prompt. plan
+# also holds admin so finish can close the builder panes (close-window needs admin).
+GRANTS = {PLAN: "read,write,fan,files,respond,admin", RESEARCH: "read", "build": "read,write"}
 # Each pane's workspace: every aidev pane is on workspace 1 in a session of its own. In another session they all
 # share the nvim window's workspace, else the lowest free one (assign_workspaces). The map is kept in the run's
 # state.json as "ws".
@@ -129,22 +130,30 @@ LUMO_RESET = "/new"
 # A builder that compacts has overflowed its context: it loses file paths and decisions mid-task, so a retry on the
 # same tier rarely helps.
 COMPACT_RE = re.compile(r"\[compaction\]|Compacted from [\d,]+ tokens")
+# pi's error when the context is full and auto-compaction is off (llama.cpp's text first).
+OVERFLOW_RE = re.compile(r"exceeds the available context size|context[_ ]length[_ ]exceeded|maximum context length"
+                         r"|prompt (?:is )?too long", re.IGNORECASE)
 LIMIT_RE = re.compile(r"free usage limit reached", re.IGNORECASE)
 SHELLS = ("zsh", "bash", "sh")
 
 
 # ---- aistack, read-only --------------------------------------------------------------------------------
-def load_ralph(project=None):
+def load_ralph(project=None, run=None):
     """ralph_mcp.py from aistack, for plan validation, worktree creation, file rules and the tamer list.
     AIDEV_TUIOS_HOME becomes its AISTACK_HOME, so every state_dir() it computes is this stack's. ralph_mcp reads
-    RALPH_MCP_ROOTS at import, so `project` is set first."""
+    RALPH_MCP_ROOTS at import, so `project` is set first. With `run`, the plan dir and worktree record are that run's."""
     if project:
         os.environ["RALPH_MCP_ROOTS"] = project
     os.environ["AISTACK_HOME"] = TEST_HOME
     os.environ.pop("AISTACK_STATE_DIR", None)
+    os.environ.pop("AISTACK_PLAN_DIR", None)
+    os.environ.pop("AISTACK_PROJECT_META", None)
     spec = importlib.util.spec_from_file_location("ralph_mcp", os.path.join(AISTACK, "ralph_mcp.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    if run is not None:
+        mod.PLAN_DIR = run.plan_dir
+        mod.PROJECT_META = run.meta_path
     return mod
 
 
@@ -443,7 +452,8 @@ class Run:
         self.dir = os.path.join(runs, run_id)
         self.path = os.path.join(self.dir, "state.json")
         self.data = rj(self.path) or {"run_id": run_id, "project": project, "phase": "open", "tasks": {},
-                                      "panes": {}, "created": time.strftime("%Y-%m-%dT%H:%M:%S")}
+                                      "panes": {}, "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                      "plan_dir": os.path.join(self.dir, "plan")}
 
     def save(self):
         wj(self.path, self.data)
@@ -455,7 +465,13 @@ class Run:
 
     @property
     def plan_dir(self):
-        return os.path.join(self.state, "plan")
+        # runs started before per-run plan dirs keep the shared one
+        return self.data.get("plan_dir") or os.path.join(self.state, "plan")
+
+    @property
+    def meta_path(self):
+        """The run's worktree record, under the name ralph gives it."""
+        return os.path.join(self.dir, "project.json")
 
     @property
     def session(self):
@@ -535,7 +551,8 @@ def builder_permissions(verify, state_dir=None):
             allow.add(f"Bash({cmd})")
     deny = set(BUILDER_DENY)
     if state_dir:
-        for p in (state_dir + "/plan/**", state_dir + "/runs/*/state.json", state_dir + "/runs/*/events.jsonl"):
+        for p in (state_dir + "/plan/**", state_dir + "/runs/*/plan/**", state_dir + "/runs/*/state.json",
+                  state_dir + "/runs/*/events.jsonl"):
             deny.update(f"{tool}(//{p.lstrip('/')})" for tool in ("Edit", "MultiEdit"))
     return {"defaultMode": "acceptEdits", "allow": sorted(allow), "deny": sorted(deny)}
 
@@ -608,6 +625,14 @@ def write_build_pi(cfg):
     os.makedirs(ext, exist_ok=True)
     for name in PI_BUILD_EXTENSIONS:
         shutil.copyfile(os.path.join(HERE, name), os.path.join(ext, name))
+    # a builder that runs out of context must fail its attempt, not compact and lose the task (pi's overflow
+    # recovery honours compaction.enabled too)
+    path = os.path.join(cfg["pi_build"], "settings.json")
+    data = rj(path, {}) or {}
+    if not isinstance(data, dict):
+        data = {}
+    data["compaction"] = {**(data.get("compaction") or {}), "enabled": False}
+    wj(path, data)
     return f"coder/{le.ALIAS}"
 
 
@@ -798,7 +823,7 @@ def build_body(run, cfg, kind, name=None):
     if kind == "billed":
         pane["builder"] = f"Claude Code {CLAUDE_MODEL} (billed)"
         try:
-            verify = load_ralph(run.project).load_plan(run.project)[1]
+            verify = load_ralph(run.project, run).load_plan(run.project)[1]
         except Exception:
             verify = None
         perms = builder_permissions(verify, state_dir=run.state)
@@ -1216,7 +1241,7 @@ def size_problems(prd, root=None):
 
 
 def cmd_check_plan(run, _argv):
-    ralph = load_ralph(run.project)
+    ralph = load_ralph(run.project, run)
     prd, verify, h = ralph.load_plan(run.project)
     if prd is None and verify is None:
         print(f"no plan yet: write {run.plan_dir}/prd.json and {run.plan_dir}/verify.json")
@@ -1240,7 +1265,7 @@ def cmd_worktree(run, _argv):
     if run.data.get("work_dir"):
         print(f"work dir: {run.data['work_dir']}")
         return 0
-    ralph = load_ralph(run.project)
+    ralph = load_ralph(run.project, run)
     prd, verify, _h = ralph.load_plan(run.project)
     if ralph.validate(prd, verify):
         print("the plan is not valid yet: run check-plan first")
@@ -1559,6 +1584,25 @@ def compaction_count(session, builder):
     return len(COMPACT_RE.findall(out))
 
 
+def overflow_count(session, builder):
+    """How many context overflow errors the builder's scrollback holds."""
+    code, out, _err = tuios("capture-pane", "-s", session, "-w", builder, "--scrollback", "--lines", "600")
+    if code:
+        return 0
+    return len(OVERFLOW_RE.findall(out))
+
+
+def context_full(run, t, builder):
+    """Why the builder ran out of context in this attempt ("compacted" or "context overflow"), or ""."""
+    if not builder:
+        return ""
+    if compaction_count(run.session, builder) > t.get("compact_base", 0):
+        return "compacted"
+    if overflow_count(run.session, builder) > t.get("overflow_base", 0):
+        return "context overflow"
+    return ""
+
+
 def prepare_builder(run, builder):
     if os.environ.get("AIDEV_NO_RESET"):
         return True
@@ -1578,7 +1622,7 @@ def cmd_send_task(run, argv):
               "AIDEV_NO_RESET=1")
         return 2
     tid, note = argv[0], " ".join(argv[1:]).strip()
-    ralph = load_ralph(run.project)
+    ralph = load_ralph(run.project, run)
     prd, verify, _h = ralph.load_plan(run.project)
     stories = {s["id"]: s for s in (prd or {}).get("userStories", [])}
     builder, wd = run.data.get("builder"), run.data.get("work_dir")
@@ -1594,6 +1638,8 @@ def cmd_send_task(run, argv):
     t["attempts"] += 1
     count_attempt(t, builder)
     t["compact_base"] = compaction_count(run.session, builder)
+    t["overflow_base"] = overflow_count(run.session, builder)
+    t["compacted"] = False
     if note:
         t["notes"].append(f"- Before attempt {t['attempts']}: {note}")
     path = write_text(os.path.join(run.dir, "tasks", f"{tid}.md"),
@@ -1611,29 +1657,38 @@ def cmd_send_task(run, argv):
 
 
 def check_task(run, tid, prefix=""):
-    ralph = load_ralph(run.project)
+    ralph = load_ralph(run.project, run)
     _prd, verify, _h = ralph.load_plan(run.project)
     if tid not in (verify or {}):
         print(f"no verify commands for {tid} in the plan")
         return 1
     t = run.data["tasks"].setdefault(tid, {"status": "pending", "attempts": 0, "notes": []})
     builder = run.data.get("builder")
-    if builder and compaction_count(run.session, builder) > t.get("compact_base", 0):
+    reason = context_full(run, t, builder)
+    if reason:
         t["compacted"] = True
-        prefix += ("COMPACTED: the builder ran out of context in this task. Split the task into smaller ones, "
-                   "or run escalate.\n")
+        prefix += (f"CONTEXT FULL ({reason}): the builder ran out of context, so this attempt fails whatever the "
+                   f"checks say. Split the task, or run escalate.\n")
     out = os.path.join(run.dir, "tasks", f"{tid}-verify-{t['attempts']}.txt")
     ok, text = run_verify(verify[tid], run.data["work_dir"], out)
+    checks_ok = ok
+    ok = ok and not reason
     t["status"] = "verified" if ok else "failed"
-    if not ok:
+    if not checks_ok:
         t["notes"].append(f"- Attempt {t['attempts']}: the checks failed; output in {out}")
+    if reason:
+        t["notes"].append(f"- Attempt {t['attempts']}: the builder ran out of context ({reason}); "
+                          f"its work may be partial")
     run.event("verify", task=tid, attempt=t["attempts"], ok=ok, output=out)
     run.save()
     n = t["attempts"]
     if ok:
         snapshot_work(run, f"{tid}-attempt{n}-after")
-    print(prefix + (f"{tid}: VERIFIED ({out})" if ok else f"{tid}: CHECKS FAILED ({out})\n{text[-3000:]}")
-          + lost_warnings(run, f"{tid}-attempt{n}-before"))
+    if reason and checks_ok:
+        result = f"{tid}: FAILED, out of context; the checks passed ({out})"
+    else:
+        result = f"{tid}: VERIFIED ({out})" if ok else f"{tid}: CHECKS FAILED ({out})\n{text[-3000:]}"
+    print(prefix + result + lost_warnings(run, f"{tid}-attempt{n}-before"))
     return 0 if ok else 1
 
 
@@ -1772,6 +1827,14 @@ def finish_work(run):
         if window_named(run.session, name):
             tuios("close-window", name, "-s", run.session)
     done = {k: run.data.pop(k, None) for k in ("work_dir", "builder", "tasks", "plan_hash")}
+    meta = rj(run.meta_path)
+    if meta:  # the next piece of work gets a new worktree and PR, not this one
+        done["project"] = meta
+        os.remove(run.meta_path)
+    # a per-run plan dir is archived; the shared one of runs started before them stays put
+    if "plan_dir" in run.data and os.path.isdir(run.plan_dir):
+        os.rename(run.plan_dir, os.path.join(run.dir, "plan-done-" + time.strftime("%Y%m%d-%H%M%S")))
+        os.makedirs(run.plan_dir, exist_ok=True)
     run.data.setdefault("finished", []).append({**done, "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
     run.data["tasks"] = {}
     run.event("finish", work_dir=wd)
@@ -1926,7 +1989,7 @@ HELPERS = {"ask-lumo": cmd_ask_lumo, "check-plan": cmd_check_plan, "worktree": c
 
 
 # ---- entry points ---------------------------------------------------------------------------------------------
-def preflight():
+def preflight(opens_plan=True):
     problems = [f"{t} is not installed" for t in ("tuios", "claude", "pi", "git", "gh") if not shutil.which(t)]
     if not os.path.isfile(os.path.join(AISTACK, "ralph_mcp.py")):
         problems.append(f"{AISTACK}/ralph_mcp.py is missing (run darwin-rebuild)")
@@ -1934,6 +1997,16 @@ def preflight():
     if "agents_disabled" in out + err or "Agent features are off" in out + err:
         problems.append("tuios agent features are off: set [agents] enabled = true in ~/.config/tuios/config.toml "
                         "and run `tuios config apply` from a terminal outside tuios")
+    if opens_plan:
+        held = held_grants()
+        missing = [g for g in GRANTS[PLAN].split(",") if g not in held] if held is not None else []
+        if missing:
+            problems.append(
+                f"this pane does not hold {','.join(missing)}, so the plan pane could not close builder panes or "
+                "answer their permission prompts. Run outside tuios: tuios config apply (config.toml gives your "
+                f"shells respond), or tuios set-pane-grants -s {os.environ.get('TUIOS_SESSION', '<session>')} "
+                f"-w {os.environ.get('TUIOS_PANE_ID', '<this pane>')} --grants {','.join(sorted(held | set(missing)))}; "
+                "then start aidev again")
     return problems
 
 
@@ -1985,6 +2058,11 @@ def cmd_restore(argv):
     if not run:
         print(f"aidev restore: no run of {project} owns the plan pane in {session}", file=sys.stderr)
         return 1
+    # a session opened before the plan pane held admin and respond gets them now
+    code, _out, err = tuios("set-pane-grants", "-s", session, "-w", claude_w["window_id"], "--grants", GRANTS[PLAN])
+    if code:
+        print(f"aidev restore: {session}: the plan pane keeps its grants ({err.strip()[:200]}); run outside tuios: "
+              f"tuios set-pane-grants -s {session} -w plan --grants {GRANTS[PLAN]}", file=sys.stderr)
     WS.update(run.data.get("ws") or {})
     for name in (PLAN, RESEARCH):
         pane = run.data["panes"].get(name) or {}
@@ -2120,20 +2198,21 @@ def cmd_handoff(argv):
     if window_named(session, PLAN) and (not live or live.data.get("work_dir")):
         return done(problem=f"the plan pane in {session} is still on a plan: finish it first (aidev_status)"
                     if live else f"{session} has a plan pane that no aidev run owns")
-    problems = preflight()
+    problems = preflight(opens_plan=not live)
     if problems:
         return done(problem="; ".join(problems))
-    plan_dir = ralph.plan_dir(project)
+    run = live or Run(project, time.strftime("%Y%m%d-%H%M%S"))
+    plan_dir = run.plan_dir
     os.makedirs(plan_dir, exist_ok=True)
     wj(os.path.join(plan_dir, "prd.json"), prd)
     wj(os.path.join(plan_dir, "verify.json"), verify)
     os.environ["AISTACK_WORKTREE_MODE"] = os.environ.get("AIDEV_TUIOS_WORKTREE_MODE") or (
         "create" if is_main_checkout(project) else "none")
     os.environ["AISTACK_TIERS"] = "aidev: Claude Code backbone, Lumo research, free builder"
+    ralph = load_ralph(project, run)
     wd, created, err = ralph.ensure_workdir(project, prd, verify)
     if err:
         return done(problem=err)
-    run = live or Run(project, time.strftime("%Y%m%d-%H%M%S"))
     run.data.update(work_dir=wd, handoff=src, tasks={})
     run.event("handoff", source=src, work_dir=wd, created=created)
     task = (f"The user approved the plan handed off from {src} in the session that wrote it. It is now in {plan_dir}, "
@@ -2148,7 +2227,7 @@ def cmd_handoff(argv):
         err = open_run(run, session, own, running, task)
         if err:
             return done(problem=err)
-    meta = rj(os.path.join(state_dir(project), "project.json"), {}) or {}
+    meta = rj(run.meta_path, {}) or {}
     return done(started=True, run_id=run.id, session=session, work_dir=wd, pr_url=meta.get("pr_url"),
                 plan_dir=plan_dir, follow=f"aidev in {project} attaches to {session}; aidev_status shows the tasks")
 

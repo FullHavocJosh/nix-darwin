@@ -48,6 +48,8 @@ def main():
     check("respond is in plan grants", "respond" in a.GRANTS[a.PLAN].split(","))
     check("respond is not in build grants", "respond" not in a.GRANTS["build"].split(","))
     check("respond is not in research grants", "respond" not in a.GRANTS[a.RESEARCH].split(","))
+    check("admin is in plan grants", "admin" in a.GRANTS[a.PLAN].split(","))
+    check("admin is not in build grants", "admin" not in a.GRANTS["build"].split(","))
 
     print("grants the launcher can give")
     held = [{"pane": True, "grants": ["read", "write", "files", "admin"]}]
@@ -57,7 +59,7 @@ def main():
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
             got = a.grantable("s", a.PLAN, a.GRANTS[a.PLAN])
-        check("admin gives fan, respond is left out", got == "read,write,fan,files", got)
+        check("admin gives fan and admin, respond is left out", got == "read,write,fan,files,admin", got)
         check("left-out grant is named with the fix", "respond" in err.getvalue()
               and "set-pane-grants -w plan -s s" in err.getvalue(), err.getvalue())
         held[0] = {"pane": True, "grants": ["read", "write", "files", "admin", "respond"]}
@@ -69,6 +71,29 @@ def main():
         check("outside a pane: grants unchanged", a.grantable("s", a.PLAN, a.GRANTS[a.PLAN]) == a.GRANTS[a.PLAN])
     finally:
         a.tuios_json = real
+
+    print("preflight and respond")
+    held = [["read", "write", "files", "admin"]]
+    real = (a.tuios_json, a.shutil.which, a.tuios)
+    a.tuios_json = lambda *args, **kw: {"pane": True, "grants": held[0]} if args and args[0] == "pane-grants" else {}
+    a.shutil.which = lambda t: "/bin/x"
+    a.tuios = lambda *args, **kw: (0, "", "")
+    try:
+        got = a.preflight()
+        check("lacking respond: refused with the fix",
+              any("respond" in p and "set-pane-grants" in p for p in got), got)
+        held[0] = ["read", "write", "files", "admin", "respond"]
+        got = a.preflight()
+        check("holding respond: no respond problem", not any("respond" in p for p in got), got)
+        held[0] = ["read", "write", "files", "admin"]
+        got = a.preflight(opens_plan=False)
+        check("no plan pane opens: no respond problem", not any("respond" in p for p in got), got)
+        held[0] = ["read", "write", "fan", "files", "respond"]
+        got = a.preflight()
+        check("lacking admin: refused with the fix",
+              any("admin" in p and "set-pane-grants" in p for p in got), got)
+    finally:
+        a.tuios_json, a.shutil.which, a.tuios = real
 
     print("workspaces")
     names = list(a.BUILDERS.values())
@@ -277,7 +302,7 @@ def main():
             "claude_backbone": os.path.join(bdir, "backbone.json")}
     brun = a.Run(p, "20260101-000002")
     real_ld, real_gg = a.load_ralph, a.write_git_guard
-    a.load_ralph = lambda project=None: type("R", (), {"load_plan": lambda self, proj: (None, {"T1": ["python3 t.py"]}, "h")})()
+    a.load_ralph = lambda project=None, run=None: type("R", (), {"load_plan": lambda self, proj: (None, {"T1": ["python3 t.py"]}, "h")})()
     a.write_git_guard = lambda r: a.write_text(os.path.join(r.dir, "bin", "guard", "git"), "")
     try:
         a.build_body(brun, bcfg, "billed")
@@ -766,6 +791,22 @@ def main():
         check("fallback types /exit into free pane", any("/exit" in " ".join(c) for c in ftuios), ftuios)
     finally:
         a.zen_status, a.restart_free_pane, a.cmd_builder, a.tuios = freal
+
+    print("restore re-grants the plan pane")
+    rp = os.path.realpath(tempfile.mkdtemp(prefix="aidev-test-restore-"))
+    a.subprocess.run(["git", "init", "-q", rp], check=False)
+    rcalls = []
+    rrun = type("R", (), {"data": {"panes": {}, "ws": {}}, "project": rp})()
+    rreal = (a.window_named, a.session_run, a.tuios)
+    a.window_named = lambda s, n: {"window_id": "w1", "cwd": rp} if n == a.PLAN else None
+    a.session_run = lambda project, session: rrun
+    a.tuios = lambda *args, **kw: (rcalls.append(args) or (0, "", ""))
+    try:
+        code = a.cmd_restore(["s"])
+        check("restore sets the plan grants on the plan window", code == 0 and
+              ("set-pane-grants", "-s", "s", "-w", "w1", "--grants", a.GRANTS[a.PLAN]) in rcalls, (code, rcalls))
+    finally:
+        a.window_named, a.session_run, a.tuios = rreal
 
     if FAILS:
         print("FAILED: " + ", ".join(FAILS))
