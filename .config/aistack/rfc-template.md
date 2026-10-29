@@ -3,7 +3,7 @@ title: <short, specific title of the change>
 status: draft
 author: <who is writing this RFC>
 date: YYYY-MM-DD
-touches: <comma-separated repo-relative paths this RFC covers, e.g. .config/aistack/ralph_mcp.py>
+touches: <comma-separated repo-relative paths this RFC covers, e.g. .zshrc_functions_tuios>
 ---
 
 <!-- status is one of: draft, review, approved, implemented -->
@@ -57,11 +57,9 @@ An RFC is required for changes to:
 
 - the research budget or the tools' file handling limits (for example the 16-call cap, the file size and line-range
   rules);
-- the ralph_plan / ralph_run flow;
 - billed-call patterns (when and how often a billed Claude call happens);
 - tier assignment (which model serves which tier);
 - verify / harness rules (what makes a task count as done);
-- planner-prompt.md hard rules.
 
 An RFC is NOT required for bug fixes, tests, docs, and wording-only prompt edits.
 
@@ -70,5 +68,5 @@ An RFC is NOT required for bug fixes, tests, docs, and wording-only prompt edits
 RFCs live in `.config/aistack/rfcs/NNNN-slug.md`, numbered in order and named with a short slug (for example
 `.config/aistack/rfcs/0003-research-budget.md`). Start from `../rfc-template.md`.
 
-Status moves `draft -> review -> approved -> implemented`. Only approved or implemented RFCs satisfy `rfc_check.py`;
+Status moves `draft -> review -> approved -> implemented`. Only an approved or implemented RFC counts;
 a draft or review RFC does not gate anything. Move the status in the frontmatter as the RFC progresses.

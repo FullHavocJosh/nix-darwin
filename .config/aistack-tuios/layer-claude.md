@@ -27,15 +27,17 @@ Run them with Bash. They are allowed without a prompt. Each prints what happened
   writes `PLAN.txt`.
 - `@@HELPER@@ worktree`: creates the gpr worktree and draft PR for the plan (in a main checkout), and prints the
   work dir.
-- `@@HELPER@@ builder [local|free|billed]`: opens a builder pane in the work dir. Without an argument it opens the
+- `@@HELPER@@ builder [local|free|billed] [--approved]`: opens a builder pane in the work dir. Without an argument it opens the
   30B where it exists, else the free Zen model. `30b`, `pickle` and `claude` still work. `billed` is billed: it asks
-  the user in the tuios Inbox first.
+  the user in the tuios Inbox first. `--approved` skips the Inbox question for billed; use it only after the user
+  said yes to billed in this conversation.
 - `@@HELPER@@ zen-check [--refresh]`: reports which free Zen models can be used now (cached). Exit 0 means one is
   available, 1 means exhausted or none, 3 means unknown.
 - `@@HELPER@@ escalate <id>`: moves task `<id>` to the next higher builder (local, free, billed) once the failed
   attempts at its tier reach the limit. It prints the next builder, or says there is no higher builder.
-- `@@HELPER@@ send-task <id> ['<note>']`: writes the task file, mails it to the builder and types it the task. The
-  note goes into the task file: use it for guidance after a failed attempt.
+- `@@HELPER@@ send-task <id> [--to local|free|billed] ['<note>']`: writes the task file, mails it to the builder and
+  types it the task. The note goes into the task file: use it for guidance after a failed attempt. `--to` sends to
+  that open builder without making it the default, so different builders can work at once.
 - `@@HELPER@@ wait-task <id> [seconds]`: waits for the builder's reply (540 s by default), then runs the task's
   verify commands and prints VERIFIED or CHECKS FAILED with the output. Exit 3 means no reply yet: run it again.
 - `@@HELPER@@ verify <id>`: runs the task's verify commands again.
@@ -91,6 +93,9 @@ Atlassian call may need the user to log in once with `/mcp`.
    `escalate` says there is no higher builder, ask the user: retry with guidance or skip. Never send-task while the
    builder works; send-task waits for rest, resets the context with /new or /clear and refuses when it cannot; then wait
    for idle and run it again; never set AIDEV_NO_RESET.
+   Tasks that touch different files may run at once on different builders: `send-task --to`, then `wait-task` each
+   in the background. Never run two tasks on one file at once. While a helper blocks, poll the builder pane every 5 s
+   (capture-pane) and report stalls at once.
 4. **Review.** When every task is verified, review the whole change yourself: `git -C <work dir> status` and
    `git -C <work dir> diff`, plus the untracked files. Judge security, accuracy against each task, and completeness
    (every acceptance criterion, meaningful tests). Report to the user: file and line, what is wrong, why, and how to
@@ -106,6 +111,10 @@ Atlassian call may need the user to log in once with `/mcp`.
 
 The user watches the research and builder panes (workspace 1) and corrects them live. So after every reply from
 another agent, stop and hand it to the user before you act on it:
+
+Once the user approved the plan, run every task to the end: report each wait-task result in one line and go on. Stop
+and ask only on CHECKS FAILED that a note cannot fix, an approval prompt, an escalation to billed, or anything outside
+the plan. Keep the Report/Ask/Watch steps for Lumo replies and for planning.
 
 1. **Report.** After each `ask-lumo` reply: Lumo's answer in a few lines, with its sources and the queries it confirmed. After a REJECTED reply, tell the user and ask whether to ask again later
    or go on without it. After each `wait-task`

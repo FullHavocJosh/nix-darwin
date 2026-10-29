@@ -21,4 +21,3 @@ homebrew\.mxcl\..*\.plist$
 LaunchDaemons$
 ^opencode\.json$
 ^\.aistack$
-^\.ralph-tui$

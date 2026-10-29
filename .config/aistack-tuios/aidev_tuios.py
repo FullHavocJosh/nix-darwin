@@ -20,7 +20,9 @@ Helpers the Claude pane runs from its own pane (so with its grants; AIDEV_TUIOS_
     ask-lumo <question...>        type the question to the Lumo pane (tuios ask-agent) and print its whole reply
     check-plan                    check plan/prd.json and plan/verify.json with aistack's rules
     worktree                      create the gpr worktree and draft PR for the plan (main checkout only)
-    builder [local|free|billed]   open a builder pane in the work dir; billed costs money and asks you first
+    builder [local|free|billed] [--approved]
+                                  open a builder pane in the work dir; billed costs money and asks you first
+                                  unless --approved (the user already approved it in the plan pane's chat)
     send-task <id> [note...]      reset the builder's context (AIDEV_NO_RESET=1 skips), write the task file,
                                   mail it to the builder and tell it to start
     wait-task <id> [seconds]      wait for the builder's reply, then run the task's verify commands
@@ -50,6 +52,8 @@ Rules the design rests on:
   - A billed builder starts only after you say yes in the tuios Inbox (ask-human).
 """
 
+import copy
+import fcntl
 import hashlib
 import importlib.util
 import json
@@ -137,17 +141,15 @@ SHELLS = ("zsh", "bash", "sh")
 
 
 # ---- aistack, read-only --------------------------------------------------------------------------------
-def load_ralph(project=None, run=None):
-    """ralph_mcp.py from aistack, for plan validation, worktree creation, file rules and the tamer list.
-    AIDEV_TUIOS_HOME becomes its AISTACK_HOME, so every state_dir() it computes is this stack's. ralph_mcp reads
-    RALPH_MCP_ROOTS at import, so `project` is set first. With `run`, the plan dir and worktree record are that run's."""
-    if project:
-        os.environ["RALPH_MCP_ROOTS"] = project
+def load_lib(project=None, run=None):
+    """aidev_lib.py from aistack: plan validation, worktree creation and the Lumo endpoint list.
+    AIDEV_TUIOS_HOME becomes its AISTACK_HOME, so every state_dir() it computes is this stack's. With run, the plan
+    dir and worktree record are that run's."""
     os.environ["AISTACK_HOME"] = TEST_HOME
     os.environ.pop("AISTACK_STATE_DIR", None)
     os.environ.pop("AISTACK_PLAN_DIR", None)
     os.environ.pop("AISTACK_PROJECT_META", None)
-    spec = importlib.util.spec_from_file_location("ralph_mcp", os.path.join(AISTACK, "ralph_mcp.py"))
+    spec = importlib.util.spec_from_file_location("aidev_lib", os.path.join(AISTACK, "aidev_lib.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     if run is not None:
@@ -161,7 +163,7 @@ def find_lumo():
     public endpoint), or None. AIDEV_TUIOS_LUMO=off opens no Lumo pane."""
     if os.environ.get("AIDEV_TUIOS_LUMO") == "off":
         return None
-    return next(load_ralph().tamer_endpoints(), None)
+    return next(load_lib().tamer_endpoints(), None)
 
 
 # ---- tuios ----------------------------------------------------------------------------------------------------
@@ -446,9 +448,38 @@ class Run:
         self.data = rj(self.path) or {"run_id": run_id, "project": project, "phase": "open", "tasks": {},
                                       "panes": {}, "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
                                       "plan_dir": os.path.join(self.dir, "plan")}
+        self._base = copy.deepcopy(self.data)
 
     def save(self):
-        wj(self.path, self.data)
+        """Write the state, merging with whatever another helper saved meanwhile: top-level keys this instance
+        changed win, the rest comes from disk, and tasks merge one by one."""
+        os.makedirs(self.dir, exist_ok=True)
+        with open(self.path + ".lock", "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                disk = rj(self.path)
+                if not isinstance(disk, dict):
+                    disk = {}
+                base_tasks = self._base.get("tasks") or {}
+                merged = {}
+                for key in set(self.data) | set(disk):
+                    if key == "tasks":
+                        continue
+                    mine = self.data.get(key)
+                    if key in disk and mine == self._base.get(key):
+                        merged[key] = disk[key]
+                    elif key in self.data:  # changed here, or new; a key this instance dropped stays dropped
+                        merged[key] = mine
+                tasks = dict(disk.get("tasks") or {})
+                for tid, task in (self.data.get("tasks") or {}).items():
+                    if task != base_tasks.get(tid):
+                        tasks[tid] = task
+                merged["tasks"] = tasks
+                wj(self.path, merged)
+                self.data = copy.deepcopy(merged)
+                self._base = copy.deepcopy(merged)
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
 
     def event(self, kind, **kw):
         os.makedirs(self.dir, exist_ok=True)
@@ -462,7 +493,7 @@ class Run:
 
     @property
     def meta_path(self):
-        """The run's worktree record, under the name ralph gives it."""
+        """The run's worktree record, under the name aidev_lib gives it."""
         return os.path.join(self.dir, "project.json")
 
     @property
@@ -815,7 +846,7 @@ def build_body(run, cfg, kind, name=None):
     if kind == "billed":
         pane["builder"] = f"Claude Code {CLAUDE_MODEL} (billed)"
         try:
-            verify = load_ralph(run.project, run).load_plan(run.project)[1]
+            verify = load_lib(run.project, run).load_plan(run.project)[1]
         except Exception:
             verify = None
         perms = builder_permissions(verify, state_dir=run.state)
@@ -870,13 +901,20 @@ def start_builder(run, kind, name, ws, cwd):
     if not body:
         return False, f"no {kind} builder: {no_builder_why(kind)}"
     script = write_script(run, name, body)
+    # free builders get a short ready timeout: OpenCode v2 never loads the TUI part of the tuios state plugin, so
+    # start-agent cannot see state and oc_ready reads the ready footer instead
+    ready_timeout, timeout = ("20000", 40) if kind == "free" else ("300000", 330)
     code, out, err = tuios("start-agent", f"/bin/zsh {script}", "-s", run.session, "--name", name,
                            "--grants", GRANTS["build"], "--cwd", cwd, "--workspace", str(ws),
-                           "--ready-timeout", "300000", timeout=330)
+                           "--ready-timeout", ready_timeout, timeout=timeout)
+    note = ""
+    if code != 0 and kind == "free" and oc_ready(run.session, name, 90):
+        note = f"ready footer seen (start-agent exit {code}); "
+        code = 0
     run.data["panes"][name].update(script=script, cwd=cwd, grants=GRANTS["build"])
     run.event("builder", name=name, ok=code == 0)
     run.save()
-    return code == 0, (f"{name}: {run.data['panes'][name].get('builder')}. start-agent (exit {code}): "
+    return code == 0, (f"{name}: {run.data['panes'][name].get('builder')}. start-agent (exit {code}): {note}"
                        f"{(out or err).strip()[-500:]}")
 
 
@@ -1233,12 +1271,12 @@ def size_problems(prd, root=None):
 
 
 def cmd_check_plan(run, _argv):
-    ralph = load_ralph(run.project, run)
-    prd, verify, h = ralph.load_plan(run.project)
+    lib = load_lib(run.project, run)
+    prd, verify, h = lib.load_plan(run.project)
     if prd is None and verify is None:
         print(f"no plan yet: write {run.plan_dir}/prd.json and {run.plan_dir}/verify.json")
         return 1
-    problems = ralph.validate(prd, verify)
+    problems = lib.validate(prd, verify)
     if problems:
         print("the plan has problems; fix them in the files:\n" + "\n".join(f"- {p}" for p in problems))
         return 1
@@ -1246,7 +1284,7 @@ def cmd_check_plan(run, _argv):
     if big:
         print("plan too big for the 30B builder:\n" + "\n".join(f"- {p}" for p in big))
         return 1
-    path = ralph.save_plan_text(run.project, ralph.present_plan(prd, verify))
+    path = lib.save_plan_text(run.project, lib.present_plan(prd, verify))
     run.data["plan_hash"] = h
     run.save()
     print(f"plan ok: {len(prd['userStories'])} task(s), in order {', '.join(task_order(prd))}. Show the user {path}.")
@@ -1257,15 +1295,15 @@ def cmd_worktree(run, _argv):
     if run.data.get("work_dir"):
         print(f"work dir: {run.data['work_dir']}")
         return 0
-    ralph = load_ralph(run.project, run)
-    prd, verify, _h = ralph.load_plan(run.project)
-    if ralph.validate(prd, verify):
+    lib = load_lib(run.project, run)
+    prd, verify, _h = lib.load_plan(run.project)
+    if lib.validate(prd, verify):
         print("the plan is not valid yet: run check-plan first")
         return 1
     os.environ["AISTACK_WORKTREE_MODE"] = os.environ.get("AIDEV_TUIOS_WORKTREE_MODE") or (
         "create" if is_main_checkout(run.project) else "none")
     os.environ["AISTACK_TIERS"] = "aidev: Claude Code backbone, Lumo research, free builder"
-    wd, created, err = ralph.ensure_workdir(run.project, prd, verify)
+    wd, created, err = lib.ensure_workdir(run.project, prd, verify)
     if err:
         print(f"creating the worktree failed: {err}")
         return 1
@@ -1277,9 +1315,11 @@ def cmd_worktree(run, _argv):
 
 
 def cmd_builder(run, argv):
+    approved = "--approved" in argv
+    argv = [w for w in argv if w != "--approved"]
     kind = norm_kind(argv[0]) if argv else ("local" if os.path.isfile(CODER_FILE) else "free")
     if kind not in BUILDERS:
-        print(f"usage: builder [{'|'.join(BUILDERS)}]")
+        print(f"usage: builder [{'|'.join(BUILDERS)}] [--approved]")
         return 2
     name, wd = BUILDERS[kind], run.data.get("work_dir")
     if not wd:
@@ -1290,8 +1330,10 @@ def cmd_builder(run, argv):
         run.save()
         print(f"{name} is already open; it is the builder now")
         return 0
-    if kind == "billed" and ask_human(run.session, "aidev: build with Claude Code (billed)?",
-                                      ["yes", "no"]) != "yes":
+    if kind == "billed" and approved:
+        run.event("billed_approved", by="plan pane")
+    elif kind == "billed" and ask_human(run.session, "aidev: build with Claude Code (billed)?",
+                                        ["yes", "no"]) != "yes":
         print("the user said no to a billed builder")
         return 1
     if kind == "free" and not zen_usable(s := zen_status(run)):
@@ -1332,9 +1374,23 @@ def pane_text(session, name, lines=15):
     return out or ""
 
 
+def oc_ready(session, name, wait=90):
+    """True when pane `name` shows the OpenCode ready footer ('ctrl+p menu' without 'esc interrupt') within `wait`
+    seconds: oc_ready polls pane_text every 2 s. OpenCode v2 never loads the TUI part of the tuios state plugin, so
+    the footer is the only ready signal the free builder gives."""
+    deadline = time.time() + wait
+    while True:
+        text = pane_text(session, name) or ""
+        if "ctrl+p menu" in text and "esc interrupt" not in text:
+            return True
+        if time.time() >= deadline:
+            return False
+        time.sleep(2)
+
+
 def restart_free_pane(run, model=None, wait=90):
     """Restart the free builder pane in place: exit opencode, then retype its script. Returns True when the ready
-    footer ('ctrl+p menu', without 'esc interrupt') shows up within `wait` seconds."""
+    footer ('ctrl+p menu', without 'esc interrupt') shows up within `wait` seconds, see oc_ready()."""
     name = BUILDERS["free"]
     try:
         session = run.session
@@ -1360,14 +1416,7 @@ def restart_free_pane(run, model=None, wait=90):
     # start it again
     tuios("send-text", "-s", session, "-w", name, "zsh " + str(script))
     tuios("send-keys", "-s", session, "-w", name, "Enter")
-    deadline = time.time() + wait
-    while True:
-        text = pane_text(session, name) or ""
-        if "ctrl+p menu" in text and "esc interrupt" not in text:
-            return True
-        if time.time() >= deadline:
-            return False
-        time.sleep(2)
+    return oc_ready(session, name, wait)
 
 
 def count_attempt(t, builder):
@@ -1610,14 +1659,21 @@ def prepare_builder(run, builder):
 
 def cmd_send_task(run, argv):
     if not argv:
-        print("usage: send-task <id> [note for the builder]; resets the builder's context first unless "
-              "AIDEV_NO_RESET=1")
+        print("usage: send-task <id> [--to local|free|billed] [note for the builder]; resets the builder's "
+              "context first unless AIDEV_NO_RESET=1")
         return 2
-    tid, note = argv[0], " ".join(argv[1:]).strip()
-    ralph = load_ralph(run.project, run)
-    prd, verify, _h = ralph.load_plan(run.project)
-    stories = {s["id"]: s for s in (prd or {}).get("userStories", [])}
+    tid, rest = argv[0], argv[1:]
     builder, wd = run.data.get("builder"), run.data.get("work_dir")
+    if rest and rest[0] == "--to":
+        kind = norm_kind(rest[1] if len(rest) > 1 else "")
+        if not kind:
+            print("usage: send-task <id> [--to local|free|billed] [note for the builder]")
+            return 2
+        builder, rest = BUILDERS[kind], rest[2:]
+    note = " ".join(rest).strip()
+    lib = load_lib(run.project, run)
+    prd, verify, _h = lib.load_plan(run.project)
+    stories = {s["id"]: s for s in (prd or {}).get("userStories", [])}
     if tid not in stories or tid not in (verify or {}):
         print(f"no task {tid} in the plan")
         return 1
@@ -1632,6 +1688,7 @@ def cmd_send_task(run, argv):
     t["compact_base"] = compaction_count(run.session, builder)
     t["overflow_base"] = overflow_count(run.session, builder)
     t["compacted"] = False
+    t["builder"] = builder
     if note:
         t["notes"].append(f"- Before attempt {t['attempts']}: {note}")
     path = write_text(os.path.join(run.dir, "tasks", f"{tid}.md"),
@@ -1649,13 +1706,13 @@ def cmd_send_task(run, argv):
 
 
 def check_task(run, tid, prefix=""):
-    ralph = load_ralph(run.project, run)
-    _prd, verify, _h = ralph.load_plan(run.project)
+    lib = load_lib(run.project, run)
+    _prd, verify, _h = lib.load_plan(run.project)
     if tid not in (verify or {}):
         print(f"no verify commands for {tid} in the plan")
         return 1
     t = run.data["tasks"].setdefault(tid, {"status": "pending", "attempts": 0, "notes": []})
-    builder = run.data.get("builder")
+    builder = t.get("builder") or run.data.get("builder")
     reason = context_full(run, t, builder)
     if reason:
         t["compacted"] = True
@@ -1691,7 +1748,7 @@ def cmd_wait_task(run, argv):
     tid = argv[0]
     limit = int(argv[1]) if len(argv) > 1 else 540
     t = run.data["tasks"].get(tid) or {}
-    me, builder = os.environ.get("TUIOS_PANE_ID") or PLAN, run.data.get("builder")
+    me, builder = os.environ.get("TUIOS_PANE_ID") or PLAN, t.get("builder") or run.data.get("builder")
     if not t.get("thread"):
         print(f"{tid} was not sent: run send-task {tid}")
         return 1
@@ -1983,8 +2040,8 @@ HELPERS = {"ask-lumo": cmd_ask_lumo, "check-plan": cmd_check_plan, "worktree": c
 # ---- entry points ---------------------------------------------------------------------------------------------
 def preflight(opens_plan=True):
     problems = [f"{t} is not installed" for t in ("tuios", "claude", "pi", "git", "gh") if not shutil.which(t)]
-    if not os.path.isfile(os.path.join(AISTACK, "ralph_mcp.py")):
-        problems.append(f"{AISTACK}/ralph_mcp.py is missing (run darwin-rebuild)")
+    if not os.path.isfile(os.path.join(AISTACK, "aidev_lib.py")):
+        problems.append(f"{AISTACK}/aidev_lib.py is missing (run darwin-rebuild)")
     _code, out, err = tuios("list-agents", "--json")
     if "agents_disabled" in out + err or "Agent features are off" in out + err:
         problems.append("tuios agent features are off: set [agents] enabled = true in ~/.config/tuios/config.toml "
@@ -2174,8 +2231,8 @@ def cmd_handoff(argv):
     if not isinstance(prd, dict) or not isinstance(verify, dict):
         return done(problem=f"{src} needs prd.json and verify.json (see /aidev-handoff)")
     project = project_root(os.getcwd())
-    ralph = load_ralph(project)
-    problems = ralph.validate(prd, verify)
+    lib = load_lib(project)
+    problems = lib.validate(prd, verify)
     if problems:
         return done(problems=problems)
     session, own, running, err = where_to_run(project)
@@ -2197,8 +2254,8 @@ def cmd_handoff(argv):
     os.environ["AISTACK_WORKTREE_MODE"] = os.environ.get("AIDEV_TUIOS_WORKTREE_MODE") or (
         "create" if is_main_checkout(project) else "none")
     os.environ["AISTACK_TIERS"] = "aidev: Claude Code backbone, Lumo research, free builder"
-    ralph = load_ralph(project, run)
-    wd, created, err = ralph.ensure_workdir(project, prd, verify)
+    lib = load_lib(project, run)
+    wd, created, err = lib.ensure_workdir(project, prd, verify)
     if err:
         return done(problem=err)
     run.data.update(work_dir=wd, handoff=src, tasks={})

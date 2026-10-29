@@ -35,7 +35,7 @@ for module, expr, want in (
     ("edit_router_hook", "m.STATE_DIR", "/aih/guard/edit-router"),
     ("local_edit_mcp", "m.STATE", "/aih/cache/local-edit"),
     ("coder_pi", "m.AGENT_DIR", "/aih/cache/aistack-pi-coder"),
-    ("ralph_mcp", "m.state_dir('/p/x')", "/aih/aidev/x-"),
+    ("aidev_lib", "m.state_dir('/p/x')", "/aih/aidev/x-"),
 ):
     got = py(expr, module)
     check(module, got.startswith(H + want), got)

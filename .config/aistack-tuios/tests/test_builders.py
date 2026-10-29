@@ -301,13 +301,13 @@ def main():
     bcfg = {"claude_settings": src_settings, "claude_mcp": os.path.join(tmp, "mcp.json"),
             "claude_backbone": os.path.join(bdir, "backbone.json")}
     brun = a.Run(p, "20260101-000002")
-    real_ld, real_gg = a.load_ralph, a.write_git_guard
-    a.load_ralph = lambda project=None, run=None: type("R", (), {"load_plan": lambda self, proj: (None, {"T1": ["python3 t.py"]}, "h")})()
+    real_ld, real_gg = a.load_lib, a.write_git_guard
+    a.load_lib = lambda project=None, run=None: type("R", (), {"load_plan": lambda self, proj: (None, {"T1": ["python3 t.py"]}, "h")})()
     a.write_git_guard = lambda r: a.write_text(os.path.join(r.dir, "bin", "guard", "git"), "")
     try:
         a.build_body(brun, bcfg, "billed")
     finally:
-        a.load_ralph, a.write_git_guard = real_ld, real_gg
+        a.load_lib, a.write_git_guard = real_ld, real_gg
     bperms = a.rj(os.path.join(bdir, "builder.json"), {}).get("permissions", {})
     check("billed builder.json carries the generated policy",
           bperms.get("defaultMode") == "acceptEdits" and "Bash(python3 t.py)" in bperms.get("allow", [])

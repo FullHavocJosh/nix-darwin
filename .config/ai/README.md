@@ -21,7 +21,6 @@ ainfo's sandbox all refuse it: a model that could write there could switch off t
 Ask any session for an RFC and it lands in `rfcs/`:
 
 - ainfo: "write an RFC for this"; the relay calls `ainfo_rfc` (Claude writes it, the bridge saves it).
-- aidev: "save this as an RFC"; the relay calls `ralph_save_rfc` (the current plan is attached).
 - ai, Claude Code, OpenCode, pi: the model writes the file itself.
 
 Start from one anywhere: point the session at the file, or run `aidev --rfc <name>` (a bare name is looked up here).

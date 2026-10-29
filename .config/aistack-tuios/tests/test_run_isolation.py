@@ -1,6 +1,6 @@
 """Tests that concurrent aidev runs of one project stay apart: each run keeps its plan dir and its worktree record
-(project.json) under runs/<id>/, ralph sees that run's, finish archives both, and runs started before per-run plan
-dirs keep the shared one. Needs no tuios daemon, no model and no network. Uses this checkout's ralph_mcp.py.
+(project.json) under runs/<id>/, aidev_lib sees that run's, finish archives both, and runs started before per-run plan
+dirs keep the shared one. Needs no tuios daemon, no model and no network. Uses this checkout's aidev_lib.py.
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_run_isolation.py
 """
 import importlib.util
@@ -49,19 +49,19 @@ def main():
     got = a.Run(p, "20260101-000003").plan_dir
     check("a run without plan_dir keeps the shared plan dir", got == os.path.join(rA.state, "plan"), got)
 
-    print("ralph sees the run's paths")
-    m = a.load_ralph(p, rA)
-    check("ralph's plan dir is the run's", m.plan_dir(p) == rA.plan_dir, m.plan_dir(p))
-    check("ralph's worktree record is the run's", m.meta_path(p) == rA.meta_path, m.meta_path(p))
-    got = a.load_ralph(p).plan_dir(p)
-    check("without a run ralph uses the shared plan dir", got == os.path.join(rA.state, "plan"), got)
+    print("aidev_lib sees the run's paths")
+    m = a.load_lib(p, rA)
+    check("aidev_lib's plan dir is the run's", m.plan_dir(p) == rA.plan_dir, m.plan_dir(p))
+    check("aidev_lib's worktree record is the run's", m.meta_path(p) == rA.meta_path, m.meta_path(p))
+    got = a.load_lib(p).plan_dir(p)
+    check("without a run aidev_lib uses the shared plan dir", got == os.path.join(rA.state, "plan"), got)
 
     print("worktree record per run")
     x = os.path.realpath(tempfile.mkdtemp(prefix="aidev-test-wt-"))
     a.wj(rA.meta_path, {"work_dir": x})
-    got = a.load_ralph(p, rA).ensure_workdir(p, {"name": "n"})[0]
+    got = a.load_lib(p, rA).ensure_workdir(p, {"name": "n"})[0]
     check("run A reuses its own work dir", got == x, got)
-    got = a.load_ralph(p, rB).ensure_workdir(p, {"name": "n"})[0]
+    got = a.load_lib(p, rB).ensure_workdir(p, {"name": "n"})[0]
     check("run B does not reuse run A's work dir", got == p, got)
 
     print("finish_work")

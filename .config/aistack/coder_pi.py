@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""aidev's free builder: pi on the on-device Qwen3-Coder-30B-A3B (RFC 0002).
+"""aidev's free builder: pi on the on-device Qwen3-Coder-30B-A3B.
 
-Ralph runs this as the `pi` agent's command (agent `coder-30b` in the run's config.toml) with pi's own arguments
+aidev's build-local pane runs this (with --hold) with pi's own arguments
 (`--print --mode json --model coder/qwen3-coder-30b ...`) and the task prompt on stdin. It:
 
   - shares the 30B with the local-edit MCP server (local_edit_mcp.py): the same llama-server on port 8082, the same
@@ -99,7 +99,7 @@ def main(argv):
 
             threading.Thread(target=keep_alive, daemon=True).start()
             env = dict(os.environ) if hold else {**os.environ, "PI_CODING_AGENT_DIR": AGENT_DIR}
-            # stdin (the task prompt) and stdout (pi's JSON events for Ralph) pass straight through
+            # stdin (the task prompt) and stdout (pi's output) pass straight through
             rc = subprocess.run(cmd, env=env).returncode
             stop.set()
             le.touch_last()

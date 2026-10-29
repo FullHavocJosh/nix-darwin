@@ -5,9 +5,9 @@ in
 {
   system.primaryUser = "havoc";
 
-  # Model and effort for aistack's Claude Code calls (claude-work.sh, claude-review.sh and the ralph agents in
-  # aistack_func). Chosen per profile because work and personal use different Anthropic plans with different token
-  # costs (work.nix sets Opus at high effort). Per-session override: export AISTACK_CLAUDE_MODEL / AISTACK_CLAUDE_EFFORT.
+  # Model and effort for aidev's Claude Code backbone (aidev_tuios.py falls back to AISTACK_CLAUDE_MODEL /
+  # AISTACK_CLAUDE_EFFORT). Chosen per profile because work and personal use different Anthropic plans with different
+  # token costs (work.nix sets Opus at high effort). Per-session override: export AISTACK_CLAUDE_MODEL / AISTACK_CLAUDE_EFFORT.
   environment.variables.AISTACK_CLAUDE_MODEL = "claude-sonnet-5-5";
   environment.variables.AISTACK_CLAUDE_EFFORT = "medium";
 

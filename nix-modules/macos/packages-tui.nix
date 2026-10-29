@@ -373,7 +373,7 @@ let
     fi
   '';
 
-  # AI tool installs that the MCP json sync can't do: pi and ralph-tui (aidev), the caveman plugin, and the
+  # AI tool installs that the MCP json sync can't do: pi (ai, ainfo and aidev's panes), the caveman plugin, and the
   # uninstall of retired token-optimizer-mcp. token-savior and the claude-token-efficient CLAUDE.md rules were
   # dropped on 2026-10-15 (token-savior was never called in 60 days; ~/bench/venv-tokensavior can be deleted).
   tokenOptimizationSetup = pkgs.writeShellScript "token-optimization-setup" ''
@@ -391,22 +391,10 @@ let
           npm uninstall -g @ooples/token-optimizer-mcp 2>&1 || echo "WARNING: token-optimizer-mcp uninstall failed" >&2
         fi
 
-        # --- pi: tier 1 of aistack, global npm install ---
+        # --- pi: global npm install ---
         if ! npm ls -g @earendil-works/pi-coding-agent &>/dev/null; then
           echo "[token-optimization] Installing pi-coding-agent..."
           npm install -g @earendil-works/pi-coding-agent 2>&1 || echo "WARNING: pi-coding-agent install failed" >&2
-        fi
-
-        # --- ralph-tui: runs aistack's plan task by task (needs Bun >= 1.0, installed via brew above) ---
-        # Pinned to the version aistack was built and tested against (0.12.0). The first run of ralph-tui
-        # also copies four ralph-tui-* skills into ~/.claude/skills on its own.
-        if command -v bun &>/dev/null; then
-          if [ ! -x "$HOME/.bun/bin/ralph-tui" ]; then
-            echo "[token-optimization] Installing ralph-tui..."
-            bun install -g ralph-tui@0.12.0 2>&1 || echo "WARNING: ralph-tui install failed" >&2
-          fi
-        else
-          echo "WARNING: bun not found, skipping ralph-tui (aistack needs it)" >&2
         fi
 
         # --- caveman: Claude Code plugin (skill + hooks + statusline) ---
@@ -451,7 +439,6 @@ in
       "atuin"
       "bash-language-server"
       "btop"
-      "bun"
       "cava"
       "cmake"
       "coreutils"
@@ -648,7 +635,7 @@ in
           ${tuiosAgentSetup}
         ) || echo "WARNING: tuios agent setup failed — continuing activation" >&2
 
-        # Claude Code commands that move work to aidev's free model (see AIDEV.md):
+        # Claude Code commands that move work to aidev's free model:
         #   /aidev-handoff  write an aidev plan in the session and start the run
         #   /delegate       hand one large mechanical edit to `aidev -p` and only review it
         mkdir -p "$HOME/.claude/commands"
