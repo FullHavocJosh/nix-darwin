@@ -29,7 +29,7 @@ refs)
 	cd "$ROOT" || exit 1
 	matches=$(grep -rEn '(~|HOME"?|home\})/lumo-tamer([^-]|$)' \
 		.config/lumo/*.sh \
-		.config/aistack/ralph_mcp.py \
+		.config/aistack/aidev_lib.py \
 		.pi/agent/extensions/lumo-first.ts \
 		.zshrc_aliases \
 		.zshrc_functions_ai \

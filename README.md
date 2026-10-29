@@ -177,7 +177,7 @@ What follows describes the daemons. Two LaunchDaemons run as `havoc`, so nothing
   request; alerts through ntfy on failure and on recovery; optionally re-authenticates by itself.
 
 There used to be a third daemon, `lumo-planner` (port 8765), a proxy that ran this loop against one fixed repository,
-and a `lumoplan` command that used it. Both are removed; `lumo_planner.py` remains as the library `aidev` loads.
+and a `lumoplan` command that used it. Both are removed.
 
 Doppler `FullHavocJosh/root_macmini`, read on the desktop only (all optional):
 `LUMO_VAULT_KEY` (restores a _missing_ key file only), `LUMO_TAMER_API_KEY`,
@@ -196,7 +196,7 @@ re-auth is not possible while a CAPTCHA/2FA sign-in is required.
 
 The MacBook runs its own tamer on loopback. pi's `lumo` provider still points at the Mini's tamer (port 3003, Doppler
 `LUMO_TAMER_API_KEY`). `lumo.nix` allows the Mini's node through the application firewall for this; tamer is protected
-by its API key only, so keep it to the LAN. `LUMO_PLANNER_API_KEY` in Doppler is no longer read by anything here.
+by its API key only, so keep it to the LAN.
 
 Moving from a hand-made setup: remove `~/Library/LaunchAgents/com.fullhavoc.lumo-*.plist` (launchctl bootout
 `gui/501/com.fullhavoc.lumo-tamer` and `-planner`) before the first `darwin-rebuild switch`, or both fight for the ports.

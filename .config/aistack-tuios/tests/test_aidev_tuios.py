@@ -1,7 +1,7 @@
 """Tests for aidev on tuios (aidev_tuios.py) that need no tuios daemon, no model and no network: task order, verify
 without a shell, the ask-human length cap, the test answer file, launchers, sessions and workspaces, Claude's helpers
-with a faked tuios, the Lumo pane and the Claude pane. Uses aistack's ralph_mcp.py from ~/.config/aistack
-(AISTACK_DIR overrides).
+with a faked tuios, the Lumo pane and the Claude pane. Uses this checkout's .config/aistack (AISTACK_DIR
+overrides).
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_aidev_tuios.py
 """
 import importlib.util
@@ -16,6 +16,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)  # .config/aistack-tuios
+os.environ.setdefault("AISTACK_DIR", os.path.realpath(os.path.join(ROOT, "..", "aistack")))
 FAILS = []
 
 
@@ -220,8 +221,8 @@ def main():
     hr = a.Run(p, "20260101-000005")
     os.makedirs(hr.dir, exist_ok=True)
     hr.data.update(session="s", ws=dict(a.WS_OWN))
-    ralph = a.load_ralph(p, hr)
-    plan_dir = ralph.plan_dir(p)
+    lib = a.load_lib(p, hr)
+    plan_dir = lib.plan_dir(p)
     check("aistack's plan dir is the run's", plan_dir == hr.plan_dir, (plan_dir, hr.plan_dir))
     os.makedirs(plan_dir, exist_ok=True)
     check("check-plan without files says so", a.cmd_check_plan(hr, []) == 1)

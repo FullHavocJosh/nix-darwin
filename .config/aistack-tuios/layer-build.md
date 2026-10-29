@@ -8,6 +8,7 @@ names a task file under @@RUN_DIR@@/tasks/. Read that file and do exactly that t
 - Work only inside @@WORK_DIR@@ with relative paths. Never edit through ~ or any path outside it: ~/.config links into the main checkout, which must stay untouched.
 - Change only what the task needs. No git commits, no pushes, no files unrelated to the task.
 - You must never run git checkout, restore, stash, reset, clean, commit or push; the planner owns git. Do not undo, revert or remove changes you did not make in this task.
+- Never change PATH, unset the git guard or call git by its full path to get around it. If a check needs git, say so in your reply.
 - Run the task's checks yourself before you stop. They are run again after your turn; only that run counts.
 - Run each check exactly as the task writes it, one command per tool call: no &&, ;, | or $(), no added redirects such as >/dev/null or 2>&1, no echo of the exit code. The exact commands are pre-approved; a changed or chained one needs a prompt that tuios treats as risky when it is cut short, and the run stalls.
 - Do not run code formatters (ruff format, black, prettier and the like); keep the existing line lengths and style.

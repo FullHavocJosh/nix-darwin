@@ -137,7 +137,7 @@ the Inbox.
 
 ### Script forms
 
-These replace the pi + ralph stack's forms. Agents reach them through
+Agents reach them through
 `~/.local/bin/aidev` (`../aistack/aidev-cli`), which allows only `-p` and `--handoff`.
 
 - `aidev -p "<change>" [files]`: one edit in this directory. Inside tuios the on-device 30B opens in a pane on a free
@@ -160,7 +160,7 @@ tuios agent features must be on: `[agents] enabled = true` in `../tuios/config.t
 
 - `aidev_tuios.py`: the launcher (`start`, `ai`, `status`) and Claude's helpers (`ask-lumo`, `check-plan`, `worktree`,
   `builder`, `send-task`, `wait-task`, `verify`, `finish`). It uses `validate`, `ensure_workdir` and the tamer list from
-  `~/.config/aistack/ralph_mcp.py`, unchanged.
+  `~/.config/aistack/aidev_lib.py`.
 - `layer-claude.md`, `layer-lumo.md`, `layer-build.md`: each pane's system prompt.
 - `tests/test_aidev_tuios.py`: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_aidev_tuios.py`.
 - `../tuios/config.toml`: tuios config (agents on, herdr protocol emulation off, strict pane grants). The functions in

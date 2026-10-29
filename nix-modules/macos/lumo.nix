@@ -50,8 +50,7 @@ in
     # Which interfaces tamer listens on and where its keys come from depends on local.lumo.lan (above).
     # Interactive Proton login cannot be declarative: sign each host in once (README).
     # There used to be a third daemon, lumo-planner (port 8765), a proxy that answered Lumo's requests for files from
-    # one fixed repository. That loop now runs inside aidev against whatever project it is started in
-    # (.config/aistack/ralph_mcp.py, with .config/lumo/lumo_planner.py as a library), so the daemon is gone.
+    # one fixed repository. It is gone.
 
     # Only the optional headless re-auth in watchdog.sh uses it (the laptop gets it from packages-gui.nix).
     homebrew.casks = lib.mkIf cfg.lan [ "ungoogled-chromium" ];

@@ -7,7 +7,7 @@ sourced answer, instead of a chain of WebSearch and WebFetch turns that each re-
 One tool:
   lumo_search(question, context)   one Lumo call; returns its answer with the URLs it found
 
-Lumo is reached the same way aidev and ainfo reach it (ralph_mcp.tamer_endpoints: this machine's tamer, then
+Lumo is reached the same way aidev and ainfo reach it (aidev_lib.tamer_endpoints: this machine's tamer, then
 MacMiniM1's, then lumo.rollet.family). The question is passed through ainfo's secret redaction before it leaves the
 machine; if that cannot be loaded, nothing is sent. Stdlib only.
 """
@@ -84,7 +84,7 @@ def lumo_search(a):
     context = str(a.get("context") or "").strip()
     try:
         redact = load("ainfo_mcp", AINFO_DIR).redact
-        endpoints = load("ralph_mcp", AISTACK_DIR).tamer_endpoints()
+        endpoints = load("aidev_lib", AISTACK_DIR).tamer_endpoints()
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": f"cannot load the Lumo helpers ({type(e).__name__}: {e}); nothing was sent"}
     prompt = PROMPT.format(
@@ -110,7 +110,7 @@ def lumo_search(a):
             try:
                 reply = ask(base, key, messages + [{"role": "assistant", "content": reply},
                                                    {"role": "user", "content": RETRY}])
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110
                 pass  # keep the first answer
         if len(reply) > REPLY_MAX:
             reply = reply[:REPLY_MAX] + "\n[reply cut at LUMO_MCP_REPLY_CHARS]"

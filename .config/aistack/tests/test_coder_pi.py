@@ -1,4 +1,4 @@
-"""Tests for coder_pi.py (aidev's 30B builder, RFC 0002). A stub llama-server and a stub pi stand in for the real
+"""Tests for coder_pi.py (aidev's 30B builder). A stub llama-server and a stub pi stand in for the real
 ones: no model, no network. Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_coder_pi.py
 """
 import json
@@ -84,9 +84,9 @@ def serving():
 print("pi on the 30B")
 r = run(["--print", "--mode", "json", "--model", "coder/qwen3-coder-30b"])
 rec = json.load(open(REC))
-check("pi runs with Ralph's arguments", r.returncode == 0 and rec["argv"][0] == "-e" and rec["argv"][1].endswith("worktree-guard.ts") and os.path.isfile(rec["argv"][1]) and rec["argv"][2:] == ["--print", "--mode", "json", "--model", "coder/qwen3-coder-30b"], (r.returncode, r.stderr, rec))
+check("pi runs with the caller's arguments", r.returncode == 0 and rec["argv"][0] == "-e" and rec["argv"][1].endswith("worktree-guard.ts") and os.path.isfile(rec["argv"][1]) and rec["argv"][2:] == ["--print", "--mode", "json", "--model", "coder/qwen3-coder-30b"], (r.returncode, r.stderr, rec))
 check("the task prompt reaches pi on stdin", rec["stdin"] == "build task T1")
-check("pi's JSON output passes through to Ralph", '"agent_end"' in r.stdout, r.stdout)
+check("pi's JSON output passes through to the caller", '"agent_end"' in r.stdout, r.stdout)
 prov = (rec["models"] or {}).get("providers", {}).get("coder", {})
 check("pi's agent dir points the coder provider at the 30B server", prov.get("baseUrl") == f"http://127.0.0.1:{PORT}/v1"
       and prov["models"][0]["id"] == "qwen3-coder-30b" and prov["models"][0]["reasoning"] is False, prov)

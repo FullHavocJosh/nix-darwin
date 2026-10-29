@@ -301,7 +301,7 @@ ${prompt: -$tail_chars}"
 # Tier 0 probe: prints "lumo" when a lumo-tamer answers /v1/models with its key, otherwise "local". Tried in order:
 # this machine's own tamer (127.0.0.1:3003, key from ~/lumo-tamer-fullhavoc/config.yaml), MacMiniM1's on the home network (key
 # from Doppler), then the public endpoint https://lumo.rollet.family/v1 (key from Doppler root_hetzner-cluster, or
-# AISTACK_LUMO_PUBLIC_KEY). Each is tried only when the one before does not answer. ralph_mcp.py uses the same order for
+# AISTACK_LUMO_PUBLIC_KEY). Each is tried only when the one before does not answer. aidev_lib.py uses the same order for
 # the requests themselves. AISTACK_TIER0=local forces local; AISTACK_TAMER_URL / AISTACK_TAMER_KEY pin one endpoint.
 function _aistack_tier0() {
   [[ "${AISTACK_TIER0:-auto}" == "local" ]] && { echo local; return 0; }
@@ -397,7 +397,7 @@ function ainfo() {
   for f in ainfo_mcp.py ainfo_guard.py ainfo-prompt.md claude-system.md lumo-prompt.md; do
     [[ -e "$adir/$f" ]] || { echo "✗ $adir/$f is missing -- run darwin-rebuild so the ainfo files are stowed." >&2; return 1; }
   done
-  for f in ralph_mcp.py ai_home.py; do
+  for f in aidev_lib.py ai_home.py; do
     [[ -e "$sdir/$f" ]] || { echo "✗ $sdir/$f is missing (ainfo reuses its Lumo endpoint lookup and RFC writer)." >&2; return 1; }
   done
   command -v pi >/dev/null || { echo "✗ pi is not installed." >&2; return 1; }

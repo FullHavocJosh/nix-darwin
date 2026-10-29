@@ -77,9 +77,9 @@
             local skill_name
             skill_name=$(basename "$skill_dir")
             local target="$HOME/.claude/skills/$skill_name"
-            # A real directory here (e.g. one ralph-tui copied in on its own) would make `ln -sfn` nest the link
-            # inside it instead of replacing it, and the repo copy would never be the one Claude Code loads.
-            # Move it aside rather than delete it.
+            # A real directory here (for example one that a tool copied there on its own) would make
+            # `ln -sfn` nest the link inside it instead of replacing it, and the repo copy would never be
+            # the one Claude Code loads. Move it aside rather than delete it.
             if [ -d "$target" ] && [ ! -L "$target" ]; then
               local displaced="$HOME/.claude/.skills-displaced/$skill_name-$(date +%Y%m%d%H%M%S)"
               mkdir -p "$HOME/.claude/.skills-displaced"

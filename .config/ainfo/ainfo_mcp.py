@@ -394,9 +394,9 @@ def split_contract(text):
 
 
 # ---- Lumo -------------------------------------------------------------------------------------------------------
-def load_ralph():
+def load_lib():
     spec = importlib.util.spec_from_file_location(
-        "ralph_mcp", os.path.join(AISTACK_DIR, "ralph_mcp.py")
+        "aidev_lib", os.path.join(AISTACK_DIR, "aidev_lib.py")
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -405,7 +405,7 @@ def load_ralph():
 
 def lumo_available():
     try:
-        return next(iter(load_ralph().tamer_endpoints()), None) is not None
+        return next(iter(load_lib().tamer_endpoints()), None) is not None
     except Exception:  # noqa: BLE001
         return False
 
@@ -419,7 +419,7 @@ def run_lumo(job, questions_text, st):
     messages.append({"role": "user", "content": prompt})
     errors = []
     try:
-        endpoints = load_ralph().tamer_endpoints()
+        endpoints = load_lib().tamer_endpoints()
     except Exception as e:  # noqa: BLE001
         return "", f"cannot find the tamer helpers in {AISTACK_DIR} ({e})"
     for base, key in endpoints:
