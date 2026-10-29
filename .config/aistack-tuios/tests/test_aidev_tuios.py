@@ -151,7 +151,6 @@ def main():
     r = subprocess.run(["zsh", "-n", script], capture_output=True, text=True, check=False)
     check("the launcher is valid zsh", r.returncode == 0, r.stderr)
     check("session names are safe", a.session_name("/x/my repo.v2") == "aidev-my-repo-v2")
-    check("HERDR_* never reaches tuios", not any(k.startswith("HERDR_") for k in a.TENV))
     print("session and workspaces")
     saved = {k: os.environ.get(k) for k in ("TUIOS_ENV", "TUIOS_SESSION", "AIDEV_TUIOS_OWN_SESSION")}
     os.environ.update(TUIOS_ENV="1", TUIOS_SESSION="dev-x")

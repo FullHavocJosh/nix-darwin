@@ -1,6 +1,6 @@
 vim.g.have_nerd_font = true
 
--- dev (one tuios session per repo) and the herdr dev_herdr launch several nvim instances at once (one per
+-- dev (one tuios session per repo) launches several nvim instances at once (one per
 -- session or tab), and they all share the default main.shada file -- writing
 -- marks/history on startup or exit collides across instances and nvim exits
 -- immediately with E137, leaving the tab sitting at a bare shell prompt. Give

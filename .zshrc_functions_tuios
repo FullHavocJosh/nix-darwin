@@ -1,5 +1,4 @@
-# The daily terminal and AI stack, on tuios. The herdr versions of these commands are in .zshrc_aliases and
-# .zshrc_functions_ai as <name>_herdr (dev_herdr, nxvim_herdr, aidev_herdr, ...).
+# The daily terminal and AI stack, on tuios.
 #
 #   dev                  reattach the daemon's sessions; with none, create nix-darwin, terraform-infrastructure and
 #                        home-infrastructure where cloned. Layout: workspace 1 holds nvim, aidev's Claude, Lumo
@@ -24,7 +23,6 @@
 # branch shows only unpushed and uncommitted work). c notes a line, C a hunk, S sends the notes to the pane's agent.
 # prdiff prints the whole PR's diff against origin's default branch.
 #
-# Run these from a plain Ghostty window, not from inside herdr: two multiplexers nested in one terminal is untested.
 # Keys (.config/tuios/config.toml): ctrl+t is tuios's prefix. ctrl+1..9 workspaces, ctrl+shift+j/k next/previous
 # session, ctrl+shift+p go to an agent, session or pane, ctrl+shift+h sidebar, ctrl+h/l previous/next window, ctrl+j/k
 # next/previous agent in every session; ctrl+t i agents and the Inbox, ctrl+t g lazygit, ctrl+t s scratch terminal,
@@ -34,19 +32,14 @@
 # tuios is ctrl only; alt belongs to aerospace.
 
 # tuios with the stowed config (~/.config/tuios; on macOS tuios otherwise reads ~/Library/Application
-# Support/tuios) and without herdr's variables, which a daemon started from a herdr pane would pass to every pane.
+# Support/tuios).
 _tuios_cmd() {
   (
-    unset -m 'HERDR_*'
     XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}" command tuios "$@"
   )
 }
 
 _tuios_guard() {
-  if [ -z "$TUIOS_ENV" ] && [ -n "$HERDR_ENV$HERDR_PANE_ID" ] && [ "$AIDEV_TUIOS_ALLOW_NESTED" != 1 ]; then
-    echo "tuios: run this from a plain Ghostty window, not inside herdr (no nested multiplexers)." >&2
-    return 1
-  fi
   command -v tuios >/dev/null || { echo "tuios is not installed (darwin-rebuild installs it through brew)." >&2; return 1; }
 }
 
@@ -98,7 +91,7 @@ _tuios_restore_nvim() {
 }
 
 # Session $1 for directory $2, the dev layout: workspace 1 holds nvim, aidev's Claude, Lumo and the builders. The pane
-# `tuios new` opens becomes nvim; its command is typed into a shell, as herdr's `pane run` did, so quitting nvim leaves
+# `tuios new` opens becomes nvim; its command is typed into a shell, so quitting nvim leaves
 # the pane at a prompt. A session that exists (still running, or restored by the daemon) keeps its layout and only
 # gets nvim, Claude and Lumo back (_tuios_restore).
 _tuios_devlayout() {
@@ -296,7 +289,6 @@ STARTUP
 }
 
 # aidev [task] opens the tuios panes; aidev_tuios.py also takes the script forms (-p, --handoff, --rfc, --direct).
-# The pi + ralph stack is aidev_herdr.
 aidev() {
   _tuios_guard || return 1
   python3 "$HOME/.config/aistack-tuios/aidev_tuios.py" start "$@"
@@ -312,7 +304,7 @@ ai_tuios() {
 }
 
 # Waits for window $1's visible content to go still (three identical, non-empty reads; about 6s at most) before keys
-# are typed into it. Same as _herdr_wait_pane_stable in .zshrc_aliases.
+# are typed into it.
 
 _tuios_wait_pane_stable() {
   local pane_id="$1" prev_content="" cur_content stable_count=0 tries=0

@@ -126,8 +126,6 @@ try {
   gm = e.message;
 }
 check("it still refuses gh pr merge, on the V2 shell tool", gm.includes("Merging PRs"), gm);
-const n = await load("herdr-nvim-open-edited.js", "nvim");
-check("herdr-nvim-open-edited: V2 default export", typeof n.def.id === "string" && typeof n.def.setup === "function");
 
 console.log(FAILS.length ? `\nFAILED: ${FAILS}` : "\nALL PASSED");
 process.exit(FAILS.length ? 1 : 0);

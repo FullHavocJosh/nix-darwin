@@ -27,12 +27,12 @@ open(MAIN + "/src/a.py", "w").write(ORIG)
 open(MAIN + "/src/b.py", "w").write("keep = 1\n")
 subprocess.run(f"cd {MAIN} && git init -q && git add . && git -c user.name=t -c user.email=t@t commit -qm i"
                f" && git worktree add -q -b w {WT}", shell=True)
-# stub opencode: records argv, cwd, HERDR_* and the config override; the prompt's keyword picks what it does
+# stub opencode: records argv, cwd and the config override; the prompt's keyword picks what it does
 open(BIN + "/opencode", "w").write("""#!/usr/bin/env python3
 import json, os, sys
 prompt = sys.argv[-1]
 open(os.environ['STUB_LOG'], 'a').write(json.dumps({'argv': sys.argv[1:], 'cwd': os.getcwd(),
-    'herdr': [k for k in os.environ if k.startswith('HERDR_')], 'config': os.environ.get('OPENCODE_CONFIG_CONTENT')}) + '\\n')
+    'config': os.environ.get('OPENCODE_CONFIG_CONTENT')}) + '\\n')
 lines = open('src/a.py').read().splitlines(keepends=True)
 if 'INSIDE' in prompt or 'OUTSIDE' in prompt:
     lines[9] = 'v10 = 100\\n'
@@ -49,7 +49,7 @@ LOG = T + "/opencode.log"
 
 def call(args, key=True, cwd=WT):
     env = {k: v for k, v in os.environ.items() if k != "OPENCODE_ZEN_API_KEY"}
-    env.update(HOME=HOME, OPENCODE_BIN=BIN + "/opencode", STUB_LOG=LOG, HERDR_PANE_ID="p1", HERDR_SOCKET_PATH="/x")
+    env.update(HOME=HOME, OPENCODE_BIN=BIN + "/opencode", STUB_LOG=LOG)
     if key:
         env["OPENCODE_ZEN_API_KEY"] = "k"
     req = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "oczen_edit", "arguments": args}}
@@ -82,7 +82,6 @@ check("runs opencode run --standalone --auto --agent build with Big Pickle in th
 check("OpenCode's formatter is off", json.loads(rec["config"] or "{}").get("formatter") is False, rec["config"])
 check("the prompt names the range, the file and the current lines", "lines 8-12 of src/a.py" in rec["argv"][-1] and "v8 = 8" in rec["argv"][-1], rec["argv"][-1])
 check("the prompt carries the test command", "grep -q 'v10 = 100' src/a.py" in rec["argv"][-1], rec["argv"][-1])
-check("HERDR_* variables are not passed to OpenCode", rec["herdr"] == [], rec["herdr"])
 reset()
 
 err, out = call({"instruction": "OUTSIDE", "file": "src/a.py", "start_line": 8, "end_line": 12})

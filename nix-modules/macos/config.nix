@@ -574,11 +574,11 @@
           fi
         fi
 
-        # tuios, the daily stack (herdr is the legacy *_herdr stack and gets neither step).
+        # tuios, the daily stack.
         #
         # Update: brew bundle's --upgrade sweep (homebrew.onActivation.upgrade, packages-tui.nix) can replace tuios
-        # under a running daemon, which keeps running the build it started with. herdr had a live-handoff; tuios's
-        # `restart-server` stops every program in every pane (each session comes back with its layout, history and
+        # under a running daemon, which keeps running the build it started with. The tuios restart-server
+        # stops every program in every pane (each session comes back with its layout, history and
         # fresh shells, and dev relaunches nvim), so activation only says when the daemon runs an older build. The
         # daemon's build is the Cellar directory of its executable (lsof), the installed one the Cellar directory that
         # `tuios` on PATH resolves to. The config needs nothing: tuios watches config.toml, a stow symlink into this repo.
