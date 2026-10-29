@@ -76,17 +76,6 @@
         ]
       }
     ],
-    "PostToolUse": [
-      {
-        "hooks": [
-          {
-            "command": "tuios agent-hook claude-code --integration 3",
-            "timeout": 5,
-            "type": "command"
-          }
-        ]
-      }
-    ],
     "SessionStart": [
       {
         "hooks": [
@@ -115,6 +104,17 @@
           {
             "command": "tuios agent-hook claude-code --integration 3",
             "timeout": 310,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "tuios agent-hook claude-code --integration 3",
+            "timeout": 5,
             "type": "command"
           }
         ]

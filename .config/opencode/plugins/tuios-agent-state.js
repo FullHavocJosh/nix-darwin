@@ -7,8 +7,8 @@
 //
 // Reports opencode's session state to the tuios pane it runs in, through
 // `tuios agent-hook opencode`. The event names are opencode's bus events
-// (https://opencode.ai/docs/plugins/), and the hook reports the matching agent
-// state for them. Events from child sessions, the subagents opencode starts, are dropped
+// (https://opencode.ai/docs/plugins/), handled the way herdr's plugin handles
+// them. Events from child sessions, the subagents opencode starts, are dropped
 // so a subagent finishing cannot mark the pane done mid-turn.
 //
 // A permission request is also offered to the tuios Inbox. The hook prints a
