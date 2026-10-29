@@ -101,8 +101,9 @@ LUMO_CONFIRM_RE = re.compile(r"^[ \t*>`]*SEARCH-CONFIRMATION:[ \t*]*searched=(ye
 PLAN, RESEARCH = "plan", "research"
 # What each pane may do through tuios (tuios --skill grants). The builder can mail Claude but not type into its pane:
 # a pane types only into panes that hold nothing it does not, and Claude holds fan and files. plan holds respond so
-# `approvals` can answer a builder prompt for the user; tuios still refuses to let a pane allow a risky prompt.
-GRANTS = {PLAN: "read,write,fan,files,respond", RESEARCH: "read", "build": "read,write"}
+# `approvals` can answer a builder prompt for the user; tuios still refuses to let a pane allow a risky prompt. plan
+# also holds admin so finish can close the builder panes (close-window needs admin).
+GRANTS = {PLAN: "read,write,fan,files,respond,admin", RESEARCH: "read", "build": "read,write"}
 # Each pane's workspace: every aidev pane is on workspace 1 in a session of its own. In another session they all
 # share the nvim window's workspace, else the lowest free one (assign_workspaces). The map is kept in the run's
 # state.json as "ws".
@@ -1998,12 +1999,13 @@ def preflight(opens_plan=True):
                         "and run `tuios config apply` from a terminal outside tuios")
     if opens_plan:
         held = held_grants()
-        if held is not None and "respond" not in held:
+        missing = [g for g in GRANTS[PLAN].split(",") if g not in held] if held is not None else []
+        if missing:
             problems.append(
-                "this pane does not hold the respond grant, so the plan pane could not answer the builder's "
-                "permission prompts. Run outside tuios: tuios config apply (config.toml gives your shells respond), "
-                f"or tuios set-pane-grants -s {os.environ.get('TUIOS_SESSION', '<session>')} "
-                f"-w {os.environ.get('TUIOS_PANE_ID', '<this pane>')} --grants {','.join(sorted(held | {'respond'}))}; "
+                f"this pane does not hold {','.join(missing)}, so the plan pane could not close builder panes or "
+                "answer their permission prompts. Run outside tuios: tuios config apply (config.toml gives your "
+                f"shells respond), or tuios set-pane-grants -s {os.environ.get('TUIOS_SESSION', '<session>')} "
+                f"-w {os.environ.get('TUIOS_PANE_ID', '<this pane>')} --grants {','.join(sorted(held | set(missing)))}; "
                 "then start aidev again")
     return problems
 
@@ -2056,6 +2058,11 @@ def cmd_restore(argv):
     if not run:
         print(f"aidev restore: no run of {project} owns the plan pane in {session}", file=sys.stderr)
         return 1
+    # a session opened before the plan pane held admin and respond gets them now
+    code, _out, err = tuios("set-pane-grants", "-s", session, "-w", claude_w["window_id"], "--grants", GRANTS[PLAN])
+    if code:
+        print(f"aidev restore: {session}: the plan pane keeps its grants ({err.strip()[:200]}); run outside tuios: "
+              f"tuios set-pane-grants -s {session} -w plan --grants {GRANTS[PLAN]}", file=sys.stderr)
     WS.update(run.data.get("ws") or {})
     for name in (PLAN, RESEARCH):
         pane = run.data["panes"].get(name) or {}

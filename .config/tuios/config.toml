@@ -297,9 +297,9 @@ herdr_protocol = "off"
 
 [agents.permissions]
 # strict: a pane started without --grants holds `grants` (your shells). aidev starts every model pane with its own
-# --grants: the Claude plan pane read,write,fan,files,respond, so it can answer the builder's permission prompts after
-# you approve them in its chat; the builder read,write (mail back to Claude, no typing into it); Lumo read. Your shells
-# hold respond only so they can pass it to the plan pane.
+# --grants: the Claude plan pane read,write,fan,files,respond,admin, so it can answer the builder's permission prompts
+# after you approve them in its chat and close builder panes (admin); the builder read,write (mail back to Claude, no
+# typing into it); Lumo read. Your shells hold admin and respond so they can pass both to the plan pane.
 mode = "strict"
 grants = ["read", "write", "files", "admin", "respond"]
 
