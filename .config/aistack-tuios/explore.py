@@ -12,6 +12,7 @@ SYSTEM = (
 )
 STOP = {"where", "what", "does", "this", "that", "with", "from", "which", "how"}
 BASE = os.environ.get("AIDEV_TUIOS_9B_URL", "http://127.0.0.1:8080")
+MAX_9B_CHARS = 40000
 
 
 def ctx_tokens():
@@ -40,7 +41,7 @@ def ask(prompt, system="", max_tokens=700):
             data=json.dumps(body).encode(),
             headers={"Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(req, timeout=300) as r:
+        with urllib.request.urlopen(req, timeout=120) as r:
             out = json.load(r)["choices"][0]["message"]["content"].strip()
     except Exception as e:
         raise RuntimeError(str(e))
@@ -56,7 +57,12 @@ def read_files(root, files, budget_chars):
     skipped = []
     used = 0
     for rel in files:
-        path = os.path.realpath(os.path.join(root_real, rel))
+        m = re.match(r"^(.*):(\d+)-(\d+)$", rel)
+        name, start, end = (m.group(1), int(m.group(2)), int(m.group(3))) if m else (rel, 1, None)
+        if m and start > end:
+            skipped.append(f"{rel}: bad range")
+            continue
+        path = os.path.realpath(os.path.join(root_real, name))
         if path != root_real and not path.startswith(root_real + os.sep):
             skipped.append(f"{rel}: outside root")
             continue
@@ -73,9 +79,15 @@ def read_files(root, files, budget_chars):
             skipped.append(f"{rel}: binary")
             continue
         lines = raw.decode("utf-8", "replace").splitlines()
-        text = f"=== {rel} ===\n" + "\n".join(
-            f"{i}: {line}" for i, line in enumerate(lines, 1)
-        )
+        if m:
+            if start > len(lines):
+                skipped.append(f"{rel}: range past end")
+                continue
+            end = min(end, len(lines))
+        else:
+            start, end = 1, len(lines)
+        numbered = [f"{i}: {lines[i-1]}" for i in range(start, end + 1)]
+        text = f"=== {name} ===\n" + "\n".join(numbered)
         if used + len(text) > budget_chars:
             skipped.append(f"{rel}: over budget")
             break
@@ -108,7 +120,7 @@ def grep_context(root, question, cap_lines=120):
 
 def explore(question, files, root, fallback=None, max_chars=1500):
     n = ctx_tokens()
-    budget = max(0, n - 4200) * 3
+    budget = min(max(0, n - 4200) * 3, MAX_9B_CHARS)
     if files:
         text, skipped = read_files(root, files, budget)
     else:
@@ -120,7 +132,7 @@ def explore(question, files, root, fallback=None, max_chars=1500):
     def fall():
         if callable(fallback):
             return fallback(prompt)[:max_chars]
-        raise RuntimeError("9B unavailable or input too big: name fewer files")
+        raise RuntimeError("9B unavailable or input too big: name fewer files or file:START-END line ranges")
 
     if n == 0 or any(s.endswith("over budget") for s in skipped) or not text.strip():
         return fall()

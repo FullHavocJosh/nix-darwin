@@ -31,6 +31,8 @@ Run them with Bash. They need no prompt.
 - `@@HELPER@@ explore '<question>' [file ...]`: the 9B reads the named files (or searches the work dir or project)
   and answers in at most 1500 characters with file:line. Use it first for any read of a file over 8 KB, and for "where
   is X" and "how does Y work". Read a file yourself only for a small region you must edit-plan exactly.
+  Files may carry a line range as path:START-END; the 9B reads at most about 40 KB, so for a file over 30 KB name
+  the function's line range instead of the whole file (bigger input falls back to a free Zen model, slower).
 - `@@HELPER@@ review-diff [path ...]`: the 9B reviews the work dir's diff file by file and prints findings plus
   `git diff --stat`. Read a hunk yourself only when a finding names it.
 - `@@HELPER@@ ask-lumo '<question>'`: prints Lumo's reply with its confirmed search queries. Exit 4 (REJECTED): never
