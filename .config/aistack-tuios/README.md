@@ -127,7 +127,7 @@ sonnet / medium). Lumo and the 30B are free; a free Zen model is used only when 
 a zero-retention one).
 
 Plan and billed panes start with `--setting-sources project,local`, so `~/.claude` settings, the user memory file,
-skills and plugins are not loaded. `explore '<question>' [files]` has the on-device 9B read code (a free Zen model when
+skills and plugins are not loaded. `explore '<question>' [file[:START-END] ...]` has the on-device 9B read code (a free Zen model when
 the 9B is down or the input is too big) and returns at most 1500 characters. `review-diff [paths]` has the 9B review the
 diff file by file. Waiting is event-driven (`wait-task` and `watch` block on mail), so a wait costs no Claude tokens.
 `finish` queues `/compact` when follow-ups remain (dirty tree, unverified task, non-empty `followups.txt` in the plan

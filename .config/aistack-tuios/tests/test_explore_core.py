@@ -62,4 +62,19 @@ with tempfile.TemporaryDirectory() as root:
     hits = explore.grep_context(root, "where is frobnicate defined")
     check("grep_context finds word", "code.py:1:" in hits, hits)
 
+    # Test 40KB cap
+    explore.ctx_tokens = lambda: 32000
+    explore.ask = fake_ask
+    with open(os.path.join(root, "big.txt"), "w") as f:
+        f.write("\n".join("x" * 99 for _ in range(500)))  # 500 lines of 99 'x' chars each
+    n = len(seen)
+    result = explore.explore("q", ["big.txt"], root, fallback=lambda p: "fb")
+    check("50KB file goes to fallback", result == "fb" and len(seen) == n, f"result={result}, seen_len={len(seen)}, n={n}")
+    
+    # Test line range functionality
+    explore.ctx_tokens = lambda: 131072  # This should be large enough
+    explore.ask = fake_ask
+    result = explore.explore("q", ["big.txt:1-3"], root)
+    check("line range uses 9B", len(seen) == n + 1 and "1: xxx" in seen[-1], f"len(seen)={len(seen)}, n={n}, last_seen={seen[-1]}")
+
 sys.exit(1 if FAILS else 0)

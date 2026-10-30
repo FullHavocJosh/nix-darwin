@@ -84,4 +84,16 @@ with tempfile.TemporaryDirectory() as d:
     text, skipped = explore.read_files(d, ["b.bin"], 1000)
     check("binary", skipped == ["b.bin: binary"], str(skipped))
 
+    # Test line ranges
+    with open(os.path.join(d, "c.txt"), "w") as f:
+        f.write("l1\nl2\nl3\nl4\nl5\n")
+    text, skipped = explore.read_files(d, ["c.txt:2-3"], 1000)
+    check("range 2-3", text == "=== c.txt ===\n2: l2\n3: l3" and skipped == [], repr(text))
+    text, skipped = explore.read_files(d, ["c.txt:4-99"], 1000)
+    check("range 4-99 clamped", text == "=== c.txt ===\n4: l4\n5: l5" and skipped == [], repr(text))
+    text, skipped = explore.read_files(d, ["c.txt:9-12"], 1000)
+    check("range 9-12 past end", skipped == ["c.txt:9-12: range past end"], repr(skipped))
+    text, skipped = explore.read_files(d, ["c.txt:3-2"], 1000)
+    check("range 3-2 bad", skipped == ["c.txt:3-2: bad range"], repr(skipped))
+
 sys.exit(1 if FAILS else 0)
