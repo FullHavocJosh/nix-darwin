@@ -126,6 +126,13 @@ Cost: Claude is interactive, so no per-call budget cap applies. `AIDEV_TUIOS_CLA
 sonnet / medium). Lumo and the 30B are free; a free Zen model is used only when one fits the repo (a private repo needs
 a zero-retention one).
 
+Plan and billed panes start with `--setting-sources project,local`, so `~/.claude` settings, the user memory file,
+skills and plugins are not loaded. `explore '<question>' [files]` has the on-device 9B read code (a free Zen model when
+the 9B is down or the input is too big) and returns at most 1500 characters. `review-diff [paths]` has the 9B review the
+diff file by file. Waiting is event-driven (`wait-task` and `watch` block on mail), so a wait costs no Claude tokens.
+`finish` queues `/compact` when follow-ups remain (dirty tree, unverified task, non-empty `followups.txt` in the plan
+dir) and `/clear` otherwise; `AIDEV_TUIOS_FINISH_RESET=off` turns that off.
+
 ### Escalation and Zen credits
 
 Zen has no balance API, so `zen_models.py status` probes each candidate free model with one tiny `opencode run` (the
@@ -161,6 +168,8 @@ tuios agent features must be on: `[agents] enabled = true` in `../tuios/config.t
 - `aidev_tuios.py`: the launcher (`start`, `ai`, `status`) and Claude's helpers (`ask-lumo`, `check-plan`, `worktree`,
   `builder`, `send-task`, `wait-task`, `verify`, `finish`). It uses `validate`, `ensure_workdir` and the tamer list from
   `~/.config/aistack/aidev_lib.py`.
+- `explore.py`: the `explore` helper; the 9B (else a free Zen model) reads code and answers in at most 1500 characters.
+- `review_diff.py`: the `review-diff` helper; the 9B reviews the diff file by file.
 - `layer-claude.md`, `layer-lumo.md`, `layer-build.md`: each pane's system prompt.
 - `tests/test_aidev_tuios.py`: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_aidev_tuios.py`.
 - `../tuios/config.toml`: tuios config (agents on, herdr protocol emulation off, strict pane grants). The functions in

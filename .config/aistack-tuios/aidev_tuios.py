@@ -93,6 +93,7 @@ ASK_MAX_BYTES = 160  # tuios refuses a longer ask-human question (invalid_params
 AT_REST = ("idle", "done", "errored")
 LUMO_SEARCH_RETRIES = 2
 LUMO_PREAMBLE = ("Search the web now, with your web search tool, before you answer. Do not answer from memory. "
+                 "Keep the answer under 250 words, before the confirmation line. "
                  "End your reply with one line in exactly this form and nothing after it: "
                  "SEARCH-CONFIRMATION: searched=yes; queries=<the search queries you ran, separated by ' | '>; "
                  "sources=<number of links you cite>. If you could not search, end with: "
@@ -514,6 +515,23 @@ def show_mini_progress(oc_dir):
     return path
 
 
+def no_formatters(oc_dir):
+    """A free builder's edit must not reformat a whole file, so the pane's config disables every formatter: the
+    usual ones and those the user's global config names."""
+    names = ["ruff", "prettier", "shfmt", "taplo", "nixfmt", "terraform", "gofmt", "stylua", "rubocop", "xmllint",
+             "djlint", "powershell"]
+    global_cfg = rj(os.path.expanduser("~/.config/opencode/opencode.json"), {})
+    if isinstance(global_cfg, dict) and isinstance(global_cfg.get("formatter"), dict):
+        names += list(global_cfg["formatter"])
+    path = os.path.join(oc_dir, "opencode.json")
+    data = rj(path, {})
+    if not isinstance(data, dict):
+        data = {}
+    data["formatter"] = {name: {"disabled": True} for name in sorted(set(names))}
+    wj(path, data)
+    return path
+
+
 PLAN_MCP_SERVERS = {"atlassian": {"type": "http", "url": "https://mcp.atlassian.com/v1/mcp"},
                     "github": {"command": "npx", "args": ["-y", "@edjl/github-mcp@1.0.8"]}}
 
@@ -550,6 +568,7 @@ def pane_configs(project):
                        env={**TENV, "XDG_CONFIG_HOME": os.path.dirname(oc_dir)}, capture_output=True, text=True,
                        check=False)
     show_mini_progress(oc_dir)
+    no_formatters(oc_dir)
     return {"dir": d, "claude_settings": os.path.join(claude_dir, "settings.json"), "claude_mcp": mcp,
             "claude_plan_mcp": plan_mcp, "claude_backbone": os.path.join(claude_dir, "backbone.json"),
             "pi_lumo": os.path.join(d, "pi-lumo"), "pi_build": os.path.join(d, "pi-build"), "opencode_dir": oc_dir}
@@ -611,12 +630,15 @@ PLAN_MCP_WRITES = ["mcp__github__github_pr_create", "mcp__github__github_pr_appr
 def write_backbone_settings(cfg):
     """The Claude pane's settings, with the helpers and the mail commands allowed, so coordinating the other panes
     does not stop for a permission prompt every time. The Atlassian and GitHub MCP tools stay read-only through the
-    guard hook."""
+    guard hook. The user-level settings are dropped (--setting-sources project,local), so the plan notes under ~/.ai
+    are allowed here and WebSearch stays denied (ask-lumo)."""
     allow = [f"Bash({HELPER}:*)", "Bash(tuios read-agent-messages:*)", "Bash(tuios wait-for:*)",
-             "Bash(tuios send-agent-message:*)", "Bash(tuios list-agents:*)", "Bash(tuios capture-pane:*)"]
+             "Bash(tuios send-agent-message:*)", "Bash(tuios list-agents:*)", "Bash(tuios capture-pane:*)",
+             "Edit(~/.ai/**)", "Write(~/.ai/**)"]
+    deny = PLAN_MCP_WRITES + ["WebSearch", "Edit(~/.ai/guard/**)", "Write(~/.ai/guard/**)"]
     hook = {"matcher": "mcp__atlassian__.*|mcp__github__.*", "hooks": [{"type": "command", "command":
             shlex.quote(sys.executable) + " " + shlex.quote(os.path.join(HERE, "plan_mcp_guard" + ".py"))}]}
-    return write_working_settings(cfg, cfg["claude_backbone"], allow, deny=PLAN_MCP_WRITES, pre_tool_hooks=[hook])
+    return write_working_settings(cfg, cfg["claude_backbone"], allow, deny=deny, pre_tool_hooks=[hook])
 
 
 def write_lumo_pi(cfg, lumo):
@@ -747,7 +769,7 @@ def claude_body(run, cfg, name, system, first, cwd, advisor=True, settings=None,
     marker = os.path.join(run.dir, "bin", f"{name}.started")
     # the global lumo, local-edit and oczen tools and their instructions conflict with ask-lumo and the builders
     base = ["claude", "--settings", settings or cfg["claude_settings"], "--mcp-config", mcp or cfg["claude_mcp"],
-            "--strict-mcp-config",
+            "--strict-mcp-config", "--setting-sources", "project,local",
             "--model", CLAUDE_MODEL, "--effort", CLAUDE_EFFORT, "--add-dir", run.state, "-n", f"aidev {name}"]
     first_line = with_system_prompt(base + ["--session-id", sid], sysp) + " " + shlex.quote(first)
     again_line = with_system_prompt(base + ["--resume", sid], sysp)
@@ -1575,6 +1597,15 @@ def wait_rest(session, builder, limit):
         time.sleep(2)
 
 
+def pane_tail(session, name, n=3):
+    """The last `n` non-blank pane lines, cut to 160 chars each, or "" when the capture fails."""
+    code, out, _err = tuios("capture-pane", "-s", session, "-w", name, "--lines", "12")
+    if code != 0:
+        return ""
+    lines = [ln.rstrip()[:160] for ln in out.splitlines() if ln.strip()]
+    return "\n".join(lines[-n:])
+
+
 def reset_pane(run, name, cmd):
     """Type the reset command `cmd` into pane `name` and wait for the pane to show a fresh session or, for Claude
     Code, a new agent session id. False when not confirmed; prints nothing."""
@@ -1736,7 +1767,7 @@ def check_task(run, tid, prefix=""):
     if reason and checks_ok:
         result = f"{tid}: FAILED, out of context; the checks passed ({out})"
     else:
-        result = f"{tid}: VERIFIED ({out})" if ok else f"{tid}: CHECKS FAILED ({out})\n{text[-3000:]}"
+        result = f"{tid}: VERIFIED ({out})" if ok else f"{tid}: CHECKS FAILED ({out})\n{text[-1200:]}"
     print(prefix + result + lost_warnings(run, f"{tid}-attempt{n}-before"))
     return 0 if ok else 1
 
@@ -1765,9 +1796,13 @@ def cmd_wait_task(run, argv):
         return 3
     if status == "timeout":
         st = agent_state(run.session, builder)
-        print(f"{tid}: no reply after {limit} s; {builder} is {st}"
-              + (" and waits on a prompt for the user" if st == "needs_input" else "")
-              + f". Run wait-task {tid} again, or look at the pane.")
+        msg = (f"{tid}: no reply after {limit} s; {builder} is {st}"
+               + (" and waits on a prompt for the user" if st == "needs_input" else "")
+               + f". Run wait-task {tid} again, or look at the pane.")
+        tail = pane_tail(run.session, builder)
+        if tail:
+            msg += "\nlast pane lines:\n" + tail
+        print(msg)
         return 3
     if status == "reply" and not wait_rest(run.session, builder, RESET_WAIT):
         print(f"{builder} still works; its reset before the next task will wait for it")
@@ -1797,7 +1832,7 @@ def watch_mail(run, me):
     if not show:
         return []
     tuios("read-agent-messages", "-s", run.session, "-w", me, "--unread")
-    return [f"--- mail #{m.get('id')} from {m.get('from')} ---\n{(m.get('text') or '').strip()[:3000]}" for m in show]
+    return [f"--- mail #{m.get('id')} from {m.get('from')} ---\n{(m.get('text') or '').strip()[:1000]}" for m in show]
 
 
 def watch_lumo(run):
@@ -1815,12 +1850,12 @@ def watch_lumo(run):
     lines = []
     for role, t in new:
         if role != "assistant":
-            lines.append(f"Asked: {t.strip()[:3000]}")
+            lines.append(f"Asked: {t.strip()[:600]}")
             continue
         ok, why, queries = lumo_confirmation(t)
         label = (f"Lumo (web search confirmed: {queries})" if ok
                  else f"Lumo (NOT confirmed as web-searched: {why}; do not rely on it)")
-        lines.append(f"{label}: {t.strip()[:3000]}")
+        lines.append(f"{label}: {t.strip()[:1500]}")
     return ["--- the research pane ---\n" + "\n".join(lines)]
 
 
@@ -1891,18 +1926,71 @@ def finish_work(run):
     return wd
 
 
+def finish_reset_cmd(run, dirty):
+    """The command that resets the plan pane's context after finish: /compact while follow-ups remain (uncommitted
+    changes, unverified tasks, a non-blank followups.txt), else /clear. "" when AIDEV_TUIOS_FINISH_RESET=off."""
+    if os.environ.get("AIDEV_TUIOS_FINISH_RESET", "on") == "off":
+        return ""
+    open_work = dirty or any(t.get("status") != "verified" for t in run.data.get("tasks", {}).values())
+    if not open_work:
+        try:
+            with open(os.path.join(run.plan_dir, "followups.txt")) as f:
+                open_work = bool(f.read().strip())
+        except OSError:
+            pass
+    if open_work:
+        return ("/compact Keep: the PR and work dir, the open follow-ups (followups.txt in the plan dir), "
+                "unverified tasks, decisions the user made. Drop tool output.")
+    return "/clear"
+
+
+def queue_plan_reset(run, cmd):
+    if not cmd:
+        return False
+    before = agent_session_id(run.session, PLAN) if cmd == "/clear" else ""
+    queued = queue(run.session, PLAN, cmd)
+    if queued and cmd == "/clear":
+        # /clear gives the pane a new session id; plan-sid stores it for claude_body's resume
+        try:
+            subprocess.Popen([sys.executable, os.path.realpath(__file__), "plan-sid", before],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+        except OSError:
+            pass
+    return queued
+
+
+def cmd_plan_sid(run, argv):
+    """plan-sid <old-id>: after a /clear, store the plan pane's new agent session id in the run state."""
+    before = argv[0] if argv else ""
+    deadline = time.time() + 300
+    while time.time() < deadline:
+        value = agent_session_id(run.session, PLAN)
+        if value and value != before and re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", value):
+            run.data["panes"].setdefault(PLAN, {})["session_id"] = value
+            run.save()
+            print(value)
+            return 0
+        time.sleep(3)
+    print("plan session id unchanged")
+    return 1
+
+
 def cmd_finish(run, _argv):
     wd0 = run.data.get("work_dir")
     dirty = bool(git_out(wd0, "status", "--porcelain").strip()) if wd0 else True
+    cmd = finish_reset_cmd(run, dirty)
     wd = finish_work(run)
+    queued = queue_plan_reset(run, cmd)
+    note = f" Plan context: {cmd.split()[0]} queued." if queued else ""
     left = [n for n in list(BUILDERS.values()) + list(LEGACY_BUILDER_PANES) if window_named(run.session, n)]
     if left:
         print(f"builder panes still open, close them by hand: {', '.join(left)}")
     if dirty:
         print(f"finished. Changes are uncommitted in {wd}: run commit, or the user commits with gpa. The panes stay "
-              "open for the next piece of work.")
+              "open for the next piece of work." + note)
     else:
-        print(f"finished. The work in {wd} is committed. The panes stay open for the next piece of work.")
+        print(f"finished. The work in {wd} is committed. The panes stay open for the next piece of work." + note)
     return 0
 
 
@@ -2030,11 +2118,76 @@ def cmd_approvals(run, argv):
     return 0 if code == 0 else 1
 
 
+_EXPLORE = None
+
+
+def load_explore():
+    global _EXPLORE
+    if _EXPLORE is None:
+        spec = importlib.util.spec_from_file_location("aidev_explore", os.path.join(HERE, "explore.py"))
+        _EXPLORE = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_EXPLORE)
+    return _EXPLORE
+
+
+def cmd_explore(run, argv):
+    """explore <question> [file ...]: answer a code question with the on-device 9B (Zen only as fallback)."""
+    if not argv:
+        print("usage: explore <question> [file ...]")
+        return 2
+    root = run.data.get("work_dir") or run.project
+    m = zen_model(run.project)
+    fallback = None
+    if m:
+        def fallback(prompt):
+            p = subprocess.run(["opencode", "run", "--model", opencode_model(m), prompt], cwd=root, timeout=300,
+                               stdin=subprocess.DEVNULL, capture_output=True, text=True)
+            out = (p.stdout or "").strip()
+            if p.returncode != 0 or not out:
+                raise RuntimeError(f"opencode exit {p.returncode}: {(p.stderr or '').strip()[:200] or 'no output'}")
+            return out
+    try:
+        answer = load_explore().explore(argv[0], argv[1:], root, fallback)
+    except RuntimeError as e:
+        print("explore: " + str(e))
+        return 1
+    print(answer)
+    run.event("explore", question=argv[0][:200], chars=len(answer))
+    return 0
+
+
+_REVIEW_DIFF = None
+
+
+def load_review_diff():
+    global _REVIEW_DIFF
+    if _REVIEW_DIFF is None:
+        spec = importlib.util.spec_from_file_location("aidev_review_diff", os.path.join(HERE, "review_diff.py"))
+        _REVIEW_DIFF = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_REVIEW_DIFF)
+    return _REVIEW_DIFF
+
+
+def cmd_review_diff(run, argv):
+    """review-diff [path ...]: review the worktree diff with the on-device 9B, one section per file."""
+    wd = run.data.get("work_dir")
+    if not wd:
+        print("review-diff: no work dir: run worktree first")
+        return 1
+    rd = load_review_diff()
+    ex = load_explore()
+    text = rd.review(wd, argv or None, ex.ask)
+    print(text)
+    run.event("review_diff", files=text.count("### "))
+    return 0
+
+
 HELPERS = {"ask-lumo": cmd_ask_lumo, "check-plan": cmd_check_plan, "worktree": cmd_worktree, "builder": cmd_builder,
            "escalate": cmd_escalate, "fallback": cmd_fallback,
            "send-task": cmd_send_task, "wait-task": cmd_wait_task, "verify": cmd_verify, "watch": cmd_watch,
            "approvals": cmd_approvals, "zen-check": cmd_zen_check, "finish": cmd_finish, "commit": cmd_commit,
-           "merged": cmd_merged}
+           "merged": cmd_merged, "plan-sid": cmd_plan_sid, "explore": cmd_explore,
+           "review-diff": cmd_review_diff}
 
 
 # ---- entry points ---------------------------------------------------------------------------------------------
