@@ -8,6 +8,8 @@
 # On failure it alerts via ntfy (state change, then every 6 h while still failing) and, when
 # enabled, tries `tamer auth browser` against a headless Chromium profile that is already
 # signed in to Lumo. It also alerts on recovery.
+# On a "server" failure it first restarts tamer, at most every 15 min, and alerts only when
+# that does not fix it: the process can stay alive while it resets every connection.
 #
 # Optional Doppler secrets (FullHavocJosh/root_macmini):
 #   LUMO_NTFY_URL    full topic URL, e.g. https://<ntfy host>/<topic>   (no alerts without it)
@@ -21,7 +23,7 @@ STATE_DIR=${LUMO_WATCHDOG_DIR:-$HOME/.lumo-watchdog}
 PROFILE=${LUMO_CHROMIUM_PROFILE:-$HOME/.lumo-chromium}
 CHROMIUM=${LUMO_CHROMIUM:-/Applications/Chromium.app/Contents/MacOS/Chromium}
 CDP_PORT=${LUMO_CDP_PORT:-9222}
-PROBE_EVERY=1800 ALERT_EVERY=21600 REAUTH_EVERY=3600
+PROBE_EVERY=1800 ALERT_EVERY=21600 REAUTH_EVERY=3600 RESTART_EVERY=900
 mkdir -p "$STATE_DIR"; chmod 700 "$STATE_DIR"
 now=$(date +%s)
 
@@ -80,6 +82,15 @@ reauth() { # returns 0 when auth was refreshed
   [[ $(check) == ok ]]
 }
 
+restart_tamer() { # returns 0 when tamer is healthy after a restart
+  (( now - $(state_get last_restart 0) >= RESTART_EVERY )) || return 1
+  state_set last_restart $now
+  log "restarting tamer"
+  # the daemon's KeepAlive starts it again
+  pkill -f "tamer server" 2>/dev/null; sleep 12
+  [[ $(check) == ok ]]
+}
+
 result=$(check)
 prev=$(state_get status ok)
 if [[ $result == ok ]]; then
@@ -88,6 +99,12 @@ if [[ $result == ok ]]; then
 fi
 
 log "check failed: $result"
+if [[ $result == server ]] && restart_tamer; then
+  log "tamer restart succeeded"
+  notify "Lumo tamer restarted" "The server check failed; a restart fixed it on $(hostname -s)." default
+  state_set status ok; exit 0
+fi
+
 if [[ $result == auth || $result == probe ]] && reauth; then
   log "auto re-auth succeeded"
   notify "Lumo tamer re-authenticated" "Failed with '$result'; refreshed automatically from the headless Chromium profile." default
@@ -98,7 +115,7 @@ if [[ $prev == ok || $now -ge $(( $(state_get last_alert 0) + ALERT_EVERY )) ]];
   case $result in
     auth|probe) hint="Lumo sign-in expired or was revoked. On your MacBook run: lumoreauth (opens Chromium, you sign in once, it hands the session to this Mini and restarts tamer). Interactive because of Proton CAPTCHA/2FA."
                 [[ $LUMO_LAN != 1 ]] && hint="Lumo sign-in expired or was revoked on $(hostname -s). Run there: lumoauth (opens Chromium, you sign in once, the local tamer takes the session and restarts)." ;;
-    server)     hint="tamer server is not answering on $base. Check ~/Library/Logs/lumo-tamer.log and 'launchctl print system/org.nixos.lumo-tamer'." ;;
+    server)     hint="tamer server is not answering on $base and a restart did not fix it. Check ~/Library/Logs/lumo-tamer.log and 'launchctl print system/org.nixos.lumo-tamer'." ;;
   esac
   notify "Lumo tamer: $result failing" "$hint" high
   state_set last_alert $now
