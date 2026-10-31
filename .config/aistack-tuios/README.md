@@ -163,6 +163,15 @@ Agents reach them through
 tuios agent features must be on: `[agents] enabled = true` in `../tuios/config.toml`. After a change to that file, run
 `tuios config apply` from a terminal outside tuios (a pane cannot widen grants), or restart the daemon.
 
+## Local planner
+
+- aidev probes `claude` at start. If the probe fails, the plan pane runs `pi` on the local 9B model.
+- `AIDEV_TUIOS_PLANNER=claude|local` forces the choice.
+- The local planner cannot run `check-plan` or `send-task` until `ask-lumo` ran once or `ask-lumo --none-needed "<reason>"`
+  was recorded. `AIDEV_TUIOS_PLANNER_GATE=off` disables the gate.
+- `ask-lumo` saves confirmed replies as notes under the run's `research` directory and reuses them for the same
+  question. `ask-lumo --fresh <question>` asks again.
+
 ## Files
 
 - `aidev_tuios.py`: the launcher (`start`, `ai`, `status`) and Claude's helpers (`ask-lumo`, `check-plan`, `worktree`,

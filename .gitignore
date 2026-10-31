@@ -14,6 +14,8 @@ private/
 *.bak-*
 *.backup
 *_local*
+!.config/aistack-tuios/planner_local.py
+!.config/aistack-tuios/tests/test_*local*.py
 
 # =============================================================================
 # Environment Variable Files - Security Policy
