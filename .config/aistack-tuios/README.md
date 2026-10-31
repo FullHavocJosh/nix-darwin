@@ -10,6 +10,8 @@ unchanged.
 |                                    | home-infrastructure where cloned. Layout: workspace 1 holds nvim, aidev's Claude, Lumo and           |
 |                                    | the builders.                                                                                        |
 | `devim [name]`                     | that layout for the current directory, always a new session                                          |
+|                                    | workspace 1 opens nvim and a `pick` pane (`aidev_pick.py`): choose Claude, 9B or 30B in advisor      |
+|                                    | mode while green check, yellow ? or red x show what is usable; a red x never blocks a choice         |
 | `nxvim`, `psvim`, `hivim`, `itvim` | the session of one project, skipped where it is not cloned                                           |
 | `hiwt <branch>`                    | a new home-infrastructure worktree and branch in `.worktrees/`, with a session of its own            |
 | `peerdev <session>`                | a session on the peer Mac through tuios host link                                                    |

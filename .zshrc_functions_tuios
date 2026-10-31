@@ -105,7 +105,10 @@ _tuios_devlayout() {
   first=$(_tuios_cmd list-windows -s "$s" --json | jq -r '.windows[0].window_id')
   _tuios_cmd set-window -s "$s" -w "$first" --name nvim >/dev/null
   _tuios_cmd send-text -s "$s" -w nvim $'nvim\n' >/dev/null
-  (cd "$dir" && AIDEV_TUIOS_SESSION="$s" AIDEV_TUIOS_NO_ATTACH=1 python3 "$HOME/.config/aistack-tuios/aidev_tuios.py" start >/dev/null)
+  # No Claude or Lumo until you choose: the picker pane checks which models are usable and starts the one you pick.
+  _tuios_cmd new-window pick -s "$s" --workspace 1 --cwd "$dir" --no-focus \
+    --grants read,write,fan,files,respond,admin -- /bin/zsh -c \
+    "AIDEV_TUIOS_SESSION=$s python3 \$HOME/.config/aistack-tuios/aidev_pick.py" >/dev/null
   _tuios_cmd select-workspace 1 -s "$s" >/dev/null
   _tuios_cmd focus-window nvim -s "$s" >/dev/null
 }

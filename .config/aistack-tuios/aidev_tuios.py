@@ -869,7 +869,9 @@ def claude_pane_body(run, cfg, task, has_lumo):
     env = {"AIDEV_TUIOS_RUN": run.id, "AIDEV_TUIOS_PROJECT": run.project}
     env.update({k: v for k, v in os.environ.items() if k.startswith("AIDEV_TUIOS_") and k not in
                 ("AIDEV_TUIOS_NO_ATTACH", "AIDEV_TUIOS_ALLOW_NESTED", "AIDEV_TUIOS_RUN", "AIDEV_TUIOS_PROJECT")})
-    return claude_body(run, cfg, PLAN, system, first, run.project, advisor=False,
+    # AIDEV_TUIOS_ADVISOR=1 (the dev picker's Claude choice): Claude reads and advises, the user makes every change
+    return claude_body(run, cfg, PLAN, system, first, run.project,
+                       advisor=os.environ.get("AIDEV_TUIOS_ADVISOR") == "1",
                        settings=write_backbone_settings(cfg), env=env, mcp=cfg.get("claude_plan_mcp"))
 
 
