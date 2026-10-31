@@ -4,12 +4,14 @@
 # Checks (cheap first):
 #   1. `tamer auth status` reports valid auth        -> reason "auth"
 #   2. tamer's /v1/models answers with the API key   -> reason "server"
-#   3. every 30 min, a real one-word Lumo request    -> reason "probe" (catches revoked tokens)
+#   3. LAN host: the same on its network address     -> reason "lan" (what other devices and the
+#      public gateway use; the application firewall can block it while loopback still answers)
+#   4. every 30 min, a real one-word Lumo request    -> reason "probe" (catches revoked tokens)
 # On failure it alerts via ntfy (state change, then every 6 h while still failing) and, when
 # enabled, tries `tamer auth browser` against a headless Chromium profile that is already
 # signed in to Lumo. It also alerts on recovery.
-# On a "server" failure it first restarts tamer, at most every 15 min, and alerts only when
-# that does not fix it: the process can stay alive while it resets every connection.
+# On a "server" or "lan" failure it first restarts tamer, at most every 15 min, and alerts only
+# when that does not fix it: the process can stay alive while it resets every connection.
 #
 # Optional Doppler secrets (FullHavocJosh/root_macmini):
 #   LUMO_NTFY_URL    full topic URL, e.g. https://<ntfy host>/<topic>   (no alerts without it)
@@ -48,12 +50,24 @@ notify() { # title, body, priority
 api_key=$(lumo_key_secret LUMO_TAMER_API_KEY); [[ -z $api_key ]] && api_key=$(lumo_tamer_key)
 base=${LUMO_TAMER_URL:-http://127.0.0.1:$LUMO_TAMER_PORT/v1}
 
+# Empty, which skips the check, on a loopback host or when this machine has no network address.
+lan_base=""
+if [[ $LUMO_LAN == 1 ]]; then
+  lan_if=$(route -n get default 2>/dev/null | awk '/interface:/ {print $2; exit}')
+  lan_addr=$(ipconfig getifaddr "$lan_if" 2>/dev/null)
+  [[ -n $lan_addr ]] && lan_base=http://$lan_addr:$LUMO_TAMER_PORT/v1
+fi
+
 check() { # echoes "ok" or a failure reason
   local out
   out=$(cd "$LUMO_TAMER_DIR" && tamer auth status 2>&1)
   [[ $out == *"Authentication is configured and valid"* ]] || { echo auth; return; }
   curl -s -m 10 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $api_key" "$base/models" \
     | grep -q '^200$' || { echo server; return; }
+  if [[ -n $lan_base ]]; then
+    curl -s -m 10 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $api_key" "$lan_base/models" \
+      | grep -q '^200$' || { echo lan; return; }
+  fi
   if (( now - $(state_get last_probe 0) >= PROBE_EVERY )); then
     local reply
     reply=$(curl -s -m 60 -H "Authorization: Bearer $api_key" -H 'Content-Type: application/json' \
@@ -88,7 +102,9 @@ restart_tamer() { # returns 0 when tamer is healthy after a restart
   log "restarting tamer"
   # the daemon's KeepAlive starts it again
   pkill -f "tamer server" 2>/dev/null; sleep 12
-  [[ $(check) == ok ]]
+  # sets result, so an alert names what is still failing after the restart
+  result=$(check)
+  [[ $result == ok ]]
 }
 
 result=$(check)
@@ -99,9 +115,9 @@ if [[ $result == ok ]]; then
 fi
 
 log "check failed: $result"
-if [[ $result == server ]] && restart_tamer; then
+if [[ $result == server || $result == lan ]] && restart_tamer; then
   log "tamer restart succeeded"
-  notify "Lumo tamer restarted" "The server check failed; a restart fixed it on $(hostname -s)." default
+  notify "Lumo tamer restarted" "A tamer check failed; a restart fixed it on $(hostname -s)." default
   state_set status ok; exit 0
 fi
 
@@ -116,6 +132,7 @@ if [[ $prev == ok || $now -ge $(( $(state_get last_alert 0) + ALERT_EVERY )) ]];
     auth|probe) hint="Lumo sign-in expired or was revoked. On your MacBook run: lumoreauth (opens Chromium, you sign in once, it hands the session to this Mini and restarts tamer). Interactive because of Proton CAPTCHA/2FA."
                 [[ $LUMO_LAN != 1 ]] && hint="Lumo sign-in expired or was revoked on $(hostname -s). Run there: lumoauth (opens Chromium, you sign in once, the local tamer takes the session and restarts)." ;;
     server)     hint="tamer server is not answering on $base and a restart did not fix it. Check ~/Library/Logs/lumo-tamer.log and 'launchctl print system/org.nixos.lumo-tamer'." ;;
+    lan)        hint="tamer answers on loopback but not on $lan_base, so other devices and the public gateway cannot reach it, and a restart did not fix it. Check that /usr/libexec/ApplicationFirewall/socketfilterfw --listapps has tamer's node; darwin-reload switch desktop adds it." ;;
   esac
   notify "Lumo tamer: $result failing" "$hint" high
   state_set last_alert $now
