@@ -5,12 +5,14 @@
                          (usable), a yellow ? (could not tell) or a red x (looks unusable). A red x never blocks a
                          choice: a check can be wrong.
 
-Keys: 1-3 or up/down + enter start a choice, r runs the checks again, s leaves a shell, q quits. The rows below the
+Keys: 1-5 or up/down + enter start a choice, r runs the checks again, s leaves a shell, q quits. The rows below the
 line (Zen, Go, OpenRouter) only report; they are what the cloud builders and fallbacks use.
 
   1 Claude (advisor): aidev's Claude and Lumo panes, Claude in advisor mode (AIDEV_TUIOS_ADVISOR=1)
-  2 9B (advisor):     pi on the always-on llama-server (:8080), advisor prompt, read-only tools
-  3 30B (advisor):    pi on the Qwen3-Coder-30B (loaded on demand), advisor prompt, read-only tools
+  2 Claude (plan):    aidev start with planner forced to claude (AIDEV_TUIOS_PLANNER=claude)
+  3 9B (advisor):     pi on the always-on llama-server (:8080), advisor prompt, read-only tools
+  4 9B (plan):        aidev start with planner forced to local (AIDEV_TUIOS_PLANNER=local)
+  5 30B (advisor):    pi on the Qwen3-Coder-30B (loaded on demand), advisor prompt, read-only tools
 """
 import importlib.util
 import json
@@ -36,9 +38,11 @@ MARK = {"ok": f"{GREEN}✓{RESET}", "bad": f"{RED}✗{RESET}", "maybe": f"{YELLO
         "wait": f"{DIM}…{RESET}"}
 
 # key, label, what it starts (None: a status row only)
-ROWS = [("claude", "Claude (advisor)", True), ("9b", "9B (advisor)", True), ("30b", "30B (advisor)", True),
+ROWS = [("claude", "Claude (advisor)", True), ("claude-plan", "Claude (plan)", True),
+        ("9b", "9B (advisor)", True), ("9b-plan", "9B (plan)", True), ("30b", "30B (advisor)", True),
         ("zen", "OpenCode Zen (free)", False), ("go", "OpenCode Go", False), ("openrouter", "OpenRouter", False)]
-state = {k: ("wait", "checking") for k, _l, _s in ROWS}
+MIRROR = {"claude-plan": "claude", "9b-plan": "9b"}
+state = {k: ("wait", "checking") for k, _l, _s in ROWS if k not in MIRROR}
 lock = threading.Lock()
 
 
@@ -64,14 +68,28 @@ def get_json(url, headers=None, timeout=5):
 def check_claude():
     if not shutil.which("claude"):
         return set_state("claude", "bad", "claude is not installed")
-    code, out = run(["claude", "auth", "status"])
-    try:
-        info = json.loads(out)
-    except ValueError:
-        return set_state("claude", "maybe", "could not read claude auth status")
-    if info.get("loggedIn"):
-        return set_state("claude", "ok", f"logged in ({info.get('authMethod')}); plan limits are not visible here")
-    set_state("claude", "bad", "not logged in (run claude, then /login)")
+    
+    # Try claude auth status up to twice
+    for attempt in range(2):
+        code, out = run(["claude", "auth", "status"])
+        try:
+            info = json.loads(out)
+        except ValueError:
+            # If we can't read the JSON, try again or give up
+            if attempt == 0:
+                continue  # Try again
+            else:
+                return set_state("claude", "maybe", f"could not read claude auth status (exit {code})")
+        
+        if info.get("loggedIn"):
+            return set_state("claude", "ok", f"logged in ({info.get('authMethod')}, {info.get('subscriptionType')}); limits not visible")
+        
+        # If loggedIn is false, it could be a pane without keychain access
+        # that wrongly reports loggedIn=false, so we should not treat it as bad
+        return set_state("claude", "maybe", "auth status says not logged in; try it (r rechecks)")
+    
+    # If we get here, we tried twice and couldn't get valid JSON
+    return set_state("claude", "maybe", f"could not read claude auth status (exit {code})")
 
 
 def check_9b():
@@ -150,14 +168,15 @@ def draw(cursor):
         snap = dict(state)
     out = ["\x1b[H\x1b[2J", "dev picker: what should this session start?\n\n"]
     room = max(10, shutil.get_terminal_size().columns - 34)
+    STARTABLE = len([r for r in ROWS if r[2]])
     for i, (key, label, startable) in enumerate(ROWS):
-        if i == 3:
+        if i == STARTABLE:
             out.append(f"  {DIM}---- cloud (status only) ----{RESET}\n")
-        status, detail = snap[key]
+        status, detail = snap[MIRROR.get(key, key)]
         pointer = ">" if startable and i == cursor else " "
         num = f"{i + 1}" if startable else " "
         out.append(f" {pointer}{num} [{MARK[status]}] {label:<22} {DIM}{detail[:room]}{RESET}\n")
-    out.append(f"\n {DIM}1-3 / arrows+enter start, r recheck, s shell, q quit; a red x never blocks a choice{RESET}\n")
+    out.append(f"\n {DIM}1-5 / arrows+enter start, r recheck, s shell, q quit; a red x never blocks a choice{RESET}\n")
     sys.stdout.write("".join(out))
     sys.stdout.flush()
 
@@ -197,6 +216,13 @@ def launch(key):
     sys.stdout.flush()
     if key == "claude":
         env = {**os.environ, "AIDEV_TUIOS_ADVISOR": "1", "AIDEV_TUIOS_NO_ATTACH": "1"}
+        code = subprocess.run([sys.executable, os.path.join(HERE, "aidev_tuios.py"), "start"], cwd=cwd, env=env,
+                              check=False).returncode
+        if code:
+            input("aidev start failed; Enter for a shell ")
+        os.execvp("zsh", ["zsh", "-i"])
+    elif key in ("claude-plan", "9b-plan"):
+        env = {**os.environ, "AIDEV_TUIOS_NO_ATTACH": "1", "AIDEV_TUIOS_PLANNER": "claude" if key == "claude-plan" else "local"}
         code = subprocess.run([sys.executable, os.path.join(HERE, "aidev_tuios.py"), "start"], cwd=cwd, env=env,
                               check=False).returncode
         if code:
@@ -247,7 +273,7 @@ def main():
                 cursor = max(0, cursor - 1)
             elif key == "down":
                 cursor = min(len(startable) - 1, cursor + 1)
-            elif key in ("1", "2", "3"):
+            elif key in ("1", "2", "3", "4", "5"):
                 cursor = int(key) - 1
                 termios.tcsetattr(fd, termios.TCSADRAIN, old)
                 launch(ROWS[cursor][0])
