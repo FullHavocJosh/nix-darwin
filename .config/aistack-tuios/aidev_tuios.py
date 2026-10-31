@@ -138,7 +138,7 @@ COMPACT_RE = re.compile(r"\[compaction\]|Compacted from [\d,]+ tokens")
 # pi's error when the context is full and auto-compaction is off (llama.cpp's text first).
 OVERFLOW_RE = re.compile(r"exceeds the available context size|context[_ ]length[_ ]exceeded|maximum context length"
                          r"|prompt (?:is )?too long", re.IGNORECASE)
-LIMIT_RE = re.compile(r"free usage limit reached", re.IGNORECASE)
+LIMIT_RE = re.compile(r"(?:free|opencode go\b[^\n]*) usage limit reached", re.IGNORECASE)
 SHELLS = ("zsh", "bash", "sh")
 
 
@@ -1519,7 +1519,7 @@ def cmd_fallback(run, argv):
     if builder != BUILDERS["free"]:
         print("fallback only applies to build-free")
         return 1
-    run.data.setdefault("zen_tried", []).append(run.data.get("zen_model"))
+    run.data["zen_tried"] = [run.data.get("zen_model")]
     if callable(getattr(run, "save", None)):
         run.save()
     s = zen_status(run, refresh=True)
