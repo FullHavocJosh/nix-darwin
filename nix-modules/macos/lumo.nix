@@ -72,6 +72,8 @@ in
             }"
           fi
         fi
+
+        node_bin=$(realpath "$(sudo -u havoc HOME=${home} /opt/homebrew/bin/node -p 'process.execPath' 2>/dev/null)" 2>/dev/null) || node_bin=""
       ''
       + lib.optionalString (!cfg.lan) ''
         echo "[lumo] loopback only on this host: tamer binds 127.0.0.1, no firewall rule is added"
@@ -92,13 +94,28 @@ in
         # choice, the public gateway on the Hetzner cluster, and other home services). tamer's own
         # API key (Doppler LUMO_TAMER_API_KEY) is the only protection, so this is LAN only. Any other node program
         # that listens on the Mini becomes reachable too; none does today.
-        node_bin=$(realpath "$(sudo -u havoc HOME=${home} /opt/homebrew/bin/node -p 'process.execPath' 2>/dev/null)" 2>/dev/null)
         if [ -n "$node_bin" ] && [ -x "$node_bin" ]; then
           /usr/libexec/ApplicationFirewall/socketfilterfw --add "$node_bin" >/dev/null
           /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$node_bin" >/dev/null
           echo "[lumo-tamer] application firewall: incoming connections allowed for $node_bin"
         else
           echo "[lumo-tamer] WARNING: node not found, firewall rule not added" >&2
+        fi
+      ''
+      + ''
+
+        # Homebrew runs before postActivation, so a switch can upgrade node and remove the binary tamer is running on.
+        # tamer then still answers on loopback, but not on the network. Restart it onto the current node; on the LAN
+        # host the firewall rule for that node is in place by now. activate runs under set -e and pipefail, and none of
+        # this may abort a switch: a stopped or still starting tamer has no node to compare, and is left alone.
+        tamer_pid=$(launchctl print system/org.nixos.lumo-tamer 2>/dev/null | awk '$1 == "pid" {print $3}') || tamer_pid=""
+        tamer_node=$(lsof -a -d txt -Fn -p "$tamer_pid" 2>/dev/null | sed -n 's|^n\(.*/bin/node\)$|\1|p') || tamer_node=""
+        if [ -n "$tamer_node" ] && [ -n "$node_bin" ] && [ "$tamer_node" != "$node_bin" ]; then
+          if launchctl kickstart -k system/org.nixos.lumo-tamer; then
+            echo "[lumo-tamer] restarted: it was running on $tamer_node, node is now $node_bin"
+          else
+            echo "[lumo-tamer] WARNING: running on $tamer_node, node is now $node_bin, and the restart failed" >&2
+          fi
         fi
       ''
     );

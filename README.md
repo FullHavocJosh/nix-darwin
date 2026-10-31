@@ -173,9 +173,13 @@ What follows describes the daemons. Two LaunchDaemons run as `havoc`, so nothing
 - `lumo-tamer`: [lumo-tamer](https://github.com/ZeroTricks/lumo-tamer), an **unofficial** OpenAI-compatible server
   for Lumo (port 3003, API key). Pinned to one reviewed commit and built by an activation-time provisioner.
   Using it may violate Proton's terms of service (its README says so).
-- `lumo-watchdog` (every 5 min): checks `tamer auth status`, the server, and every 30 min a real one-word Lumo
-  request; restarts tamer when the server check fails (at most every 15 min); alerts through ntfy when that does not
-  fix it, on any other failure and on recovery; optionally re-authenticates by itself.
+- `lumo-watchdog` (every 5 min): checks `tamer auth status`, the server on loopback and (on the Mini) on its network
+  address, and every 30 min a real one-word Lumo request; restarts tamer when a server check fails (at most every 15
+  min); alerts through ntfy when that does not fix it, on any other failure and on recovery; optionally re-authenticates
+  by itself.
+
+A switch that upgrades Homebrew's node also restarts tamer: on the removed binary it would still answer on loopback but
+not on the network.
 
 There used to be a third daemon, `lumo-planner` (port 8765), a proxy that ran this loop against one fixed repository,
 and a `lumoplan` command that used it. Both are removed.
