@@ -174,7 +174,8 @@ What follows describes the daemons. Two LaunchDaemons run as `havoc`, so nothing
   for Lumo (port 3003, API key). Pinned to one reviewed commit and built by an activation-time provisioner.
   Using it may violate Proton's terms of service (its README says so).
 - `lumo-watchdog` (every 5 min): checks `tamer auth status`, the server, and every 30 min a real one-word Lumo
-  request; alerts through ntfy on failure and on recovery; optionally re-authenticates by itself.
+  request; restarts tamer when the server check fails (at most every 15 min); alerts through ntfy when that does not
+  fix it, on any other failure and on recovery; optionally re-authenticates by itself.
 
 There used to be a third daemon, `lumo-planner` (port 8765), a proxy that ran this loop against one fixed repository,
 and a `lumoplan` command that used it. Both are removed.
