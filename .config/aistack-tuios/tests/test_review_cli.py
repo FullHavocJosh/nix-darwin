@@ -29,7 +29,7 @@ def check(name, cond, extra=""):
 calls = []
 
 
-def fake_review(wd, paths, ask):
+def fake_review(wd, paths, ask, criteria=''):
     calls.append((wd, paths, ask))
     return "### f: no findings"
 

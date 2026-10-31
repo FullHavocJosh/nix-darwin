@@ -170,6 +170,7 @@ tuios agent features must be on: `[agents] enabled = true` in `../tuios/config.t
   `~/.config/aistack/aidev_lib.py`.
 - `explore.py`: the `explore` helper; the 9B (else a free Zen model) reads code and answers in at most 1500 characters.
 - `review_diff.py`: the `review-diff` helper; the 9B reviews the diff file by file.
+- `plan_bash_guard.py`: PreToolUse hook for the plan pane; denies grep and find in Bash and points to rg and fd.
 - `layer-claude.md`, `layer-lumo.md`, `layer-build.md`: each pane's system prompt.
 - `tests/test_aidev_tuios.py`: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_aidev_tuios.py`.
 - `../tuios/config.toml`: tuios config (agents on, herdr protocol emulation off, strict pane grants). The functions in
@@ -180,6 +181,7 @@ tuios agent features must be on: `[agents] enabled = true` in `../tuios/config.t
 
 Settings for scripts and tests: `AIDEV_TUIOS_HOME` (state dir), `AIDEV_TUIOS_LUMO=off` (no Lumo pane),
 `AIDEV_TUIOS_NO_ATTACH=1` (print the session, do not attach), `AIDEV_TUIOS_WORKTREE_MODE=none`,
-`AIDEV_TUIOS_REPO_PRIVATE=yes|no`, and `AIDEV_TUIOS_FAKE_HUMAN=<file>`. The
+`AIDEV_TUIOS_REPO_PRIVATE=yes|no`, `AIDEV_TUIOS_REPLY_ECHO_MAX` (default 300, characters of the builder reply
+wait-task echoes), and `AIDEV_TUIOS_FAKE_HUMAN=<file>`. The
 last one is for tests only: tuios lets only an attached client answer an Inbox question, so the helpers read their
 answers from lines in that file.

@@ -118,6 +118,33 @@ def grep_context(root, question, cap_lines=120):
     return "\n".join(hits[:cap_lines])
 
 
+def ground(answer, root):
+    """Check citations in answer against files in root."""
+    pattern = r'([\w./-]+\.\w+):(\d+)'
+    citations = re.findall(pattern, answer)
+    bad = []
+    for path, line in citations:
+        full_path = os.path.realpath(os.path.join(root, path))
+        root_real = os.path.realpath(root)
+        # Check if path is under root
+        if full_path != root_real and not full_path.startswith(root_real + os.sep):
+            continue  # Skip if outside root
+        if not os.path.isfile(full_path):
+            continue  # Skip if file doesn't exist
+        # Count lines in file
+        try:
+            with open(full_path, 'r', errors='replace') as f:
+                line_count = sum(1 for _ in f)
+        except OSError:
+            continue
+        line_num = int(line)
+        if line_num == 0 or line_num > line_count:
+            bad.append(f'{path}:{line}')
+    if bad:
+        return answer + '\nUNVERIFIED (line past end of file): ' + ', '.join(bad)
+    return answer
+
+
 def explore(question, files, root, fallback=None, max_chars=1500):
     n = ctx_tokens()
     budget = min(max(0, n - 4200) * 3, MAX_9B_CHARS)
@@ -131,7 +158,7 @@ def explore(question, files, root, fallback=None, max_chars=1500):
 
     def fall():
         if callable(fallback):
-            return fallback(prompt)[:max_chars]
+            return ground(fallback(prompt), root)[:max_chars]
         raise RuntimeError("9B unavailable or input too big: name fewer files or file:START-END line ranges")
 
     if n == 0 or any(s.endswith("over budget") for s in skipped) or not text.strip():
@@ -140,4 +167,4 @@ def explore(question, files, root, fallback=None, max_chars=1500):
         answer = ask(prompt, SYSTEM)
     except RuntimeError:
         return fall()
-    return answer[:max_chars]
+    return ground(answer, root)[:max_chars]

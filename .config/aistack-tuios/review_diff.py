@@ -6,7 +6,8 @@ import subprocess
 SYSTEM = (
     "You review one file's diff for a planner. List only real problems: bugs, "
     "security holes, missing edge cases. One line each: 'line N: problem'. "
-    "If there are none, reply exactly: no findings."
+    "If there are none, reply exactly: no findings. "
+    "Quote the offending line after the line number."
 )
 
 
@@ -32,10 +33,12 @@ def file_diff(work_dir, path, max_chars=12000):
                 text = "".join("+" + line for line in f.read().splitlines(True))
         except OSError:
             text = ""
-    return text[:max_chars]
+    if len(text) > max_chars:
+        return text[:max_chars] + "\n[diff truncated]"
+    return text
 
 
-def review(work_dir, paths, ask, max_chars=1500):
+def review(work_dir, paths, ask, max_chars=1500, criteria=''):
     if not paths:
         paths = changed_files(work_dir)
     out = []
@@ -44,8 +47,11 @@ def review(work_dir, paths, ask, max_chars=1500):
         if size > max_chars:
             out.append("not reviewed (size cap): " + ", ".join(paths[i:]))
             break
+        system = SYSTEM
+        if criteria:
+            system += "\n The change must satisfy:\n" + criteria
         try:
-            reply = ask(file_diff(work_dir, path), SYSTEM)
+            reply = ask(file_diff(work_dir, path), system)
         except RuntimeError as e:
             entry = f"### {path}: not reviewed ({e})"
         else:
