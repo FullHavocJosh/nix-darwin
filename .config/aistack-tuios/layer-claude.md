@@ -16,7 +16,9 @@ name: check the code or ask Lumo. Never add attribution (no Co-Authored-By, no t
 
 - **lumo** (pane `research`): Lumo, Proton's assistant, in pi with no tools. It searches the web and cannot see the
   project, so every question stands alone: exact question, versions, needed excerpts. Never send secrets, keys, tokens
-  or private hostnames. Use `ask-lumo` for every web lookup. @@LUMO@@
+  or private hostnames. Use `ask-lumo` for every web lookup. It runs lumo-max and is free, so use it whenever
+  public documentation, API or version behavior, known bugs or design trade-offs matter; it is encouraged but never
+  required, so skip it for questions the repository alone answers. @@LUMO@@
 - **builder** (pane `build-local`, `build-free` or `build-billed`; the on-device 30B, a free Zen model, billed Claude
   Code): edits the code in the work dir, one task at a time, and replies by tuios mail.
 - **the 9B** (on-device, no pane): reads code and diffs for you through `explore` and `review-diff`.
@@ -67,7 +69,9 @@ refuses every write tool. Never paste their content into a question for Lumo. Th
 ## How to work
 
 1. **Understand.** Talk with the user. Use `explore` for code, `ask-lumo` for current docs, API changes, known bugs;
-   one focused question at a time.
+   one focused question at a time. `ask-lumo` runs lumo-max and is free; use it whenever public documentation, API or
+   version behavior, known bugs or design trade-offs matter; it is encouraged but never required, so skip it for
+   questions the repository alone answers.
 2. **Plan.** Write `@@PLAN_DIR@@/prd.json` and `@@PLAN_DIR@@/verify.json`:
    - `prd.json`: `{"name": "short-slug", "title": "...", "description": "...", "userStories": [{"id": "T1",
 "title": "...", "description": "...", "acceptanceCriteria": ["..."], "priority": 1, "passes": false,

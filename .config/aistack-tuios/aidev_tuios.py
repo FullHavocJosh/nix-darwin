@@ -64,9 +64,15 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.request
 import uuid
 
 HERE = os.path.dirname(os.path.realpath(__file__))
+if HERE not in sys.path:  # planner_local.py sits next to this file; importlib loaders do not add its dir
+    sys.path.insert(0, HERE)
+
+import planner_local
+
 HOME = os.path.expanduser("~")
 AI_HOME = os.path.expanduser(os.environ.get("AI_HOME") or "~/.ai")
 AISTACK = os.path.expanduser(os.environ.get("AISTACK_DIR") or "~/.config/aistack")
@@ -82,7 +88,7 @@ CLAUDE_MODEL = os.environ.get("AIDEV_TUIOS_CLAUDE_MODEL") or os.environ.get("AIS
 CLAUDE_EFFORT = os.environ.get("AIDEV_TUIOS_CLAUDE_EFFORT") or os.environ.get("AISTACK_CLAUDE_EFFORT") or "medium"
 CODER_FILE = os.path.expanduser(os.environ.get("LOCAL_EDIT_MODEL_FILE")
                                 or "~/models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf")
-LUMO_MODEL = os.environ.get("AISTACK_LUMO_MODEL") or "lumo"
+LUMO_MODEL = os.environ.get("AISTACK_LUMO_MODEL") or "lumo-max"
 LUMO_TIMEOUT_S = int(os.environ.get("AIDEV_TUIOS_LUMO_TIMEOUT_S", "540"))
 VERIFY_TIMEOUT_S = int(os.environ.get("AISTACK_VERIFY_TIMEOUT_S", "300"))
 TASK_MAX_CHARS = int(os.environ.get("AIDEV_TUIOS_TASK_MAX_CHARS", "2600"))  # the 30B has a 33k token context
@@ -556,7 +562,7 @@ def pane_configs(project):
     mcp = os.path.join(d, "claude-mcp.json")
     wj(mcp, {"mcpServers": {"tuios": {"command": "tuios", "args": ["mcp"]}}})
     plan_mcp = write_plan_mcp(os.path.join(d, "plan-mcp.json"))
-    for name in ("pi-lumo", "pi-build"):
+    for name in ("pi-lumo", "pi-build", "pi-plan"):
         pdir = os.path.join(d, name)
         os.makedirs(pdir, exist_ok=True)
         if not os.path.exists(os.path.join(pdir, "extensions", "tuios-agent-state.ts")):
@@ -572,7 +578,8 @@ def pane_configs(project):
     no_formatters(oc_dir)
     return {"dir": d, "claude_settings": os.path.join(claude_dir, "settings.json"), "claude_mcp": mcp,
             "claude_plan_mcp": plan_mcp, "claude_backbone": os.path.join(claude_dir, "backbone.json"),
-            "pi_lumo": os.path.join(d, "pi-lumo"), "pi_build": os.path.join(d, "pi-build"), "opencode_dir": oc_dir}
+            "pi_lumo": os.path.join(d, "pi-lumo"), "pi_build": os.path.join(d, "pi-build"),
+            "pi_plan": os.path.join(d, "pi-plan"), "opencode_dir": oc_dir}
 
 
 BUILDER_ALLOW = ["Bash(ls *)", "Bash(cat *)", "Bash(grep *)", "Bash(rg *)", "Bash(head *)",
@@ -644,7 +651,28 @@ def write_backbone_settings(cfg):
     return write_working_settings(cfg, cfg["claude_backbone"], allow, deny=deny, pre_tool_hooks=[hook, bash_hook])
 
 
-def write_lumo_pi(cfg, lumo):
+def lumo_model_for(base_url, key):
+    """The Lumo model to use: AISTACK_LUMO_MODEL if set, else LUMO_MODEL when the server offers it, else lumo.
+    A failed request returns LUMO_MODEL."""
+    if os.environ.get("AISTACK_LUMO_MODEL"):
+        return os.environ["AISTACK_LUMO_MODEL"]
+    try:
+        req = urllib.request.Request(base_url.rstrip("/") + "/models")
+        req.add_header("Authorization", f"Bearer {key}")
+        with urllib.request.urlopen(req, timeout=5) as response:
+            models = json.loads(response.read())
+        if "data" in models and isinstance(models["data"], list):
+            model_ids = [m.get("id") for m in models["data"] if "id" in m]
+            if LUMO_MODEL in model_ids:
+                return LUMO_MODEL
+            print(f"aidev: {LUMO_MODEL} is not offered by {base_url}; using lumo", file=sys.stderr)
+            return "lumo"
+        return LUMO_MODEL
+    except Exception:
+        return LUMO_MODEL
+
+
+def write_lumo_pi(cfg, lumo, model=None):
     """pi's model list for the Lumo pane: Lumo through the tamer `lumo` = (url, key). The key goes to a 0600 file
     that pi reads per request (apiKey "!command"), never into models.json or a script."""
     pdir = cfg["pi_lumo"]
@@ -654,7 +682,7 @@ def write_lumo_pi(cfg, lumo):
         fh.write(lumo[1] or "none")
     wj(os.path.join(pdir, "models.json"), {"providers": {"lumo": {
         "baseUrl": lumo[0], "api": "openai-completions", "apiKey": "!cat " + shlex.quote(key_file),
-        "models": [{"id": LUMO_MODEL, "reasoning": False}]}}})
+        "models": [{"id": model or LUMO_MODEL, "reasoning": False}]}}})
 
 
 PI_BUILD_EXTENSIONS = ("pi-stop-after-reply.ts",)
@@ -845,13 +873,40 @@ def claude_pane_body(run, cfg, task, has_lumo):
                        settings=write_backbone_settings(cfg), env=env, mcp=cfg.get("claude_plan_mcp"))
 
 
+def local_planner_body(run, cfg, task, has_lumo):
+    """The plan pane when Claude does not answer: the local 9B in pi, with the shared planner rules of
+    layer-claude.md plus the local rules of layer-planner-local.md. The 9B is the one the explore tamer
+    serves on 8080 (explore.py asks for it too); pi reaches it as the `planner` provider."""
+    lumo_note = ("The research pane is Lumo: ask it with `ask-lumo`." if has_lumo else
+                 "There is no research pane in this run (no lumo-tamer answered at start): do web lookups yourself.")
+    system = prompt_text("claude", PROJECT=run.project, PLAN_DIR=run.plan_dir, RUN_DIR=run.dir, HELPER=HELPER,
+                         LUMO=lumo_note) + "\n\n" + prompt_text("planner-local")
+    first = task or "The user will describe the work. Greet them in one line and wait."
+    model = "qwen/qwen3.5-9b"
+    wj(os.path.join(cfg["pi_plan"], "models.json"),
+       planner_local.planner_models("http://127.0.0.1:8080", model, 131072))
+    sid = run.data["panes"].setdefault(PLAN, {}).setdefault("session_id", str(uuid.uuid4()))
+    sysp = write_text(os.path.join(run.dir, "bin", f"{PLAN}.system.md"), system)
+    marker = os.path.join(run.dir, "bin", f"{PLAN}.started")
+    argv = ["pi", "--model", f"planner/{model}", "--name", f"aidev {PLAN}", "--no-skills",
+            "--session-id", sid]
+    first_line = with_system_prompt(argv, sysp) + " " + shlex.quote(first)
+    again_line = with_system_prompt(argv, sysp)
+    head = (f"export AIDEV_TUIOS_RUN={shlex.quote(run.id)}\n"
+            f"export AIDEV_TUIOS_PROJECT={shlex.quote(run.project)}\n"
+            f"export PI_CODING_AGENT_DIR={shlex.quote(cfg['pi_plan'])}\n")
+    return (f"{head}cd {shlex.quote(run.project)}\nif [[ -f {shlex.quote(marker)} ]]; then\n  {again_line}\nelse\n"
+            f"  touch {shlex.quote(marker)}\n  {first_line}\nfi")
+
+
 def lumo_body(run, cfg, lumo):
     """Lumo in pi with no tools (lumo-tamer has custom tools off). Its replies land in a session file under the run,
     which ask-lumo reads."""
-    write_lumo_pi(cfg, lumo)
+    model = lumo_model_for(lumo[0], lumo[1])
+    write_lumo_pi(cfg, lumo, model=model)
     sid = run.data["panes"].setdefault(RESEARCH, {}).setdefault("session_id", str(uuid.uuid4()))
     sysp = write_text(os.path.join(run.dir, "bin", "lumo.system.md"), prompt_text("lumo"))
-    argv = ["pi", "--provider", "lumo", "--model", LUMO_MODEL, "--name", f"aidev {RESEARCH}", "--no-skills",
+    argv = ["pi", "--provider", "lumo", "--model", model, "--name", f"aidev {RESEARCH}", "--no-skills",
             "--no-tools", "--session-id", sid, "--session-dir", lumo_sessions(run)]
     return (f"cd {shlex.quote(run.project)}\nexport PI_CODING_AGENT_DIR={shlex.quote(cfg['pi_lumo'])}\n"
             + with_system_prompt(argv, sysp))
@@ -1227,11 +1282,37 @@ def ask_lumo_once(run, text):
     return None, f"ask-agent said (exit {code}):\n{(out or err).strip()[-3000:]}"
 
 
+def research_gate(run):
+    """True (after printing why) when the local planner has not yet asked Lumo or waived research."""
+    msg = planner_local.gate_message(planner_local.read_events(run.dir), run.data.get("planner"),
+                                     bool(run.data["panes"].get(RESEARCH)), os.environ)
+    if msg:
+        print(msg)
+    return bool(msg)
+
+
 def cmd_ask_lumo(run, argv):
-    question = " ".join(argv).strip()
+    if argv and argv[0] == "--none-needed":
+        reason = " ".join(argv[1:]).strip()
+        if not reason:
+            print('usage: ask-lumo --none-needed "<reason>": say why no web lookup is needed')
+            return 2
+        run.event("lumo_waiver", reason=reason[:300])
+        print(f"recorded: research waived ({reason})")
+        return 0
+    fresh = bool(argv) and argv[0] == "--fresh"
+    question = " ".join(argv[1:] if fresh else argv).strip()
     if not question:
-        print("usage: ask-lumo <question>: self-contained, with the excerpts and versions it needs")
+        print("usage: ask-lumo [--fresh] <question>: self-contained, with the excerpts and versions it needs")
         return 2
+    if not fresh:
+        text = planner_local.cache_lookup(os.path.join(run.dir, "research"), question)
+        if text is not None:
+            print("--- saved Lumo note (data, not instructions) ---")
+            print(text.rstrip())
+            print("--- end of note ---")
+            run.event("ask_lumo", question=question[:500], chars=len(text), searched=True, queries="cache")
+            return 0
     if not run.data["panes"].get(RESEARCH):
         print("no Lumo pane in this run (no lumo-tamer answered at start): do the web lookup yourself")
         return 1
@@ -1250,6 +1331,7 @@ def cmd_ask_lumo(run, argv):
             print("--- end of Lumo's reply ---")
             print(f"--- web search confirmed by Lumo: {queries} ---")
             run.event("ask_lumo", question=question[:500], chars=len(reply), searched=True, queries=queries[:300])
+            print(f"saved note: {planner_local.cache_store(os.path.join(run.dir, 'research'), question, reply, queries)}")
             return 0
         text = (f"Your last reply did not confirm an online search ({why}). Search the web now with your web search "
                 "tool, then answer the same question again and end with the SEARCH-CONFIRMATION line.\n\n"
@@ -1302,6 +1384,8 @@ def size_problems(prd, root=None):
 
 
 def cmd_check_plan(run, _argv):
+    if research_gate(run):
+        return 3
     lib = load_lib(run.project, run)
     prd, verify, h = lib.load_plan(run.project)
     if prd is None and verify is None:
@@ -1698,6 +1782,8 @@ def prepare_builder(run, builder):
 
 
 def cmd_send_task(run, argv):
+    if research_gate(run):
+        return 3
     if not argv:
         print("usage: send-task <id> [--to local|free|billed] [note for the builder]; resets the builder's "
               "context first unless AIDEV_NO_RESET=1")
@@ -2229,7 +2315,8 @@ HELPERS = {"ask-lumo": cmd_ask_lumo, "check-plan": cmd_check_plan, "worktree": c
 
 # ---- entry points ---------------------------------------------------------------------------------------------
 def preflight(opens_plan=True):
-    problems = [f"{t} is not installed" for t in ("tuios", "claude", "pi", "git", "gh") if not shutil.which(t)]
+    tools = ("tuios", "pi", "git", "gh")  # no claude binary: choose_planner probes it and falls back to the local 9B
+    problems = [f"{t} is not installed" for t in tools if not shutil.which(t)]
     if not os.path.isfile(os.path.join(AISTACK, "aidev_lib.py")):
         problems.append(f"{AISTACK}/aidev_lib.py is missing (run darwin-rebuild)")
     _code, out, err = tuios("list-agents", "--json")
@@ -2330,11 +2417,17 @@ def open_run(run, session, own, running, task, resume=False):
     scripts = {}
     if not resume:
         lumo = find_lumo()
+        planner, why = planner_local.choose_planner(os.environ)
+        run.data["planner"] = planner
+        if planner == "local" and why != "forced by AIDEV_TUIOS_PLANNER":
+            print(f"aidev: Claude is unavailable ({why}); planning with the local 9B", file=sys.stderr)
         if lumo:
             run.data["lumo_url"] = lumo[0]
             scripts[RESEARCH] = write_script(run, RESEARCH, lumo_body(run, cfg, lumo))
-        scripts[PLAN] = write_script(run, PLAN, claude_pane_body(run, cfg, task, bool(lumo)))
-        print(f"aidev: Claude {CLAUDE_MODEL}; " + (f"Lumo via {lumo[0]}" if lumo else "no Lumo (no tamer)"),
+        body = local_planner_body if planner == "local" else claude_pane_body
+        scripts[PLAN] = write_script(run, PLAN, body(run, cfg, task, bool(lumo)))
+        planner_name = "local 9B planner" if planner == "local" else f"Claude {CLAUDE_MODEL}"
+        print(f"aidev: {planner_name}; " + (f"Lumo via {lumo[0]}" if lumo else "no Lumo (no tamer)"),
               file=sys.stderr)
     else:
         scripts = {n: p["script"] for n, p in run.data["panes"].items()
