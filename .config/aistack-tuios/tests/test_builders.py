@@ -649,6 +649,8 @@ def main():
         check("free_limit_hit true on the sentence", a.free_limit_hit("s", "build-free") is True)
         a.tuios = lambda *args, **kw: (0, "free usage limit reached", "")
         check("free_limit_hit is case-insensitive", a.free_limit_hit("s", "build-free") is True)
+        a.tuios = lambda *args, **kw: (0, "OpenCode Go 5 hour usage limit reached. Switch to a free model", "")
+        check("free_limit_hit true on the Go limit", a.free_limit_hit("s", "build-free") is True)
         a.tuios = lambda *args, **kw: (0, "normal screen", "")
         check("free_limit_hit false on a normal screen", a.free_limit_hit("s", "build-free") is False)
         a.tuios = lambda *args, **kw: (1, "Free usage limit reached", "")
@@ -789,6 +791,24 @@ def main():
         check("fallback tried model goes to billed", code == 0 and fcb and fcb[-1] == ["billed"]
               and "no free model left" in text, (code, text, fcb))
         check("fallback types /exit into free pane", any("/exit" in " ".join(c) for c in ftuios), ftuios)
+    finally:
+        a.zen_status, a.restart_free_pane, a.cmd_builder, a.tuios = freal
+
+    frun = a.Run(p, "20260101-000007")
+    frun.data["builder"] = "build-free"
+    frun.data["zen_model"] = "m1"
+    frun.data["zen_tried"] = ["m2"]
+    frestarted = []
+    freal = (a.zen_status, a.restart_free_pane, a.cmd_builder, a.tuios)
+    a.zen_status = lambda r, refresh=False: {"state": "available", "model": "m2"}
+    a.restart_free_pane = lambda r, model=None, wait=90: (frestarted.append(model) or True)
+    a.cmd_builder = lambda r, argv: 0
+    a.tuios = lambda *args, **kw: (0, "", "")
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = a.cmd_fallback(frun, ["T3"])
+        check("fallback retries a model from before its limit reset", code == 0 and frestarted == ["m2"],
+              (code, frestarted))
     finally:
         a.zen_status, a.restart_free_pane, a.cmd_builder, a.tuios = freal
 
