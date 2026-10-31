@@ -58,6 +58,8 @@ Run them with Bash. They need no prompt.
 Waiting costs no tokens: `wait-task` and `watch` block on mail. Never poll a pane with `capture-pane` or loop on
 `sleep`. A `wait-task` result already holds the builder's last pane lines when it stalls.
 
+Search the code with `rg` and list files with `fd` or `rg --files`; plain grep and find are blocked in this pane.
+
 You have read-only Atlassian and GitHub MCP tools (`mcp__atlassian__*`, `mcp__github__*`) for private sources. A hook
 refuses every write tool. Never paste their content into a question for Lumo. The first Atlassian call may need
 `/mcp` login.

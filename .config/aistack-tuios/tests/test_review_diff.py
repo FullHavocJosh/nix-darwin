@@ -51,7 +51,7 @@ with tempfile.TemporaryDirectory() as d:
         review_diff.file_diff(d, "b.txt") == "+new1\n+new2\n",
         review_diff.file_diff(d, "b.txt"),
     )
-    check("file_diff cut", len(review_diff.file_diff(d, "a.txt", 5)) == 5)
+    check("file_diff cut", review_diff.file_diff(d, "a.txt", 5).endswith('[diff truncated]') and review_diff.file_diff(d, "a.txt", 5)[:5] == review_diff.file_diff(d, "a.txt", 10000)[:5])
 
     def ask(prompt, system):
         return "no findings" if "+three" in prompt else "line 2: bug"
