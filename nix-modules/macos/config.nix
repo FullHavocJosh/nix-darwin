@@ -591,6 +591,7 @@
         # Ctrl-U (0x15) first clears a half-typed command line, so the source line never runs glued onto it. Skipped:
         # agents that are working (mid-stream) or waiting on a prompt (tuios's rule: never type into needs_input), ssh
         # and mosh panes (the Ctrl-Z would reach the remote job), and the pane running this darwin-rebuild.
+        # Panes whose foreground group holds more than one process are skipped (they are agent panes with wrapper scripts).
         if command -v tuios &>/dev/null; then
           # The daemon's pid file (pgrep does not list the daemon process on macOS).
           tuios_daemon=$(cat "/tmp/tuios-$(id -u)/tuios.sock.pid" 2>/dev/null)
@@ -615,6 +616,11 @@
                   case "$fg" in
                     *darwin-rebuild*) continue ;;
                   esac
+                  # Skip panes whose window pid is a wrapper script (agent panes with child processes)
+                  fg_count=$(echo "$fg" | wc -l)
+                  if [ "$fg_count" -gt 1 ]; then
+                    continue
+                  fi
                   case "$(echo "$fg" | awk 'NR==1 {print $3}' | xargs basename 2>/dev/null)" in
                     ssh | mosh | mosh-client) continue ;;
                   esac
