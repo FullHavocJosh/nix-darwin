@@ -209,25 +209,40 @@ def advisor_prompt():
         fh.write(text.strip() + "\n\nThe user cannot see your tools, only your replies. Be short.\n")
     return path
 
+def plan_pane_open():
+    session = os.environ.get('AIDEV_TUIOS_SESSION') or os.environ.get('TUIOS_SESSION')
+    if not session:
+        return False
+    code, out = run(['tuios','list-windows','-s',session,'--json'])
+    if code != 0:
+        return False
+    try:
+        data = json.loads(out)
+    except ValueError:
+        return False
+    return any(w.get('custom_name') == 'plan' for w in data.get('windows') or [])
+
+
+def start_aidev(extra):
+    env = {**os.environ, **extra}
+    if plan_pane_open():
+        env['AIDEV_TUIOS_OWN_SESSION'] = '1'
+        print('a plan pane is already open; starting in its own session')
+    else:
+        env['AIDEV_TUIOS_NO_ATTACH'] = '1'
+    code = subprocess.run([sys.executable, os.path.join(HERE, 'aidev_tuios.py'), 'start'], cwd=os.getcwd(), env=env, check=False).returncode
+    if code != 0:
+        input('aidev start failed; Enter for a shell ')
+    os.execvp('zsh', ['zsh', '-i'])
 
 def launch(key):
     cwd = os.getcwd()
     sys.stdout.write("\x1b[?25h\x1b[H\x1b[2J")
     sys.stdout.flush()
     if key == "claude":
-        env = {**os.environ, "AIDEV_TUIOS_ADVISOR": "1", "AIDEV_TUIOS_NO_ATTACH": "1"}
-        code = subprocess.run([sys.executable, os.path.join(HERE, "aidev_tuios.py"), "start"], cwd=cwd, env=env,
-                              check=False).returncode
-        if code:
-            input("aidev start failed; Enter for a shell ")
-        os.execvp("zsh", ["zsh", "-i"])
+        start_aidev({'AIDEV_TUIOS_ADVISOR': '1'})
     elif key in ("claude-plan", "9b-plan"):
-        env = {**os.environ, "AIDEV_TUIOS_NO_ATTACH": "1", "AIDEV_TUIOS_PLANNER": "claude" if key == "claude-plan" else "local"}
-        code = subprocess.run([sys.executable, os.path.join(HERE, "aidev_tuios.py"), "start"], cwd=cwd, env=env,
-                              check=False).returncode
-        if code:
-            input("aidev start failed; Enter for a shell ")
-        os.execvp("zsh", ["zsh", "-i"])
+        start_aidev({'AIDEV_TUIOS_PLANNER': 'claude' if key == 'claude-plan' else 'local'})
     mod = load_aidev()
     cfg = mod.pane_configs(mod.project_root(cwd))
     prompt = advisor_prompt()
