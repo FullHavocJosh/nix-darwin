@@ -291,19 +291,9 @@ STARTUP
   _launch_terminal_window "$attach_script" "$name"
 }
 
-# aidev [task] opens the tuios panes; aidev_tuios.py also takes the script forms (-p, --handoff, --rfc, --direct).
-aidev() {
-  _tuios_guard || return 1
-  python3 "$HOME/.config/aistack-tuios/aidev_tuios.py" start "$@"
-}
-
-aidev_status() {
-  python3 "$HOME/.config/aistack-tuios/aidev_tuios.py" status "$@"
-}
-
-ai_tuios() {
-  _tuios_guard || return 1
-  python3 "$HOME/.config/aistack-tuios/aidev_tuios.py" ai "$@"
+# ai opens the aidev picker (Claude/9B/30B advisor and plan rows); runs inline, in or out of tuios.
+ai() {
+  python3 "$HOME/.config/aistack-tuios/aidev_pick.py" "$@"
 }
 
 # Waits for window $1's visible content to go still (three identical, non-empty reads; about 6s at most) before keys
