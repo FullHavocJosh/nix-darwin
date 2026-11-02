@@ -119,12 +119,16 @@ def check_zen_and_go():
     script = os.path.join(AISTACK, "zen_models.py")
     code, out = run([sys.executable, script, "status", "--private", "no", "--probe", "--all", "--json"], timeout=330)
     try:
-        models = json.loads(out).get("models") or []
+        doc = json.loads(out)
+        models = doc.get("models") or []
     except ValueError:
-        models = []
+        doc, models = {}, []
     if code is None or not out.strip():
         set_state("zen", "maybe", "zen_models.py status gave no answer")
         return set_state("go", "maybe", "zen_models.py status gave no answer")
+    if doc.get("no_key"):
+        set_state("zen", "bad", "no OpenCode Zen API key")
+        return set_state("go", "bad", "no OpenCode Zen API key")
     for key, go in (("zen", False), ("go", True)):
         rows = [m for m in models if str(m.get("model", "")).startswith("opencode-go/") == go]
         states = {m.get("state") for m in rows}

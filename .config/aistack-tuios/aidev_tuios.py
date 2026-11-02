@@ -720,8 +720,24 @@ def repo_private(project):
     return os.environ.get("AIDEV_TUIOS_REPO_PRIVATE") or private  # tests: a scratch repo has no GitHub remote
 
 
+NO_ZEN_KEY = "no OpenCode Zen API key on this host: OpenCode builders are off"
+
+
+def zen_key_present():
+    """True when this host has an OpenCode Zen API key (zen_models.key_present); False on any error (fail closed)."""
+    try:
+        spec = importlib.util.spec_from_file_location("zen_models", os.path.join(AISTACK, "zen_models.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return bool(mod.key_present())
+    except Exception:
+        return False
+
+
 def zen_model(project):
     """The free Zen model for this repository, or None (no key, or nothing offered)."""
+    if not zen_key_present():
+        return None
     r = subprocess.run([sys.executable, os.path.join(AISTACK, "zen_models.py"), "choose", "--private",
                         repo_private(project)], capture_output=True, text=True, check=False)
     try:
@@ -732,7 +748,10 @@ def zen_model(project):
 
 def zen_status(run, refresh=False):
     """State of the free Zen models for this run's repository: {"state", "model", "detail", "models"}. state is
-    "none" (nothing offered), "exhausted", "available" or "unknown". The best model is kept in run.data["zen_model"]."""
+    "none" (nothing offered, or no API key), "exhausted", "available" or "unknown". The best model is kept in
+    run.data["zen_model"]."""
+    if not zen_key_present():
+        return {"state": "none", "model": None, "detail": NO_ZEN_KEY, "models": []}
     cmd = [sys.executable, os.path.join(AISTACK, "zen_models.py"), "status", "--private", repo_private(run.project),
            "--probe", "--json"] + (["--refresh"] if refresh else [])
     try:
@@ -742,6 +761,8 @@ def zen_status(run, refresh=False):
         best = st.get("best") or None
     except (ValueError, AttributeError, subprocess.TimeoutExpired, OSError):
         return {"state": "unknown", "model": None, "detail": "zen_models.py status failed", "models": []}
+    if st.get("no_key"):
+        return {"state": "none", "model": None, "detail": NO_ZEN_KEY, "models": []}
     if not models:
         state = "none"
     elif st.get("all_exhausted"):
@@ -947,6 +968,8 @@ def build_body(run, cfg, kind, name=None):
         pane["builder"] = "on-device Qwen3-Coder-30B (free)"
         return (pane_path + f"cd {shlex.quote(wd)}\nexport AIDEV_TUIOS_BUILDER=1\n"
                 f"export PI_CODING_AGENT_DIR={shlex.quote(cfg['pi_build'])}\n" + with_system_prompt(argv, sysp))
+    if not zen_key_present():
+        return None
     model = run.data.get("zen_model") or zen_model(run.project)
     if not model:
         return None
@@ -966,6 +989,8 @@ def opencode_model(model):
 def no_builder_why(kind):
     if kind == "local":
         return f"no model file {CODER_FILE}"
+    if not zen_key_present():
+        return NO_ZEN_KEY
     return ("no free Zen model fits this repo (a private repo needs a zero-retention one): "
             f"python3 {AISTACK}/zen_models.py choose --private yes")
 

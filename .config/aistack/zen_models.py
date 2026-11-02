@@ -43,6 +43,30 @@ EXHAUSTED_RE = re.compile(r"free usage exceeded|usage exceeded|rate.?limit|\b429
 STATUS_CACHE = os.environ.get("AISTACK_ZEN_STATUS_CACHE") or os.path.expanduser("~/.cache/aistack/zen-status.json")
 STATUS_TTL_S = 600
 RETRY_RE = re.compile(r"retrying in ([^\n]*?)(?: attempt|$)", re.IGNORECASE | re.MULTILINE)
+NO_KEY = "no OpenCode Zen API key on this host: Zen and Go models are disabled"
+HOME = os.path.expanduser("~")
+
+
+def key_present():
+    """True when this host has an OpenCode Zen API key; AISTACK_ZEN_KEY=1/0 overrides (tests)."""
+    override = os.environ.get("AISTACK_ZEN_KEY")
+    if override == "1":
+        return True
+    if override == "0":
+        return False
+    if os.environ.get("OPENCODE_ZEN_API_KEY"):
+        return True
+    for f in (".zshrc_envvars", ".zshrc_envvars_insecure", ".config/opencode/.env"):
+        try:
+            if "OPENCODE_ZEN_API_KEY" in open(os.path.join(HOME, f), errors="replace").read():
+                return True
+        except OSError:
+            pass
+    try:
+        auth = json.load(open(os.path.join(HOME, ".local/share/opencode/auth.json")))
+        return bool((auth.get("opencode") or {}).get("key"))
+    except (OSError, ValueError):
+        return False
 
 
 def _age_h(path):
@@ -310,6 +334,20 @@ def main(argv=None):
     # test hooks for shell-level tests: a fixed catalog and a fixed list of offered models
     a.catalog = a.catalog or os.environ.get("AISTACK_ZEN_CATALOG")
     a.offered = a.offered if a.offered is not None else os.environ.get("AISTACK_ZEN_OFFERED")
+    if not key_present():
+        if a.cmd == "choose":
+            print(json.dumps({"model": None, "no_key": True, "private": a.private == "yes", "free_models": [], "zero_retention": [], "warnings": [NO_KEY], "notes": []}))
+            return 0
+        elif a.cmd == "best":
+            print(NO_KEY, file=sys.stderr)
+            return 1
+        elif a.cmd == "status":
+            st = {"private": a.private == "yes", "models": [], "usable": [], "best": None, "all_exhausted": False, "no_key": True, "warnings": [NO_KEY]}
+            if a.json:
+                print(json.dumps(st))
+            else:
+                print("best: none (" + NO_KEY + ")")
+            return 1
     try:
         policy = json.load(open(a.policy))
     except (OSError, ValueError):

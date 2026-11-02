@@ -13,6 +13,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 import zen_models as z
 
+os.environ["AISTACK_ZEN_KEY"] = "1"
+
 FAILS = []
 
 def check(name, cond, extra=""):
@@ -83,6 +85,24 @@ rc, out, _ = run("best", "--catalog", cf, "--offered", ",".join(sorted(ALL)), "-
 check("best prints Big Pickle for other callers", rc == 0 and out.strip() == "big-pickle", out)
 rc, out, err = run("best", "--catalog", cf, "--offered", "paid-one", "--policy", pf)
 check("best exits 1 with the reason when nothing is free", rc == 1 and "not a free Zen option anymore" in err, err)
+print("no API key")
+os.environ["AISTACK_ZEN_KEY"] = "0"
+check("key_present() is False with AISTACK_ZEN_KEY=0", z.key_present() is False)
+def boom(*args, **kw):
+    raise RuntimeError("must not run without a key")
+orig = (z.load_catalog, z.offered_ids, z.offered_go_ids)
+z.load_catalog = z.offered_ids = z.offered_go_ids = boom
+try:
+    rc, out, _ = run("choose", "--private", "no")
+    check("no key: choose gives no model and no_key", rc == 0 and json.loads(out)["model"] is None and json.loads(out)["no_key"] is True, out)
+    rc, _, err = run("best")
+    check("no key: best exits 1 with the reason", rc == 1 and z.NO_KEY in err, err)
+    rc, out, _ = run("status", "--private", "no", "--json")
+    check("no key: status exits 1 with no models and no_key", rc == 1 and json.loads(out)["models"] == [] and json.loads(out)["no_key"] is True, out)
+finally:
+    z.load_catalog, z.offered_ids, z.offered_go_ids = orig
+    os.environ["AISTACK_ZEN_KEY"] = "1"
+check("key_present() is True with AISTACK_ZEN_KEY=1", z.key_present() is True)
 
 print("probing")
 EXH = "Free usage exceeded, add credits  retrying in 10h 37m attempt 1"

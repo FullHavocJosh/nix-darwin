@@ -14,6 +14,8 @@ import tempfile
 import threading
 import time
 
+os.environ["AISTACK_ZEN_KEY"] = "1"
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)  # .config/aistack-tuios
 os.environ.setdefault("AISTACK_DIR", os.path.realpath(os.path.join(ROOT, "..", "aistack")))
@@ -696,8 +698,9 @@ def main():
     saved_env = {k: os.environ.get(k) for k in ("TUIOS_ENV", "AIDEV_TEST_CMD", "AIDEV_TUIOS_BUILDER")}
     os.environ.pop("TUIOS_ENV", None)
     os.environ["AIDEV_TEST_CMD"] = "python3 -c 'import calc; calc.sub'"
-    real_headless, real_coder = a.edit_headless, a.CODER_FILE
+    real_headless, real_coder, real_zen = a.edit_headless, a.CODER_FILE, a.zen_status
     a.edit_headless, a.CODER_FILE = fake_headless, os.path.join(ep, "calc.py")  # any existing file: "the 30B is here"
+    a.zen_status = lambda r, refresh=False: {"state": "available", "model": "big-pickle", "detail": "", "models": []}
     cwd0 = os.getcwd()
     os.chdir(ep)
     real_stdout, sys.stdout = sys.stdout, io.StringIO()
@@ -712,7 +715,7 @@ def main():
     os.environ["AIDEV_TUIOS_BUILDER"] = "1"
     check("-p is refused inside a builder pane", a.cmd_edit(["x"]) == 2)
     os.chdir(cwd0)
-    a.edit_headless, a.CODER_FILE = real_headless, real_coder
+    a.edit_headless, a.CODER_FILE, a.zen_status = real_headless, real_coder, real_zen
     for k, v in saved_env.items():
         if v is None:
             os.environ.pop(k, None)
