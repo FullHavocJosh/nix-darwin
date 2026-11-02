@@ -45,6 +45,8 @@ declare -A SSH_TARGETS=(
 	["k3sworkervm0"]="havoc@k3sworkervm0.rollet.family"
 	["k3sworkervm1"]="havoc@k3sworkervm1.rollet.family"
 	["ha"]="root@homeassistant.rollet.family"
+	["steamdeck"]="deck@joshs-steamdeck.rollet.family"
+	["novadeck"]="armada@novadeck.rollet.family"
 )
 
 echo -e "${YELLOW}This script will copy your SSH public key to the following servers:${NC}"
@@ -65,23 +67,12 @@ check_host_reachable() {
 	local target=$1
 	local hostname=$(echo "$target" | cut -d'@' -f2)
 
-	# Try to resolve hostname first (use getent if host command not available)
-	if command -v host &>/dev/null; then
-		if ! host "$hostname" &>/dev/null; then
-			return 1
-		fi
-	elif command -v getent &>/dev/null; then
-		if ! getent hosts "$hostname" &>/dev/null; then
-			return 1
-		fi
-	fi
-	# If neither command is available, skip DNS check and try connection
-
-	# Quick TCP connection test on port 22 with 5 second timeout
-	if timeout 5 bash -c "cat < /dev/null > /dev/tcp/$hostname/22" 2>/dev/null; then
-		return 0
+	# nc uses the system resolver (host and bash /dev/tcp fail on IPs and on
+	# mDNS/Tailscale-resolved names); fall back to /dev/tcp only without nc
+	if command -v nc &>/dev/null; then
+		nc -z -w 5 "$hostname" 22 &>/dev/null
 	else
-		return 1
+		timeout 5 bash -c "cat < /dev/null > /dev/tcp/$hostname/22" 2>/dev/null
 	fi
 }
 
@@ -198,4 +189,4 @@ fi
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "You can now test the connections with your aliases:"
-echo "  sshmacbook, sshg14, sshazeroth, sshtestazeroth, sshmini, sshtruenas, ssh6rx26x1, sshcaitsg14, sshxps13, sshopnsense, ssh705g4, ssh4kfjsn2, ssh2fgjsn2, sshk3sworkervm0, sshk3sworkervm1, sshha"
+echo "  sshmacbook, sshg14, sshazeroth, sshtestazeroth, sshmini, sshtruenas, ssh6rx26x1, sshcaitsg14, sshxps13, sshopnsense, ssh705g4, ssh4kfjsn2, ssh2fgjsn2, sshk3sworkervm0, sshk3sworkervm1, sshha, sshsteamdeck, sshnovadeck"
