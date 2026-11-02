@@ -527,6 +527,8 @@ in
     onActivation.extraFlags = [ "--force" ];
     onActivation.autoUpdate = true;
     onActivation.upgrade = true;
+    # casks that update themselves or are :latest are skipped by brew upgrade without this
+    greedyCasks = true;
   };
 
   # Runs before brew bundle so Homebrew can link without conflict.
@@ -601,6 +603,9 @@ in
           # dumped to stdout instead of running.
           brew upgrade </dev/null 2>&1 || true
         fi
+
+        # Upgrade all packages
+        bash ${../../scripts/upgrade-all.sh} </dev/null || echo "WARNING: package upgrades failed -- see UPGRADE FAILURES above" >&2
 
         if [ -f "$HOME/.config/opencode/opencode.json" ]; then
           echo "Patching opencode.json with correct home path..."
