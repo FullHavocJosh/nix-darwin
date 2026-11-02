@@ -53,7 +53,7 @@ in
     # one fixed repository. It is gone.
 
     # Only the optional headless re-auth in watchdog.sh uses it (the laptop gets it from packages-gui.nix).
-    homebrew.casks = lib.mkIf cfg.lan [ "ungoogled-chromium" ];
+    homebrew.casks = lib.mkIf cfg.lan [ "helium-browser" ];
 
     # nix-darwin only assembles a fixed set of activationScripts names into the activate script; a custom
     # name (the first version used lumoTamerProvision) is silently dropped, so this hooks postActivation.

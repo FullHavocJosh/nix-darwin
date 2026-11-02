@@ -3,7 +3,7 @@
 # Helper functions and main workflow commands for git operations
 # =============================================================================
 
-# Helper function: Launch a script in a new terminal window (macOS + Linux)
+# Helper function: Launch a script in a new terminal window (macOS)
 # Usage: _launch_terminal_window <script_path> <label>
 # Returns 0 on success, 1 if no terminal could be found
 function _launch_terminal_window() {
@@ -26,10 +26,8 @@ function _launch_terminal_window() {
         return 0
         ;;
     esac
-    # Fallbacks: kitty, wezterm, then Terminal.app (always present)
-    if command -v kitty &>/dev/null; then
-      nohup kitty "$script" >/dev/null 2>&1 &
-    elif command -v wezterm &>/dev/null; then
+    # Fallbacks: wezterm, then Terminal.app (always present)
+    if command -v wezterm &>/dev/null; then
       nohup wezterm start -- "$script" >/dev/null 2>&1 &
     else
       open -a Terminal "$script"
@@ -38,19 +36,7 @@ function _launch_terminal_window() {
     return 0
   fi
 
-  # Linux
-  if command -v xdg-terminal-exec &>/dev/null; then
-    nohup xdg-terminal-exec "$script" >/dev/null 2>&1 &
-    echo "✓ Launched $label in new terminal window"
-    return 0
-  elif [ -n "$TERMINAL" ] && command -v "$TERMINAL" &>/dev/null; then
-    nohup "$TERMINAL" -e "$script" >/dev/null 2>&1 &
-    echo "✓ Launched $label in new terminal window"
-    return 0
-  fi
-
-  echo "✗ Could not determine default terminal"
-  echo "  Set \$TERMINAL environment variable or install xdg-terminal-exec"
+  # This should not happen in macOS
   return 1
 }
 

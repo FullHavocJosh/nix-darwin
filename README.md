@@ -1,11 +1,11 @@
-# Nix-Darwin Cross-Platform Dotfiles
+# Nix-Darwin macOS Dotfiles
 
 A comprehensive, declarative development environment configuration for **macOS** (using nix-darwin), with powerful AI-assisted Git workflow automation.
 
 ## 🎯 What This Repository Provides
 
 - **Declarative System Configuration** - Reproducible development environments across machines
-- **Cross-Platform Support** - macOS (nix-darwin) and Linux
+- **macOS Support - nix-darwin**
 - **AI-Powered Git Workflows** - Automated code review, commit messages, and PR generation
 - **Multiple Profile Support** - Personal and work configurations with profile-specific packages
 - **Complete Dev Environment** - Shell (zsh), editor (Neovim), terminal (tuios), window management, and more
@@ -47,7 +47,6 @@ nix-darwin/
 │
 ├── scripts/                            # Utility scripts
 │   ├── truenas-smb-monitor.sh          # TrueNAS SMB service monitor
-│   ├── install-nerd-fonts.sh           # Nerd Fonts installer
 │   ├── setup-ssh-keys.sh               # SSH key setup automation
 │   ├── check-timemachine-exclusions.sh # validates timemachine-exclusions.txt
 │   └── opnsense-routing.sh             # routing fix after plugging in the OPNsense LAN cable
@@ -74,8 +73,6 @@ nix-darwin/
 ├── .zshrc_functions_ai                 # AI provider selection & management
 ├── .zshrc_functions_tuios              # tuios session and aidev commands
 ├── .zshrc_os_macos                     # macOS-specific shell config
-├── .zshrc_os_linux                     # Linux-specific shell config
-├── .zshrc_os_linux_omarchy_*           # Linux shell configs
 ├── .zshrc_envvars_insecure             # Non-sensitive environment variables (tracked)
 ├── .github/workflows/validate.yml      # GitHub Actions workflow
 ├── timemachine-exclusions.txt          # Time Machine exclusions
@@ -189,15 +186,15 @@ Doppler `FullHavocJosh/root_macmini`, read on the desktop only (all optional):
 `LUMO_NTFY_URL` (full topic URL), `LUMO_NTFY_TOKEN` (ntfy access token).
 
 First setup and every re-auth: run `lumoreauth` on the MacBook (`.config/lumo/reauth.sh`). The Mini is headless, so the
-sign-in happens here: it opens Chromium with a temporary profile, you sign in to Lumo (Proton shows CAPTCHA and 2FA),
+sign-in happens here: it opens Helium with a temporary profile, you sign in to Lumo (Proton shows CAPTCHA and 2FA),
 and it runs `tamer auth browser` on the Mini through an SSH reverse tunnel to that browser, restarts tamer and shows
 the auth status. The profile is deleted on exit, because lumo-tamer's docs say not to reuse the same tokens on two
-machines. `lumoreauth --check` tests everything except the handover (Chromium starts, the tunnel carries its debug
+machines. `lumoreauth --check` tests everything except the handover (Helium starts, the tunnel carries its debug
 port) and changes nothing on the Mini. When auth fails, the watchdog's ntfy alert tells you to run it. Fully automatic
 re-auth is not possible while a CAPTCHA/2FA sign-in is required.
 
-(The watchdog still has an opt-in headless re-auth for a Chromium profile signed in on the Mini itself
-(`~/.lumo-chromium` plus `~/.lumo-watchdog/auto-reauth`). It needs a GUI session on the Mini, so it is unused.)
+(The watchdog still has an opt-in headless re-auth for a Helium profile signed in on the Mini itself
+(`~/.lumo-browser` plus `~/.lumo-watchdog/auto-reauth`). It needs a GUI session on the Mini, so it is unused.)
 
 The MacBook runs its own tamer on loopback. pi's `lumo` provider still points at the Mini's tamer (port 3003, Doppler
 `LUMO_TAMER_API_KEY`). `lumo.nix` allows the Mini's node through the application firewall for this; tamer is protected
@@ -213,12 +210,6 @@ darwin-rebuild switch --flake ~/nix-darwin#macos_laptop
 darwin-rebuild switch --flake ~/nix-darwin#macos_desktop
 darwin-rebuild switch --flake ~/nix-darwin#macos_work
 ```
-
-### Linux
-
-Single profile focused on personal development and desktop environment.
-
-- Deployed via GNU Stow
 
 ## Terminal: tuios
 
@@ -449,7 +440,6 @@ All automatically installed via nix-darwin/package managers:
 ### Window Management
 
 - **AeroSpace** - macOS tiling window manager
-- **Hyprland** - Linux Wayland compositor
 
 ### Shell
 
@@ -510,10 +500,6 @@ Visit [search.nixos.org](https://search.nixos.org)
 nix flake update
 darwin-rebuild switch --flake ~/nix-darwin#macos_laptop
 ```
-
-### Linux
-
-Package management depends on the distribution.
 
 ## 🚀 Deployment with GNU Stow
 
@@ -577,18 +563,6 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 darwin-rebuild switch --flake ~/nix-darwin#macos_laptop --show-trace
 ```
 
-### Linux Issues
-
-**Missing commands:**
-
-```bash
-export PATH="$HOME/.local/bin:$HOME/go/bin:$HOME/.cargo/bin:$HOME/.npm-global/bin:$PATH"
-```
-
-**Tmux plugins not installed:**
-
-- Press `Prefix + I` in tmux
-
 ## 🔄 Updating This Configuration
 
 ### Pull Latest Changes
@@ -603,13 +577,6 @@ git pull
 ```bash
 nix flake update
 darwin-rebuild switch --flake ~/nix-darwin#macos_laptop
-```
-
-### Linux: Re-Stow Dotfiles
-
-```bash
-cd ~/nix-darwin
-stow -R . -t ~  # Re-stow (replaces existing symlinks)
 ```
 
 ## 📚 Additional Documentation

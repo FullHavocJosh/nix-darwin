@@ -10,14 +10,12 @@
     enable = true;
     casks = [
       "nikitabobko/tap/aerospace"
-      "hyper"
-      "kitty"
       "claude"
       "claude-code"
       "goland"
       "jetbrains-toolbox"
-      "ungoogled-chromium"
       "zen"
+      "helium-browser"
       "vlc"
       "balenaetcher"
       "xykong/tap/flux-markdown"
