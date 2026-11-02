@@ -10,8 +10,11 @@ import os
 import sys
 import tempfile
 
+os.environ["AISTACK_ZEN_KEY"] = "1"  # zen_models.key_present: existing tests assume a host with a Zen API key
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)  # .config/aistack-tuios
+os.environ["AISTACK_DIR"] = os.path.join(os.path.dirname(ROOT), "aistack")  # this checkout's zen_models.py
 FAILS = []
 
 
@@ -419,6 +422,25 @@ def main():
             return a.zen_status(zrun)
         rec = lambda m, st: {"model": m, "state": st, "detail": ""}
         check("zen none", zs({"models": [], "best": None})["state"] == "none")
+        s = zs({"models": [], "best": None, "no_key": True})
+        check("zen no_key json", s["state"] == "none" and "API key" in s["detail"], s)
+        os.environ["AISTACK_ZEN_KEY"] = "0"
+        fake_run, calls = a.subprocess.run, []
+        a.subprocess.run = lambda *args, **kw: (calls.append(args) or fake_run(*args, **kw))
+        real_gg = a.write_git_guard
+        a.write_git_guard = lambda r: a.write_text(os.path.join(r.dir, "bin", "guard", "git"), "")
+        try:
+            s = a.zen_status(zrun)
+            check("zen without a key is none and runs nothing", s["state"] == "none" and not calls, (s, calls))
+            check("zen_model without a key is None", a.zen_model(p) is None)
+            check("no_builder_why(free) without a key names the API key", "API key" in a.no_builder_why("free"))
+            zcfg = a.pane_configs(p)
+            zrun.data["zen_model"] = "big-pickle"
+            check("build_body free without a key ignores a cached zen_model",
+                  a.build_body(zrun, zcfg, "free", "build-free") is None)
+        finally:
+            os.environ["AISTACK_ZEN_KEY"] = "1"
+            a.subprocess.run, a.write_git_guard = fake_run, real_gg
         check("zen exhausted", zs({"models": [rec("m1", "exhausted")], "best": None, "all_exhausted": True})["state"]
               == "exhausted")
         s = zs({"models": [rec("m1", "exhausted"), rec("m2", "available")], "best": "m2", "all_exhausted": False})

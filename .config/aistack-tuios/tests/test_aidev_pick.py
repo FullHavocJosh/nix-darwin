@@ -148,9 +148,26 @@ def test_start_aidev():
         mod.subprocess.run = original_run
 
 
+def test_zen_and_go_no_key():
+    # zen_models.py status --json reports no_key on a host without an OpenCode Zen API key
+    original_run, original_set_state = mod.run, mod.set_state
+    calls = {}
+    try:
+        mod.run = lambda cmd, timeout=None: (1, json.dumps({"models": [], "no_key": True}))
+        mod.set_state = lambda key, state, detail: calls.__setitem__(key, (state, detail))
+        mod.check_zen_and_go()
+    finally:
+        mod.run, mod.set_state = original_run, original_set_state
+    for key in ("zen", "go"):
+        state, detail = calls.get(key, (None, ""))
+        check(f"no key sets {key} bad", state == "bad", f"{state}: {detail}")
+        check(f"no key names the API key for {key}", "API key" in detail, detail)
+
+
 def main():
     test_plan_pane_open()
     test_start_aidev()
+    test_zen_and_go_no_key()
     check("All tests completed", True)
     return 1 if FAILS else 0
 
