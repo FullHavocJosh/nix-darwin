@@ -31,7 +31,7 @@ if command -v doppler &>/dev/null; then
 else
   [ -f ~/.zshrc_envvars ] && source ~/.zshrc_envvars
 fi
-[ -f ~/.zshrc_os_linux ] && source ~/.zshrc_os_linux
+
 [ -f ~/.zshrc_os_macos ] && source ~/.zshrc_os_macos
 [ -f ~/.zshrc_personal ] && source ~/.zshrc_personal
 [ -f ~/.zshrc_work ] && source ~/.zshrc_work

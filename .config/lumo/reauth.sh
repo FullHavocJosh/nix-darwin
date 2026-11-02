@@ -4,7 +4,7 @@
 # SSH reverse tunnel to this browser's debug port. Needs Proton's CAPTCHA/2FA, so it is interactive.
 #
 #   lumoreauth           sign in, hand over, restart tamer, verify
-#   lumoreauth --check   everything except the handover: Chromium starts, the tunnel carries its debug port
+#   lumoreauth --check   everything except the handover: Helium starts, the tunnel carries its debug port
 #                        to the Mini. Changes nothing on the Mini.
 #   lumoauth             (this script with --local) sign in and give the session to THIS machine's own tamer, the
 #                        loopback-only one a laptop runs. No ssh, nothing on the Mini changes. Each machine gets its
@@ -18,7 +18,7 @@
 MINI=${LUMO_MINI_HOST:-macminim1.rollet.family}
 MINI_USER=${LUMO_MINI_USER:-havoc}
 SSH_KEY=${LUMO_SSH_KEY:-$HOME/.ssh/id_ed25519}
-CHROMIUM=${LUMO_CHROMIUM:-/Applications/Chromium.app/Contents/MacOS/Chromium}
+BROWSER=${LUMO_BROWSER:-/Applications/Helium.app/Contents/MacOS/Helium}
 LOCAL_PORT=${LUMO_CDP_PORT:-9222}
 REMOTE_PORT=${LUMO_CDP_REMOTE_PORT:-19222}
 CHECK=0 LOCAL=0
@@ -30,46 +30,46 @@ for arg in "$@"; do
   esac
 done
 
-# The Mini has no screen in use, so a browser opened here can never be signed in. Its sign-in always runs in Chromium
+# The Mini has no screen in use, so a browser opened here can never be signed in. Its sign-in always runs in Helium
 # on the MacBook, so lumoauth typed on the Mini runs this script there (it tunnels back to this Mini's tamer).
 MACBOOK=${LUMO_MACBOOK_HOST:-macbookm2pro.rollet.family}
 MACBOOK_USER=${LUMO_MACBOOK_USER:-havoc}
 if (( LOCAL )) && [[ ${(L)$(scutil --get LocalHostName 2>/dev/null)} == ${(L)MINI%%.*} ]]; then
-  print "This is the Mini: running lumoreauth on $MACBOOK instead, Chromium opens there..."
+  print "This is the Mini: running lumoreauth on $MACBOOK instead, Helium opens there..."
   fwd=""; (( CHECK )) && fwd=" --check"
   exec ssh -t -i "$SSH_KEY" -o ConnectTimeout=8 "$MACBOOK_USER@$MACBOOK" "zsh ~/.config/lumo/reauth.sh$fwd"
 fi
 
 SSH=(ssh -i "$SSH_KEY" -o BatchMode=yes -o ConnectTimeout=8 "$MINI_USER@$MINI")
 PROFILE=$(mktemp -d "${TMPDIR:-/tmp}/lumo-reauth.XXXXXX") || exit 1
-CHROMIUM_PID=""
+BROWSER_PID=""
 cleanup() {
-  [[ -n $CHROMIUM_PID ]] && kill $CHROMIUM_PID 2>/dev/null && sleep 1 && kill -9 $CHROMIUM_PID 2>/dev/null
+  [[ -n $BROWSER_PID ]] && kill $BROWSER_PID 2>/dev/null && sleep 1 && kill -9 $BROWSER_PID 2>/dev/null
   rm -rf "$PROFILE"
 }
 trap cleanup EXIT INT TERM
 die() { print -u2 -r -- "lumoreauth: $*"; exit 1; }
 
-[[ -x $CHROMIUM ]] || die "Chromium not found at $CHROMIUM (set LUMO_CHROMIUM)"
-lsof -nP -iTCP:$LOCAL_PORT -sTCP:LISTEN >/dev/null 2>&1 && die "port $LOCAL_PORT is already in use; quit any Chromium started with --remote-debugging-port"
+[[ -x $BROWSER ]] || die "Helium not found at $BROWSER (set LUMO_BROWSER)"
+lsof -nP -iTCP:$LOCAL_PORT -sTCP:LISTEN >/dev/null 2>&1 && die "port $LOCAL_PORT is already in use; quit any Helium started with --remote-debugging-port"
 (( LOCAL )) || "${SSH[@]}" true 2>/dev/null || die "cannot ssh to $MINI_USER@$MINI with $SSH_KEY"
 
-print "Starting Chromium with a temporary profile..."
-"$CHROMIUM" --remote-debugging-port=$LOCAL_PORT --remote-debugging-address=127.0.0.1 --user-data-dir="$PROFILE" \
+print "Starting Helium with a temporary profile..."
+"$BROWSER" --remote-debugging-port=$LOCAL_PORT --remote-debugging-address=127.0.0.1 --user-data-dir="$PROFILE" \
   --no-first-run --no-default-browser-check https://lumo.proton.me >/dev/null 2>&1 &
-CHROMIUM_PID=$!
+BROWSER_PID=$!
 for i in {1..30}; do curl -s -m 2 "http://127.0.0.1:$LOCAL_PORT/json/version" >/dev/null && break; sleep 1; done
-curl -s -m 2 "http://127.0.0.1:$LOCAL_PORT/json/version" >/dev/null || die "Chromium's debug port did not come up"
+curl -s -m 2 "http://127.0.0.1:$LOCAL_PORT/json/version" >/dev/null || die "Helium's debug port did not come up"
 
 TUNNEL=(-o ExitOnForwardFailure=yes -R 127.0.0.1:$REMOTE_PORT:127.0.0.1:$LOCAL_PORT)
 if (( CHECK )); then
   out=$("${SSH[@]}" "${TUNNEL[@]}" "curl -s -m 5 http://127.0.0.1:$REMOTE_PORT/json/version | head -c 120" 2>&1)
   [[ $out == *Browser* ]] || die "tunnel check failed: $out"
-  print "check ok: Chromium's debug port is reachable from the Mini through the tunnel. Nothing was changed."
+  print "check ok: Helium's debug port is reachable from the Mini through the tunnel. Nothing was changed."
   exit 0
 fi
 
-print "In the Chromium window, sign in to Lumo (password, 2FA, CAPTCHA) until you see your Lumo chat."
+print "In the Helium window, sign in to Lumo (password, 2FA, CAPTCHA) until you see your Lumo chat."
 read -r "?Press Enter when Lumo shows the chat signed in (Ctrl-C to abort): "
 
 if (( LOCAL )); then

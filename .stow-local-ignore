@@ -8,13 +8,11 @@
 \.gitmodules$
 \.idea$
 \.themes$
-ansible-linux
 README\.md$
 flake\..*
 nix-modules$
 result$
 CRUSH\.md$
-ansible-.*
 org\.nixos\..*\.plist$
 homebrew\.mxcl\..*\.plist$
 ^\.claude$

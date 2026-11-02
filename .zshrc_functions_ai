@@ -513,15 +513,9 @@ function ai_security_audit() {
   
   # Check ~/.zshrc_envvars permissions
   if [[ -f ~/.zshrc_envvars ]]; then
-    # Cross-platform stat command (macOS vs Linux)
+    # macOS stat command
     local perms=""
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-      # macOS
-      perms=$(stat -f "%Op" ~/.zshrc_envvars 2>/dev/null | tail -c 4)
-    else
-      # Linux
-      perms=$(stat -c "%a" ~/.zshrc_envvars 2>/dev/null)
-    fi
+    perms=$(stat -f "%Op" ~/.zshrc_envvars 2>/dev/null | tail -c 4)
     
     echo "Checking ~/.zshrc_envvars..."
     if [[ "$perms" == "0600" ]] || [[ "$perms" == "600" ]]; then
@@ -546,11 +540,7 @@ function ai_security_audit() {
     local target_file=$(readlink -f ~/.zshrc_envvars_insecure 2>/dev/null || realpath ~/.zshrc_envvars_insecure 2>/dev/null || echo ~/.zshrc_envvars_insecure)
 
     local perms=""
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-      perms=$(stat -f "%Op" "$target_file" 2>/dev/null | tail -c 4)
-    else
-      perms=$(stat -c "%a" "$target_file" 2>/dev/null)
-    fi
+    perms=$(stat -f "%Op" "$target_file" 2>/dev/null | tail -c 4)
 
     echo "Checking ~/.zshrc_envvars_insecure..."
     if [[ -L ~/.zshrc_envvars_insecure ]]; then

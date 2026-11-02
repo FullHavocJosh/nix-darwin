@@ -137,7 +137,7 @@ if.app-id = 'com.apple.Safari'
 run = ['move-node-to-workspace Browser']
 
 [[on-window-detected]]
-if.app-id = 'org.chromium.Chromium'
+if.app-id = 'net.imput.helium'
 run = ['move-node-to-workspace Browser']
 
 # Communication
