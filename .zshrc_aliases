@@ -116,13 +116,33 @@ function darwin-reload() {
   local -a sudo_cmd
   [[ "$action" == build ]] || sudo_cmd=(sudo)   # switch and check must run as root (darwin-rebuild refuses otherwise)
   if [[ -n "$remote" ]]; then
-    ssh -t "$remote" "${sudo_cmd[*]} darwin-rebuild $action --flake ~/nix-darwin#macos_desktop ${(j: :)${(q)@}}" || return $?
+    local pre=""
+    [[ "$action" == switch ]] && pre="cd ~/nix-darwin && nix flake update && "
+    ssh -t "$remote" "${pre}${sudo_cmd[*]} darwin-rebuild $action --flake ~/nix-darwin#macos_desktop ${(j: :)${(q)@}}" || return $?
   else
+    if [[ "$action" == switch ]]; then
+      nix flake update --flake "$HOME/nix-darwin" || return $?
+    fi
     nix-recover || return $?
     "${sudo_cmd[@]}" darwin-rebuild "$action" --flake "$HOME/nix-darwin#macos_$host" "$@" || return $?
   fi
-  [[ "$action" == switch && "$host" != work ]] || return 0
-  _lumo_signin_if_invalid "$host" "$remote"
+  if [[ "$action" == switch ]]; then
+    local rc=0
+    if [[ -n "$remote" ]]; then
+      local upg_status=$(ssh -n -o BatchMode=yes "$remote" cat '~/.cache/darwin-upgrade-status' 2>/dev/null)
+    else
+      local upg_status=$(cat ~/.cache/darwin-upgrade-status 2>/dev/null)
+    fi
+    if [[ -n "$upg_status" && "$upg_status" == failed:* ]]; then
+      echo "darwin-reload: package upgrades failed ($upg_status); rerun: bash ~/nix-darwin/scripts/upgrade-all.sh" >&2
+      rc=1
+    fi
+    if [[ "$host" != work ]]; then
+      _lumo_signin_if_invalid "$host" "$remote"
+    fi
+    return $rc
+  fi
+  return 0
 }
 
 # Lumo sign-in state of this machine ($1 empty) or of the ssh target in $1: prints valid, invalid, building
