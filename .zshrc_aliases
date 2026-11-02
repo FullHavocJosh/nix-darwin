@@ -115,16 +115,13 @@ function darwin-reload() {
   [[ "$host" == desktop && "${this:l}" != macminim1 ]] && remote="$mini"
   local -a sudo_cmd
   [[ "$action" == build ]] || sudo_cmd=(sudo)   # switch and check must run as root (darwin-rebuild refuses otherwise)
+  local -a fresh=()
+  [[ "$action" == switch ]] && fresh=(--refresh --no-write-lock-file --override-input nixpkgs github:NixOS/nixpkgs/nixpkgs-unstable --override-input nix-darwin github:LnL7/nix-darwin --override-input nix-homebrew github:zhaofengli-wip/nix-homebrew)
   if [[ -n "$remote" ]]; then
-    local pre=""
-    [[ "$action" == switch ]] && pre="cd ~/nix-darwin && nix flake update && "
-    ssh -t "$remote" "${pre}${sudo_cmd[*]} darwin-rebuild $action --flake ~/nix-darwin#macos_desktop ${(j: :)${(q)@}}" || return $?
+    ssh -t "$remote" "${sudo_cmd[*]} darwin-rebuild $action --flake ~/nix-darwin#macos_desktop ${(j: :)fresh} ${(j: :)${(q)@}}" || return $?
   else
-    if [[ "$action" == switch ]]; then
-      nix flake update --flake "$HOME/nix-darwin" || return $?
-    fi
     nix-recover || return $?
-    "${sudo_cmd[@]}" darwin-rebuild "$action" --flake "$HOME/nix-darwin#macos_$host" "$@" || return $?
+    "${sudo_cmd[@]}" darwin-rebuild "$action" --flake "$HOME/nix-darwin#macos_$host" "${fresh[@]}" "$@" || return $?
   fi
   if [[ "$action" == switch ]]; then
     local rc=0
