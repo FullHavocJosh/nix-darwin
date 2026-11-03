@@ -234,13 +234,12 @@ def pr_title_and_body(prd, verify):
     lines += [
         "",
         "---",
-        "Opened by aistack when the plan was confirmed. "
-        + (
-            os.environ.get("AISTACK_TIERS", "") + ". "
+        (
+            "Opened by " + os.environ["AISTACK_TIERS"] + "."
             if os.environ.get("AISTACK_TIERS")
-            else ""
-        )
-        + "Changes stay uncommitted in this worktree until committed with gpc/gpa.",
+            else "Opened by aistack when the plan was confirmed. "
+            "Changes stay uncommitted in this worktree until committed with gpc/gpa."
+        ),
     ]
     return ptype, title, "\n".join(lines)
 

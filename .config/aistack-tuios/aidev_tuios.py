@@ -1444,7 +1444,7 @@ def cmd_worktree(run, _argv):
         return 1
     os.environ["AISTACK_WORKTREE_MODE"] = os.environ.get("AIDEV_TUIOS_WORKTREE_MODE") or (
         "create" if is_main_checkout(run.project) else "none")
-    os.environ["AISTACK_TIERS"] = "aidev: Claude Code backbone, Lumo research, free builder"
+    os.environ["AISTACK_TIERS"] = "aidev stack: Plan: Claude, Research:Lumo, Build-Local:Qwen-Code, Build-Free:OpenCode, Build-Billed:Claude"
     wd, created, err = lib.ensure_workdir(run.project, prd, verify)
     if err:
         print(f"creating the worktree failed: {err}")
@@ -2563,7 +2563,7 @@ def cmd_handoff(argv):
     wj(os.path.join(plan_dir, "verify.json"), verify)
     os.environ["AISTACK_WORKTREE_MODE"] = os.environ.get("AIDEV_TUIOS_WORKTREE_MODE") or (
         "create" if is_main_checkout(project) else "none")
-    os.environ["AISTACK_TIERS"] = "aidev: Claude Code backbone, Lumo research, free builder"
+    os.environ["AISTACK_TIERS"] = "aidev stack: Plan: Claude, Research:Lumo, Build-Local:Qwen-Code, Build-Free:OpenCode, Build-Billed:Claude"
     lib = load_lib(project, run)
     wd, created, err = lib.ensure_workdir(project, prd, verify)
     if err:
