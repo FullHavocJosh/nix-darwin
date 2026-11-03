@@ -158,6 +158,9 @@ in
     brews = [
       "doppler"
       "minio/stable/mc"
+      "numpy"
+      "pillow"
+      "pytest"
       "tailscale"
       "vitobotta/tap/hetzner_k3s"
     ];
