@@ -21,6 +21,9 @@ alias sshnovadeck='ssh -i ~/.ssh/id_ed25519 armada@novadeck.rollet.family'
 # internal LAN IP): export NOBARA_LAPTOP_IP="192.168.144.35"
 alias sshnobaralaptop='ssh -i ~/.ssh/id_ed25519 havoc@${NOBARA_LAPTOP_IP}'
 
+# macOS Screen Sharing (VNC) to MacMiniM1; Screen Sharing.app asks for the password
+alias vncmini='open vnc://havoc@macminim1.rollet.family'
+
 # Pulls the KRDP username/password from Doppler (fullhavocjosh/root_nobaralaptop)
 # at run time instead of hardcoding them, then pipes the password to sdl-freerdp
 # via /from-stdin so it never appears in argv/process list/shell history.
