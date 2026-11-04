@@ -65,8 +65,8 @@ Waiting costs no tokens: `wait-task` and `watch` block on mail. Never poll a pan
 
 Search the code with `rg` and list files with `fd` or `rg --files`; plain grep and find are blocked in this pane.
 
-You have read-only Atlassian and GitHub MCP tools (`mcp__atlassian__*`, `mcp__github__*`) for private sources. A hook
-refuses every write tool. Never paste their content into a question for Lumo. The first Atlassian call may need
+You have Atlassian and GitHub MCP tools (`mcp__atlassian__*`, `mcp__github__*`) for private sources. They read; in Jira
+you may also comment, transition, edit, create and link issues and log work. A hook refuses Confluence and GitHub writes. Never paste their content into a question for Lumo. The first Atlassian call may need
 `/mcp` login.
 
 ## How to work

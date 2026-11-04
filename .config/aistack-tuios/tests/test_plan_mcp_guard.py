@@ -44,18 +44,24 @@ def run_hook(input_data, env=None, raw=False):
     return None
 
 def main():
-    # Test read tools that should be allowed
-    read_tools = [
+    # Test read tools and Jira writes that should be allowed
+    allowed_tools = [
         "mcp__atlassian__getJiraIssue",
         "mcp__atlassian__searchJiraIssuesUsingJql",
         "mcp__atlassian__getConfluencePage",
         "mcp__atlassian__fetch",
+        "mcp__atlassian__createJiraIssue",
+        "mcp__atlassian__editJiraIssue",
+        "mcp__atlassian__addCommentToJiraIssue",
+        "mcp__atlassian__transitionJiraIssue",
+        "mcp__atlassian__createIssueLink",
+        "mcp__atlassian__addWorklogToJiraIssue",
         "mcp__github__github_pr_list",
         "mcp__github__github_file_get",
         "mcp__github__github_pr_changes"
     ]
-    
-    for tool in read_tools:
+
+    for tool in allowed_tools:
         input_data = {"tool_name": tool}
         result = run_hook(input_data)
         check(f"allow {tool}", 
@@ -64,11 +70,9 @@ def main():
     
     # Test write tools that should be denied
     write_tools = [
-        "mcp__atlassian__createJiraIssue",
-        "mcp__atlassian__editJiraIssue",
-        "mcp__atlassian__addCommentToJiraIssue",
-        "mcp__atlassian__transitionJiraIssue",
         "mcp__atlassian__updateConfluencePage",
+        "mcp__atlassian__createConfluencePage",
+        "mcp__atlassian__createConfluenceFooterComment",
         "mcp__github__github_pr_create",
         "mcp__github__github_pr_approve",
         "mcp__github__github_pr_suggest_change"

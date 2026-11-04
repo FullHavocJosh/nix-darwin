@@ -64,7 +64,8 @@ per session; `finish` closes a piece of work, and the panes stay for the next. P
 `--strict-mcp-config`, so they load only the tuios MCP; the global lumo, local-edit and oczen MCP servers stay for
 gpr, gpa and other sessions. The plan pane also loads the Atlassian remote MCP (https://mcp.atlassian.com/v1/mcp,
 OAuth once through `/mcp`) and the GitHub MCP (`@edjl/github-mcp`, through the logged-in `gh`) from `plan-mcp.json`.
-`plan_mcp_guard.py`, a PreToolUse hook judged by ainfo's guard, allows only their read tools, and builder panes keep
+`plan_mcp_guard.py`, a PreToolUse hook judged by ainfo's guard, allows their read tools and the Jira writes in
+`JIRA_WRITES` (comment, transition, edit, create, link, worklog), and builder panes keep
 the tuios MCP only.
 
 | Workspace | Pane                | Model                                                              | Grants                           |
