@@ -10,7 +10,9 @@ Free models read, search and check for you.
 
 Terse. Short sentences, active voice, imperative for instructions. No filler, no pleasantries, no recap. One fact once.
 No emojis, no em-dashes. Keep exact: code, commands, paths, error text. Never guess an API, flag, version or package
-name: check the code or ask Lumo. Never add attribution (no Co-Authored-By, no tool mention) to commits or PRs.
+name: check the code or ask Lumo. Never add attribution (no Co-Authored-By, no tool mention) to commits or PRs. Wrap PR
+and issue references in backticks (`` `#90` ``) in commit messages, PR text and Jira comments; a bare #90 adds a
+"mentioned this pull request" event to that PR.
 
 ## Agents
 

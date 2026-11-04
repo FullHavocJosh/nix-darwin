@@ -207,18 +207,27 @@ DEFAULT_WORKTREE_CMD = (
 )
 
 
+def backtick_refs(text):
+    """Wrap each bare #N (PR or issue reference) in backticks outside code spans, so GitHub adds no cross-reference
+    event to PR N's timeline."""
+    parts = str(text).split("`")
+    parts[::2] = [re.sub(r"(?<![\w&/#])#(\d+)(?!\w)", r"`#\1`", p) for p in parts[::2]]
+    return "`".join(parts)
+
+
 def pr_title_and_body(prd, verify):
     """The draft PR's title and description, from the plan: prd.json 'title' (falls back to 'name'), its description,
     the tasks with acceptance criteria and verify commands, and which tiers do the work."""
     ptype = prd.get("type") or "feat"
     text = str(prd.get("title") or prd.get("name") or "aistack plan").strip()
     text = re.sub(r"^(feat|fix)(\([^)]*\))?:\s*", "", text, flags=re.IGNORECASE)
+    text = backtick_refs(text)
     title = f"{ptype}: {text}"
     if len(title) > 72:
         title = title[:71].rstrip() + "\u2026"
     lines = [
         "## Summary",
-        str(prd.get("description") or prd.get("name") or "").strip(),
+        backtick_refs(str(prd.get("description") or prd.get("name") or "").strip()),
         "",
         "## Plan",
     ]
@@ -227,8 +236,8 @@ def pr_title_and_body(prd, verify):
         v = verify.get(st["id"], []) if isinstance(verify, dict) else []
         v = [v] if isinstance(v, str) else v
         lines.append(
-            f"- **{st['id']}** {st.get('title', '')}"
-            + (f": {crit}" if crit else "")
+            f"- **{st['id']}** {backtick_refs(st.get('title', ''))}"
+            + (f": {backtick_refs(crit)}" if crit else "")
             + (" (verify: " + ", ".join(f"`{c}`" for c in v) + ")" if v else "")
         )
     lines += [

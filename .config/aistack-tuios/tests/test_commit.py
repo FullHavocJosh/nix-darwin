@@ -91,6 +91,12 @@ def main():
         check("argv overrides the prd", code == 0 and env.get("AIDEV_COMMIT_SUBJECT") == "Subj"
               and env.get("AIDEV_COMMIT_BODY") == "Body.", str(env))
 
+        code, _, calls = commit(tmp, {"work_dir": "/wd", "tasks": verified}, ["Fix #7", "After #90 and `#3`."],
+                                " M x", ok, events)
+        env = calls[0][1].get("env") if calls else {}
+        check("bare refs are backticked", env.get("AIDEV_COMMIT_SUBJECT") == "Fix `#7`"
+              and env.get("AIDEV_COMMIT_BODY") == "After `#90` and `#3`.", str(env))
+
         failed = json.dumps({"ok": False, "output_tail": "lint failed"})
         code, out, _ = commit(tmp, {"work_dir": "/wd", "tasks": verified}, [], " M x", failed, events)
         check("failed gpa returns 1 and prints the tail", code == 1 and "lint failed" in out, f"code {code}: {out}")
@@ -100,6 +106,7 @@ def main():
         a.subprocess.run = real_run
         a.finish_work = lambda _run: "/wd"
         a.window_named = lambda _s, _n: None
+        os.environ["AIDEV_TUIOS_FINISH_RESET"] = "off"
         for status, want, name in ((" M x", "uncommitted", "dirty"), ("", "is committed", "clean")):
             a.git_out = lambda _wd, *_args, s=status: s
             out = io.StringIO()
@@ -111,6 +118,7 @@ def main():
     finally:
         a.git_out, a.subprocess.run = real_git_out, real_run
         a.finish_work, a.window_named = real_finish_work, real_window_named
+        os.environ.pop("AIDEV_TUIOS_FINISH_RESET", None)
         shutil.rmtree(tmp, ignore_errors=True)
     print(f"{len(FAILS)} failed" if FAILS else "all passed")
     return 1 if FAILS else 0

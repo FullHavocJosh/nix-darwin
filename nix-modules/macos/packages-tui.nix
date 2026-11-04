@@ -371,6 +371,17 @@ let
     EOF
       echo "[claude] Added no-attribution rule to CLAUDE.md"
     fi
+
+    REFS_MARKER="<!-- nix-darwin: github-refs rule -->"
+    if ! grep -qF "$REFS_MARKER" "$CLAUDE_MD"; then
+      cat >> "$CLAUDE_MD" <<'EOF'
+
+    <!-- nix-darwin: github-refs rule -->
+    ## GitHub references
+    - PR and issue references in PR bodies, commit messages and comments: wrap in backticks (`` `#90` ``), never a bare #90; a bare reference makes GitHub add a "mentioned this pull request" event to that PR.
+    EOF
+      echo "[claude] Added GitHub references rule to CLAUDE.md"
+    fi
   '';
 
   # AI tool installs that the MCP json sync can't do: pi (ai, ainfo and aidev's panes), the caveman plugin, and the
