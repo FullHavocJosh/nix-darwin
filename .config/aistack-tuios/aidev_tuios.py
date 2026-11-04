@@ -33,6 +33,7 @@ Helpers the Claude pane runs from its own pane (so with its grants; AIDEV_TUIOS_
     approvals [approve|deny]      show the prompt the builder waits on, or answer it (needs the respond grant)
     zen-check [--refresh]         show each free Zen model's state; exit 0 available, 3 unknown, 1 none usable
     finish                        close this piece of work; the panes stay for the next one
+    pr-status [seconds]           after commit: wait for the PR checks, print failed logs and open bot feedback
     merged                        after PR merged: close work if open, reset Lumo and idle builders
 
 Panes, all on one workspace (nvim's, else the lowest free one), each named after its role:
@@ -72,6 +73,7 @@ if HERE not in sys.path:  # planner_local.py sits next to this file; importlib l
     sys.path.insert(0, HERE)
 
 import planner_local
+import pr_status
 
 HOME = os.path.expanduser("~")
 AI_HOME = os.path.expanduser(os.environ.get("AI_HOME") or "~/.ai")
@@ -2127,6 +2129,7 @@ def cmd_finish(run, _argv):
 
 
 GPA_TIMEOUT = int(os.environ.get("AIDEV_TUIOS_GPA_TIMEOUT", "1200"))
+PR_POLL_S = int(os.environ.get("AIDEV_TUIOS_PR_POLL_S", "20"))
 GPA_CMD = 'source ~/.zshrc_functions_git 2>/dev/null; gpa --auto -m "$AIDEV_COMMIT_SUBJECT" -d "$AIDEV_COMMIT_BODY" --json'
 
 
@@ -2181,6 +2184,39 @@ def cmd_commit(run, argv):
     print(f"commit failed (gpa exit {r.returncode}):")
     print(data.get("output_tail") or ((r.stdout or "") + (r.stderr or ""))[-3000:])
     return 1
+
+
+def cmd_pr_status(run, argv):
+    """pr-status [seconds, default 540]: wait for the PR's checks, then print failed check logs and open or bot
+    review comments. Exit 0 all green and nothing open, 1 failed checks, 2 review feedback, 3 still pending."""
+    wd = run.data.get("work_dir")
+    if not wd:
+        print("pr-status: no work dir: run worktree first")
+        return 1
+    try:
+        seconds = int(argv[0]) if argv else 540
+    except ValueError:
+        print("pr-status: usage: pr-status [seconds, default 540]")
+        return 2
+    deadline = time.time() + seconds
+    text = ""
+    while True:
+        res = pr_status.collect(wd)
+        if res is None:
+            print("pr-status: gh could not read the PR (is it pushed?)")
+            return 1
+        code, text = res
+        if code != 3:
+            print(text)
+            run.event("pr_status", code=code)
+            run.save()
+            return code
+        if time.time() >= deadline:
+            break
+        time.sleep(PR_POLL_S)
+    print(text)
+    print(f"pr-status: still pending after {seconds} s; run it again")
+    return 3
 
 
 def cmd_merged(run, _argv):
@@ -2336,6 +2372,7 @@ HELPERS = {"ask-lumo": cmd_ask_lumo, "check-plan": cmd_check_plan, "worktree": c
            "escalate": cmd_escalate, "fallback": cmd_fallback,
            "send-task": cmd_send_task, "wait-task": cmd_wait_task, "verify": cmd_verify, "watch": cmd_watch,
            "approvals": cmd_approvals, "zen-check": cmd_zen_check, "finish": cmd_finish, "commit": cmd_commit,
+           "pr-status": cmd_pr_status,
            "merged": cmd_merged, "plan-sid": cmd_plan_sid, "explore": cmd_explore,
            "review-diff": cmd_review_diff}
 
