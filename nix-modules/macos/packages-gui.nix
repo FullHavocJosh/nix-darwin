@@ -10,7 +10,6 @@
     enable = true;
     casks = [
       "nikitabobko/tap/aerospace"
-      "claude"
       "claude-code"
       "goland"
       "jetbrains-toolbox"
