@@ -2128,6 +2128,14 @@ def cmd_finish(run, _argv):
     return 0
 
 
+def backtick_refs(text):
+    """Wrap each bare #N (PR or issue reference) in backticks outside code spans, so GitHub adds no cross-reference
+    event to PR N's timeline."""
+    parts = str(text).split("`")
+    parts[::2] = [re.sub(r"(?<![\w&/#])#(\d+)(?!\w)", r"`#\1`", p) for p in parts[::2]]
+    return "`".join(parts)
+
+
 GPA_TIMEOUT = int(os.environ.get("AIDEV_TUIOS_GPA_TIMEOUT", "1200"))
 PR_POLL_S = int(os.environ.get("AIDEV_TUIOS_PR_POLL_S", "20"))
 GPA_CMD = 'source ~/.zshrc_functions_git 2>/dev/null; gpa --auto -m "$AIDEV_COMMIT_SUBJECT" -d "$AIDEV_COMMIT_BODY" --json'
@@ -2152,6 +2160,8 @@ def cmd_commit(run, argv):
         return 1
     subject = (argv[0] if argv else "") or str(prd.get("title") or "").strip()
     body = (argv[1] if len(argv) > 1 else "") or str(prd.get("description") or "").strip()
+    subject = backtick_refs(subject)
+    body = backtick_refs(body)
     if not subject:
         print("commit: no subject")
         return 2
