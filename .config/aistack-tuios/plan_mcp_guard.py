@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Read-only guard hook for the plan pane's Atlassian and GitHub tools.
-This hook ensures that only read-only tools from Atlassian and GitHub MCPs
-are allowed in the plan pane, while all write operations are denied.
+Guard hook for the plan pane's Atlassian and GitHub tools.
+This hook allows the read-only tools from Atlassian and GitHub MCPs and the
+Jira writes in JIRA_WRITES; every other write (Confluence, GitHub) is denied.
 """
 
 import importlib.util
@@ -13,6 +13,9 @@ import sys
 HERE = os.path.dirname(os.path.realpath(__file__))
 GUARD = os.environ.get("AIDEV_TUIOS_GUARD") or os.path.join(os.path.dirname(HERE), "ainfo", "ainfo_guard.py")
 GUARDED = ("mcp__atlassian__", "mcp__github__")
+# Jira writes the plan pane may make; Confluence and GitHub stay read-only
+JIRA_WRITES = {"mcp__atlassian__" + t for t in ("addCommentToJiraIssue", "transitionJiraIssue", "editJiraIssue",
+               "createJiraIssue", "createIssueLink", "addWorklogToJiraIssue")}
 
 def load_guard():
     spec = importlib.util.spec_from_file_location("ainfo_guard", GUARD)
@@ -26,7 +29,10 @@ def decide(ev):
     # If tool doesn't have a guarded prefix, allow it
     if not any(tool.startswith(prefix) for prefix in GUARDED):
         return (None, "")
-    
+
+    if tool in JIRA_WRITES:
+        return ("allow", "")
+
     # Load the guard module and check the decision
     why = load_guard().mcp_decision(tool, ev.get("tool_input") or {})
     if why is None:
