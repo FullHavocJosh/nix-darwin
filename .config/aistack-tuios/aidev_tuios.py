@@ -976,7 +976,7 @@ def build_body(run, cfg, kind, name=None):
     if not model:
         return None
     run.data["zen_model"] = model
-    pane["builder"] = f"OpenCode {model} (free)"
+    pane["builder"] = f"OpenCode {model} {builder_cost_label(model)}"
     first = f"Read your instructions in {sysp}, then stop. Reply only: Ready. Do not read any other file, do not run any command, and do nothing until a task prompt arrives."
     # OPENCODE_CONFIG_DIR adds the tuios state plugin to the user's own opencode config, for this pane only
     return (pane_path + f"cd {shlex.quote(wd)}\nexport AIDEV_TUIOS_BUILDER=1\n"
@@ -986,6 +986,14 @@ def build_body(run, cfg, kind, name=None):
 
 def opencode_model(model):
     return model if "/" in model else f"opencode/{model}"  # opencode wants provider/model
+
+
+def builder_cost_label(model):
+    if model.startswith("opencode-go/"):
+        return "(Go plan)"
+    if model.startswith("opencode/"):
+        return "(Zen, paid)"  # the paid twin of a Go model
+    return "(free)"
 
 
 def no_builder_why(kind):

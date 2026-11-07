@@ -145,6 +145,10 @@ builder opens on the first available free model, and an exhausted or missing fre
 failures at a tier (default 2), and from local straight to billed when no free model is usable. Billed always asks in
 the Inbox.
 
+For public repos the free builder tries each OpenCode Go model first, then the same model on Zen (the Zen twin,
+`opencode/<id>`), then the free Zen models. The Zen twin is paid and pay-per-token, so it spends Zen balance; it is tried
+automatically only after the Go model reports a usage limit. Private repos are unchanged.
+
 ### Script forms
 
 Agents reach them through

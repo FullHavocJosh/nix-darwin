@@ -11,5 +11,5 @@
     "minimax-m3"
   ],
   "go_zero_retention": [],
-  "notes": "Zen docs on the verified date: Space Bunny Free and LongCat 2.5 Preview Free are zero-retention and not used for training; Big Pickle and most other free models say collected data may be used to improve the model during the free period; Nemotron endpoints say not to submit personal or confidential data. Go retention terms are each provider's and are not verified, so private repositories get no Go model until one is listed in go_zero_retention."
+  "notes": "Zen docs on the verified date: Space Bunny Free and LongCat 2.5 Preview Free are zero-retention and not used for training; Big Pickle and most other free models say collected data may be used to improve the model during the free period; Nemotron endpoints say not to submit personal or confidential data. Go retention terms are each provider's and are not verified, so private repositories get no Go model until one is listed in go_zero_retention. For public repositories each go_preferred model is tried as opencode-go/<id>, then as opencode/<id> (the paid Zen twin), before the free Zen models."
 }
