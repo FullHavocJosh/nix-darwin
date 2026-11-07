@@ -152,12 +152,30 @@ check("private candidates are the free zero-retention models in policy order",
       z.candidates(BASE, ALL, POLICY, True) == ["space-bunny-free", "longcat-2.5-preview-free"])
 check("public candidates start with Big Pickle, then the newest free",
       z.candidates(BASE, ALL, POLICY, False, limit=3) == ["big-pickle", "other-free", "space-bunny-free"])
-check("candidates puts opencode-go/ ids after the Zen ids for a public repo",
-      z.candidates(BASE, ALL, POLICY, False, go_offered={"glm-5.3", "kimi-k2.7-code"}) == ["big-pickle", "other-free", "space-bunny-free", "longcat-2.5-preview-free", "opencode-go/glm-5.3", "opencode-go/kimi-k2.7-code"])
+check("candidates puts opencode-go/ ids before the Zen ids for a public repo",
+      z.candidates(BASE, ALL, POLICY, False, go_offered={"glm-5.3", "kimi-k2.7-code"}) == ["opencode-go/glm-5.3", "opencode-go/kimi-k2.7-code", "big-pickle", "other-free", "space-bunny-free", "longcat-2.5-preview-free"])
 check("no Go ids for a private repo with an empty go_zero_retention",
       z.candidates(BASE, ALL, POLICY, True, go_offered={"glm-5.3"}) == ["space-bunny-free", "longcat-2.5-preview-free"])
 check("skips a Go id missing from go_offered",
-      z.candidates(BASE, ALL, POLICY, False, go_offered={"kimi-k2.7-code"}) == ["big-pickle", "other-free", "space-bunny-free", "longcat-2.5-preview-free", "opencode-go/kimi-k2.7-code"])
+      z.candidates(BASE, ALL, POLICY, False, go_offered={"kimi-k2.7-code"}) == ["opencode-go/kimi-k2.7-code", "big-pickle", "other-free", "space-bunny-free", "longcat-2.5-preview-free"])
+PAIR = lambda g: cat(**{**BASE["opencode"]["models"], "glm-5.3": g})
+OFF = ALL | {"glm-5.3"}
+FREE = ["big-pickle", "other-free", "space-bunny-free", "longcat-2.5-preview-free"]
+GO = {"glm-5.3"}
+check("a paid Zen twin follows its Go id",
+      z.candidates(PAIR(model(cost=3)), OFF, POLICY, False, go_offered=GO) == ["opencode-go/glm-5.3", "opencode/glm-5.3"] + FREE)
+check("a deprecated Zen twin is skipped",
+      z.candidates(PAIR(model(cost=3, status="deprecated")), OFF, POLICY, False, go_offered=GO) == ["opencode-go/glm-5.3"] + FREE)
+check("a Zen twin without tool calls is skipped",
+      z.candidates(PAIR(model(cost=3, tool=False)), OFF, POLICY, False, go_offered=GO) == ["opencode-go/glm-5.3"] + FREE)
+check("a Zen twin not offered to the account is skipped",
+      z.candidates(PAIR(model(cost=3)), ALL, POLICY, False, go_offered=GO) == ["opencode-go/glm-5.3"] + FREE)
+check("a Go id with no Zen catalog entry gets no twin",
+      z.candidates(BASE, ALL, POLICY, False, go_offered=GO) == ["opencode-go/glm-5.3"] + FREE)
+r = z.candidates(PAIR(model(cost=0)), OFF, POLICY, False, go_offered=GO)
+check("a free Zen twin is not added again", "opencode/glm-5.3" not in r and r[0] == "opencode-go/glm-5.3", r)
+check("limit cuts only the free ids",
+      z.candidates(PAIR(model(cost=3)), OFF, POLICY, False, limit=1, go_offered=GO) == ["opencode-go/glm-5.3", "opencode/glm-5.3", "big-pickle"])
 r = z.status(BASE, ALL, POLICY, False, do_probe=False, runner=fake({}))
 check("do_probe False never calls the runner", not calls and all(m["state"] == "unprobed" for m in r["models"]) and r["best"] is None, (calls, r))
 r = z.status(BASE, ALL, POLICY, False, do_probe=True, runner=fake({}))

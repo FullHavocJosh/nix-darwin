@@ -207,26 +207,34 @@ def free_models(catalog, offered):
 
 
 def candidates(catalog, offered, policy, private, limit=9, go_offered=None):
-    """Free model ids in the order to try them: zero-retention only for a private repo, else Big Pickle first."""
+    """Model ids in the order to try them.
+    Public: each Go id, then its Zen twin, then the free ids with Big Pickle first.
+    Private: zero-retention free ids, then zero-retention Go ids."""
     free = free_models(catalog, offered)
-    if private:
-        out = [m for m in policy.get("zero_retention", []) if m in free]
-    else:
-        preferred = policy.get("public_preferred", "big-pickle")
-        out = ([preferred] if preferred in free else []) + [m for m in free if m != preferred]
-    out = out[:limit]
     if go_offered is None:
         go_offered = set()
     if private:
-        go_list = policy.get("go_zero_retention", [])
-    else:
-        go_list = policy.get("go_preferred", [])
-    for m in go_list:
-        if m in go_offered:
-            gid = "opencode-go/" + m
-            if gid not in out:
-                out.append(gid)
-    return out
+        out = [m for m in policy.get("zero_retention", []) if m in free][:limit]
+        for m in policy.get("go_zero_retention", []):
+            if m in go_offered and "opencode-go/" + m not in out:
+                out.append("opencode-go/" + m)
+        return out
+    preferred = policy.get("public_preferred", "big-pickle")
+    free_part = ([preferred] if preferred in free else []) + [m for m in free if m != preferred]
+    zen = zen_models(catalog)
+    go_part = []
+    for m in policy.get("go_preferred", []):
+        if m not in go_offered:
+            continue
+        go_part.append("opencode-go/" + m)
+        twin = zen.get(m) or {}
+        cost = twin.get("cost") or {}
+        # The Zen twin is paid and is tried only after its Go model.
+        if (twin and twin.get("status") not in ("deprecated", "retired") and twin.get("tool_call")
+                and (offered is None or m in offered) and (cost.get("input"), cost.get("output")) != (0, 0)
+                and "opencode/" + m not in go_part):
+            go_part.append("opencode/" + m)
+    return go_part + free_part[:limit]
 
 
 def _load_status_cache():

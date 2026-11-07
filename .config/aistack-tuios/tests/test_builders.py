@@ -434,6 +434,9 @@ def main():
             check("zen without a key is none and runs nothing", s["state"] == "none" and not calls, (s, calls))
             check("zen_model without a key is None", a.zen_model(p) is None)
             check("no_builder_why(free) without a key names the API key", "API key" in a.no_builder_why("free"))
+            check("builder_cost_label by provider", (a.builder_cost_label("opencode-go/glm-5.3"),
+                  a.builder_cost_label("opencode/glm-5.3"), a.builder_cost_label("big-pickle"))
+                  == ("(Go plan)", "(Zen, paid)", "(free)"))
             zcfg = a.pane_configs(p)
             zrun.data["zen_model"] = "big-pickle"
             check("build_body free without a key ignores a cached zen_model",
