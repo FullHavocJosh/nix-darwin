@@ -507,7 +507,6 @@ in
       "terraform-ls"
       "terraform-lsp"
       "terraformer"
-      "tflint"
       "typescript"
       "tree"
       "tree-sitter"
