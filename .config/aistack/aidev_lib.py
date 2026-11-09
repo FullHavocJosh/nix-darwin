@@ -43,7 +43,9 @@ def state_dir(project):
     d = os.environ.get("AISTACK_STATE_DIR")
     if d:
         return os.path.realpath(os.path.expanduser(d))
-    home = os.environ.get("AISTACK_HOME") or os.path.join(os.path.expanduser(os.environ.get("AI_HOME") or "~/.ai"), "aidev")
+    home = os.environ.get("AISTACK_HOME") or os.path.join(
+        os.path.expanduser(os.environ.get("AI_HOME") or "~/.ai"), "aidev"
+    )
     return os.path.join(
         home,
         f"{os.path.basename(project)}-{hashlib.sha1(project.encode()).hexdigest()[:10]}",
@@ -201,7 +203,7 @@ def save_plan_text(project, text):
 # gpr's AI interface: --auto never prompts, --title/--description become the PR title and body, the last stdout line is
 # JSON ({"ok","branch","worktree","pr_url","pr_number"}); AISTACK_BRANCH / _PR_TYPE / _PR_TITLE / _PR_BODY are set below
 DEFAULT_WORKTREE_CMD = (
-    "source ~/.zshrc_functions_git 2>/dev/null; source ~/.zshrc_functions_ai 2>/dev/null; "
+    'for _d in ~/.zsh_functions/ai ~/.zsh_functions/git; do for _f in "$_d"/*.zsh(N); do source "$_f" 2>/dev/null; done; done; '
     'gpr_func --auto "$AISTACK_PR_TYPE" "$AISTACK_BRANCH" --title "$AISTACK_PR_TITLE" '
     '--description "$AISTACK_PR_BODY"'
 )
@@ -327,6 +329,8 @@ TAMER_MINI_URL = os.environ.get(
 TAMER_PUBLIC_URL = os.environ.get(
     "AISTACK_LUMO_PUBLIC_URL", "https://lumo.rollet.family/v1"
 ).rstrip("/")
+
+
 def tamer_local_key():
     """The API key this machine's own tamer serves with (run-tamer.sh writes it to config.yaml), or ''."""
     try:
