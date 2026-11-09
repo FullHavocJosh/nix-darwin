@@ -68,16 +68,17 @@ nix-darwin/
 │   └── ...                             # Many more application configs
 │
 ├── .zshrc                              # Main zsh configuration
-├── .zshrc_aliases                      # Shell aliases
-├── .zshrc_functions_git                # Git workflow automation functions
-├── .zshrc_functions_ai                 # AI provider selection & management
-├── .zshrc_functions_tuios              # tuios session and aidev commands
+├── .zsh_shell/                         # zinit plugins, env, keybinds
+├── .zsh_aliases/                       # Aliases, nix-recover, darwin-reload, Lumo sign-in
+├── .zsh_functions/                     # git/, ai/, tuios/, aws/: one numbered file per purpose
 ├── .zshrc_os_macos                     # macOS-specific shell config
 ├── .zshrc_envvars_insecure             # Non-sensitive environment variables (tracked)
 ├── .github/workflows/validate.yml      # GitHub Actions workflow
 ├── timemachine-exclusions.txt          # Time Machine exclusions
 └── .zshrc_envvars                      # Sensitive environment variables (gitignored)
 ```
+
+The files in `.zsh_shell/`, `.zsh_aliases/` and `.zsh_functions/` load in numeric order, one file per purpose.
 
 ## 🔐 Security Model
 
@@ -159,7 +160,7 @@ its own copy, with its own keys and its own Proton sign-in; `local.lumo.lan` in 
 
 Upstream lumo-tamer has no setting for its listen address, so the fork's one `listen()` call reads `LUMO_TAMER_HOST`
 (unset means every interface); `run-tamer.sh` sets it to `127.0.0.1` on a loopback host and refuses to start a build
-without it. `darwin-reload switch laptop|desktop` (`.zshrc_aliases`) runs `sudo darwin-rebuild switch` for that host (the
+without it. `darwin-reload switch laptop|desktop` (`.zsh_aliases/40-darwin-reload.zsh`) runs `sudo darwin-rebuild switch` for that host (the
 desktop's over ssh when called from the MacBook) and then starts the browser sign-in if that host's Proton session is
 not valid: `lumoauth` for the laptop, `lumoreauth` for the Mini. A valid session is left alone. Plain
 `darwin-rebuild switch` only prints the sign-in state.
@@ -213,7 +214,7 @@ darwin-rebuild switch --flake ~/nix-darwin#macos_work
 
 ## Terminal: tuios
 
-tuios is the daily terminal multiplexer, installed by brew (`packages-tui.nix`), config in `.config/tuios/config.toml`, commands in `.zshrc_functions_tuios`.
+tuios is the daily terminal multiplexer, installed by brew (`packages-tui.nix`), config in `.config/tuios/config.toml`, commands in `.zsh_functions/tuios/`.
 
 | Command                            | What it does                                                                               |
 | ---------------------------------- | ------------------------------------------------------------------------------------------ |

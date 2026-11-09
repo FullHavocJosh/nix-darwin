@@ -5,8 +5,8 @@
 
   # Makes plain gpa behave like gpa-local (no Claude Code fallback or escalation;
   # gpc/gpr are always local) on this host by default -- see the guard at the
-  # top of _gpa_impl() in .zshrc_functions_git. Moved here from llamacpp-local.nix.
-  # Does NOT affect aidev/opencode. Override for one shell session
+  # top of _gpa_impl() in .zsh_functions/git/75-gpa-impl.zsh. Moved here from
+  # llamacpp-local.nix. Does NOT affect aidev/opencode. Override for one shell session
   # with `unset AI_LOCAL_DEFAULT`.
   environment.variables.AI_LOCAL_DEFAULT = "1";
 

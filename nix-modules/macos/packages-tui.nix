@@ -298,7 +298,7 @@ let
   claudeRoutingRules = pkgs.writeShellScript "claude-routing-rules" ''
     set -euo pipefail
     mkdir -p "$HOME/.claude" "$HOME/.local/bin"
-    # aidev is a zsh function (.zshrc_functions_tuios); OpenCode, pi and scripts get it through this executable
+    # aidev is a zsh function (.zsh_functions/tuios/); OpenCode, pi and scripts get it through this executable
     ln -sfn "$HOME/.config/aistack/aidev-cli" "$HOME/.local/bin/aidev"
     python3 - "$HOME/.claude/CLAUDE.md" <<'PYEOF'
     import os, re, sys
@@ -510,7 +510,7 @@ in
       "typescript"
       "tree"
       "tree-sitter"
-      "tuios" # the daily multiplexer (.zshrc_functions_tuios)
+      "tuios" # the daily multiplexer (.zsh_functions/tuios/)
       "typescript-language-server"
       "uv"
       "vscode-langservers-extracted"
