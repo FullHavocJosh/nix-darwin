@@ -2146,7 +2146,7 @@ def backtick_refs(text):
 
 GPA_TIMEOUT = int(os.environ.get("AIDEV_TUIOS_GPA_TIMEOUT", "1200"))
 PR_POLL_S = int(os.environ.get("AIDEV_TUIOS_PR_POLL_S", "20"))
-GPA_CMD = 'source ~/.zshrc_functions_git 2>/dev/null; gpa --auto -m "$AIDEV_COMMIT_SUBJECT" -d "$AIDEV_COMMIT_BODY" --json'
+GPA_CMD = 'for _d in ~/.zsh_functions/ai ~/.zsh_functions/git; do for _f in "$_d"/*.zsh(N); do source "$_f" 2>/dev/null; done; done; gpa --auto -m "$AIDEV_COMMIT_SUBJECT" -d "$AIDEV_COMMIT_BODY" --json'
 
 
 def cmd_commit(run, argv):
