@@ -166,8 +166,6 @@ in
     ];
     casks = [
       "element"
-      "font-merriweather"
-      "font-open-sans"
       "music-assistant/tap/music-assistant"
       "obsidian"
       "plex"

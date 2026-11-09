@@ -222,3 +222,19 @@ stow-uninstall-local-ignore
 
 # Token Optimizer wiki ignore
 .token-optimizer/wiki/*
+
+# Tool caches and histories (also in ~/.gitignore_global; repeated so a fresh clone is safe)
+.aider*
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+__pycache__/
+*.pyc
+.ropeproject/
+.worktrees/
+.token-optimizer/
+node_modules/
+.config/opencode/package.json
+package-lock.js*
+.config/opencode/bun.lock
+*.tuios.bak
