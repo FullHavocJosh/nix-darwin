@@ -10,7 +10,6 @@
     enable = true;
     casks = [
       "nikitabobko/tap/aerospace"
-      "claude-code"
       "goland"
       "jetbrains-toolbox"
       "zen"
@@ -23,6 +22,19 @@
       "neovide-app"
       "sf-symbols"
       "shottr"
+      "alacritty"
+      "kitty"
+      "hyper"
+      "firefox"
+      "firefox@developer-edition"
+      "google-chrome"
+      "ungoogled-chromium"
+      "betterdisplay"
+      "claude"
+      "windows-app"
+      "raspberry-pi-imager"
+      "openchamber"
+      "opcode"
     ];
   };
 }
