@@ -32,10 +32,13 @@ nix-darwin/
 │
 ├── nix-modules/macos/                  # macOS nix-darwin modules
 │   ├── packages-tui.nix                # Shared CLI packages (all profiles)
+│   ├── claude-setup/                   # Claude Code, tuios and ~/.ai setup scripts run on activation
+│   ├── homebrew/                       # brew taps, brews and casks as plain lists
 │   ├── packages-gui.nix                # Shared GUI apps (laptop/work profiles)
 │   ├── packages-laptop-only.nix        # Laptop-only packages
 │   ├── packages-devtest.nix            # Laptop only: browser engines, simulator tooling, VMs
-│   ├── config.nix                      # System configuration & scripts
+│   ├── config.nix                      # System configuration (import list)
+│   ├── config/                         # config.nix pieces: activation/ scripts, defaults, firewall, gui-path, tap trust
 │   ├── personal.nix                    # Personal (laptop/desktop) profile packages/services
 │   ├── work.nix                        # Work profile packages/services
 │   ├── laptop.nix                      # Laptop-specific config
@@ -43,6 +46,7 @@ nix-darwin/
 │   ├── llamacpp-local.nix              # llama-server launchd daemon
 │   ├── lumo.nix                        # lumo-tamer daemons
 │   ├── timemachine-exclusions.nix      # applies timemachine-exclusions.txt, laptop and desktop
+│   ├── lib/                            # fragments.nix: reads .sh files into nix strings
 │   └── claude-tui-usage-patch.py       # idempotent patch of the claude-tui brew formula, run on activation
 │
 ├── scripts/                            # Utility scripts
@@ -394,7 +398,7 @@ All automatically installed via nix-darwin/package managers:
 
 ## 🤖 Claude Code & MCP Integration
 
-`config.nix` automatically sets up Claude Code on activation:
+`config.nix` (`config/activation/`) and `packages-tui.nix` (`claude-setup/`) automatically set up Claude Code on activation:
 
 - **Skills**: links each skill (a directory with `SKILL.md`) from `~/model-skills-fullhavoc` and `~/model-skills-perfectserve` into `~/.claude/skills`, and removes stale skill links
 - **Settings symlink**: `~/.claude/settings.local.json` → `~/nix-darwin/.claude/settings.local.json`
