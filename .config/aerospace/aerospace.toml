@@ -140,9 +140,17 @@ run = ['move-node-to-workspace Browser']
 if.app-id = 'net.imput.helium'
 run = ['move-node-to-workspace Browser']
 
+[[on-window-detected]]
+if.app-id = 'com.apple.SafariTechnologyPreview'
+run = ['move-node-to-workspace Browser']
+
 # Communication
 [[on-window-detected]]
 if.app-id = 'im.riot.app'
+run = ['move-node-to-workspace Communication']
+
+[[on-window-detected]]
+if.app-id = 'moe.sable.client'
 run = ['move-node-to-workspace Communication']
 
 [[on-window-detected]]

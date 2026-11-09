@@ -1,8 +1,6 @@
 # Test targets for web, mobile and native work: browser engines, simulator
 # tooling, Linux/macOS VMs. Laptop only: the desktop is SSH-only.
-# Android Studio, the Android SDK tools and temurin are in packages-tui.nix.
-# Simulator runtimes and Android system images are not brew packages:
-# `xcodebuild -downloadPlatform iOS` and `sdkmanager` fetch them.
+# Simulator runtimes are not brew packages: `xcodebuild -downloadPlatform iOS` fetches them.
 { ... }:
 {
   homebrew = {
@@ -18,7 +16,6 @@
     ];
     casks = [
       "safari-technology-preview" # next WebKit
-      "temurin@21" # LTS JDK for command-line Gradle; temurin (27) is newer than AGP expects
       "utm" # Linux VMs (arm64 native, x86_64 via QEMU/Rosetta) and macOS guests
     ];
   };
