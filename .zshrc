@@ -35,12 +35,11 @@ fi
 [ -f ~/.zshrc_os_macos ] && source ~/.zshrc_os_macos
 [ -f ~/.zshrc_personal ] && source ~/.zshrc_personal
 [ -f ~/.zshrc_work ] && source ~/.zshrc_work
-[ -f ~/.zshrc_shell ] && source ~/.zshrc_shell
-[ -f ~/.zshrc_aliases ] && source ~/.zshrc_aliases
-[ -f ~/.zshrc_functions_ai ] && source ~/.zshrc_functions_ai
-[ -f ~/.zshrc_functions_git ] && source ~/.zshrc_functions_git
-# tuios test stack (dev_test, aidev_test, ai_test; RFC ~/.ai/rfcs/2026-10-25-aidev-tuios-test.md)
-[ -f ~/.zshrc_functions_tuios ] && source ~/.zshrc_functions_tuios
+# Numbered files in each directory load in order; the tuios dir holds the test stack (dev_test, aidev_test, ai_test; RFC ~/.ai/rfcs/2026-10-25-aidev-tuios-test.md)
+for _zdir in ~/.zsh_shell ~/.zsh_aliases ~/.zsh_functions/ai ~/.zsh_functions/aws ~/.zsh_functions/git ~/.zsh_functions/tuios; do
+  for _zf in "$_zdir"/*.zsh(N); do source "$_zf"; done
+done
+unset _zdir _zf
 
 # File descriptor limits fix for AWS MCP servers
 [ -f ~/.zshrc_ulimit ] && source ~/.zshrc_ulimit
