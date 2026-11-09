@@ -115,7 +115,6 @@ in
     brews = [
       "act"
       "awscli"
-      "podman"
       "docker"
       "docker-compose"
       "docker-credential-helper"

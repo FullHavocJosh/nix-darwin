@@ -44,5 +44,17 @@
   # hangs forever (no error, no dropped connection) when darwin-rebuild is
   # invoked over SSH -- which is how MacMiniM1 (desktop.nix) is always
   # updated. Keep masApps host-scoped here rather than in shared personal.nix.
-  homebrew.masApps = { };
+  homebrew.masApps = {
+    Banish = 1639049780;
+    "Dark Reader for Safari" = 1438243180;
+    Hush = 1544743900;
+    OverPicture = 1188020834;
+    "Proton Pass for Safari" = 6502835663;
+    SearchPlus = 6781814441;
+    "Simple Refresh" = 1492951704;
+    SponsorBlock = 1573461917;
+    TestFlight = 899247664;
+    "uBlock Origin Lite" = 6745342698;
+    Xcode = 497799835;
+  };
 }
