@@ -15,7 +15,6 @@
       "mkcert" # trusted local HTTPS, for testing on simulators and devices
     ];
     casks = [
-      "safari-technology-preview" # next WebKit
       "utm" # Linux VMs (arm64 native, x86_64 via QEMU/Rosetta) and macOS guests
     ];
   };

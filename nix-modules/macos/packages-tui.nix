@@ -17,6 +17,7 @@ in
   environment.systemPackages = with pkgs; [
     nil
     nixd
+    tflint
   ];
 
   homebrew = {

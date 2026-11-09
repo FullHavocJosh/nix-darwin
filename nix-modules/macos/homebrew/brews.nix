@@ -71,8 +71,6 @@
   "terraform-ls"
   "terraform-lsp"
   "terraformer"
-  "tflint"
-  "trufflehog"
   "typescript"
   "tree"
   "tree-sitter"

@@ -120,10 +120,6 @@ if.app-id = 'com.neovide.neovide'
 run = ['move-node-to-workspace Development']
 
 [[on-window-detected]]
-if.app-id = 'com.jetbrains.goland'
-run = ['move-node-to-workspace Development']
-
-[[on-window-detected]]
 if.app-id = 'md.obsidian'
 run = ['move-node-to-workspace 1st-Workspace']
 
