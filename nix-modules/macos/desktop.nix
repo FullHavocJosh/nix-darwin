@@ -66,6 +66,13 @@ in
     "ollama-app"
   ];
 
+  # Mac App Store apps installed by hand; mas install/upgrade hangs when
+  # darwin-rebuild runs over SSH, so run switch from the GUI session or expect a hang
+  homebrew.masApps = {
+    "uBlock Origin Lite" = 6745342698;
+    Xcode = 497799835;
+  };
+
   # postActivation, not a custom name: nix-darwin only assembles a fixed set of activationScripts names into
   # the activate script, and the original `ollamaModelProvision` was silently dropped (no
   # ~/.ollama/provision.log ever appeared on MacMiniM1).
