@@ -28,7 +28,8 @@ in
     brews = import ./homebrew/brews.nix;
     casks = import ./homebrew/casks.nix;
     masApps = { };
-    onActivation.cleanup = "none";
+    # packages missing from the Brewfile are removed on switch
+    onActivation.cleanup = "uninstall";
     onActivation.extraFlags = [ "--force" ];
     onActivation.autoUpdate = true;
     onActivation.upgrade = true;
