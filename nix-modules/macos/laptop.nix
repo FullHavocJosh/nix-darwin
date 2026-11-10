@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, lib, ... }:
 {
   networking.hostName = "MacBookM2Pro";
   networking.computerName = "MacBookM2Pro";
@@ -57,4 +57,8 @@
     "uBlock Origin Lite" = 6745342698;
     Xcode = 497799835;
   };
+
+  # uninstall and zap pass brew's disabled --cleanup switch; check runs brew bundle cleanup
+  # and aborts activation on unmanaged items
+  homebrew.onActivation.cleanup = lib.mkForce "check";
 }
