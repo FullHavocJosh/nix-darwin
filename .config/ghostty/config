@@ -10,7 +10,10 @@ font-size = 14
 quit-after-last-window-closed = true
 background-opacity = 0.0
 background-blur = macos-glass-regular
-macos-titlebar-style = transparent
+macos-titlebar-style = hidden
+window-padding-x = 4
+window-padding-y = 4
+window-padding-balance = true
 
 # Cursor
 cursor-style = block
