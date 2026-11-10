@@ -22,6 +22,8 @@
       "shottr"
       "windows-app"
       "raspberry-pi-imager"
+      "ollama-app"
+      "openchamber"
     ];
   };
 }
