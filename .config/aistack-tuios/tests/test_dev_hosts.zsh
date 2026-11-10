@@ -15,7 +15,7 @@ log_call() {
 }
 
 # Source the original functions
-source "${0:A:h}/../../../.zshrc_functions_tuios"
+for f in "${0:A:h}"/../../../.zsh_functions/tuios/*.zsh; do source "$f"; done
 
 # Shadow the functions to log their calls instead of executing them
 ssh() {
@@ -59,21 +59,21 @@ failures=0
 # Test cases
 echo "Running tests..."
 
-# Test 1: FAKE_HOST=MacBookM2Pro: _tuios_peer prints "mini havoc@macminim1.rollet.family"
+# Test 1: FAKE_HOST=MacBookM2Pro: _tuios_peer prints "macmini havoc@macminim1.rollet.family"
 echo "Test 1: MacBookM2Pro peer"
 rm -f "$log_file"
 FAKE_HOST="MacBookM2Pro"
 FAKE_SSH_RC=0
 result=$(_tuios_peer)
-check "peer MacBookM2Pro" "[ \"$result\" = \"mini havoc@macminim1.rollet.family\" ]"
+check "peer MacBookM2Pro" "[ \"$result\" = \"macmini havoc@macminim1.rollet.family\" ]"
 
-# Test 2: FAKE_HOST=MacMiniM1: _tuios_peer prints "macbook havoc@macbookm2pro.rollet.family"
+# Test 2: FAKE_HOST=MacMiniM1: _tuios_peer prints "macbookpro havoc@macbookm2pro.rollet.family"
 echo "Test 2: MacMiniM1 peer"
 rm -f "$log_file"
 FAKE_HOST="MacMiniM1"
 FAKE_SSH_RC=0
 result=$(_tuios_peer)
-check "peer MacMiniM1" "[ \"$result\" = \"macbook havoc@macbookm2pro.rollet.family\" ]"
+check "peer MacMiniM1" "[ \"$result\" = \"macbookpro havoc@macbookm2pro.rollet.family\" ]"
 
 # Test 3: FAKE_HOST=other: _tuios_peer prints nothing and returns 1
 
@@ -152,15 +152,15 @@ else
 fi
 # The hint about `tuios config apply` is printed when the host is not linked
 check "dev_peer prints config apply hint when host is missing" \
-    "[[ \"$result\" == *\"tuios: host mini is not linked yet; run 'tuios config apply' in a terminal outside tuios\"* ]]"
+    "[[ \"$result\" == *\"tuios: host macmini is not linked yet; run 'tuios config apply' in a terminal outside tuios\"* ]]"
 
-# Test 9: FAKE_HOSTS=mini: no `hosts add` call is logged (since it already exists)
+# Test 9: FAKE_HOSTS=macmini: no `hosts add` call is logged (since it already exists)
 
 echo "Test 9: Host already exists"
 rm -f "$log_file"
 FAKE_HOST="MacBookM2Pro"
 FAKE_SSH_RC=0
-FAKE_HOSTS="mini"
+FAKE_HOSTS="macmini"
 TUIOS_DEV_NO_PEER=""
 result=$(_tuios_dev_peer 2>&1)
 # Check that there are no hosts add calls and nothing is printed
@@ -172,14 +172,14 @@ else
 fi
 check "dev_peer prints nothing when host already exists" "[ -z \"$result\" ]"
 
-# Test 10: mmdev with no argument logs a `new --host mini` call with no extra empty argument
+# Test 10: mmdev with no argument logs a `new --host macmini` call with no extra empty argument
 echo "Test 10: mmdev no argument"
 rm -f "$log_file"
 FAKE_HOST="MacBookM2Pro"
 FAKE_SSH_RC=0
 mmdev
-# The logged call must be exactly 'new --host mini': no extra empty argument
-if grep -qx "_tuios_cmd new --host mini" "$log_file" 2>/dev/null; then
+# The logged call must be exactly 'new --host macmini': no extra empty argument
+if grep -qx "_tuios_cmd new --host macmini" "$log_file" 2>/dev/null; then
     echo "PASS mmdev no extra empty argument"
 else
     echo "FAIL mmdev no extra empty argument"

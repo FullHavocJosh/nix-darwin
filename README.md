@@ -246,7 +246,7 @@ aerospace.
 
 ### Two Macs
 
-The host entries `mini` (MacMiniM1) and `macbook` (MacBookM2Pro) are in `.config/tuios/config.toml`. After a pull,
+The host entries `macmini` (MacMiniM1) and `macbookpro` (MacBookM2Pro) are in `.config/tuios/config.toml`. After a pull,
 run `tuios config apply` once per machine, in a terminal outside tuios.
 
 `dev` ensures the other Mac's nix-darwin and home-infrastructure sessions exist, but only when ssh answers within

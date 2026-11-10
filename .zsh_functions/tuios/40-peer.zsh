@@ -1,11 +1,11 @@
 # _tuios_peer: prints two words <hostname> <user@address> for the other Mac, chosen by hostname -s
-#   MacBookM2Pro prints mini havoc@macminim1.rollet.family
-#   MacMiniM1 prints macbook havoc@macbookm2pro.rollet.family
+#   MacBookM2Pro prints macmini havoc@macminim1.rollet.family
+#   MacMiniM1 prints macbookpro havoc@macbookm2pro.rollet.family
 #   any other host prints nothing and returns 1
 _tuios_peer() {
   case "$(hostname -s)" in
-    MacBookM2Pro) echo "mini havoc@macminim1.rollet.family" ;;
-    MacMiniM1) echo "macbook havoc@macbookm2pro.rollet.family" ;;
+    MacBookM2Pro) echo "macmini havoc@macminim1.rollet.family" ;;
+    MacMiniM1) echo "macbookpro havoc@macbookm2pro.rollet.family" ;;
     *) return 1 ;;
   esac
 }
