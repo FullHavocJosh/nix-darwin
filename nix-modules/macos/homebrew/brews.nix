@@ -51,6 +51,7 @@
   "python3"
   "reattach-to-user-namespace"
   "ripgrep"
+  "rsync"
   "ruff"
   "rust"
   "shellcheck" # gpa lints sh/bash scripts with it (errors only)
