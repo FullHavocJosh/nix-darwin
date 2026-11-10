@@ -66,6 +66,10 @@ in
     "ollama-app"
   ];
 
+  # uninstall and zap pass brew's disabled --cleanup switch; check runs brew bundle cleanup
+  # and aborts activation on unmanaged items
+  homebrew.onActivation.cleanup = lib.mkForce "check";
+
   # Mac App Store apps installed by hand; mas install/upgrade hangs when
   # darwin-rebuild runs over SSH, so run switch from the GUI session or expect a hang
   homebrew.masApps = {
