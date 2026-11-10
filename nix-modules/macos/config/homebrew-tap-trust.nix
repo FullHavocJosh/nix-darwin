@@ -1,7 +1,9 @@
 { config, lib, ... }:
 {
-  # Prepend tap trust setup to the homebrew activation script so it runs BEFORE brew bundle.
-  system.activationScripts.homebrew.text = lib.mkBefore ''
+  # Prepend tap trust setup to system.checks so it runs BEFORE brew bundle. cleanup = "check" runs
+  # brew bundle cleanup from system.checks, ahead of activationScripts.homebrew, and fails on any
+  # untrusted tap when ~/.homebrew/trust.json is missing.
+  system.checks.text = lib.mkBefore ''
         USER_HOME=$(eval echo ~${config.system.primaryUser})
         TRUST_FILE="$USER_HOME/.homebrew/trust.json"
         mkdir -p "$USER_HOME/.homebrew"
