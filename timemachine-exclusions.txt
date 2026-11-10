@@ -19,7 +19,7 @@
 # Model weights are gigabytes and a single `ollama pull` / LM Studio download
 # brings them back.
 ~/.ollama/models
-~/.lmstudio/models
+~/.models
 
 # --- Package manager caches -------------------------------------------------
 # Re-downloadable indexes, tarballs and package stores.

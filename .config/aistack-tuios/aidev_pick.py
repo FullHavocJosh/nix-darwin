@@ -104,7 +104,7 @@ def check_9b():
 
 def check_30b():
     path = os.environ.get("LOCAL_EDIT_MODEL_FILE") or os.path.expanduser(
-        "~/models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf")
+        "~/.models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf")
     if not os.path.isfile(path):
         return set_state("30b", "bad", "model file missing (hosts below 32 GB do not download it)")
     try:

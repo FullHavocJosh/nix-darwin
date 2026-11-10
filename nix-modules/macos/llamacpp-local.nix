@@ -48,7 +48,7 @@ let
       #!/usr/bin/env bash
       set -uo pipefail
 
-      MODELS_DIR="$HOME/models"
+      MODELS_DIR="$HOME/.models"
       LOG="$MODELS_DIR/download.log"
       LOG_PREFIX="[llama-model-downloader-${name}]"
       DEST="$MODELS_DIR/${model.file}"
@@ -103,9 +103,9 @@ let
     llama_profile
     echo "[llama-server-local-launcher] profile: $LLAMA_CLASS ($LLAMA_RAM_GB GB) ctx=$LLAMA_CTX_SIZE kv=$LLAMA_KV_K/$LLAMA_KV_V" >&2
 
-    MODEL_FILE="$HOME/models/${model.file}"
+    MODEL_FILE="$HOME/.models/${model.file}"
     if [ ! -f "$MODEL_FILE" ]; then
-      echo "[llama-server-local-launcher] ERROR: $MODEL_FILE not found; the downloader runs on darwin-rebuild (tail ~/models/download.log)" >&2
+      echo "[llama-server-local-launcher] ERROR: $MODEL_FILE not found; the downloader runs on darwin-rebuild (tail ~/.models/download.log)" >&2
       exit 1
     fi
 
@@ -161,10 +161,10 @@ in
   # `sudo --set-home -u`.
   system.activationScripts.postActivation.text = lib.mkAfter ''
     sudo --set-home -u ${username} bash <<'USERSCRIPT'
-    mkdir -p "$HOME/models"
-    nohup bash -c '${modelDownloader}; ${coderDownloader}' </dev/null >>"$HOME/models/download.log" 2>&1 &
+    mkdir -p "$HOME/.models"
+    nohup bash -c '${modelDownloader}; ${coderDownloader}' </dev/null >>"$HOME/.models/download.log" 2>&1 &
     disown
-    echo "[llama-model-downloader-local] Model check running in background -- tail ~/models/download.log"
+    echo "[llama-model-downloader-local] Model check running in background -- tail ~/.models/download.log"
     USERSCRIPT
   '';
 

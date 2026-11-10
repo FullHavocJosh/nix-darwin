@@ -42,7 +42,7 @@ PROTECTED=(
 # Entries the list has to contain: the replaceable caches and model stores.
 REQUIRED=(
     "~/.ollama/models"
-    "~/.lmstudio/models"
+    "~/.models"
     "~/.cache"
     "~/.npm"
     "~/.bun/install/cache"

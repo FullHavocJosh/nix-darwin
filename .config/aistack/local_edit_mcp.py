@@ -29,7 +29,7 @@ import time
 import urllib.request
 
 HOME = os.path.expanduser("~")
-MODEL_FILE = os.environ.get("LOCAL_EDIT_MODEL_FILE") or os.path.join(HOME, "models", "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf")
+MODEL_FILE = os.environ.get("LOCAL_EDIT_MODEL_FILE") or os.path.join(HOME, ".models", "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf")
 ALIAS = os.environ.get("LOCAL_EDIT_ALIAS", "qwen3-coder-30b")
 PORT = int(os.environ.get("LOCAL_EDIT_PORT", "8082"))
 CTX = int(os.environ.get("LOCAL_EDIT_CTX", "32768"))

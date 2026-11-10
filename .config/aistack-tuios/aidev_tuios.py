@@ -89,7 +89,7 @@ TENV = {**os.environ,
 CLAUDE_MODEL = os.environ.get("AIDEV_TUIOS_CLAUDE_MODEL") or os.environ.get("AISTACK_CLAUDE_MODEL") or "sonnet"
 CLAUDE_EFFORT = os.environ.get("AIDEV_TUIOS_CLAUDE_EFFORT") or os.environ.get("AISTACK_CLAUDE_EFFORT") or "medium"
 CODER_FILE = os.path.expanduser(os.environ.get("LOCAL_EDIT_MODEL_FILE")
-                                or "~/models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf")
+                                or "~/.models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf")
 LUMO_MODEL = os.environ.get("AISTACK_LUMO_MODEL") or "lumo-max"
 LUMO_TIMEOUT_S = int(os.environ.get("AIDEV_TUIOS_LUMO_TIMEOUT_S", "540"))
 VERIFY_TIMEOUT_S = int(os.environ.get("AISTACK_VERIFY_TIMEOUT_S", "300"))
