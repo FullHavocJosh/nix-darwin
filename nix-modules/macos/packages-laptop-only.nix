@@ -2,7 +2,10 @@
 {
   homebrew = {
     enable = true;
-    taps = [ "SableClient/sable" ];
+    taps = [
+      "SableClient/sable"
+      "gcenx/wine"
+    ];
     casks = [
       "battle-net"
       "game-porting-toolkit"

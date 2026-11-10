@@ -8,7 +8,7 @@
         /usr/bin/python3 -c "
     import json, os
     tf = '$TRUST_FILE'
-    taps = 'dopplerhq/cli minio/stable nikitabobko/tap slima4/claude-tui vitobotta/tap warrensbox/tap xykong/tap'.split()
+    taps = 'dopplerhq/cli gcenx/wine minio/stable music-assistant/tap nikitabobko/tap sableclient/sable slima4/claude-tui vitobotta/tap warrensbox/tap xykong/tap'.split()
     try:
         with open(tf) as f:
             d = json.load(f)
