@@ -14,20 +14,17 @@ if command -v starship &>/dev/null; then
   eval "$(starship init zsh)"
 fi
 
-# Secrets via Doppler (falls back to ~/.zshrc_envvars and ~/.zshrc_envvars_insecure)
+# Secrets via Doppler, project fullhavocjosh (falls back to ~/.zshrc_envvars)
 if command -v doppler &>/dev/null; then
-  _device_config=$(scutil --get LocalHostName 2>/dev/null | tr '[:upper:]' '[:lower:]')
-  for _dp in \
-    "devices-laptops:${_device_config}" \
-    "ai-tools:local" \
-    "media-stack:local" \
-    "homelab-infra:local" \
-    "matrix-homelab:hetzner"; do
-    eval "$(doppler secrets download --no-file --format shell \
-      --project ${_dp%%:*} --config ${_dp##*:} 2>/dev/null)"
-  done
-  
-  unset _dp _device_config
+  case "$(scutil --get LocalHostName 2>/dev/null | tr '[:upper:]' '[:lower:]')" in
+    macminim1)  _dp_config=root_macmini ;;
+    *)          _dp_config=root_macbook ;;
+  esac
+  set -a
+  eval "$(doppler secrets download --no-file --format env \
+    --project fullhavocjosh --config "$_dp_config" 2>/dev/null)"
+  set +a
+  unset _dp_config
 else
   [ -f ~/.zshrc_envvars ] && source ~/.zshrc_envvars
 fi
