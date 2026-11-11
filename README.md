@@ -148,7 +148,7 @@ Defined in `flake.nix`:
 
 #### Shared (all macOS profiles, via `packages-tui.nix`)
 
-- **llama-server** launchd daemon: serves `qwen/qwen3.5-9b` (Qwen3.5-9B Q4_K_M GGUF, 128K context) on `127.0.0.1:8080` only; the bind address is hard-coded and `_validate_llamacpp` rejects any other `LLAMA_CPP_HOST`. Used for gpc/gpa/gpr and opencode. The GGUF is downloaded to `~/models` (sha256-verified) on `darwin-rebuild switch`. No LM Studio, no LM Link: no device calls another device's model.
+- **llama-server** launchd daemon: serves `qwen/qwen3.5-9b` (Qwen3.5-9B Q4_K_M GGUF, 128K context) on `127.0.0.1:8080` only; the bind address is hard-coded and `_validate_llamacpp` rejects any other `LLAMA_CPP_HOST`. Used for gpc/gpa/gpr and opencode. The GGUF is downloaded to `~/.models` (sha256-verified) on `darwin-rebuild switch`. No LM Studio, no LM Link: no device calls another device's model.
 
 #### Lumo (lumo-tamer, on every personal Mac)
 

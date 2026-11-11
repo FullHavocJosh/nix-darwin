@@ -1,7 +1,7 @@
 { pkgs, lib, ... }:
 let
   # Ollama itself (app + launchd daemon) is declarative below, but its
-  # model store (~/.ollama/models) is not -- nothing else in this repo guarantees
+  # model store (~/.models/ollama) is not -- nothing else in this repo guarantees
   # a given model is actually present. This makes it self-healing: every
   # darwin-rebuild switch re-checks and re-pulls if the model has gone missing
   # (manual `ollama rm`, disk cleanup, etc). Currently just llama3.2:1b, used by
@@ -95,6 +95,7 @@ in
       ];
       EnvironmentVariables = {
         OLLAMA_HOST = "0.0.0.0:11434";
+        OLLAMA_MODELS = "/Users/havoc/.models/ollama";
         OLLAMA_FLASH_ATTENTION = "1";
         OLLAMA_KV_CACHE_TYPE = "q8_0";
         # mod-ollama-chat on azerothcore allows OllamaChat.MaxConcurrentQueries = 32
