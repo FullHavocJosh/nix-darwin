@@ -655,7 +655,7 @@ def write_backbone_settings(cfg):
     guard hook. The user-level settings are dropped (--setting-sources project,local), so the plan notes under ~/.ai
     are allowed here and WebSearch stays denied (ask-lumo). Read-only shell commands, ~/ai-info reads and mkdir/touch
     under ~/.ai are allowed too (not under ~/.ai/guard)."""
-    allow = [f"Bash({HELPER}:*)", "Bash(tuios read-agent-messages:*)", "Bash(tuios wait-for:*)",
+    allow = [f"Bash({HELPER}:*)", "Bash(gpa --auto:*)", "Bash(gprr:*)", "Bash(tuios read-agent-messages:*)", "Bash(tuios wait-for:*)",
              "Bash(tuios send-agent-message:*)", "Bash(tuios list-agents:*)", "Bash(tuios capture-pane:*)",
              "Edit(~/.ai/**)", "Write(~/.ai/**)",
              "Bash(cat:*)", "Bash(ls:*)", "Bash(wc:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(rg:*)", "Bash(fd:*)",

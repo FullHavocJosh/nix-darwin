@@ -39,13 +39,15 @@ deny = perms.get('deny', [])
 for entry in ["Bash(cat:*)", "Bash(ls:*)", "Bash(wc:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(rg:*)", "Bash(fd:*)",
               "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)",
               "Bash(tuios list-windows:*)", "Bash(tuios peek-prompt:*)", "Read(~/ai-info/**)",
-              "Bash(mkdir -p ~/.ai/**)", "Bash(touch ~/.ai/**)", "Edit(~/.ai/**)", "Write(~/.ai/**)"]:
+              "Bash(mkdir -p ~/.ai/**)", "Bash(touch ~/.ai/**)", "Edit(~/.ai/**)", "Write(~/.ai/**)",
+              "Bash(gpa --auto:*)", "Bash(gprr:*)"]:
     check(entry in allow, "allow has " + entry)
 
 check(os.path.expanduser("~/ai-info") in perms.get('additionalDirectories', []), "additionalDirectories has ~/ai-info")
 
 for entry in ["Bash(git commit:*)", "Bash(git push:*)", "Bash(gh:*)"]:
     check(entry not in allow, "allow lacks " + entry)
+check(not any(e.startswith("Bash(gpa") and e != "Bash(gpa --auto:*)" for e in allow), "allow has no other gpa rule")
 for prefix in ["Bash(rm", "Bash(mv"]:
     check(not any(e.startswith(prefix) for e in allow), "allow has no entry starting with " + prefix)
 
