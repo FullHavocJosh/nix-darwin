@@ -49,7 +49,7 @@ LOG = T + "/opencode.log"
 
 def call(args, key=True, cwd=WT):
     env = {k: v for k, v in os.environ.items() if k != "OPENCODE_ZEN_API_KEY"}
-    env.update(HOME=HOME, OPENCODE_BIN=BIN + "/opencode", STUB_LOG=LOG)
+    env.update(HOME=HOME, OPENCODE_BIN=BIN + "/opencode", STUB_LOG=LOG, OCZEN_ADAPTIVE="0")
     if key:
         env["OPENCODE_ZEN_API_KEY"] = "k"
     req = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "oczen_edit", "arguments": args}}

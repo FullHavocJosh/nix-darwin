@@ -25,7 +25,7 @@ import time
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 HOME = os.path.expanduser("~")
-MODEL = "opencode/big-pickle"
+MODEL = "opencode/big-pickle"   # the fallback when no model can be picked (pick_models)
 OPENCODE = os.environ.get("OPENCODE_BIN") or shutil.which("opencode") or "/opt/homebrew/bin/opencode"
 TIMEOUT_S = int(os.environ.get("OCZEN_TIMEOUT_S", "900"))
 PROTOCOL = "2024-11-05"
@@ -58,6 +58,36 @@ def zen_key_present():
         return bool((auth.get("opencode") or {}).get("key"))
     except (OSError, ValueError):
         return False
+
+
+def pick_models(limit=3):
+    """Model ids for `opencode run --model`, best first: the OpenCode Go and free Zen models that answer a probe now.
+    The paid Zen twins (opencode/<id> that are not free) are skipped, so this never bills. Falls back to MODEL when
+    OCZEN_ADAPTIVE=0, when probing fails, or when nothing answers."""
+    if os.environ.get("OCZEN_ADAPTIVE") == "0":
+        return [MODEL]
+    try:
+        zm = load_zen_models()
+        policy = json.load(open(os.path.join(HERE, "zen-policy.json")))
+        catalog, _source, _age = zm.load_catalog()
+        offered = zm.offered_ids()
+        free = set(zm.free_models(catalog, offered))
+        st = zm.status(catalog, offered, policy, False, do_probe=True, go_offered=zm.offered_go_ids())
+    except Exception:
+        return [MODEL]
+    ids = []
+    for r in st["models"]:
+        mid = r["model"]
+        if r["state"] == "exhausted" or mid in ids:
+            continue
+        if mid.startswith("opencode-go/"):
+            ids.append(mid)
+        elif mid.startswith("opencode/"):
+            if mid[len("opencode/"):] in free:
+                ids.append(mid)
+        elif mid in free:
+            ids.append("opencode/" + mid)
+    return ids[:limit] or [MODEL]
 
 
 def git_status(root):
@@ -119,22 +149,28 @@ def oczen_edit(a):
     env = dict(os.environ)
     env["OPENCODE_CONFIG_CONTENT"] = json.dumps({"formatter": False})
     t0 = time.time()
-    try:
-        # --agent build: the default agent is advisor (read-only); this is a builder run
-        argv = [OPENCODE, "run", "--auto", "--agent", "build", "--model", MODEL, prompt]
-        p = subprocess.run(argv, cwd=root, capture_output=True, text=True, timeout=TIMEOUT_S,
-                           stdin=subprocess.DEVNULL, env=env)
-        log, rc = (p.stdout or "") + (p.stderr or ""), p.returncode
-    except subprocess.TimeoutExpired:
-        log, rc = f"timed out after {TIMEOUT_S} s", 124
-    except OSError as exc:
-        return {"ok": False, "error": f"cannot run opencode ({OPENCODE}): {exc}"}
+    zm = load_zen_models()
+    model = MODEL
+    for model in pick_models():
+        try:
+            # --agent build: the default agent is advisor (read-only); this is a builder run
+            argv = [OPENCODE, "run", "--auto", "--agent", "build", "--model", model, prompt]
+            p = subprocess.run(argv, cwd=root, capture_output=True, text=True, timeout=TIMEOUT_S,
+                               stdin=subprocess.DEVNULL, env=env)
+            log, rc = (p.stdout or "") + (p.stderr or ""), p.returncode
+        except subprocess.TimeoutExpired:
+            log, rc = f"timed out after {TIMEOUT_S} s", 124
+        except OSError as exc:
+            return {"ok": False, "error": f"cannot run opencode ({OPENCODE}): {exc}"}
+        # a model whose quota ran out between the probe and the run: try the next one
+        if zm.classify(log, rc)[0] != "exhausted":
+            break
     undone = undo_other_files(root, rel, status_before)
     reverted = req["text"] is not None and outside_range(req)
     if reverted:
         with open(req["path"], "w") as fh:
             fh.write(req["text"])
-    out = le.summarize(req, rc == 0 and not reverted, round(time.time() - t0), MODEL, log=log)
+    out = le.summarize(req, rc == 0 and not reverted, round(time.time() - t0), model, log=log)
     if undone:
         out["undone"] = undone
         out["note"] = "it also changed other files; those changes were undone"
@@ -165,7 +201,7 @@ def zen_free_models(a):
         return {"ok": False, "error": f"model catalog unavailable: {exc}"}
     st = zm.status(catalog, zm.offered_ids(), policy, bool(a.get("private", False)),
                    do_probe=bool(a.get("probe", True)), refresh=bool(a.get("refresh", False)),
-                   probe_all=bool(a.get("all", False)))
+                   probe_all=bool(a.get("all", False)), go_offered=zm.offered_go_ids())
     return {"ok": True, "best": st["best"], "all_exhausted": st["all_exhausted"], "models": st["models"],
             "warnings": st["warnings"]}
 
