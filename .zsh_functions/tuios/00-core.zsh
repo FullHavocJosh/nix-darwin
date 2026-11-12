@@ -8,13 +8,15 @@
 #   hiwt <branch>        a new home-infrastructure worktree and branch, with a session of its own
 #   peerdev, nxpeer, hipeer, mmdev, himmdev, nxmmdev      sessions of the other Mac opened through the tuios host link
 #   aidev [task]         Claude Code as backbone, Lumo for web lookups, a free builder, mailing each other, as extra
-#                        workspaces of the current tuios session (outside tuios: session aidev-<repo>;
+#                        workspaces of the current tuios session (outside tuios: session <repo>;
 #                        .config/aistack-tuios/aidev_tuios.py)
 #   aidev --resume, aidev_status
 #   aidev -p "<change>" [files]   one edit by a free builder (a pane on a free workspace), AIDEV_TEST_CMD checked
 #   aidev --handoff <dir>         a run for a plan another session wrote; aidev --rfc <name> plans from an RFC
 #   aidev --direct [words]        a free builder, interactive, in this terminal
-#   ai_tuios [-c] [msg]  one Claude Code pane in session ai_tuios-<dir>
+#   ai_tuios [-c] [msg]  one Claude Code pane in session <dir>
+#
+# Every dev layout and every ai edit session also has a bare zsh window (named zsh, workspace 1).
 #
 # gpr points this session's nvim and zsh windows at a new worktree (_tuios_sync_dev_panes), and gpa's manual-fix
 # choices open nvim and aidev in a free workspace (_tuios_ai_edit_workspace).

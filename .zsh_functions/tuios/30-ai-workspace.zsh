@@ -1,6 +1,6 @@
 # gpa's manual-fix choices: nvim with $3 and a shell running $4 (aidev) in directory $2. Inside tuios the two windows
 # open on the lowest free workspace of this session; elsewhere in a new session $1, attached in a new terminal
-# window (_launch_terminal_window, .zshrc_functions_git).
+# window (_launch_terminal_window, .zsh_functions/git/).
 _tuios_ai_edit_workspace() {
   local name="$1" dir="$2" cmd_nvim="$3" cmd_aidev="$4" s ws first
   if [ -n "$TUIOS_ENV" ]; then
@@ -18,6 +18,7 @@ _tuios_ai_edit_workspace() {
   first=$(_tuios_cmd list-windows -s "$name" --json | jq -r '.windows[0].window_id')
   _tuios_cmd set-window -s "$name" -w "$first" --name nvim >/dev/null
   _tuios_cmd new-window ai -s "$name" --workspace 1 --cwd "$dir" --no-focus >/dev/null
+  _tuios_cmd new-window zsh -s "$name" --workspace 1 --cwd "$dir" --no-focus >/dev/null
   [ -n "$cmd_aidev" ] && _tuios_cmd send-text -s "$name" -w ai "$cmd_aidev"$'\n' >/dev/null
   [ -n "$cmd_nvim" ] && _tuios_cmd send-text -s "$name" -w nvim "$cmd_nvim"$'\n' >/dev/null
   _tuios_cmd focus-window nvim -s "$name" >/dev/null

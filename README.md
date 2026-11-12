@@ -230,7 +230,9 @@ tuios is the daily terminal multiplexer, installed by brew (`packages-tui.nix`),
 | `peerdev <session>`                | a session on the peer Mac through tuios host link                                          |
 | `nxpeer`, `hipeer`                 | peerdev for nix-darwin and home-infrastructure sessions                                    |
 | `mmdev`, `himmdev`, `nxmmdev`      | old names, kept as aliases of `peerdev`, `hipeer`, `nxpeer`                                |
-| `ai_tuios [-c] [message]`          | one Claude Code pane in session `ai_tuios-<dir>` (`-c` continues the last one here)        |
+| `ai_tuios [-c] [message]`          | one Claude Code pane in session `<dir>` (`-c` continues the last one here)                 |
+
+Every session has a bare `zsh` window next to nvim.
 
 Review: `ctrl+t v` opens the tuios review view of the focused pane's changes, against the branch's upstream (a pushed
 `gpr` branch shows only unpushed and uncommitted work). `c` notes a line, `C` a hunk, `S` sends the notes to the pane's
@@ -268,6 +270,7 @@ This repository includes powerful shell functions for AI-assisted development.
 Each role has one fixed tool; there is no provider picker:
 
 - **gpa / gpc** - llama.cpp (local llama-server on 127.0.0.1:8080) through aider; gpr uses no AI
+- **gprr** - the local 9B rewrites the PR body as a short description, marks the PR ready, then watches checks and bot comments
 - **ainfo** - the local llama.cpp model in pi
 - **aidev** - on tuios: Claude Code as backbone that plans and reviews, Lumo in a pane for web lookups, a builder that edits (the on-device Qwen3-Coder-30B where present, else a free OpenCode Zen model), talking by tuios mail
 - **Review and approval** - Claude Code with Sonnet/Opus (gpa `--tier=<model>` and critical-finding escalation)
@@ -356,15 +359,15 @@ It is refused together with `--auto`. Tests: `python3 .config/aistack/tests/test
 
 #### `aidev` - Claude Code with free builders on tuios
 
-| Command                       | What it does                                                                          |
-| ----------------------------- | ------------------------------------------------------------------------------------- |
-| `aidev [task]`                | Claude, Lumo and a builder in the current tuios session (else session `aidev-<repo>`) |
-| `aidev --resume`              | reopen the Claude and Lumo panes of an unfinished run after a daemon restart          |
-| `aidev -p "<change>" [files]` | one edit by a free builder in a pane, blocking; `AIDEV_TEST_CMD` must pass            |
-| `aidev --handoff <dir>`       | a run for a plan another session wrote (`/aidev-handoff`); one JSON line, no attach   |
-| `aidev --rfc <name> [words]`  | a run whose Claude plans from an RFC in `~/.ai/rfcs`                                  |
-| `aidev --direct [words]`      | a free builder, interactive, in this terminal (gpa's fix windows use it)              |
-| `aidev_status`                | the latest run's work dir, builder and tasks                                          |
+| Command                       | What it does                                                                        |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| `aidev [task]`                | Claude, Lumo and a builder in the current tuios session (else session `<repo>`)     |
+| `aidev --resume`              | reopen the Claude and Lumo panes of an unfinished run after a daemon restart        |
+| `aidev -p "<change>" [files]` | one edit by a free builder in a pane, blocking; `AIDEV_TEST_CMD` must pass          |
+| `aidev --handoff <dir>`       | a run for a plan another session wrote (`/aidev-handoff`); one JSON line, no attach |
+| `aidev --rfc <name> [words]`  | a run whose Claude plans from an RFC in `~/.ai/rfcs`                                |
+| `aidev --direct [words]`      | a free builder, interactive, in this terminal (gpa's fix windows use it)            |
+| `aidev_status`                | the latest run's work dir, builder and tasks                                        |
 
 The panes talk by tuios mail (session commands: [Terminal: tuios](#terminal-tuios)):
 

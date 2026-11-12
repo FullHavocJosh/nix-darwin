@@ -1,6 +1,6 @@
 # Device profile for the local llama-server: context window and KV cache types by RAM.
 # Sourced by the launchd launcher (embedded by nix-modules/macos/llamacpp-local.nix) and by the shell helpers in
-# .zshrc_functions_ai, so both always agree. Works in bash and zsh.
+# .zsh_functions/ai/, so both always agree. Works in bash and zsh.
 #
 # KV cache: q4_0 values are slow at depth on Metal (llama-bench, Qwen3.5-9B Q4_K_M, M2 Pro 32 GB, llama.cpp 9190,
 # pp4096 tokens/s at depth 0 / 12288: K q8_0 + V q4_0 118 / 28, K q8_0 + V q8_0 202 / 160, f16 + f16 212 / 205).

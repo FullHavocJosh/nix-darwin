@@ -39,6 +39,7 @@ _tuios_devlayout() {
   _tuios_cmd new-window pick -s "$s" --workspace 1 --cwd "$dir" --no-focus \
     --grants read,write,fan,files,respond,admin -- /bin/zsh -c \
     "export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:\$PATH; AIDEV_TUIOS_SESSION=$s python3 \$HOME/.config/aistack-tuios/aidev_pick.py" >/dev/null
+  _tuios_cmd new-window zsh -s "$s" --workspace 1 --cwd "$dir" --no-focus >/dev/null
   _tuios_cmd select-workspace 1 -s "$s" >/dev/null
   _tuios_cmd focus-window nvim -s "$s" >/dev/null
 }
@@ -46,6 +47,11 @@ _tuios_devlayout() {
 # A restored session's nvim, Claude and Lumo (tuios brings the windows back with fresh shells): nvim is typed in
 # again, Claude and Lumo start again from their launchers with their conversations (aidev_tuios.py restore).
 _tuios_restore() {
+  local zdir
+  if ! _tuios_cmd list-windows -s "$1" --json 2>/dev/null | jq -e '.windows[] | select(.custom_name == "zsh")' >/dev/null; then
+    zdir=$(_tuios_cmd list-windows -s "$1" --json 2>/dev/null | jq -r '.windows[] | select(.custom_name == "nvim") | .cwd' | head -n1)
+    _tuios_cmd new-window zsh -s "$1" --workspace 1 --cwd "${zdir:-$HOME}" --no-focus >/dev/null
+  fi
   _tuios_restore_nvim "$1"
   python3 "$HOME/.config/aistack-tuios/aidev_tuios.py" restore "$1"
 }

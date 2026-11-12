@@ -31,8 +31,8 @@ refs)
 		.config/lumo/*.sh \
 		.config/aistack/aidev_lib.py \
 		.pi/agent/extensions/lumo-first.ts \
-		.zshrc_aliases \
-		.zshrc_functions_ai \
+		.zsh_aliases \
+		.zsh_functions \
 		nix-modules/macos/lumo.nix)
 	if [[ -n $matches ]]; then
 		print -r -- "$matches"

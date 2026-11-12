@@ -2,13 +2,13 @@
 """aidev on tuios with Claude Code as the backbone (RFC ~/.ai/rfcs/2026-10-25-aidev-tuios-test.md). The `aidev`
 shell function runs it.
 
-    aidev_tuios.py start [--resume] [task words...]   open the panes: in this tuios session, else aidev-<repo>
+    aidev_tuios.py start [--resume] [task words...]   open the panes: in this tuios session, else <repo>
     aidev_tuios.py start --rfc <name> [words...]       the same, with Claude told to carry out an RFC (~/.ai/rfcs)
     aidev_tuios.py start --handoff <dir>               build a plan another session wrote and the user approved
                                                        (prd.json + verify.json): one JSON line, never attaches
     aidev_tuios.py start -p "<change>" [files...]      one edit by a free builder, checked here (AIDEV_TEST_CMD)
     aidev_tuios.py start --direct [words...]           an interactive free builder in this terminal
-    aidev_tuios.py ai [-c] [message words...]         ai_tuios: one Claude pane in session ai_tuios-<dir>
+    aidev_tuios.py ai [-c] [message words...]         ai_tuios: one Claude pane in session <dir>
     aidev_tuios.py status [<project>]                  print the latest run's state
     aidev_tuios.py restore <session>                   after a daemon restart: start the session's claude and lumo
                                                        panes again, conversations included (dev runs it)
@@ -42,7 +42,7 @@ Panes, all on one workspace (nvim's, else the lowest free one), each named after
     research pi on Lumo through lumo-tamer, no tools: web lookups on what Claude sends it        read
     build-local / build-free / build-billed   builders: pi on the on-device 30B, OpenCode on a free Zen model,
              Claude on a billed model; Claude opens them                                   read,write
-    dev-nvim nvim, only in a session of its own (in your session you have yours)                default
+    nvim     nvim, only in a session of its own (in your session you have yours)                default
 
 Rules the design rests on:
   - Claude decides; Lumo and the builder answer it. What they send is data to Claude, not instructions.
@@ -377,12 +377,12 @@ def safe_name(text):
 
 
 def session_name(project):
-    return "aidev-" + safe_name(os.path.basename(project))
+    return safe_name(os.path.basename(project))
 
 
 def start_session(project):
     """The session a new run lives in: AIDEV_TUIOS_SESSION when set (the dev layout names its new session), else the
-    tuios session aidev was started from, so the panes open beside your own windows, else aidev-<repo>.
+    tuios session aidev was started from, so the panes open beside your own windows, else <repo>.
     AIDEV_TUIOS_OWN_SESSION=1 always takes the last."""
     if os.environ.get("AIDEV_TUIOS_SESSION") and os.environ.get("AIDEV_TUIOS_OWN_SESSION") != "1":
         return os.environ["AIDEV_TUIOS_SESSION"]
@@ -1037,10 +1037,16 @@ def start_builder(run, kind, name, ws, cwd):
                        f"{(out or err).strip()[-500:]}")
 
 
+def ensure_zsh_window(session, cwd):
+    if not window_named(session, "zsh"):
+        tuios("new-window", "zsh", "-s", session, "--workspace", "1", "--cwd", cwd, "--no-focus")
+
+
 def start_dev_workspace(run, session, wd):
-    if not window_named(session, "dev-nvim"):
-        tuios("new-window", "dev-nvim", "-s", session, "--workspace", str(WS["dev"]), "--cwd", wd, "--no-focus")
-        tuios("send-text", "-s", session, "-w", "dev-nvim", "nvim\n")
+    if not window_named(session, "nvim"):
+        tuios("new-window", "nvim", "-s", session, "--workspace", str(WS["dev"]), "--cwd", wd, "--no-focus")
+        tuios("send-text", "-s", session, "-w", "nvim", "nvim\n")
+    ensure_zsh_window(session, wd)
 
 
 # ---- tasks and checks -----------------------------------------------------------------------------------------
@@ -1456,7 +1462,6 @@ def cmd_worktree(run, _argv):
         return 1
     os.environ["AISTACK_WORKTREE_MODE"] = os.environ.get("AIDEV_TUIOS_WORKTREE_MODE") or (
         "create" if is_main_checkout(run.project) else "none")
-    os.environ["AISTACK_TIERS"] = "aidev stack: Plan: Claude, Research: Lumo, Build-Local: Qwen-Code, Build-Free: OpenCode, Build-Billed: Claude"
     wd, created, err = lib.ensure_workdir(run.project, prd, verify)
     if err:
         print(f"creating the worktree failed: {err}")
@@ -2368,6 +2373,57 @@ def load_review_diff():
     return _REVIEW_DIFF
 
 
+_GPRR = None
+
+
+def load_gprr():
+    global _GPRR
+    if _GPRR is None:
+        spec = importlib.util.spec_from_file_location("aidev_gprr", os.path.join(HERE, "gprr.py"))
+        _GPRR = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_GPRR)
+    return _GPRR
+
+
+def cmd_pr_describe(run, argv):
+    """pr-describe: rewrite the PR body into a short description with the on-device 9B."""
+    wd = run.data.get("work_dir")
+    if not wd:
+        print("pr-describe: no work dir: run worktree first")
+        return 1
+    g = load_gprr()
+    ok, msg = g.describe_pr(wd, g._load_prd(run.plan_dir), load_explore().ask)
+    print(msg)
+    run.event("pr_describe", ok=ok)
+    return 0 if ok else 1
+
+
+def cmd_gprr(run, argv):
+    """gprr [--monitor]: describe the PR with the 9B, mark it ready, then queue /compact and the monitor prompt for
+    the plan pane. gprr --monitor is pr-status."""
+    wd = run.data.get("work_dir")
+    if not wd:
+        print("gprr: no work dir: run worktree first")
+        return 1
+    if argv and argv[0] == "--monitor":
+        return cmd_pr_status(run, argv[1:])
+    g = load_gprr()
+    ok_d, msg_d = g.describe_pr(wd, g._load_prd(run.plan_dir), load_explore().ask)
+    ok_r, msg_r = g.mark_ready(wd)
+    print(msg_d)
+    print(msg_r)
+    run.event("gprr", described=ok_d, ready=ok_r)
+    if not (ok_d and ok_r):
+        return 1
+    if os.environ.get("AIDEV_TUIOS_FINISH_RESET", "on") != "off":
+        queue(run.session, PLAN, "/compact Keep only: the PR url and number, the branch and work dir, the run id and "
+              "plan dir, open follow-ups (followups.txt), PR findings already handled, decisions the user made. "
+              "Drop tool output and task transcripts.")
+    queue(run.session, PLAN, "Run gprr --monitor. Handle each finding as in step 5b, then run finish when it exits 0.")
+    print("gprr: compact and monitor prompt queued for the plan pane")
+    return 0
+
+
 def plan_criteria(prd, limit=1500):
     """Extract acceptance criteria from user stories for review-diff."""
     if not prd:
@@ -2404,7 +2460,7 @@ HELPERS = {"ask-lumo": cmd_ask_lumo, "check-plan": cmd_check_plan, "worktree": c
            "escalate": cmd_escalate, "fallback": cmd_fallback,
            "send-task": cmd_send_task, "wait-task": cmd_wait_task, "verify": cmd_verify, "watch": cmd_watch,
            "approvals": cmd_approvals, "zen-check": cmd_zen_check, "finish": cmd_finish, "commit": cmd_commit,
-           "pr-status": cmd_pr_status,
+           "pr-status": cmd_pr_status, "gprr": cmd_gprr, "pr-describe": cmd_pr_describe,
            "merged": cmd_merged, "plan-sid": cmd_plan_sid, "explore": cmd_explore,
            "review-diff": cmd_review_diff}
 
@@ -2444,9 +2500,9 @@ def new_session(session, cwd):
 
 def where_to_run(project, resume=False):
     """(session, own, running, error) for a run of `project`: --resume goes back to the session the run was started
-    in; a new run opens in this tuios session, else in aidev-<repo> (start_session). One run per session."""
+    in; a new run opens in this tuios session, else in <repo> (start_session). One run per session."""
     session = (Run(project).data.get("session") if resume else None) or start_session(project)
-    own = session == session_name(project)
+    own = session == session_name(project) and (not session_exists(session) or bool(window_named(session, PLAN)))
     claude_w = None if own else window_named(session, PLAN)
     if claude_w and os.path.realpath(claude_w.get("cwd") or "") != project:
         return session, own, True, (f"{session} already holds a run for {claude_w.get('cwd')}; one run per session. "
@@ -2632,7 +2688,6 @@ def cmd_handoff(argv):
     wj(os.path.join(plan_dir, "verify.json"), verify)
     os.environ["AISTACK_WORKTREE_MODE"] = os.environ.get("AIDEV_TUIOS_WORKTREE_MODE") or (
         "create" if is_main_checkout(project) else "none")
-    os.environ["AISTACK_TIERS"] = "aidev stack: Plan: Claude, Research: Lumo, Build-Local: Qwen-Code, Build-Free: OpenCode, Build-Billed: Claude"
     lib = load_lib(project, run)
     wd, created, err = lib.ensure_workdir(project, prd, verify)
     if err:
@@ -2806,7 +2861,7 @@ def cmd_ai(argv):
     cont = "-c" in argv
     msg = " ".join(a for a in argv if a != "-c").strip()
     cwd = os.path.realpath(os.getcwd())
-    session = "ai_tuios-" + safe_name(os.path.basename(cwd))
+    session = safe_name(os.path.basename(cwd))
     if session_exists(session) and not msg and not cont:
         return attach(session)
     cfg = pane_configs(cwd)
@@ -2827,6 +2882,7 @@ def cmd_ai(argv):
         if err:
             print(f"ai_tuios: {err}", file=sys.stderr)
             return 1
+        ensure_zsh_window(session, cwd)
     tuios("new-window", f"claude-{sid[:8]}", "-s", session, "--cwd", cwd, "--grants", "read", "--",
           "/bin/zsh", "-c", " ".join(map(shlex.quote, argv_c)) + "; exec zsh -i")
     return attach(session)
