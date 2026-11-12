@@ -165,7 +165,7 @@ def _text(x):
 def probe(mid, runner=subprocess.run):
     """State record for one free model: ask opencode one trivial question and classify what comes back."""
     model_arg = mid if "/" in mid else "opencode/" + mid
-    cmd = ["opencode", "run", "--standalone", "--model", model_arg, PROBE_PROMPT]
+    cmd = ["opencode", "run", "--model", model_arg, PROBE_PROMPT]
     try:
         r = runner(cmd, cwd=tempfile.mkdtemp(), capture_output=True, text=True, timeout=PROBE_TIMEOUT_S,
                    stdin=subprocess.DEVNULL, check=False)

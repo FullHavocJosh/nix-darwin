@@ -8,7 +8,7 @@ Two tools:
   zen_free_models(private, probe, all, refresh)   read-only: which free Zen models this account can use now (zen_models.py)
 
 local_edit (on-device, nothing leaves the machine) stays the first choice; oczen_edit is for when local_edit is
-unavailable (the 30B is not on this host) or failed. It runs `opencode run --standalone --auto` (a private server, so
+unavailable (the 30B is not on this host) or failed. It runs `opencode run --auto` (a private server, so
 no shared background service with someone else's environment) with OpenCode's formatter turned off, and tells Big
 Pickle to change only the given lines of the given file. Afterwards it checks that: a change outside the line range
 puts the file back, and any other file it touched is restored or removed. It uses local_edit's request checks and
@@ -121,7 +121,7 @@ def oczen_edit(a):
     t0 = time.time()
     try:
         # --agent build: the default agent is advisor (read-only); this is a builder run
-        argv = [OPENCODE, "run", "--standalone", "--auto", "--agent", "build", "--model", MODEL, prompt]
+        argv = [OPENCODE, "run", "--auto", "--agent", "build", "--model", MODEL, prompt]
         p = subprocess.run(argv, cwd=root, capture_output=True, text=True, timeout=TIMEOUT_S,
                            stdin=subprocess.DEVNULL, env=env)
         log, rc = (p.stdout or "") + (p.stderr or ""), p.returncode

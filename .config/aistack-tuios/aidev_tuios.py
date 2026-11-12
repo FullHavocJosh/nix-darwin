@@ -766,8 +766,10 @@ def zen_status(run, refresh=False):
     if st.get("no_key"):
         return {"state": "none", "model": None, "detail": NO_ZEN_KEY, "models": []}
     if not models:
-        state = "none"
-    elif st.get("all_exhausted"):
+        why = ("no zero-retention free model is offered to this account (private repository)"
+               if repo_private(run.project) == "yes" else "no free model is offered to this account")
+        return {"state": "none", "model": None, "detail": why, "models": []}
+    if st.get("all_exhausted"):
         state = "exhausted"
     elif best and next((m for m in models if m.get("model") == best), {}).get("state") == "available":
         state = "available"
@@ -1466,10 +1468,22 @@ def cmd_worktree(run, _argv):
     return 0
 
 
+def auto_builder(run):
+    """The builder to open when none is named: local when the 30B file exists, else free when a free Zen model is
+    usable, else billed (cmd_builder then asks the user in the Inbox, so the plan pane never has to ask in chat)."""
+    if os.path.isfile(CODER_FILE):
+        return "local"
+    zs = zen_status(run)
+    if zen_usable(zs):
+        return "free"
+    print(f"no local 30B and free Zen is not usable ({zs['detail']}): only the billed builder is left")
+    return "billed"
+
+
 def cmd_builder(run, argv):
     approved = "--approved" in argv
     argv = [w for w in argv if w != "--approved"]
-    kind = norm_kind(argv[0]) if argv else ("local" if os.path.isfile(CODER_FILE) else "free")
+    kind = norm_kind(argv[0]) if argv else auto_builder(run)
     if kind not in BUILDERS:
         print(f"usage: builder [{'|'.join(BUILDERS)}] [--approved]")
         return 2

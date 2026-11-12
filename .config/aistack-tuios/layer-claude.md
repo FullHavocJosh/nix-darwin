@@ -95,7 +95,11 @@ you may also comment, transition, edit, create and link issues and log work. A h
      says so.
    - Write ideas you defer to `@@PLAN_DIR@@/followups.txt`, one line each. A non-empty file makes `finish` compact
      instead of clear.
-3. **Build.** Run `worktree`, then `builder`. For each task in `check-plan` order: `send-task`, then `wait-task`. On
+3. **Build.** Run `worktree`, then plain `builder` with no argument: it opens the best builder that works here (local,
+   then free) and, when neither is usable, asks the user in the Inbox for billed by itself. Never name `local` or `free`
+   yourself, never retry `zen-check --refresh` to look for a free model, and never ask in chat which builder to use
+   first; the user already answered that in the Inbox. A private repository gets only zero-retention free models, so
+   "no free model" there is policy, not a fault. For each task in `check-plan` order: `send-task`, then `wait-task`. On
    CHECKS FAILED, `send-task` the same id with a note saying what to fix. After the failed attempts that `escalate`
    accepts (two by default), run `escalate <id>`, tell the user which builder is next and why, then `send-task` with a
    note. When wait-task says the free builder hit its usage limit, run `fallback <id>`, tell the user, `send-task`
