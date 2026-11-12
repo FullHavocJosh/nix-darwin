@@ -32,7 +32,30 @@ _tuios_cmd() {
     log_call "_tuios_cmd $*"
     if [[ "$1" == "hosts" ]]; then
         echo "$FAKE_HOSTS"
+    elif [[ "$1" == "ls" ]]; then
+        echo "${FAKE_SESSIONS:-[]}"
+    elif [[ "$1" == "list-windows" ]]; then
+        if [[ -n "$FAKE_WINDOWS" ]]; then
+            echo "$FAKE_WINDOWS"
+        else
+            echo '{"windows":[]}'
+        fi
     fi
+    return 0
+}
+
+_tuios_daemon_up() {
+    log_call "_tuios_daemon_up $*"
+    return 0
+}
+
+_tuios_devlayout() {
+    log_call "_tuios_devlayout $*"
+    return 0
+}
+
+_tuios_restore() {
+    log_call "_tuios_restore $*"
     return 0
 }
 
@@ -191,6 +214,79 @@ echo "Test 11: peerdev no argument"
 rm -f "$log_file"
 result=$(peerdev 2>&1)
 check "peerdev no argument returns 1" "[ $? -eq 1 ]"
+
+# Tests 12-15: dev ensures an ai-info session and opens its manage window once
+real_home="$HOME"
+TUIOS_DEV_NO_PEER=1
+FAKE_HOST="MacBookM2Pro"
+FAKE_SSH_RC=0
+
+# Test 12: ai-info present: one launch with TUIOS_SESSION=ai-info; missing session gets a devlayout
+echo "Test 12: ai-info present"
+home_dir=$(mktemp -d)
+HOME="$home_dir"
+mkdir -p "$HOME/ai-info/manage"
+printf '#!/bin/sh\necho "launch $TUIOS_SESSION" >> "%s/launch.log"\n' "$home_dir" > "$HOME/ai-info/manage/launch.sh"
+chmod +x "$HOME/ai-info/manage/launch.sh"
+rm -f "$log_file"
+FAKE_SESSIONS='[{"name":"ai-info"}]'
+FAKE_WINDOWS=""
+dev --detached
+check "ai-info present launches manage once" \
+    "[ \"\$(cat \"$home_dir/launch.log\" 2>/dev/null)\" = 'launch ai-info' ]"
+rm -f "$home_dir/launch.log"
+rm -f "$log_file"
+FAKE_SESSIONS='[]'
+dev --detached
+check "ai-info missing session gets devlayout" "grep -q '^_tuios_devlayout ai-info ' \"$log_file\""
+HOME="$real_home"
+rm -rf "$home_dir"
+
+# Test 13: ai-info absent: no ai-info calls and no launch
+echo "Test 13: ai-info absent"
+home_dir=$(mktemp -d)
+HOME="$home_dir"
+rm -f "$log_file"
+FAKE_SESSIONS='[]'
+FAKE_WINDOWS=""
+dev --detached
+check "ai-info absent logs no ai-info" "! grep -q 'ai-info' \"$log_file\""
+check "ai-info absent does not launch" "[ ! -e \"$home_dir/launch.log\" ]"
+HOME="$real_home"
+rm -rf "$home_dir"
+
+# Test 14: manage window already present: no launch, even after two runs
+echo "Test 14: manage window already present"
+home_dir=$(mktemp -d)
+HOME="$home_dir"
+mkdir -p "$HOME/ai-info/manage"
+printf '#!/bin/sh\necho "launch $TUIOS_SESSION" >> "%s/launch.log"\n' "$home_dir" > "$HOME/ai-info/manage/launch.sh"
+chmod +x "$HOME/ai-info/manage/launch.sh"
+rm -f "$log_file"
+FAKE_SESSIONS='[{"name":"ai-info"}]'
+FAKE_WINDOWS='{"windows":[{"custom_name":"manage"}]}'
+dev --detached
+dev --detached
+check "manage window present does not launch" "[ ! -s \"$home_dir/launch.log\" ]"
+HOME="$real_home"
+rm -rf "$home_dir"
+
+# Test 15: launch.sh present but not executable: no launch
+echo "Test 15: launch.sh not executable"
+home_dir=$(mktemp -d)
+HOME="$home_dir"
+mkdir -p "$HOME/ai-info/manage"
+printf '#!/bin/sh\necho "launch $TUIOS_SESSION" >> "%s/launch.log"\n' "$home_dir" > "$HOME/ai-info/manage/launch.sh"
+chmod -x "$HOME/ai-info/manage/launch.sh"
+rm -f "$log_file"
+FAKE_SESSIONS='[{"name":"ai-info"}]'
+FAKE_WINDOWS=""
+dev --detached
+check "non-executable launch.sh does not launch" "[ ! -s \"$home_dir/launch.log\" ]"
+HOME="$real_home"
+rm -rf "$home_dir"
+FAKE_SESSIONS=""
+FAKE_WINDOWS=""
 
 # Final check: no `hosts add` call is ever logged during the whole run
 if ! grep -q "hosts add" "$all_log_file" 2>/dev/null; then

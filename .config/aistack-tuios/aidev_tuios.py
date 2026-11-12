@@ -592,11 +592,12 @@ BUILDER_DENY = ["Bash(git " + w + " *)" for w in ("commit", "push", "reset", "re
                                                                   "Bash(find * -delete*)", "Bash(find * -exec*)"]
 
 
-def builder_permissions(verify, state_dir=None):
+def builder_permissions(verify, state_dir=None, work_dir=None):
     """Permission policy of the billed builder: edits accepted, the fixed read-only commands and the exact verify
     commands of the plan (`verify` = the plan's verify.json dict or None) allowed, git writes and the like denied.
     With `state_dir`, edits to the plan directory and the runs' state.json and events.jsonl are denied too, since
-    acceptEdits would otherwise approve them (the pane has run.state as an added directory)."""
+    acceptEdits would otherwise approve them (the pane has run.state as an added directory). With `work_dir`, edits and
+    file commands inside it are allowed, and ~/.ai is readable but not writable."""
     allow = set(BUILDER_ALLOW)
     for cmds in (verify or {}).values():
         for cmd in [cmds] if isinstance(cmds, str) else cmds:
@@ -606,14 +607,23 @@ def builder_permissions(verify, state_dir=None):
         for p in (state_dir + "/plan/**", state_dir + "/runs/*/plan/**", state_dir + "/runs/*/state.json",
                   state_dir + "/runs/*/events.jsonl"):
             deny.update(f"{tool}(//{p.lstrip('/')})" for tool in ("Edit", "MultiEdit"))
+    if work_dir:
+        wd = os.path.realpath(work_dir)
+        allow.update(f"{tool}(//{wd.lstrip('/')}/**)" for tool in ("Edit", "MultiEdit", "Write"))
+        allow.update([f"Bash(mkdir -p {wd}/*)", f"Bash(touch {wd}/*)", f"Bash(mv {wd}/* {wd}/*)",
+                      f"Bash(cp {wd}/* {wd}/*)", f"Bash(rm {wd}/*)", f"Bash(rm -r {wd}/*)"])
+        ai = os.path.expanduser("~/.ai").lstrip("/")
+        allow.add(f"Read(//{ai}/**)")
+        deny.update(f"{tool}(//{ai}/**)" for tool in ("Edit", "MultiEdit", "Write"))
     return {"defaultMode": "acceptEdits", "allow": sorted(allow), "deny": sorted(deny)}
 
 
-def write_working_settings(cfg, path, allow=(), deny=(), mode=None, pre_tool_hooks=()):
+def write_working_settings(cfg, path, allow=(), deny=(), mode=None, pre_tool_hooks=(), add_dirs=()):
     """Settings for a Claude pane that does the work itself: tuios's hooks (mail notices, agent state), the default
     output style (CLAUDE_ADVISOR=off stops only the advisor hook; the Advisor style in ~/.claude/settings.json would
     still hand every change to the user as a command, and --settings overrides it), `allow` and `deny` in the
-    permission lists, `mode` as the default permission mode and `pre_tool_hooks` added to the PreToolUse hooks."""
+    permission lists, `mode` as the default permission mode, `pre_tool_hooks` added to the PreToolUse hooks and
+    `add_dirs` added to the additional directories."""
     s = rj(cfg["claude_settings"], {}) or {}
     s["outputStyle"] = "default"
     if pre_tool_hooks:
@@ -621,7 +631,7 @@ def write_working_settings(cfg, path, allow=(), deny=(), mode=None, pre_tool_hoo
         for entry in pre_tool_hooks:
             if entry not in pre:
                 pre.append(entry)
-    if allow or deny or mode:
+    if allow or deny or mode or add_dirs:
         perms = s.setdefault("permissions", {})
         if allow:
             perms["allow"] = sorted(set(perms.get("allow") or []) | set(allow))
@@ -629,6 +639,8 @@ def write_working_settings(cfg, path, allow=(), deny=(), mode=None, pre_tool_hoo
             perms["deny"] = sorted(set(perms.get("deny") or []) | set(deny))
         if mode:
             perms["defaultMode"] = mode
+        if add_dirs:
+            perms["additionalDirectories"] = sorted(set(perms.get("additionalDirectories") or []) | set(add_dirs))
     wj(path, s)
     return path
 
@@ -641,16 +653,23 @@ def write_backbone_settings(cfg):
     """The Claude pane's settings, with the helpers and the mail commands allowed, so coordinating the other panes
     does not stop for a permission prompt every time. The Atlassian and GitHub MCP tools stay read-only through the
     guard hook. The user-level settings are dropped (--setting-sources project,local), so the plan notes under ~/.ai
-    are allowed here and WebSearch stays denied (ask-lumo)."""
+    are allowed here and WebSearch stays denied (ask-lumo). Read-only shell commands, ~/ai-info reads and mkdir/touch
+    under ~/.ai are allowed too (not under ~/.ai/guard)."""
     allow = [f"Bash({HELPER}:*)", "Bash(tuios read-agent-messages:*)", "Bash(tuios wait-for:*)",
              "Bash(tuios send-agent-message:*)", "Bash(tuios list-agents:*)", "Bash(tuios capture-pane:*)",
-             "Edit(~/.ai/**)", "Write(~/.ai/**)"]
-    deny = PLAN_MCP_WRITES + ["WebSearch", "Edit(~/.ai/guard/**)", "Write(~/.ai/guard/**)"]
+             "Edit(~/.ai/**)", "Write(~/.ai/**)",
+             "Bash(cat:*)", "Bash(ls:*)", "Bash(wc:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(rg:*)", "Bash(fd:*)",
+             "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)",
+             "Bash(tuios list-windows:*)", "Bash(tuios peek-prompt:*)", "Read(~/ai-info/**)",
+             "Bash(mkdir -p ~/.ai/**)", "Bash(touch ~/.ai/**)"]
+    deny = PLAN_MCP_WRITES + ["WebSearch", "Edit(~/.ai/guard/**)", "Write(~/.ai/guard/**)",
+                              "Bash(mkdir -p ~/.ai/guard/**)", "Bash(touch ~/.ai/guard/**)"]
     hook = {"matcher": "mcp__atlassian__.*|mcp__github__.*", "hooks": [{"type": "command", "command":
             shlex.quote(sys.executable) + " " + shlex.quote(os.path.join(HERE, "plan_mcp_guard" + ".py"))}]}
     bash_hook = {"matcher": "Bash", "hooks": [{"type": "command", "command":
             shlex.quote(sys.executable) + " " + shlex.quote(os.path.join(HERE, "plan_bash_guard" + ".py"))}]}
-    return write_working_settings(cfg, cfg["claude_backbone"], allow, deny=deny, pre_tool_hooks=[hook, bash_hook])
+    return write_working_settings(cfg, cfg["claude_backbone"], allow, deny=deny, pre_tool_hooks=[hook, bash_hook],
+                                  add_dirs=[os.path.expanduser("~/ai-info")])
 
 
 def lumo_model_for(base_url, key):
@@ -956,9 +975,15 @@ def build_body(run, cfg, kind, name=None):
             verify = load_lib(run.project, run).load_plan(run.project)[1]
         except Exception:
             verify = None
-        perms = builder_permissions(verify, state_dir=run.state)
+        perms = builder_permissions(verify, state_dir=run.state, work_dir=wd if "/.worktrees/" in wd else None)
+        hooks = []
+        if "/.worktrees/" in wd:
+            hooks.append({"matcher": "Bash", "hooks": [{"type": "command", "command":
+                          shlex.quote(sys.executable) + " " + shlex.quote(os.path.join(HERE, "builder_path_guard" + ".py"))
+                          + " " + shlex.quote(os.path.realpath(wd))}]})
         settings = write_working_settings(cfg, os.path.join(os.path.dirname(cfg["claude_backbone"]), "builder.json"),
-                                          allow=perms["allow"], deny=perms["deny"], mode=perms["defaultMode"])
+                                          allow=perms["allow"], deny=perms["deny"], mode=perms["defaultMode"],
+                                          pre_tool_hooks=hooks)
         return pane_path + claude_body(run, cfg, name, system, "Wait for the first task.", wd, advisor=False,
                                        settings=settings, env={"AIDEV_TUIOS_BUILDER": "1"})
     sysp = write_text(os.path.join(run.dir, "bin", f"{name}.system.md"), system)

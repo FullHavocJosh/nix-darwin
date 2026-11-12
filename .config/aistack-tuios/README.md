@@ -8,7 +8,8 @@ unchanged.
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `dev`                              | reattach the daemon's sessions; with none, create nix-darwin, terraform-infrastructure and           |
 |                                    | home-infrastructure where cloned. Layout: workspace 1 holds nvim, aidev's Claude, Lumo and           |
-|                                    | the builders.                                                                                        |
+|                                    | the builders. Where `~/ai-info` exists it also ensures an `ai-info` session and a manage window      |
+|                                    | (never twice).                                                                                       |
 | `devim [name]`                     | that layout for the current directory, always a new session                                          |
 |                                    | workspace 1 opens nvim and a `pick` pane (`aidev_pick.py`): choose Claude, 9B or 30B in advisor      |
 |                                    | mode while green check, yellow ? or red x show what is usable; a red x never blocks a choice         |
@@ -52,7 +53,8 @@ The host entries `macmini` (MacMiniM1) and `macbookpro` (MacBookM2Pro) are in `.
 run `tuios config apply` once per machine, in a terminal outside tuios.
 
 `dev` ensures the other Mac's nix-darwin and home-infrastructure sessions exist, but only when ssh answers within
-3 seconds. When it does not, `dev` prints one line and carries on. `TUIOS_DEV_NO_PEER=1` turns the peer step off.
+3 seconds, and through `dev --detached` also its `ai-info` session and manage window. When it does not, `dev` prints
+one line and carries on. `TUIOS_DEV_NO_PEER=1` turns the peer step off.
 
 The sessions run on their own Mac. You only see and attach them from this one. The `*_ssh` commands (`mmdev_ssh`,
 `himmdev_ssh`, `nxmmdev_ssh`) are the old ssh-window versions.

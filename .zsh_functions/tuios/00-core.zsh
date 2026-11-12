@@ -2,7 +2,8 @@
 #
 #   dev                  reattach the daemon's sessions; with none, create nix-darwin, terraform-infrastructure and
 #                        home-infrastructure where cloned. Layout: workspace 1 holds nvim, aidev's Claude, Lumo
-#                        and the builders
+#                        and the builders. Where ~/ai-info exists, dev also ensures an ai-info session and a manage
+#                        window (never duplicated), on the other Mac too through dev --detached
 #   devim [name]         the same layout for the current directory, always a new session
 #   nxvim, psvim, hivim, itvim   the session of one project (skipped where it is not cloned)
 #   hiwt <branch>        a new home-infrastructure worktree and branch, with a session of its own
