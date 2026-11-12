@@ -1,7 +1,7 @@
 # aistack-tuios: aidev on tuios
 
 The daily terminal and AI stack, on tuios, with Claude Code as the backbone of aidev and the other models in panes it
-talks to by tuios mail. The commands are in `.zshrc_functions_tuios`. `ai` and `ainfo` use no multiplexer and are
+talks to by tuios mail. The commands are in `.zsh_functions/tuios/`. `ai` and `ainfo` use no multiplexer and are
 unchanged.
 
 | Command                            | What it does                                                                                         |
@@ -17,17 +17,22 @@ unchanged.
 | `peerdev <session>`                | a session on the peer Mac through tuios host link                                                    |
 | `nxpeer`, `hipeer`                 | peerdev for nix-darwin and home-infrastructure sessions                                              |
 | `mmdev`, `himmdev`, `nxmmdev`      | old names, kept as aliases of `peerdev`, `hipeer`, `nxpeer`                                          |
-| `aidev [task]`                     | Claude, Lumo and a builder, in the current tuios session (else session `aidev-<repo>`)               |
+| `aidev [task]`                     | Claude, Lumo and a builder, in the current tuios session (else session `<repo>`)                     |
 | `aidev --resume`                   | reopen the Claude and Lumo panes of an unfinished run after a daemon restart, conversations included |
 | `aidev -p "<change>" [files]`      | one edit by a free builder, blocking; `AIDEV_TEST_CMD` must pass                                     |
 | `aidev --handoff <dir>`            | a run for a plan another session wrote (`/aidev-handoff`); one JSON line, no attach                  |
 | `aidev --rfc <name> [words]`       | a run whose Claude plans from an RFC in `~/.ai/rfcs`                                                 |
 | `aidev --direct [words]`           | a free builder, interactive, in this terminal (gpa's fix windows use it)                             |
 | `aidev_status`                     | the latest run's work dir, builder and tasks                                                         |
-| `ai_tuios [-c] [message]`          | one Claude Code pane in session `ai_tuios-<dir>` (`-c` continues the last one here)                  |
+| `ai_tuios [-c] [message]`          | one Claude Code pane in session `<dir>` (`-c` continues the last one here)                           |
 
 gpr points the current session's `nvim` and `zsh` windows at its new worktree. gpa's manual-fix choices open nvim
 and aidev on a free workspace of the current session.
+
+`gprr` (also a zsh function) is for a PR that is done: the on-device 9B rewrites the detailed task list in the PR body
+as a short human-readable description (`pr-describe` does only that), the PR is marked ready for review, and
+`gprr --monitor` watches it for failed checks and Qodo, Copilot and Akkido comments. In the plan pane `gprr` also
+queues `/compact` first, then a follow-up prompt tells Claude to run `gprr --monitor`.
 
 Review: `ctrl+t v` opens the tuios review view of the focused pane's changes, against the branch's upstream (a pushed
 gpr branch shows only unpushed and uncommitted work). `c` notes a line, `C` a hunk, `S` sends the notes to the pane's
@@ -59,7 +64,7 @@ web lookups for it, and a free model edits the code. Every dev session (`dev`, `
 `AIDEV_TUIOS_SESSION=<session>`: Claude, Lumo and every builder open on workspace 1 beside nvim (`aidev -p` edits
 included), so you can watch each agent and type into it. Started by hand inside another tuios session, Claude joins
 the workspace of a window named `nvim`, else the lowest free one, and the rest share it. Outside tuios, or with
-`AIDEV_TUIOS_OWN_SESSION=1`, they get session `aidev-<repo>` with the numbers below and a `dev-nvim` window. One run
+`AIDEV_TUIOS_OWN_SESSION=1`, they get session `<repo>` with the numbers below and a bare `zsh` window next to `nvim`. One run
 per session; `finish` closes a piece of work, and the panes stay for the next. Plan and the billed builder start with
 `--strict-mcp-config`, so they load only the tuios MCP; the global lumo, local-edit and oczen MCP servers stay for
 gpr, gpa and other sessions. The plan pane also loads the Atlassian remote MCP (https://mcp.atlassian.com/v1/mcp,
@@ -68,14 +73,14 @@ OAuth once through `/mcp`) and the GitHub MCP (`@edjl/github-mcp`, through the l
 `JIRA_WRITES` (comment, transition, edit, create, link, worklog), and builder panes keep
 the tuios MCP only.
 
-| Workspace | Pane                | Model                                                              | Grants                           |
-| --------- | ------------------- | ------------------------------------------------------------------ | -------------------------------- |
-| 1         | `plan`              | Claude Code, advisor off: plans, sends tasks, verifies, reviews    | read, write, fan, files, respond |
-| 1         | `nvim` (`dev-nvim`) | your editor (`dev-nvim` only in a session of its own)              | default                          |
-| 1         | `research`          | pi on Lumo through lumo-tamer, no tools: web lookups               | read                             |
-| 1         | `build-local`       | pi on the on-device 30B; Claude opens it when the plan is approved | read, write                      |
-| 1         | `build-free`        | escalation: pi on a free Zen model                                 | read, write                      |
-| 1         | `build-billed`      | escalation: Claude Code (billed, asks you first)                   | read, write                      |
+| Workspace | Pane           | Model                                                              | Grants                           |
+| --------- | -------------- | ------------------------------------------------------------------ | -------------------------------- |
+| 1         | `plan`         | Claude Code, advisor off: plans, sends tasks, verifies, reviews    | read, write, fan, files, respond |
+| 1         | `nvim`         | your editor, with a bare `zsh` window next to it                   | default                          |
+| 1         | `research`     | pi on Lumo through lumo-tamer, no tools: web lookups               | read                             |
+| 1         | `build-local`  | pi on the on-device 30B; Claude opens it when the plan is approved | read, write                      |
+| 1         | `build-free`   | escalation: pi on a free Zen model                                 | read, write                      |
+| 1         | `build-billed` | escalation: Claude Code (billed, asks you first)                   | read, write                      |
 
 The billed builder's settings use `acceptEdits`, allow the plan's verify commands by exact text and the read-only
 commands, and deny git writes, `gh`, `rm -rf` and `sudo` (deny wins over allow). Edits to the plan directory and to the run's `state.json` and `events.jsonl` are denied too. Each run has its own plan directory and worktree record (`meta_path`) under `runs/<id>/`, so concurrent runs of one project never share a plan, worktree or PR; finish archives the plan to `runs/<id>/plan-done-<time>`.
@@ -190,7 +195,7 @@ tuios agent features must be on: `[agents] enabled = true` in `../tuios/config.t
 - `layer-claude.md`, `layer-lumo.md`, `layer-build.md`: each pane's system prompt.
 - `tests/test_aidev_tuios.py`: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_aidev_tuios.py`.
 - `../tuios/config.toml`: tuios config (agents on, herdr protocol emulation off, strict pane grants). The functions in
-  `.zshrc_functions_tuios` set `XDG_CONFIG_HOME` so tuios reads it; check with `tuios config files`.
+  `.zsh_functions/tuios/` set `XDG_CONFIG_HOME` so tuios reads it; check with `tuios config files`.
 - Per-pane tuios hooks (Claude Code settings, the pi extension, the OpenCode plugin) are generated under
   `~/.ai/cache/aidev_tuios/` and passed per launch (`--settings`, `PI_CODING_AGENT_DIR`, `OPENCODE_CONFIG_DIR`). The
   stowed `~/.claude`, `~/.pi` and `~/.config/opencode` are never changed.

@@ -153,7 +153,7 @@ def main():
           f"export PATH={a.shlex.quote(os.environ['PATH'])}\n" in open(script).read())
     r = subprocess.run(["zsh", "-n", script], capture_output=True, text=True, check=False)
     check("the launcher is valid zsh", r.returncode == 0, r.stderr)
-    check("session names are safe", a.session_name("/x/my repo.v2") == "aidev-my-repo-v2")
+    check("session names are safe", a.session_name("/x/my repo.v2") == "my-repo-v2")
     print("session and workspaces")
     saved = {k: os.environ.get(k) for k in ("TUIOS_ENV", "TUIOS_SESSION", "AIDEV_TUIOS_OWN_SESSION")}
     os.environ.update(TUIOS_ENV="1", TUIOS_SESSION="dev-x")

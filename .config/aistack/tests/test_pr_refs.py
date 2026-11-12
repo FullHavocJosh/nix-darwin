@@ -45,6 +45,7 @@ check("summary wraps #90", "`#90`" in body, body)
 check("story title wraps #3", "`#3`" in body, body)
 check("criteria wrap #4", "`#4`" in body, body)
 check("verify command kept as `echo #5`", "`echo #5`" in body, body)
+check("body has no Opened by trailer", "Opened by" not in body and "---" not in body, body)
 
 if FAILS:
     print(f"{len(FAILS)} failed")

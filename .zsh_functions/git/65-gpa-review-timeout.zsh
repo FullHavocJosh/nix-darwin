@@ -7,7 +7,7 @@ function _gpa_review_batch_with_timeout() {
   local tier_override="${4:-auto}"  # Optional tier override
 
   # Local model (qwen3.5-9b via aider on llama.cpp): a review batch can take several minutes, mostly generation
-  # at 10-22 tok/s (see _local_llm_timeout in .zshrc_functions_ai for the numbers), so the local limit is
+  # at 10-22 tok/s (see _local_llm_timeout in .zsh_functions/ai/20-aider-local.zsh for the numbers), so the local limit is
   # AI_LOCAL_REVIEW_TIMEOUT (default 900s). It must not be lower than the aider call's own limit or this outer
   # watchdog kills a review that is still working. Claude Code (--tier): one call is capped at GPA_CLAUDE_TIMEOUT
   # (default 180s) inside _run_ai_direct_claude, so the watchdog allows a little more.

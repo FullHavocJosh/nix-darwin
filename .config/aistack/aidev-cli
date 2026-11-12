@@ -1,6 +1,6 @@
 #!/bin/zsh
 # aidev for agents: the `aidev` that OpenCode, pi and scripts find on PATH (~/.local/bin/aidev links here).
-# aidev itself is a zsh function (.zshrc_functions_tuios); this runs the same script without an interactive zsh.
+# aidev itself is a zsh function (.zsh_functions/tuios/); this runs the same script without an interactive zsh.
 # An agent can use the two headless forms:
 #
 #   aidev -p "<exact change. Change nothing else.>" <files>   one edit by a free builder (the on-device 30B, then a

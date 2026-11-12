@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic guardrails for gpa's AI code review (.zshrc_functions_git calls this; stdlib only).
+"""Deterministic guardrails for gpa's AI code review (.zsh_functions/git/ calls this; stdlib only).
 
 The review model is small and its findings used to block a commit as they came: invented text, pre-existing code,
 style opinions marked Critical, and a new set on every run. This decides, without a model, which findings may block.

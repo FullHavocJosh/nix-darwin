@@ -242,16 +242,6 @@ def pr_title_and_body(prd, verify):
             + (f": {backtick_refs(crit)}" if crit else "")
             + (" (verify: " + ", ".join(f"`{c}`" for c in v) + ")" if v else "")
         )
-    lines += [
-        "",
-        "---",
-        (
-            "Opened by " + os.environ["AISTACK_TIERS"] + "."
-            if os.environ.get("AISTACK_TIERS")
-            else "Opened by aistack when the plan was confirmed. "
-            "Changes stay uncommitted in this worktree until committed with gpc/gpa."
-        ),
-    ]
     return ptype, title, "\n".join(lines)
 
 

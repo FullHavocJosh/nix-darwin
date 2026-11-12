@@ -44,7 +44,7 @@ INSTRUCTIONS = (
 
 
 def zen_key_present():
-    """The same places _validate_opencode_zen (.zshrc_functions_ai) looks for an OpenCode Zen API key."""
+    """The same places _validate_opencode_zen (.zsh_functions/ai/) looks for an OpenCode Zen API key."""
     if os.environ.get("OPENCODE_ZEN_API_KEY"):
         return True
     for f in (".zshrc_envvars", ".zshrc_envvars_insecure", ".config/opencode/.env"):
