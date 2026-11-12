@@ -151,7 +151,7 @@ in
     LLAMA_CPP_HOST = lib.mkForce "http://${bindHost}:${toString port}";
     LOCAL_LLM_MODEL = modelAlias;
     # local_edit_mcp.py's coder model (absent on hosts below 32 GB, where the tool reports it is unavailable)
-    LOCAL_EDIT_MODEL_FILE = "/Users/${username}/models/${coderModel.file}";
+    LOCAL_EDIT_MODEL_FILE = "/Users/${username}/.models/${coderModel.file}";
   };
 
   # Must be `postActivation` (via lib.mkAfter, which merges with the other
