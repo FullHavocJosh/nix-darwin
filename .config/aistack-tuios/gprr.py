@@ -130,7 +130,7 @@ def main(argv):
     wd = os.getcwd()
     failed = False
     if not only_monitor:
-        ok, msg = describe_pr(wd, _load_prd(plan_dir), explore.ask)
+        _ok, msg = describe_pr(wd, _load_prd(plan_dir), explore.ask)
         print(f"describe: {msg}")
         ok2, msg2 = mark_ready(wd)
         print(f"ready: {msg2}")
