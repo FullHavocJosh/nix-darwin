@@ -48,6 +48,7 @@ _tuios_devlayout() {
 # again, Claude and Lumo start again from their launchers with their conversations (aidev_tuios.py restore).
 _tuios_restore() {
   local zdir
+  [ "$1" = ai-info ] && return 0
   if ! _tuios_cmd list-windows -s "$1" --json 2>/dev/null | jq -e '.windows[] | select(.custom_name == "zsh")' >/dev/null; then
     zdir=$(_tuios_cmd list-windows -s "$1" --json 2>/dev/null | jq -r '.windows[] | select(.custom_name == "nvim") | .cwd' | head -n1)
     _tuios_cmd new-window zsh -s "$1" --workspace 1 --cwd "${zdir:-$HOME}" --no-focus >/dev/null
@@ -56,16 +57,25 @@ _tuios_restore() {
   python3 "$HOME/.config/aistack-tuios/aidev_tuios.py" restore "$1"
 }
 
-# Opens ai-info's manage window through its launcher, only once: nothing when ~/ai-info or its session or launcher is
-# missing, or a window named manage is already there.
+# ai-info holds only its manage window. Creates the session when missing (its initial shell window is closed once
+# manage is open), else opens manage only when no window of that name exists. Nothing when ~/ai-info or launch.sh is
+# missing.
 _tuios_ai_info_manage() {
+  local win
   [ -d "$HOME/ai-info" ] || return 0
-  _tuios_session_exists ai-info || return 0
   [ -x "$HOME/ai-info/manage/launch.sh" ] || return 0
-  if _tuios_cmd list-windows -s ai-info --json 2>/dev/null | jq -e '.windows[] | select(.custom_name == "manage")' >/dev/null; then
+  _tuios_daemon_up
+  if _tuios_session_exists ai-info; then
+    if ! _tuios_cmd list-windows -s ai-info --json 2>/dev/null | jq -e '.windows[] | select(.custom_name == "manage")' >/dev/null; then
+      TUIOS_SESSION=ai-info "$HOME/ai-info/manage/launch.sh" >/dev/null
+    fi
     return 0
   fi
+  _tuios_cmd new ai-info -d --cwd "$HOME/ai-info" >/dev/null || return 1
   TUIOS_SESSION=ai-info "$HOME/ai-info/manage/launch.sh" >/dev/null
+  win=$(_tuios_cmd list-windows -s ai-info --json 2>/dev/null | jq -r '[.windows[] | select(.custom_name != "manage")][0].window_id // empty')
+  [ -n "$win" ] && _tuios_cmd close-window "$win" -s ai-info >/dev/null
+  return 0
 }
 
 # Reattaches to the sessions the daemon holds (each gets nvim, Claude and Lumo back), to nix-darwin's when there is
@@ -77,6 +87,7 @@ dev() {
   [ "$1" = "--detached" ] && detached=1 && shift
   _tuios_daemon_up
   for s in $(_tuios_cmd ls --json 2>/dev/null | jq -r '.[]?.name'); do
+    [ "$s" = ai-info ] && continue
     _tuios_restore "$s"
     [ -z "$first" ] && first="$s"
   done
@@ -88,8 +99,8 @@ dev() {
       [ -z "$first" ] && first="${spec%%:*}"
     done
   fi
-  # Ensure nix-darwin, home-infrastructure and ai-info sessions exist where directories are cloned
-  for spec in nix-darwin:"$HOME/nix-darwin" home-infrastructure:"$HOME/home-infrastructure" ai-info:"$HOME/ai-info"; do
+  # Ensure nix-darwin and home-infrastructure sessions exist where directories are cloned (ai-info: _tuios_ai_info_manage)
+  for spec in nix-darwin:"$HOME/nix-darwin" home-infrastructure:"$HOME/home-infrastructure"; do
     [ -d "${spec#*:}" ] || continue
     _tuios_session_exists "${spec%%:*}" && continue
     _tuios_devlayout "${spec%%:*}" "${spec#*:}" || continue
