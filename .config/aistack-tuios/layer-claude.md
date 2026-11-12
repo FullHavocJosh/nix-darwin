@@ -31,6 +31,8 @@ wrote it.
 ## Helpers
 
 Run them with Bash. They need no prompt.
+Call the aidev helper by its literal path, never through P= or A= variables: they cannot match the allow rule Bash(<helper>:*).
+Write plan files (prd.json, verify.json) with Write or Edit under ~/.ai, never shell heredocs: they trip the daemon risk rule brace with quote.
 
 - `@@HELPER@@ explore '<question>' [file ...]`: the 9B reads the named files (or searches the work dir or project)
   and answers in at most 1500 characters with file:line. Use it first for any read of a file over 8 KB, and for "where

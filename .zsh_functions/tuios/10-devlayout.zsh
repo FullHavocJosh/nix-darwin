@@ -56,6 +56,18 @@ _tuios_restore() {
   python3 "$HOME/.config/aistack-tuios/aidev_tuios.py" restore "$1"
 }
 
+# Opens ai-info's manage window through its launcher, only once: nothing when ~/ai-info or its session or launcher is
+# missing, or a window named manage is already there.
+_tuios_ai_info_manage() {
+  [ -d "$HOME/ai-info" ] || return 0
+  _tuios_session_exists ai-info || return 0
+  [ -x "$HOME/ai-info/manage/launch.sh" ] || return 0
+  if _tuios_cmd list-windows -s ai-info --json 2>/dev/null | jq -e '.windows[] | select(.custom_name == "manage")' >/dev/null; then
+    return 0
+  fi
+  TUIOS_SESSION=ai-info "$HOME/ai-info/manage/launch.sh" >/dev/null
+}
+
 # Reattaches to the sessions the daemon holds (each gets nvim, Claude and Lumo back), to nix-darwin's when there is
 # one. With no session at all it creates the dev layout for ~/nix-darwin, ~/pscloudops/terraform-infrastructure and
 # ~/home-infrastructure, each only where it is cloned, then attaches to nix-darwin's (else the first one).
@@ -76,12 +88,13 @@ dev() {
       [ -z "$first" ] && first="${spec%%:*}"
     done
   fi
-  # Ensure nix-darwin and home-infrastructure sessions exist where directories are cloned
-  for spec in nix-darwin:"$HOME/nix-darwin" home-infrastructure:"$HOME/home-infrastructure"; do
+  # Ensure nix-darwin, home-infrastructure and ai-info sessions exist where directories are cloned
+  for spec in nix-darwin:"$HOME/nix-darwin" home-infrastructure:"$HOME/home-infrastructure" ai-info:"$HOME/ai-info"; do
     [ -d "${spec#*:}" ] || continue
     _tuios_session_exists "${spec%%:*}" && continue
     _tuios_devlayout "${spec%%:*}" "${spec#*:}" || continue
   done
+  _tuios_ai_info_manage
   # Call _tuios_dev_peer after local sessions exist, but before final attach
   if [ "$detached" -eq 0 ]; then
     _tuios_dev_peer
