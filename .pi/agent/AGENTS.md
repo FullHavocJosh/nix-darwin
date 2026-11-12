@@ -1,1 +1,0 @@
-/Users/havoc/ai-info/nix-darwin/.pi/agent/AGENT.md
