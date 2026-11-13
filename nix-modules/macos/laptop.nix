@@ -50,7 +50,6 @@
     Hush = 1544743900;
     OverPicture = 1188020834;
     "Proton Pass for Safari" = 6502835663;
-    SearchPlus = 6781814441;
     "Simple Refresh" = 1492951704;
     SponsorBlock = 1573461917;
     TestFlight = 899247664;

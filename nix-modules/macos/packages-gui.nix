@@ -20,7 +20,6 @@
       "neovide-app"
       "sf-symbols"
       "shottr"
-      "windows-app"
       "raspberry-pi-imager"
       "ollama-app"
       "openchamber"
