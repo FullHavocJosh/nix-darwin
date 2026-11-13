@@ -227,6 +227,14 @@ def plan_pane_open():
     return any(w.get('custom_name') == 'plan' for w in data.get('windows') or [])
 
 
+def close_pick_window():
+    session = os.environ.get('AIDEV_TUIOS_SESSION') or os.environ.get('TUIOS_SESSION')
+    if not session:
+        return False
+    code, _out = run(['tuios','close-window','pick','-s',session])
+    return code == 0
+
+
 def start_aidev(extra):
     env = {**os.environ, **extra}
     if plan_pane_open():
@@ -237,6 +245,8 @@ def start_aidev(extra):
     code = subprocess.run([sys.executable, os.path.join(HERE, 'aidev_tuios.py'), 'start'], cwd=os.getcwd(), env=env, check=False).returncode
     if code != 0:
         input('aidev start failed; Enter for a shell ')
+    elif close_pick_window():
+        return
     os.execvp('zsh', ['zsh', '-i'])
 
 def launch(key):

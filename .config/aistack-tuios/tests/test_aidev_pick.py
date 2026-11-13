@@ -148,6 +148,46 @@ def test_start_aidev():
         mod.subprocess.run = original_run
 
 
+def test_close_pick_window():
+    original_env = os.environ.copy()
+    original_run = mod.run
+    # Test 1: session set; run records the close-window command
+    try:
+        os.environ['AIDEV_TUIOS_SESSION'] = 'test-session'
+        os.environ['TUIOS_SESSION'] = 'test-session'
+        calls = []
+        def mock_run(cmd, *args, **kwargs):
+            calls.append(cmd)
+            return (0, '')
+        mod.run = mock_run
+        result = mod.close_pick_window()
+        check("session set returns True on exit 0", result == True)
+        check("runs tuios close-window pick -s <session>", calls == [['tuios', 'close-window', 'pick', '-s', 'test-session']])
+    finally:
+        os.environ.clear()
+        os.environ.update(original_env)
+        mod.run = original_run
+
+    # Test 2: both session env vars unset; run is not called
+    try:
+        if 'AIDEV_TUIOS_SESSION' in os.environ:
+            del os.environ['AIDEV_TUIOS_SESSION']
+        if 'TUIOS_SESSION' in os.environ:
+            del os.environ['TUIOS_SESSION']
+        calls = []
+        def mock_run(cmd, *args, **kwargs):
+            calls.append(cmd)
+            return (0, '')
+        mod.run = mock_run
+        result = mod.close_pick_window()
+        check("no session env returns False", result == False)
+        check("no session env does not call run", calls == [])
+    finally:
+        os.environ.clear()
+        os.environ.update(original_env)
+        mod.run = original_run
+
+
 def test_zen_and_go_no_key():
     # zen_models.py status --json reports no_key on a host without an OpenCode Zen API key
     original_run, original_set_state = mod.run, mod.set_state
@@ -167,6 +207,7 @@ def test_zen_and_go_no_key():
 def main():
     test_plan_pane_open()
     test_start_aidev()
+    test_close_pick_window()
     test_zen_and_go_no_key()
     check("All tests completed", True)
     return 1 if FAILS else 0
