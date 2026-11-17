@@ -61,4 +61,22 @@ default = a.builder_permissions(None, '/s/st')
 check(default == a.builder_permissions(None, '/s/st', work_dir=None), "work_dir=None equals the default")
 check(not any(e.startswith("Write(") for e in default['allow'] + default['deny']), "default has no Write( entry")
 
+plain = a.builder_permissions(None)["allow"]
+for entry in ("Bash(fd *)", "Bash(jq *)", "Bash(sort *)", "Bash(uniq *)", "Bash(stat *)", "Bash(file *)",
+              "Bash(tree *)", "Bash(pwd *)", "Bash(which *)", "Bash(test *)", "Bash(git branch --list *)",
+              "Bash(git ls-files *)", "Bash(git blame *)", "Bash(git rev-parse *)", "Bash(git diff-tree *)",
+              "Bash(git grep *)", "Bash(git ls-tree *)", "Bash(git remote -v *)"):
+    check(entry in plain, "read-only allow " + entry)
+check(not any(e.startswith(("Bash(git commit", "Bash(git push", "Bash(rm", "Bash(echo")) for e in plain),
+      "no write command in the default allow")
+
+with tempfile.TemporaryDirectory() as tmp:
+    base = os.path.join(tmp, "settings.json")
+    a.wj(base, {})
+    sb = {"enabled": True, "autoAllowBashIfSandboxed": True, "allowUnsandboxedCommands": False}
+    out = a.write_working_settings({"claude_settings": base}, os.path.join(tmp, "b.json"), sandbox=sb)
+    check(a.rj(out, {}).get("sandbox") == sb, "write_working_settings writes the sandbox dict")
+    out = a.write_working_settings({"claude_settings": base}, os.path.join(tmp, "c.json"))
+    check("sandbox" not in a.rj(out, {}), "no sandbox key without sandbox")
+
 sys.exit(1 if FAILS else 0)

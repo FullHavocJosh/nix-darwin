@@ -586,7 +586,11 @@ def pane_configs(project):
 
 BUILDER_ALLOW = ["Bash(ls *)", "Bash(cat *)", "Bash(grep *)", "Bash(rg *)", "Bash(head *)",
                  "Bash(tail *)", "Bash(wc *)", "Bash(diff *)", "Bash(git status *)", "Bash(git diff *)",
-                 "Bash(git log *)", "Bash(git show *)", "Bash(tuios send-agent-message *)"]
+                 "Bash(git log *)", "Bash(git show *)", "Bash(tuios send-agent-message *)",
+                 "Bash(fd *)", "Bash(jq *)", "Bash(sort *)", "Bash(uniq *)", "Bash(stat *)", "Bash(file *)",
+                 "Bash(tree *)", "Bash(pwd *)", "Bash(which *)", "Bash(test *)", "Bash(git branch --list *)",
+                 "Bash(git ls-files *)", "Bash(git blame *)", "Bash(git rev-parse *)", "Bash(git diff-tree *)",
+                 "Bash(git grep *)", "Bash(git ls-tree *)", "Bash(git remote -v *)"]
 BUILDER_DENY = ["Bash(git " + w + " *)" for w in ("commit", "push", "reset", "restore", "stash", "clean", "rebase",
                                                    "merge", "checkout")] + ["Bash(gh *)", "Bash(rm -rf *)", "Bash(sudo *)",
                                                                   "Bash(find * -delete*)", "Bash(find * -exec*)"]
@@ -618,12 +622,12 @@ def builder_permissions(verify, state_dir=None, work_dir=None):
     return {"defaultMode": "acceptEdits", "allow": sorted(allow), "deny": sorted(deny)}
 
 
-def write_working_settings(cfg, path, allow=(), deny=(), mode=None, pre_tool_hooks=(), add_dirs=()):
+def write_working_settings(cfg, path, allow=(), deny=(), mode=None, pre_tool_hooks=(), add_dirs=(), sandbox=None):
     """Settings for a Claude pane that does the work itself: tuios's hooks (mail notices, agent state), the default
     output style (CLAUDE_ADVISOR=off stops only the advisor hook; the Advisor style in ~/.claude/settings.json would
     still hand every change to the user as a command, and --settings overrides it), `allow` and `deny` in the
     permission lists, `mode` as the default permission mode, `pre_tool_hooks` added to the PreToolUse hooks and
-    `add_dirs` added to the additional directories."""
+    `add_dirs` added to the additional directories, `sandbox` (a dict) set as the sandbox settings."""
     s = rj(cfg["claude_settings"], {}) or {}
     s["outputStyle"] = "default"
     if pre_tool_hooks:
@@ -641,6 +645,8 @@ def write_working_settings(cfg, path, allow=(), deny=(), mode=None, pre_tool_hoo
             perms["defaultMode"] = mode
         if add_dirs:
             perms["additionalDirectories"] = sorted(set(perms.get("additionalDirectories") or []) | set(add_dirs))
+    if isinstance(sandbox, dict):
+        s["sandbox"] = sandbox
     wj(path, s)
     return path
 
@@ -977,13 +983,15 @@ def build_body(run, cfg, kind, name=None):
             verify = None
         perms = builder_permissions(verify, state_dir=run.state, work_dir=wd if "/.worktrees/" in wd else None)
         hooks = []
+        sandbox = None
         if "/.worktrees/" in wd:
+            sandbox = {"enabled": True, "autoAllowBashIfSandboxed": True, "allowUnsandboxedCommands": False}
             hooks.append({"matcher": "Bash", "hooks": [{"type": "command", "command":
                           shlex.quote(sys.executable) + " " + shlex.quote(os.path.join(HERE, "builder_path_guard" + ".py"))
                           + " " + shlex.quote(os.path.realpath(wd))}]})
         settings = write_working_settings(cfg, os.path.join(os.path.dirname(cfg["claude_backbone"]), "builder.json"),
                                           allow=perms["allow"], deny=perms["deny"], mode=perms["defaultMode"],
-                                          pre_tool_hooks=hooks)
+                                          pre_tool_hooks=hooks, sandbox=sandbox)
         return pane_path + claude_body(run, cfg, name, system, "Wait for the first task.", wd, advisor=False,
                                        settings=settings, env={"AIDEV_TUIOS_BUILDER": "1"})
     sysp = write_text(os.path.join(run.dir, "bin", f"{name}.system.md"), system)
