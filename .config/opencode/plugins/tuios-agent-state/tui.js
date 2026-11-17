@@ -1,7 +1,7 @@
 // installed by tuios
 // managed by tuios; `tuios integration install opencode` overwrites this file
 // TUIOS_INTEGRATION_ID=opencode
-// TUIOS_INTEGRATION_VERSION=5
+// TUIOS_INTEGRATION_VERSION=7
 // OpenCode V2 CLI plugin: https://opencode.ai/v2/docs/build/plugins/cli
 
 import { TuiosAgentState } from "../tuios-agent-state.js";

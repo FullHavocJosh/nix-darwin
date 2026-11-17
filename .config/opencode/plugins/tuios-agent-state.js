@@ -3,10 +3,11 @@
 // and `tuios integration uninstall opencode` removes it. Put your own plugins
 // beside it instead of editing it.
 // TUIOS_INTEGRATION_ID=opencode
-// TUIOS_INTEGRATION_VERSION=5
+// TUIOS_INTEGRATION_VERSION=7
 //
 // Reports opencode's session state to the tuios pane it runs in, through
-// `tuios agent-hook opencode`. The event names are opencode's bus events
+// the daemon's agent-hook-event verb on its socket, or `tuios agent-hook
+// opencode` where the daemon has no such verb. The event names are opencode's bus events
 // (https://opencode.ai/docs/plugins/), handled the way herdr's plugin handles
 // them. Events from child sessions, the subagents opencode starts, are dropped
 // so a subagent finishing cannot mark the pane done mid-turn.
@@ -31,8 +32,102 @@
 
 import { spawn } from "node:child_process";
 
+// hookViaSocket sends one hook event to the tuios daemon over its socket, as
+// the agent-hook-event verb, so no tuios process starts for it. The daemon
+// finds the pane from this process, as `tuios agent-hook` finds it from its
+// own. It resolves to what the hook prints for the harness to read (a string,
+// often empty, and empty when signal aborts the call), or to null when the
+// event has to go through `tuios agent-hook` instead: no socket in the
+// environment, a socket that cannot be reached, or a daemon older than the
+// verb. The two last are remembered, so
+// the events after them go to the process at once. A call that reached the
+// daemon is never sent again, so an event is never reported twice.
+import { connect as tuiosConnect } from "node:net";
+
+// The variables the hook mapping reads, as tuios integration writes them.
+const TUIOS_HOOK_ENV = ["TUIOS_AGENT","CODEX_THREAD_ID","CURSOR_VERSION","GROK_SESSION_ID","CRUSH_SESSION_ID"];
+let tuiosSocketOff = !process.env.TUIOS_SOCKET;
+
+// verb is agent-hook-event unless named (agent-statusline-event for a status
+// line run), and extra holds that verb's own params.
+function hookViaSocket(harness, payload, limitMs, signal, verb = "agent-hook-event", extra = {}) {
+  if (tuiosSocketOff) return Promise.resolve(null);
+  if (signal?.aborted) return Promise.resolve("");
+  return new Promise((resolve) => {
+    let settled = false;
+    let connected = false;
+    let buf = "";
+    let sock = null;
+    let timer = null;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      try {
+        sock?.destroy();
+      } catch {}
+      resolve(value);
+    };
+    // An abort ends the call with nothing printed; the daemon ends the hold
+    // when it sees the connection go.
+    const abort = () => done("");
+    signal?.addEventListener("abort", abort, { once: true });
+    const env = {};
+    for (const name of TUIOS_HOOK_ENV) {
+      if (process.env[name]) env[name] = process.env[name];
+    }
+    try {
+      sock = tuiosConnect(process.env.TUIOS_SOCKET);
+    } catch {
+      tuiosSocketOff = true;
+      done(null);
+      return;
+    }
+    // Past the limit nothing is printed, as when the hook process gives up.
+    timer = setTimeout(() => done(connected ? "" : null), limitMs);
+    sock.setEncoding("utf8");
+    sock.on("connect", () => {
+      connected = true;
+      sock.write(JSON.stringify({ id: 1, verb, params: { ...extra, harness, payload, env } }) + "\n");
+    });
+    sock.on("data", (chunk) => {
+      buf += chunk;
+      const nl = buf.indexOf("\n");
+      if (nl < 0) {
+        if (buf.length > 1 << 20) done("");
+        return;
+      }
+      let msg = null;
+      try {
+        msg = JSON.parse(buf.slice(0, nl));
+      } catch {
+        done("");
+        return;
+      }
+      if (msg && msg.error) {
+        if (msg.error.code === "unknown_verb") {
+          tuiosSocketOff = true;
+          done(null);
+          return;
+        }
+        done("");
+        return;
+      }
+      const out = msg && msg.result ? msg.result.stdout : "";
+      done(typeof out === "string" ? out : "");
+    });
+    sock.on("error", () => {
+      if (!connected) tuiosSocketOff = true;
+      done(connected ? "" : null);
+    });
+    sock.on("close", () => done(connected ? "" : null));
+  });
+}
+
+
 const TUIOS = "tuios";
-const ARGS = ["agent-hook", "opencode", "--integration", "5"];
+const ARGS = ["agent-hook", "opencode", "--integration", "7"];
 // The daemon ends a hold within 300 seconds; this only guards against a hook
 // that never exits.
 const HOLD_LIMIT_MS = 310000;
@@ -43,7 +138,7 @@ const children = new Set();
 // The Inbox only offers a request whose call it can show whole.
 const calls = new Map();
 const CALLS_MAX = 256;
-const STATUS_ARGS = ["agent-statusline", "opencode", "--integration", "5"];
+const STATUS_ARGS = ["agent-statusline", "opencode", "--integration", "7"];
 // usage maps a session id to its assistant messages' cost by message id, the
 // model last named, and what was last sent.
 const usage = new Map();
@@ -70,7 +165,12 @@ function payloadFor(event, sessionID, extra) {
 }
 
 function report(event, sessionID, extra) {
-  run(ARGS, payloadFor(event, sessionID, extra));
+  const payload = payloadFor(event, sessionID, extra);
+  after(() =>
+    hookViaSocket("opencode", payload, REPORT_LIMIT_MS).then((out) => {
+      if (out === null) return spawnOnce(ARGS, payload);
+    }),
+  );
 }
 
 // Reports leave one at a time, in the order of their events: each starts when
@@ -88,9 +188,10 @@ function after(start) {
   sending = sending.then(start).catch(() => {});
 }
 
-// run queues tuios with args and input on its stdin, and does not wait.
-function run(args, input) {
-  after(() => new Promise((resolve) => {
+// spawnOnce runs tuios with args and input on its stdin, and resolves when it
+// has exited.
+function spawnOnce(args, input) {
+  return new Promise((resolve) => {
     try {
       const child = spawn(TUIOS, args, {
         stdio: ["pipe", "ignore", "ignore"],
@@ -105,7 +206,7 @@ function run(args, input) {
       // A report that cannot be sent must never break opencode.
       resolve();
     }
-  }));
+  });
 }
 
 // noteUsage takes an assistant message's model and cost.
@@ -144,7 +245,13 @@ function sendUsage(sessionID, turnEnd) {
   if (!turnEnd && key === u.sent) return;
   if (key === "|") return;
   u.sent = key;
-  run(turnEnd ? [...STATUS_ARGS, "--turn-end"] : STATUS_ARGS, JSON.stringify(payload));
+  const input = JSON.stringify(payload);
+  const args = turnEnd ? [...STATUS_ARGS, "--turn-end"] : STATUS_ARGS;
+  after(() =>
+    hookViaSocket("opencode", input, REPORT_LIMIT_MS, undefined, "agent-statusline-event", turnEnd ? { turn_end: true } : {}).then((out) => {
+      if (out === null) return spawnOnce(args, input);
+    }),
+  );
 }
 
 // ask runs the hook for a permission request and resolves to the reply it
@@ -175,7 +282,29 @@ function ask(event, sessionID, extra, signal) {
     // The request goes out after the reports before it, so it cannot land
     // ahead of the busy status of its own turn. The reports after it do not
     // wait for the person's answer: they wait only for its start.
+    const payload = payloadFor(event, sessionID, extra);
+    const parse = (text) => {
+      try {
+        const value = JSON.parse(text.trim());
+        if (value && REPLIES.includes(value.reply)) {
+          done(value);
+          return;
+        }
+      } catch {}
+      done(null);
+    };
     after(() => {
+      if (settled) return;
+      // Not returned: the reports after this one wait only for its start.
+      hookViaSocket("opencode", payload, HOLD_LIMIT_MS, signal).then((printed) => {
+        if (printed === null) {
+          viaProcess();
+          return;
+        }
+        parse(printed);
+      });
+    });
+    const viaProcess = () => {
       if (settled) return;
       try {
         child = spawn(TUIOS, ARGS, {
@@ -198,18 +327,9 @@ function ask(event, sessionID, extra, signal) {
       child.stdout.on("data", (chunk) => {
         if (out.length < 65536) out += chunk;
       });
-      child.on("close", () => {
-        try {
-          const value = JSON.parse(out.trim());
-          if (value && REPLIES.includes(value.reply)) {
-            done(value);
-            return;
-          }
-        } catch {}
-        done(null);
-      });
-      child.stdin.end(payloadFor(event, sessionID, extra));
-    });
+      child.on("close", () => parse(out));
+      child.stdin.end(payload);
+    };
   });
 }
 

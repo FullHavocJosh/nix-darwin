@@ -1,7 +1,7 @@
 // installed by tuios
 // managed by tuios; `tuios integration install opencode` overwrites this file
 // TUIOS_INTEGRATION_ID=opencode
-// TUIOS_INTEGRATION_VERSION=5
+// TUIOS_INTEGRATION_VERSION=7
 
 // OpenCode discovers the adjacent tui.js through this server entrypoint.
 // Reporting belongs to the terminal client: the shared server may have been
