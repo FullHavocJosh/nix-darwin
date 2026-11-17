@@ -1278,7 +1278,7 @@ def lumo_messages(run):
 
 def mail_id(out):
     """The message id in send-agent-message's reply ('message 3 queued for build (...)'), or None."""
-    m = re.search(r"message (\d+) queued", out)
+    m = re.search(r"message (\d+) (?:queued|delivered)", out)
     return m.group(1) if m else None
 
 
