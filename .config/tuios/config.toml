@@ -292,6 +292,8 @@ daemon = true
 enabled = true
 # off: tuios does not emulate herdr's protocol in its panes; state reporting comes from tuios's own hooks.
 herdr_protocol = "off"
+# off: the SessionStart hook tells agents not to rename their pane or session.
+name_hint = "off"
 
 [agents.permissions]
 # strict: a pane started without --grants holds `grants` (your shells). aidev starts every model pane with its own
