@@ -111,17 +111,33 @@ in
   };
   homebrew = {
     enable = true;
-    taps = [ ];
+    taps = [
+      "agavra/tap"
+      "seunggabi/tap"
+    ];
+    # jemalloc, libevent and lima are not listed: they are dependencies of tmux, tpm and colima.
     brews = [
       "act"
       "awscli"
+      "colima" # Docker runtime for the docker CLI
       "docker"
       "docker-compose"
       "docker-credential-helper"
       "docker-credential-helper-ecr"
       "lazydocker"
+      "neovide"
+      "tfsec"
+      "tmux"
+      "tpm"
+      "agavra/tap/tuicr"
+      "seunggabi/tap/claude-dashboard"
     ];
     casks = [
+      "font-jetbrains-mono-nerd-font"
+      "goland"
+      "jetbrains-toolbox"
+      "microsoft-365-copilot"
+      "opcode"
       "citrix-workspace"
       "lastpass"
       "mqtt-explorer"
