@@ -3,9 +3,12 @@
 Test cases for plan_bash_guard.py
 """
 
+import os
 import subprocess
 import sys
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+GUARD = os.path.join(HERE, '..', 'plan_bash_guard.py')
 
 def test_bash_guard():
     # Test cases that should be denied
@@ -37,7 +40,7 @@ def test_bash_guard():
     for case in deny_cases:
         result = subprocess.run([
             sys.executable, 
-            '.config/aistack-tuios/plan_bash_guard.py'
+            GUARD
         ], 
         input=f'{{"tool_name": "Bash", "tool_input": {{"command": "{case}"}}}}',
         text=True, 
@@ -56,7 +59,7 @@ def test_bash_guard():
     for case in allow_cases:
         result = subprocess.run([
             sys.executable, 
-            '.config/aistack-tuios/plan_bash_guard.py'
+            GUARD
         ], 
         input=f'{{"tool_name": "Bash", "tool_input": {{"command": "{case}"}}}}',
         text=True, 
@@ -74,7 +77,7 @@ def test_bash_guard():
     # Test non-Bash tool
     result = subprocess.run([
         sys.executable, 
-        '.config/aistack-tuios/plan_bash_guard.py'
+        GUARD
     ], 
     input=str(non_bash_case),
     text=True, 

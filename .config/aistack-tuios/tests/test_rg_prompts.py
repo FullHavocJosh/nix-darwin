@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 
+import os
 import sys
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+
 # Read layer-build.md and check for rg -n and not grep -n
-with open('.config/aistack-tuios/layer-build.md', 'r') as f:
+with open(os.path.join(HERE, '..', 'layer-build.md'), 'r') as f:
     layer_build_content = f.read()
 
 # Read layer-claude.md and check for fd and rg --files
-with open('.config/aistack-tuios/layer-claude.md', 'r') as f:
+with open(os.path.join(HERE, '..', 'layer-claude.md'), 'r') as f:
     layer_claude_content = f.read()
 
 FAILS = 0
