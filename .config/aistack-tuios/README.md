@@ -89,6 +89,8 @@ commands, and deny git writes, `gh`, `rm -rf` and `sudo` (deny wins over allow).
 Tasks added after the builder opened
 still prompt.
 
+The billed builder runs Bash in the Claude Code sandbox (`sandbox.enabled`, `autoAllowBashIfSandboxed`) inside `.worktrees`, with a read-only command allowlist and the plan's verify commands allowed. The free OpenCode builder gets the same allowlist as `permission.bash`, with `ask` for everything else and `deny` for git writes, `gh`, `rm -rf` and `sudo`. The local pi builder has no permission prompts and relies on the PATH git guard.
+
 1. You describe the work to Claude. It reads the code and asks Lumo (`ask-lumo`) for current docs, API changes and known
    bugs. Lumo is the first lumo-tamer that answers (this machine, MacMiniM1, then lumo.rollet.family); with none, there
    is no Lumo pane and Claude does the lookups itself.

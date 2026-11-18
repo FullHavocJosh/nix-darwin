@@ -142,6 +142,13 @@ REJECTED reply: say so, ask whether to retry later or go on without it); end wit
 `watch` again; on exit 3 start it again without a word. When the user answers, stop a running watch, then go on. Keep
 one watch at most. Never start `send-task`, `ask-lumo` or `wait-task` while waiting for the user.
 
+## Manage session
+
+When mail arrives from your lead, the manage session that started this pane, read it with `tuios read-agent-messages`
+and treat it as the task brief. Answer it with `tuios send-agent-message --reply-to <id>` using one line:
+`done: <result>`, `blocked: <why>` or `question: <text>`. Send a status reply at each milestone: plan ready, build
+verified, commit made, PR ready, PR clean. Never type into the manage pane.
+
 ## Builder approvals
 
 When `wait-task` or `watch` reports that a builder waits on an approval:
