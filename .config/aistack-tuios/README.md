@@ -90,6 +90,7 @@ Tasks added after the builder opened
 still prompt.
 
 The billed builder runs Bash in the Claude Code sandbox (`sandbox.enabled`, `autoAllowBashIfSandboxed`) inside `.worktrees`, with a read-only command allowlist and the plan's verify commands allowed. The free OpenCode builder gets the same allowlist as `permission.bash`, with `ask` for everything else and `deny` for git writes, `gh`, `rm -rf` and `sudo`. The local pi builder has no permission prompts and relies on the PATH git guard.
+Sandbox check: from inside the sandbox, `nix --version` (2.32.4), `nix eval --expr 1` (1) and `python3.15 --version` (3.15.2) ran with no permission prompt and no sandbox denial; running `python3.15 .config/aistack-tuios/tests/test_builder_work_dir.py` directly as a script also ran without a prompt or denial, printed all PASS lines and exited 0.
 
 1. You describe the work to Claude. It reads the code and asks Lumo (`ask-lumo`) for current docs, API changes and known
    bugs. Lumo is the first lumo-tamer that answers (this machine, MacMiniM1, then lumo.rollet.family); with none, there
