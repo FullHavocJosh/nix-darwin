@@ -5,7 +5,7 @@
                          (usable), a yellow ? (could not tell) or a red x (looks unusable). A red x never blocks a
                          choice: a check can be wrong.
 
-Keys: 1-5 or up/down + enter start a choice, r runs the checks again, s leaves a shell, q quits. The rows below the
+Keys: 1-5 (1-6 in ~/ai-info) or up/down + enter start a choice, r runs the checks again, s leaves a shell, q quits. The rows below the
 line (Zen, Go, OpenRouter) only report; they are what the cloud builders and fallbacks use.
 
   1 Claude (advisor): aidev's Claude and Lumo panes, Claude in advisor mode (AIDEV_TUIOS_ADVISOR=1)
@@ -13,6 +13,7 @@ line (Zen, Go, OpenRouter) only report; they are what the cloud builders and fal
   3 9B (advisor):     pi on the always-on llama-server (:8080), advisor prompt, read-only tools
   4 9B (plan):        aidev start with planner forced to local (AIDEV_TUIOS_PLANNER=local)
   5 30B (advisor):    pi on the Qwen3-Coder-30B (loaded on demand), advisor prompt, read-only tools
+  6 Manage session: only in ~/ai-info; runs ~/ai-info/manage/launch.sh
 """
 import importlib.util
 import json
@@ -33,14 +34,22 @@ AI_HOME = os.path.expanduser(os.environ.get("AI_HOME") or "~/.ai")
 LLAMA = os.environ.get("LLAMA_CPP_HOST") or "http://127.0.0.1:8080"
 NINE_B = os.environ.get("LOCAL_LLM_MODEL") or "qwen/qwen3.5-9b"
 READ_TOOLS = "read,grep,find,ls"
+MANAGE_LAUNCH = os.path.expanduser("~/ai-info/manage/launch.sh")
 GREEN, RED, YELLOW, DIM, RESET = "\x1b[32m", "\x1b[31m", "\x1b[33m", "\x1b[2m", "\x1b[0m"
 MARK = {"ok": f"{GREEN}✓{RESET}", "bad": f"{RED}✗{RESET}", "maybe": f"{YELLOW}?{RESET}",
         "wait": f"{DIM}…{RESET}"}
 
 # key, label, what it starts (None: a status row only)
-ROWS = [("claude", "Claude (advisor)", True), ("claude-plan", "Claude (plan)", True),
-        ("9b", "9B (advisor)", True), ("9b-plan", "9B (plan)", True), ("30b", "30B (advisor)", True),
-        ("zen", "OpenCode Zen (free)", False), ("go", "OpenCode Go", False), ("openrouter", "OpenRouter", False)]
+def build_rows(cwd=None):
+    rows = [("claude", "Claude (advisor)", True), ("claude-plan", "Claude (plan)", True),
+            ("9b", "9B (advisor)", True), ("9b-plan", "9B (plan)", True), ("30b", "30B (advisor)", True),
+            ("zen", "OpenCode Zen (free)", False), ("go", "OpenCode Go", False), ("openrouter", "OpenRouter", False)]
+    if os.path.realpath(cwd or os.getcwd()) == os.path.realpath(os.path.expanduser("~/ai-info")):
+        rows.insert(5, ("manage", "Manage session", True))
+    return rows
+
+
+ROWS = build_rows()
 MIRROR = {"claude-plan": "claude", "9b-plan": "9b"}
 state = {k: ("wait", "checking") for k, _l, _s in ROWS if k not in MIRROR}
 lock = threading.Lock()
@@ -156,8 +165,18 @@ def check_openrouter():
     set_state("openrouter", "ok" if left > 0 else "bad", detail)
 
 
+def check_manage():
+    if not os.path.isfile(MANAGE_LAUNCH):
+        return set_state("manage", "bad", "launch.sh missing")
+    if not shutil.which("tuios"):
+        return set_state("manage", "bad", "tuios not on PATH")
+    set_state("manage", "ok", MANAGE_LAUNCH)
+
+
 CHECKS = {"claude": check_claude, "9b": check_9b, "30b": check_30b, "openrouter": check_openrouter,
           "zen": check_zen_and_go}
+if any(key == "manage" for key, _label, _startable in ROWS):
+    CHECKS["manage"] = check_manage
 
 
 def start_checks():
@@ -180,7 +199,7 @@ def draw(cursor):
         pointer = ">" if startable and i == cursor else " "
         num = f"{i + 1}" if startable else " "
         out.append(f" {pointer}{num} [{MARK[status]}] {label:<22} {DIM}{detail[:room]}{RESET}\n")
-    out.append(f"\n {DIM}1-5 / arrows+enter start, r recheck, s shell, q quit; a red x never blocks a choice{RESET}\n")
+    out.append(f"\n {DIM}1-{STARTABLE} / arrows+enter start, r recheck, s shell, q quit; a red x never blocks a choice{RESET}\n")
     sys.stdout.write("".join(out))
     sys.stdout.flush()
 
@@ -253,6 +272,14 @@ def launch(key):
     cwd = os.getcwd()
     sys.stdout.write("\x1b[?25h\x1b[H\x1b[2J")
     sys.stdout.flush()
+    if key == "manage":
+        try:
+            code = subprocess.run([MANAGE_LAUNCH], check=False).returncode
+        except OSError:
+            code = 1
+        if code == 0 and close_pick_window():
+            return
+        os.execvp('zsh', ['zsh', '-i'])
     if key == "claude":
         start_aidev({'AIDEV_TUIOS_ADVISOR': '1'})
     elif key in ("claude-plan", "9b-plan"):
@@ -282,6 +309,7 @@ def main():
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     cursor, startable = 0, [i for i, r in enumerate(ROWS) if r[2]]
+    num_keys = {str(n) for n in range(1, len(startable) + 1)}
     start_checks()
     try:
         tty.setcbreak(fd)
@@ -302,7 +330,7 @@ def main():
                 cursor = max(0, cursor - 1)
             elif key == "down":
                 cursor = min(len(startable) - 1, cursor + 1)
-            elif key in ("1", "2", "3", "4", "5"):
+            elif key in num_keys:
                 cursor = int(key) - 1
                 termios.tcsetattr(fd, termios.TCSADRAIN, old)
                 launch(ROWS[cursor][0])
