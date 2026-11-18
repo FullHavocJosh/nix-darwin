@@ -138,4 +138,10 @@ in
       RunAtLoad = false;
     };
   };
+
+  # Desktop: keep the Dock and menu bar always visible (shared defaults autohide the Dock).
+  system.defaults = {
+    dock.autohide = lib.mkForce false;
+    NSGlobalDomain._HIHideMenuBar = lib.mkForce false;
+  };
 }
