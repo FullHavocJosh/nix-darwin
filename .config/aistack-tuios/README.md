@@ -211,3 +211,9 @@ Settings for scripts and tests: `AIDEV_TUIOS_HOME` (state dir), `AIDEV_TUIOS_LUM
 wait-task echoes), and `AIDEV_TUIOS_FAKE_HUMAN=<file>`. The
 last one is for tests only: tuios lets only an attached client answer an Inbox question, so the helpers read their
 answers from lines in that file.
+
+When a builder pane repeats 'successfully completed task T<n>' (two or more times in its last 80 scrollback
+lines), or says it in mail to the plan pane, `wait-task` and `watch` interrupt it (Escape, then ctrl+c if
+needed) and reset it with its reset command (`/new` for local and free, `/clear` for billed) without closing
+the window, and print `builder X looped on completion; reset`. A reply already mailed on the task thread
+stays the normal result and verify still runs. Set `AIDEV_TUIOS_LOOP_STOP=off` to disable it.
