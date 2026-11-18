@@ -67,6 +67,7 @@ for entry in ("Bash(fd *)", "Bash(jq *)", "Bash(sort *)", "Bash(uniq *)", "Bash(
               "Bash(git ls-files *)", "Bash(git blame *)", "Bash(git rev-parse *)", "Bash(git diff-tree *)",
               "Bash(git grep *)", "Bash(git ls-tree *)", "Bash(git remote -v *)"):
     check(entry in plain, "read-only allow " + entry)
+check("mcp__tuios__tuios_send_agent_message" in plain, "tuios send message tool allowed")
 check(not any(e.startswith(("Bash(git commit", "Bash(git push", "Bash(rm", "Bash(echo")) for e in plain),
       "no write command in the default allow")
 

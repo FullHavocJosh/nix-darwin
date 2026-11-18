@@ -605,6 +605,7 @@ BUILDER_ALLOW = ["Bash(ls *)", "Bash(cat *)", "Bash(grep *)", "Bash(rg *)", "Bas
                  "Bash(tree *)", "Bash(pwd *)", "Bash(which *)", "Bash(test *)", "Bash(git branch --list *)",
                  "Bash(git ls-files *)", "Bash(git blame *)", "Bash(git rev-parse *)", "Bash(git diff-tree *)",
                  "Bash(git grep *)", "Bash(git ls-tree *)", "Bash(git remote -v *)"]
+BUILDER_ALLOW_TOOLS = ["mcp__tuios__tuios_send_agent_message"]
 BUILDER_DENY = ["Bash(git " + w + " *)" for w in ("commit", "push", "reset", "restore", "stash", "clean", "rebase",
                                                    "merge", "checkout")] + ["Bash(gh *)", "Bash(rm -rf *)", "Bash(sudo *)",
                                                                   "Bash(find * -delete*)", "Bash(find * -exec*)"]
@@ -616,7 +617,7 @@ def builder_permissions(verify, state_dir=None, work_dir=None):
     With `state_dir`, edits to the plan directory and the runs' state.json and events.jsonl are denied too, since
     acceptEdits would otherwise approve them (the pane has run.state as an added directory). With `work_dir`, edits and
     file commands inside it are allowed, and ~/.ai is readable but not writable."""
-    allow = set(BUILDER_ALLOW)
+    allow = set(BUILDER_ALLOW) | set(BUILDER_ALLOW_TOOLS)
     for cmds in (verify or {}).values():
         for cmd in [cmds] if isinstance(cmds, str) else cmds:
             allow.add(f"Bash({cmd})")
