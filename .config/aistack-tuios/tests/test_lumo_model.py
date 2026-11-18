@@ -6,7 +6,8 @@ import os
 import sys
 
 # Load the module
-spec = importlib.util.spec_from_file_location("aidev_tuios", "/Users/havoc/nix-darwin/.worktrees/aistack-aidev-local-planner-lumo-max-1122/.config/aistack-tuios/aidev_tuios.py")
+HERE = os.path.dirname(os.path.abspath(__file__))
+spec = importlib.util.spec_from_file_location("aidev_tuios", os.path.join(HERE, '..', 'aidev_tuios.py'))
 aidev_tuios = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(aidev_tuios)
 

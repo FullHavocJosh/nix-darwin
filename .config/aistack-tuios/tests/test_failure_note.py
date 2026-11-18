@@ -2,10 +2,13 @@
 """Test for failure_note function."""
 
 import importlib.util
+import os
 import sys
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+
 # Load aidev_tuios module
-spec = importlib.util.spec_from_file_location("aidev_tuios", ".config/aistack-tuios/aidev_tuios.py")
+spec = importlib.util.spec_from_file_location("aidev_tuios", os.path.join(HERE, '..', 'aidev_tuios.py'))
 aidev_tuios = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(aidev_tuios)
 
