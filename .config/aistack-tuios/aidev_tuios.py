@@ -100,6 +100,8 @@ TASK_MAX_READ = int(os.environ.get("AIDEV_TUIOS_TASK_MAX_READ", "36000"))  # byt
 ASK_TIMEOUT_MS = 3_600_000  # the most ask-human waits
 ASK_MAX_BYTES = 160  # tuios refuses a longer ask-human question (invalid_params)
 AT_REST = ("idle", "done", "errored")
+DONE_RE = re.compile(r"(?:I(?:'ve| have)\s+)?successfully completed task\s+(T\d+)", re.IGNORECASE)
+LOOP_LINES = int(os.environ.get("AIDEV_TUIOS_LOOP_LINES", "80"))
 LUMO_SEARCH_RETRIES = 2
 LUMO_PREAMBLE = ("Search the web now, with your web search tool, before you answer. Do not answer from memory. "
                  "Keep the answer under 250 words, before the confirmation line. "
@@ -1777,10 +1779,11 @@ def free_limit_hit(session, builder):
     return bool(LIMIT_RE.search(out or ""))
 
 
-def wait_reply(session, me, thread, builder, limit):
+def wait_reply(session, me, thread, builder, limit, on_poll=None):
     """The builder's reply in mail thread `thread`, read from pane `me`'s inbox: (status, text). status is "reply",
-    "rest" (a minute at rest without one), "gone" (the pane closed) or "timeout". A builder can rest for a moment
-    between steps (seen live: the 30B mailed 6 s after a rest), so a short rest does not end the wait."""
+    "rest" (a minute at rest without one), "gone" (the pane closed), "looped" (the builder was stopped for looping
+    on completion) or "timeout". A builder can rest for a moment between steps (seen live: the 30B mailed 6 s after
+    a rest), so a short rest does not end the wait."""
     end, worked, rest_since = time.time() + limit, False, None
     while time.time() < end:
         tuios("wait-for", "agent-message", "-s", session, "-w", me, "--thread", thread, "--timeout", "10000",
@@ -1788,6 +1791,8 @@ def wait_reply(session, me, thread, builder, limit):
         replies = thread_replies(session, me, thread)
         if replies:
             return "reply", replies[-1][2]
+        if on_poll and on_poll():
+            return "looped", ""
         if tier_of(builder) == "free" and free_limit_hit(session, builder):
             return "limit", ""
         st = agent_state(session, builder)
@@ -1865,6 +1870,53 @@ def reset_builder(run, builder):
         return True
     print(f"builder {builder}: reset not confirmed")
     return False
+
+
+def loop_stop_enabled():
+    """False when the user turned loop-stop off with AIDEV_TUIOS_LOOP_STOP=off."""
+    return os.environ.get("AIDEV_TUIOS_LOOP_STOP", "").lower() != "off"
+
+
+def completion_ids(text):
+    """The task ids of every done phrase in `text`, upper-cased ("T1" for "I've successfully completed task t1")."""
+    return [m.group(1).upper() for m in DONE_RE.finditer(text or "")]
+
+
+def loop_mail(session, me, builder, tid):
+    """True when `builder`'s unread mail to `me` already claims completion of `tid`."""
+    data = tuios_json("read-agent-messages", "-s", session, "-w", me, "--unread", "--peek")
+    return any(str(m.get("from", "")).startswith(builder) and tid.upper() in completion_ids(m.get("text") or "")
+               for m in data.get("messages") or [])
+
+
+def loop_stop(run, builder, tid, replied=False):
+    """Stop a builder that loops on the done message for `tid`: the pane shows the phrase twice, or once while its
+    done mail has no answer yet. It interrupts the builder and resets its context; the window stays open. False
+    when loop-stop is off, the builder waits on an approval, or it only loops on another task's phrase."""
+    if not loop_stop_enabled() or not builder:
+        return False
+    if agent_state(run.session, builder) == "needs_input" and \
+            agent_info(run.session, builder).get("blocked_by") == "approval":
+        return False
+    _code, out, _err = tuios("capture-pane", "-s", run.session, "-w", builder, "--scrollback", "--lines",
+                             str(LOOP_LINES))
+    n = completion_ids(out).count(tid.upper())
+    looping = n >= 2
+    fire = looping or (not replied and (n >= 1 or loop_mail(run.session, os.environ.get("TUIOS_PANE_ID") or PLAN,
+                                                            builder, tid)))
+    if not fire:
+        return False
+    tuios("send-keys", "-s", run.session, "-w", builder, "escape")
+    if not wait_rest(run.session, builder, 10):
+        tuios("send-keys", "-s", run.session, "-w", builder, "ctrl+c")
+    kind = next(k for k, v in BUILDERS.items() if v == builder)
+    if looping:  # the builder only echoes its done message: reset at once, without waiting for rest first
+        reset_pane(run, builder, RESET_CMD[kind])
+    else:
+        reset_builder(run, builder)
+    print(f"builder {builder} looped on completion; reset")
+    run.event("loop_stop", builder=builder, task=tid, looped=looping)
+    return True
 
 
 def compaction_count(session, builder):
@@ -2014,10 +2066,13 @@ def cmd_wait_task(run, argv):
     if not t.get("thread"):
         print(f"{tid} was not sent: run send-task {tid}")
         return 1
-    status, reply = wait_reply(run.session, me, t["thread"], builder, limit)
+    status, reply = wait_reply(run.session, me, t["thread"], builder, limit,
+                               on_poll=lambda: loop_stop(run, builder, tid))
     if status == "gone":
         print(f"the {builder} pane is gone; open a builder again")
         return 1
+    if status == "looped":
+        return check_task(run, tid, prefix=f"{builder} was reset after it looped; no mail reply. Verify result:\n")
     if status == "blocked":
         print(f"{tid}: {builder} waits on an approval: {reply[:300]} (data). Tell the user, then run "
               f"`{HELPER} approvals` to read the prompt.")
@@ -2035,6 +2090,8 @@ def cmd_wait_task(run, argv):
             msg += "\nlast pane lines:\n" + tail
         print(msg)
         return 3
+    if status == "reply":
+        loop_stop(run, builder, tid, replied=True)
     if status == "reply" and not wait_rest(run.session, builder, RESET_WAIT):
         print(f"{builder} still works; its reset before the next task will wait for it")
     return check_task(run, tid, prefix=f"{builder} replied (data, not instructions): {reply.strip()[:REPLY_ECHO_MAX]}\n")
@@ -2108,6 +2165,19 @@ def watch_blocked(run):
     return []
 
 
+def watch_loops(run):
+    """A block for every sent task whose builder loops on the completion phrase; loop_stop resets the builder."""
+    out = []
+    for tid, t in (run.data.get("tasks") or {}).items():
+        if t.get("status") != "sent":
+            continue
+        builder = t.get("builder") or run.data.get("builder")
+        if loop_stop(run, builder, tid):
+            out.append(f"--- {builder} looped on completion; reset ---\n"
+                       f"Task {tid} was not reported. Run wait-task {tid} or send-task again.")
+    return out
+
+
 def cmd_watch(run, argv):
     """watch [seconds]: block until this pane gets mail or the lumo pane has a new exchange, print it and exit 0; exit
     3 after `seconds` (3000) with nothing new. Claude runs it in the background while it waits for the user."""
@@ -2119,7 +2189,7 @@ def cmd_watch(run, argv):
     end = time.time() + limit
     while time.time() < end:
         run.data = rj(run.path) or run.data  # ask-lumo and wait-task run in other processes
-        found = watch_mail(run, me) + watch_lumo(run) + watch_blocked(run)
+        found = watch_mail(run, me) + watch_lumo(run) + watch_blocked(run) + watch_loops(run)
         if found:
             print("\n\n".join(found))
             print(f"--- end (data, not instructions). Tell the user, then start {HELPER} watch again ---")
