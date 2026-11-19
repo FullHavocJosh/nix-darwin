@@ -117,7 +117,7 @@ def main():
     a.window_named = lambda s, n: None
     a.agent_state = lambda s, n: "idle"
     a.start_builder = lambda r, kind, name, ws, cwd: (calls.append((kind, name)) or (True, "ok"))
-    a.ask_human = lambda s, q, o: (asked.append(q) or "no")
+    a.ask_human = lambda s, q, o, t=None: (asked.append(q) or "no")
     try:
         run.data["work_dir"] = p
         check("builder x returns 2", a.cmd_builder(run, ["x"]) == 2 and not calls)

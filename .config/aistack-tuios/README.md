@@ -132,7 +132,8 @@ How the panes talk:
   outside the worktree): the user answers those in the Inbox (`ctrl+t i`). The shell grants in `.config/tuios/config.toml`
   include respond so the launcher can pass it on; only a plan pane opened from a pane without respond needs
   `tuios set-pane-grants -w plan --grants read,write,fan,files,respond` run outside any pane.
-- A billed builder starts only after you say yes in the tuios Inbox (`ctrl+t i`).
+- A billed builder starts only after you say yes: in the plan pane's chat (the pane then runs `builder billed --approved`),
+  else in the tuios Inbox (`ctrl+t i`), where the ask gives up after `AIDEV_BILLED_ASK_TIMEOUT_S` seconds (default 120).
 
 Cost: Claude is interactive, so no per-call budget cap applies. `AIDEV_TUIOS_CLAUDE_MODEL` and
 `AIDEV_TUIOS_CLAUDE_EFFORT` set its model and effort (default: `AISTACK_CLAUDE_MODEL` / `AISTACK_CLAUDE_EFFORT`, else
