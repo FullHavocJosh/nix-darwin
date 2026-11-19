@@ -90,6 +90,14 @@ CLAUDE_MODEL = os.environ.get("AIDEV_TUIOS_CLAUDE_MODEL") or os.environ.get("AIS
 CLAUDE_EFFORT = os.environ.get("AIDEV_TUIOS_CLAUDE_EFFORT") or os.environ.get("AISTACK_CLAUDE_EFFORT") or "medium"
 CODER_FILE = os.path.expanduser(os.environ.get("LOCAL_EDIT_MODEL_FILE")
                                 or "~/.models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf")
+
+
+def local_builder_available():
+    """The local builder can run: the model file exists, or a remote llama-server is configured."""
+    return os.path.isfile(CODER_FILE) or bool(
+        os.environ.get("AIDEV_REMOTE_BUILDER_URL") and os.environ.get("AIDEV_REMOTE_BUILDER_KEY_FILE"))
+
+
 LUMO_MODEL = os.environ.get("AISTACK_LUMO_MODEL") or "lumo-max"
 LUMO_TIMEOUT_S = int(os.environ.get("AIDEV_TUIOS_LUMO_TIMEOUT_S", "540"))
 VERIFY_TIMEOUT_S = int(os.environ.get("AISTACK_VERIFY_TIMEOUT_S", "300"))
@@ -1038,7 +1046,7 @@ def build_body(run, cfg, kind, name=None):
                                        settings=settings, env={"AIDEV_TUIOS_BUILDER": "1"})
     sysp = write_text(os.path.join(run.dir, "bin", f"{name}.system.md"), system)
     if kind == "local":
-        if not os.path.isfile(CODER_FILE):
+        if not local_builder_available():
             return None
         model = write_build_pi(cfg)
         sid = pane.setdefault("session_id", str(uuid.uuid4()))
@@ -1556,7 +1564,7 @@ def cmd_worktree(run, _argv):
 def auto_builder(run):
     """The builder to open when none is named: local when the 30B file exists, else free when a free Zen model is
     usable, else billed (cmd_builder then asks the user in the Inbox, so the plan pane never has to ask in chat)."""
-    if os.path.isfile(CODER_FILE):
+    if local_builder_available():
         return "local"
     zs = zen_status(run)
     if zen_usable(zs):
@@ -2910,7 +2918,7 @@ def edit_headless(run, kind, task_text, limit):
     cfg = pane_configs(run.project)
     env = {**os.environ, "AIDEV_TUIOS_BUILDER": "1"}
     if kind == "local":
-        if not os.path.isfile(CODER_FILE):
+        if not local_builder_available():
             return "", no_builder_why(kind)
         env["PI_CODING_AGENT_DIR"] = cfg["pi_build"]
         argv = [sys.executable, os.path.join(AISTACK, "coder_pi.py"), "--hold", "--", "pi", "--model",
@@ -2958,7 +2966,7 @@ def cmd_edit(argv):
     run.save()
     before, why = tree_state(cwd), ""
     for i, kind in enumerate(("local", "free")):
-        if kind == "local" and not os.path.isfile(CODER_FILE):
+        if kind == "local" and not local_builder_available():
             continue
         if kind == "free" and not zen_usable(zs := zen_status(run)):
             print(f"aidev -p: free Zen is not usable ({zs['detail']}); not trying it", file=sys.stderr)
@@ -2992,7 +3000,7 @@ def cmd_direct(argv):
     words = " ".join(a for a in argv if a != "--direct").strip()
     project = project_root(os.getcwd())
     cfg = pane_configs(project)
-    if os.path.isfile(CODER_FILE):
+    if local_builder_available():
         argv = [sys.executable, os.path.join(AISTACK, "coder_pi.py"), "--hold", "--", "pi", "--model",
                 write_build_pi(cfg), "--name", "aidev direct", "--no-skills"] + ([words] if words else [])
         os.execvpe(argv[0], argv, {**os.environ, "PI_CODING_AGENT_DIR": cfg["pi_build"]})

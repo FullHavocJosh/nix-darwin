@@ -382,8 +382,11 @@ The panes talk by tuios mail (session commands: [Terminal: tuios](#terminal-tuio
 Plan, tasks, check output and events are files under `~/.ai/aidev_tuios/<project>-<hash>/` (`plan/`, `runs/<id>/`).
 The changes stay uncommitted in the work dir; you commit with `gpa`. Details:
 [.config/aistack-tuios/README.md](.config/aistack-tuios/README.md).
+`build-local` can use a remote llama-server when `AIDEV_REMOTE_BUILDER_URL` and `AIDEV_REMOTE_BUILDER_KEY_FILE` are
+set; see "Remote builder" in that README.
 Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_aidev_tuios.py` (tests dir
 `.config/aistack-tuios/tests`).
+Remote builder tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_remote_builder.py`.
 
 ### Required Packages
 

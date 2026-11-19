@@ -212,6 +212,22 @@ wait-task echoes), and `AIDEV_TUIOS_FAKE_HUMAN=<file>`. The
 last one is for tests only: tuios lets only an attached client answer an Inbox question, so the helpers read their
 answers from lines in that file.
 
+#### Remote builder
+
+The local builder can use a remote OpenAI-compatible llama-server (the G14) instead of the on-device 30B. Three
+settings control it:
+
+- `AIDEV_REMOTE_BUILDER_URL`: the OpenAI base, for example `http://HOST:8082/v1`. Unset means no remote tier.
+- `AIDEV_REMOTE_BUILDER_KEY_FILE`: the path to a file that holds the key. Set the path, never the key itself.
+- `AIDEV_REMOTE_BUILDER_MODEL`: the model name to request (default `qwen3-coder-30b`).
+
+Before each local-builder start, aidev sends a 2 s probe, `GET /models`, to the remote. If the remote is
+unreachable, aidev prints one stderr line and falls through to the on-device 30B, then to Zen. If it is healthy, the
+local `edit.lock` and the idle unload are skipped, because the remote does not use the local GPU. If the remote dies
+during a job, aidev kills pi, prints a partial-edit warning and exits 3 (escalate), so check the work dir before you
+retry. With the settings unset, nothing changes. aidev never logs the URL or the key. The real endpoint is set up in
+another repo.
+
 When a builder pane repeats 'successfully completed task T<n>' (two or more times in its last 80 scrollback
 lines), or says it in mail to the plan pane, `wait-task` and `watch` interrupt it (Escape, then ctrl+c if
 needed) and reset it with its reset command (`/new` for local and free, `/clear` for billed) without closing
