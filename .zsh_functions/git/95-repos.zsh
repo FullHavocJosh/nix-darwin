@@ -114,9 +114,9 @@ function update-repos() {
       }
     fi
 
-    git -C "$repo_path" pull \
+    git -C "$repo_path" pull --ff-only \
       && git -C "$repo_path" submodule update --init --recursive \
-      || echo "  Warning: pull failed for $repo_name (SSH agent may not be available)."
+      || echo "  Warning: pull --ff-only failed for $repo_name (diverged branch, missing remote ref, or no SSH agent)."
 
     if [ "$current_branch" != "$main_branch" ]; then
       git -C "$repo_path" checkout "$current_branch" \
