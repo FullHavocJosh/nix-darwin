@@ -4,6 +4,7 @@ with a faked tuios, the Lumo pane and the Claude pane. Uses this checkout's .con
 overrides).
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_aidev_tuios.py
 """
+import http.server
 import importlib.util
 import io
 import json
@@ -15,6 +16,7 @@ import threading
 import time
 
 os.environ["AISTACK_ZEN_KEY"] = "1"
+os.environ["AIDEV_REMOTE_BUILDER"] = "off"  # no test may reach the real default gateway
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)  # .config/aistack-tuios
@@ -721,6 +723,52 @@ def main():
             os.environ.pop(k, None)
         else:
             os.environ[k] = v
+
+    print("remote builder probe")
+    secret = "probe-secret"
+    kf = os.path.join(d, "rb.key")
+    with open(kf, "w") as fh:
+        fh.write(secret + "\n")
+
+    class ProbeHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/v1/models" and self.headers.get("Authorization") == "Bearer " + secret:
+                body = json.dumps({"data": [{"id": "qwen3-coder-30b"}]}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self.send_response(401)
+                self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), ProbeHandler)
+    dead = http.server.HTTPServer(("127.0.0.1", 0), ProbeHandler)
+    dead_port = dead.server_address[1]
+    dead.server_close()  # a port nothing listens on
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    saved_probe_env = {k: os.environ.get(k) for k in ("AIDEV_REMOTE_BUILDER_URL", "AIDEV_REMOTE_BUILDER_KEY_FILE")}
+    real_coder_file = a.CODER_FILE
+    a.CODER_FILE = os.path.join(d, "no-such-model.gguf")  # no local model file: only the probe can say yes
+    os.environ["AIDEV_REMOTE_BUILDER_URL"] = f"http://127.0.0.1:{srv.server_address[1]}/v1"
+    os.environ["AIDEV_REMOTE_BUILDER_KEY_FILE"] = kf
+    up = a.local_builder_available()
+    os.environ["AIDEV_REMOTE_BUILDER_URL"] = f"http://127.0.0.1:{dead_port}/v1"
+    down = a.local_builder_available()
+    check("local_builder_available is True when the probe answers and False on a closed port",
+          up is True and down is False, (up, down))
+    a.CODER_FILE = real_coder_file
+    for k, v in saved_probe_env.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+    srv.shutdown()
+    srv.server_close()
 
     hp = project()
     hdir = os.path.join(d, "handoff")

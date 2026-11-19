@@ -24,8 +24,9 @@ FAILS = []
 KEY = "sk-remote-builder-test-key"
 SEEN = {}
 
-for k in (rb.URL_ENV, rb.KEY_FILE_ENV, rb.MODEL_ENV):
+for k in (rb.URL_ENV, rb.KEY_FILE_ENV, rb.MODEL_ENV, rb.KEY_ENV):
     os.environ.pop(k, None)  # keep this run hermetic whatever the caller has set
+os.environ[rb.OFF_ENV] = "off"  # the new defaults off too, for the same reason
 
 
 def check(name, cond, extra=""):
@@ -219,6 +220,114 @@ check(
     err.getvalue() == "coder-30b: falling through to the local 30B\n",
     err.getvalue(),
 )
+
+print("defaults and the off switch")
+saved_env = dict(os.environ)  # each block below restores the whole env, PATH included
+os.environ.pop(rb.OFF_ENV, None)
+os.environ.pop(rb.URL_ENV, None)
+check(
+    "url() is the default URL and configured() is True with nothing set",
+    rb.url() == rb.DEFAULT_URL and rb.configured() is True,
+    rb.url(),
+)
+os.environ[rb.OFF_ENV] = "off"
+check(
+    "configured() is False with the off switch set and no URL", rb.configured() is False
+)
+os.environ[rb.URL_ENV] = "http://127.0.0.1:1/v1"
+check(
+    "configured() is True with the off switch set and an explicit URL",
+    rb.configured() is True and rb.url() == "http://127.0.0.1:1/v1",
+    rb.url(),
+)
+os.environ.clear()
+os.environ.update(saved_env)
+
+print("key from the env")
+saved_env = dict(os.environ)
+os.environ.pop(rb.KEY_FILE_ENV, None)
+os.environ[rb.KEY_ENV] = "  sk-env-key \n"
+check(
+    "read_key() returns the stripped KEY_ENV value when no key file is set",
+    rb.read_key() == "sk-env-key",
+    rb.read_key(),
+)
+os.environ.clear()
+os.environ.update(saved_env)
+
+print("doppler")
+DOP_KEY = "sk-from-doppler"
+DOPPLER_DIR = tempfile.mkdtemp(prefix="remote-builder-doppler-")
+STUB = os.path.join(DOPPLER_DIR, "doppler")
+
+
+def write_stub(src):
+    """The fake doppler CLI: prints the key, or fails; 0755 so PATH lookup runs it."""
+    with open(STUB, "w") as fh:
+        fh.write(src)
+    os.chmod(STUB, 0o755)
+
+
+saved_env = dict(os.environ)
+os.environ["PATH"] = DOPPLER_DIR + os.pathsep + os.environ["PATH"]
+os.environ.pop(rb.KEY_FILE_ENV, None)
+os.environ.pop(rb.KEY_ENV, None)
+write_stub(f"#!/bin/sh\necho {DOP_KEY}\n")
+rb.reset_key_cache()
+check(
+    "read_key() returns the key the doppler stub prints",
+    rb.read_key() == DOP_KEY,
+    rb.read_key(),
+)
+os.unlink(STUB)  # the cache must answer without the CLI
+check(
+    "read_key() is unchanged after the doppler stub is deleted (the cache)",
+    rb.read_key() == DOP_KEY,
+    rb.read_key(),
+)
+write_stub("#!/bin/sh\nexit 1\n")
+rb.reset_key_cache()
+check("read_key() is None when doppler exits 1", rb.read_key() is None, rb.read_key())
+os.environ[rb.URL_ENV] = "http://127.0.0.1:1/v1"
+ok, reason = rb.probe()
+check(
+    "probe fails with 'no key' when doppler fails",
+    (ok, reason) == (False, "no key"),
+    (ok, reason),
+)
+os.environ.clear()
+os.environ.update(saved_env)
+
+print("key_path")
+saved_env = dict(os.environ)
+os.environ[rb.KEY_FILE_ENV] = KEY_FILE
+check(
+    "key_path() is the configured key file when one is set",
+    rb.key_path() == KEY_FILE,
+    rb.key_path(),
+)
+os.environ.pop(rb.KEY_FILE_ENV, None)
+os.environ.pop(rb.KEY_ENV, None)
+os.environ["PATH"] = DOPPLER_DIR + os.pathsep + os.environ["PATH"]
+write_stub(f"#!/bin/sh\necho {DOP_KEY}\n")
+rb.reset_key_cache()
+tmp_key = rb.key_path()
+st = os.stat(tmp_key) if tmp_key else None
+check(
+    "key_path() with the doppler key is a 0600 file holding the key",
+    st is not None
+    and (st.st_mode & 0o777) == 0o600
+    and open(tmp_key).read().strip() == DOP_KEY,
+    (tmp_key, oct(st.st_mode & 0o777) if st else None),
+)
+api_key = rb.models_config(32768)["providers"]["coder"]["apiKey"]
+check(
+    "apiKey cats the doppler temp key file, never the key itself",
+    api_key.startswith("!cat ") and tmp_key in api_key and DOP_KEY not in api_key,
+    api_key,
+)
+os.environ.clear()
+os.environ.update(saved_env)
 
 print("\nFAILED:%s" % FAILS if FAILS else "\nALL PASSED")
 sys.exit(1 if FAILS else 0)

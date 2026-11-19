@@ -382,8 +382,12 @@ The panes talk by tuios mail (session commands: [Terminal: tuios](#terminal-tuio
 Plan, tasks, check output and events are files under `~/.ai/aidev_tuios/<project>-<hash>/` (`plan/`, `runs/<id>/`).
 The changes stay uncommitted in the work dir; you commit with `gpa`. Details:
 [.config/aistack-tuios/README.md](.config/aistack-tuios/README.md).
-`build-local` can use a remote llama-server when `AIDEV_REMOTE_BUILDER_URL` and `AIDEV_REMOTE_BUILDER_KEY_FILE` are
-set; see "Remote builder" in that README.
+`build-local` uses a remote llama-server by default: the G14 behind the llm-gateway at `https://llm.rollet.family/v1`.
+The key is fetched at runtime from Doppler (`LLM_PUBLIC_API_KEY` in `FullHavocJosh/root_hetzner-cluster`), or comes
+from `AIDEV_REMOTE_BUILDER_KEY` or `AIDEV_REMOTE_BUILDER_KEY_FILE`. `AIDEV_REMOTE_BUILDER=off` disables the defaults,
+and an explicit `AIDEV_REMOTE_BUILDER_URL` always wins. A 2 s probe and a 5 s mid-job monitor decide online or
+offline; offline falls back to the on-device 30B, then Zen. The gateway returns 503 when the G14 is off. The endpoint
+is deliberately not monitored or alerted on. See "Remote builder" in that README.
 Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_aidev_tuios.py` (tests dir
 `.config/aistack-tuios/tests`).
 Remote builder tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_remote_builder.py`.

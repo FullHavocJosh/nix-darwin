@@ -2,22 +2,31 @@
 """aidev's remote builder: the 30B coder model served by an OpenAI-compatible llama-server on another
 machine (the G14), so the local one need not be loaded.
 
-With AIDEV_REMOTE_BUILDER_URL (an OpenAI base such as http://HOST:8082/v1) and AIDEV_REMOTE_BUILDER_KEY_FILE
-set, probe() checks in under timeout + 0.5 s that the server answers /models with the model alias
-(qwen3-coder-30b, or AIDEV_REMOTE_BUILDER_MODEL); models_config(ctx) is then the pi models.json dict that
-points provider `coder` at it. The key itself never appears in anything this module returns or writes:
-models.json carries apiKey "!cat <key file>", so pi reads the key at runtime from the file. Failure reasons
-are short fixed words ("timeout", "refused", "http 401") that never contain the URL, host or key, because
-the driver prints them with note() as it falls through to the local 30B, then Zen.
+On by default: with nothing configured url() is the default server (https://llm.rollet.family/v1) and
+the key is fetched from Doppler at runtime (LLM_PUBLIC_API_KEY, FullHavocJosh / root_hetzner-cluster),
+so no env setup is needed; AIDEV_REMOTE_BUILDER=off (or "0", "no", "false") turns those defaults off,
+while an explicit AIDEV_REMOTE_BUILDER_URL (an OpenAI base such as http://HOST:8082/v1) still wins, off
+or not. The key resolves in order: AIDEV_REMOTE_BUILDER_KEY_FILE, AIDEV_REMOTE_BUILDER_KEY, then
+Doppler, whose result is cached, failures included, so the mid-job monitor never calls it twice.
+probe() checks in under timeout + 0.5 s that the server answers /models with the model alias
+(qwen3-coder-30b, or AIDEV_REMOTE_BUILDER_MODEL); models_config(ctx) is then the pi models.json dict
+that points provider `coder` at it. The key never appears in models.json or anything else this module
+returns: apiKey is "!cat <file>", the configured key file or a 0600 temp file this module writes the
+key into and removes at exit, so pi reads it at runtime. Failure reasons are short fixed words
+("timeout", "refused", "http 401") that never contain the URL, host or key, because the driver prints
+them with note() as it falls through to the local 30B, then Zen.
 
-The remote path skips the local edit.lock and the 2-minute idle unload: that machine owns its model. With
-the env unset configured() is False and nothing changes. Stdlib only.
+The remote path skips the local edit.lock and the 2-minute idle unload: that machine owns its model.
+With the off switch set and no explicit URL, configured() is False and nothing changes. Stdlib only.
 """
 
+import atexit
 import json
 import os
 import shlex
+import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 
@@ -25,15 +34,36 @@ URL_ENV = "AIDEV_REMOTE_BUILDER_URL"  # an OpenAI base, such as http://HOST:8082
 KEY_FILE_ENV = (
     "AIDEV_REMOTE_BUILDER_KEY_FILE"  # the file the server's bearer key lives in
 )
+KEY_ENV = (
+    "AIDEV_REMOTE_BUILDER_KEY"  # the bearer key itself, when no key file is at hand
+)
+OFF_ENV = "AIDEV_REMOTE_BUILDER"  # "off", "0", "no" or "false" disables the defaults
 MODEL_ENV = "AIDEV_REMOTE_BUILDER_MODEL"  # overrides DEFAULT_ALIAS
+DEFAULT_URL = (
+    "https://llm.rollet.family/v1"  # the server used when no URL is configured
+)
 DEFAULT_ALIAS = "qwen3-coder-30b"
 PROBE_TIMEOUT_S = 2.0
 MAX_TOKENS = 8192
 
+_KEY_CACHE = {}  # doppler_key()'s cached result, None included, keyed "doppler"
+_TMP_KEY_PATH = (
+    None  # the 0600 temp file key_path() writes the key into, removed at exit
+)
+
+
+def off():
+    """True when AIDEV_REMOTE_BUILDER disables the remote builder defaults."""
+    return os.environ.get(OFF_ENV, "").strip().lower() in ("off", "0", "no", "false")
+
 
 def url():
-    """The configured OpenAI base without a trailing slash; '' when unset."""
-    return os.environ.get(URL_ENV, "").strip().rstrip("/")
+    """The OpenAI base to use, without a trailing slash: AIDEV_REMOTE_BUILDER_URL when set (it wins
+    even when off), else '' when the defaults are off, else the default URL."""
+    explicit = os.environ.get(URL_ENV, "").strip().rstrip("/")
+    if explicit:
+        return explicit
+    return "" if off() else DEFAULT_URL
 
 
 def key_file():
@@ -47,17 +77,102 @@ def alias():
 
 
 def configured():
-    """True only when both the remote builder URL and its key file are set to something."""
-    return bool(url() and key_file())
+    """True when a URL is in play, explicit or default; the key is resolved later, from a key file,
+    the env or Doppler, so this call never runs Doppler."""
+    return bool(url())
 
 
 def read_key():
-    """The stripped contents of the key file, or None when it cannot be read."""
+    """The bearer key: the key file's stripped contents when one is configured (None when it cannot
+    be read), else AIDEV_REMOTE_BUILDER_KEY when non-empty, else the Doppler key (None when that
+    failed)."""
+    if key_file():
+        try:
+            with open(key_file()) as fh:
+                return fh.read().strip()
+        except OSError:
+            return None
+    env_key = os.environ.get(KEY_ENV, "").strip()
+    if env_key:
+        return env_key
+    return doppler_key()
+
+
+def doppler_key():
+    """The LLM_PUBLIC_API_KEY secret from Doppler (FullHavocJosh / root_hetzner-cluster), or None
+    when the doppler CLI is missing, errors or is slow. The result is cached, None included, so the
+    mid-job monitor never runs Doppler twice; the key is never printed or logged."""
+    if "doppler" in _KEY_CACHE:
+        return _KEY_CACHE["doppler"]
+    key = None
     try:
-        with open(key_file()) as fh:
-            return fh.read().strip()
-    except OSError:
+        proc = subprocess.run(
+            [
+                "doppler",
+                "secrets",
+                "get",
+                "LLM_PUBLIC_API_KEY",
+                "--project",
+                "FullHavocJosh",
+                "--config",
+                "root_hetzner-cluster",
+                "--plain",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            key = proc.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        key = None
+    _KEY_CACHE["doppler"] = key
+    return key
+
+
+def reset_key_cache():
+    """Clear doppler_key()'s cache so the next call runs Doppler again; tests call it."""
+    _KEY_CACHE.clear()
+
+
+def key_path():
+    """The file pi reads the key from at runtime: key_file() when one is configured, else the 0600
+    temp file this process wrote read_key() into (created once, removed at exit); None when there is
+    no key."""
+    global _TMP_KEY_PATH
+    if key_file():
+        return key_file()
+    if _TMP_KEY_PATH:
+        return _TMP_KEY_PATH
+    key = read_key()
+    if key is None:
         return None
+    fd, path = tempfile.mkstemp(prefix="aidev-remote-key-")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(key)
+    except OSError:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        return None
+    _TMP_KEY_PATH = path
+    return path
+
+
+def _remove_tmp_key():
+    """The atexit hook that removes the temp key file, if this process created one."""
+    global _TMP_KEY_PATH
+    if _TMP_KEY_PATH:
+        try:
+            os.unlink(_TMP_KEY_PATH)
+        except OSError:
+            pass
+        _TMP_KEY_PATH = None
+
+
+atexit.register(_remove_tmp_key)
 
 
 def _short_reason(err):
@@ -77,7 +192,7 @@ def probe(timeout=PROBE_TIMEOUT_S):
     if not base:
         return False, "not configured"
     if key is None:
-        return False, "no key file"
+        return False, ("no key file" if key_file() else "no key")
     req = urllib.request.Request(
         base + "/models", headers={"Authorization": "Bearer " + key}
     )
@@ -107,13 +222,14 @@ def probe(timeout=PROBE_TIMEOUT_S):
 
 def models_config(ctx):
     """The pi models.json dict with provider `coder` pointing at the remote server. The key itself is never
-    in it: apiKey is the shell command that reads the key file at runtime."""
+    in it: apiKey is the shell command that reads the key at runtime from key_path(), the configured key
+    file or the 0600 temp file written when the key came from the env or Doppler."""
     return {
         "providers": {
             "coder": {
                 "baseUrl": url(),
                 "api": "openai-completions",
-                "apiKey": "!cat " + shlex.quote(key_file()),
+                "apiKey": "!cat " + shlex.quote(key_path()),
                 # Qwen3-Coder has no thinking mode; ctx is the remote server's context window
                 "models": [
                     {

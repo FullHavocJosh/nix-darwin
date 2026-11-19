@@ -93,10 +93,20 @@ CODER_FILE = os.path.expanduser(os.environ.get("LOCAL_EDIT_MODEL_FILE")
                                 or "~/.models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf")
 
 
+def load_remote_builder():
+    """AISTACK/remote_builder.py as a module, for its configured() and probe()."""
+    spec = importlib.util.spec_from_file_location("remote_builder", os.path.join(AISTACK, "remote_builder.py"))
+    rb = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rb)
+    return rb
+
+
 def local_builder_available():
-    """The local builder can run: the model file exists, or a remote llama-server is configured."""
-    return os.path.isfile(CODER_FILE) or bool(
-        os.environ.get("AIDEV_REMOTE_BUILDER_URL") and os.environ.get("AIDEV_REMOTE_BUILDER_KEY_FILE"))
+    """The local builder can run: the model file exists, or the remote builder answers its 2 s probe."""
+    if os.path.isfile(CODER_FILE):
+        return True
+    rb = load_remote_builder()
+    return rb.configured() and rb.probe()[0]
 
 
 LUMO_MODEL = os.environ.get("AISTACK_LUMO_MODEL") or "lumo-max"
