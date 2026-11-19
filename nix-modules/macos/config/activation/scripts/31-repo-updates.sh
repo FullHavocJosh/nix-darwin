@@ -50,8 +50,8 @@
           }
         fi
 
-        git -C "$repo_path" pull \
-          || echo "  Warning: pull failed for $repo_name (SSH agent may not be available)."
+        git -C "$repo_path" pull --ff-only \
+          || echo "  Warning: pull --ff-only failed for $repo_name (diverged branch, missing remote ref, or no SSH agent)."
         git -C "$repo_path" submodule update --init --recursive \
           || echo "  Warning: submodule update failed for $repo_name (private or inaccessible submodule?)."
 
