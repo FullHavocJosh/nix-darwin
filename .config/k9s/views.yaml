@@ -1,0 +1,54 @@
+views:
+  v1/nodes:
+    columns:
+      - NAME
+      - STATUS
+      - ROLE
+      - TAINTS
+      - VERSION
+      - PODS
+      - CPU
+      - "CPU/A"
+      - "%CPU"
+      - MEM
+      - "MEM/A"
+      - "%MEM"
+      - AGE
+  v1/pods:
+    columns:
+      - NAMESPACE
+      - NAME
+      - VS
+      - PF
+      - READY
+      - STATUS
+      - RESTARTS
+      - CPU
+      - "%CPU/R"
+      - "%CPU/L"
+      - MEM
+      - "%MEM/R"
+      - "%MEM/L"
+      - IP
+      - NODE
+      - AGE
+  containers:
+    columns:
+      - IDX
+      - NAME
+      - PF
+      - IMAGE
+      - READY
+      - STATE
+      - RESTARTS
+      - "PROBES(L:R:S)"
+      - CPU
+      - "CPU/RL"
+      - "%CPU/R"
+      - "%CPU/L"
+      - MEM
+      - "MEM/RL"
+      - "%MEM/R"
+      - "%MEM/L"
+      - PORTS
+      - AGE
