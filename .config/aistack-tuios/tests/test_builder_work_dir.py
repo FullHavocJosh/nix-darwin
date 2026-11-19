@@ -80,4 +80,21 @@ with tempfile.TemporaryDirectory() as tmp:
     out = a.write_working_settings({"claude_settings": base}, os.path.join(tmp, "c.json"))
     check("sandbox" not in a.rj(out, {}), "no sandbox key without sandbox")
 
+saved_sock = os.environ.get("TUIOS_SOCKET")
+try:
+    os.environ["TUIOS_SOCKET"] = "/tmp/x/t.sock"
+    sbx = a.builder_sandbox()
+    check(sbx["network"]["allowUnixSockets"] == [os.path.realpath("/tmp/x/t.sock")], "sandbox allows the TUIOS_SOCKET path")
+    check(sbx["enabled"] is True and sbx["allowUnsandboxedCommands"] is False, "sandbox enabled, no unsandboxed commands")
+    check("allowAllUnixSockets" not in sbx and "allowAllUnixSockets" not in sbx["network"],
+          "sandbox has no allowAllUnixSockets")
+    os.environ.pop("TUIOS_SOCKET", None)
+    check(a.builder_sandbox()["network"]["allowUnixSockets"] == [os.path.realpath("/tmp/tuios-%d/tuios.sock" % os.getuid())],
+          "sandbox falls back to /tmp/tuios-<uid>/tuios.sock")
+finally:
+    if saved_sock is None:
+        os.environ.pop("TUIOS_SOCKET", None)
+    else:
+        os.environ["TUIOS_SOCKET"] = saved_sock
+
 sys.exit(1 if FAILS else 0)

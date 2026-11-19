@@ -998,6 +998,14 @@ def lumo_body(run, cfg, lumo):
             + with_system_prompt(argv, sysp))
 
 
+def builder_sandbox():
+    """The Claude Code sandbox of the billed builder in a worktree. It may reach the tuios socket (to mail its reply)
+    and no other Unix socket."""
+    sock = os.path.realpath(os.environ.get("TUIOS_SOCKET") or f"/tmp/tuios-{os.getuid()}/tuios.sock")
+    return {"enabled": True, "autoAllowBashIfSandboxed": True, "allowUnsandboxedCommands": False,
+            "network": {"allowUnixSockets": [sock]}}
+
+
 def build_body(run, cfg, kind, name=None):
     """The launcher body of builder `kind` (local, free, billed) in pane `name`, or None when that builder does not
     exist here. It replies by mail to run.data["reply_to"]: the plan pane in a run, the caller of `aidev -p` in an
@@ -1019,7 +1027,7 @@ def build_body(run, cfg, kind, name=None):
         hooks = []
         sandbox = None
         if "/.worktrees/" in wd:
-            sandbox = {"enabled": True, "autoAllowBashIfSandboxed": True, "allowUnsandboxedCommands": False}
+            sandbox = builder_sandbox()
             hooks.append({"matcher": "Bash", "hooks": [{"type": "command", "command":
                           shlex.quote(sys.executable) + " " + shlex.quote(os.path.join(HERE, "builder_path_guard" + ".py"))
                           + " " + shlex.quote(os.path.realpath(wd))}]})
