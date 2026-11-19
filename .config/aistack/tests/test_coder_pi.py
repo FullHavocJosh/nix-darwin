@@ -22,10 +22,13 @@ for k in (
     "AIDEV_REMOTE_BUILDER_URL",
     "AIDEV_REMOTE_BUILDER_KEY_FILE",
     "AIDEV_REMOTE_BUILDER_MODEL",
+    "AIDEV_REMOTE_BUILDER_KEY",
 ):
     os.environ.pop(
         k, None
     )  # keep the local-path checks hermetic whatever the caller has set
+# off: no default-gateway probe or Doppler call; an explicit URL below still wins
+os.environ["AIDEV_REMOTE_BUILDER"] = "off"
 
 
 def check(name, cond, extra=""):
@@ -353,7 +356,10 @@ check(
 )
 check(
     "the remote dies mid-job: one partial-edit line, no key or URL",
-    err.count("coder-30b: remote builder died mid-job; the work dir may hold a partial edit") == 1
+    err.count(
+        "coder-30b: remote builder died mid-job; the work dir may hold a partial edit"
+    )
+    == 1
     and "git status" in err
     and KEY not in err
     and str(MPORT) not in err

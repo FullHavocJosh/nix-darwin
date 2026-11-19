@@ -215,10 +215,15 @@ answers from lines in that file.
 
 #### Remote builder
 
-The local builder can use a remote OpenAI-compatible llama-server (the G14) instead of the on-device 30B. Three
-settings control it:
+The local builder uses a remote OpenAI-compatible llama-server (the G14, behind the llm-gateway) instead of the
+on-device 30B. It is on by default at `https://llm.rollet.family/v1`, so no env setup is needed. The key is fetched
+at runtime from Doppler (`LLM_PUBLIC_API_KEY` in `FullHavocJosh/root_hetzner-cluster`), like the public Lumo
+endpoint. These settings override the defaults:
 
-- `AIDEV_REMOTE_BUILDER_URL`: the OpenAI base, for example `http://HOST:8082/v1`. Unset means no remote tier.
+- `AIDEV_REMOTE_BUILDER=off`: disables the defaults and uses no remote tier.
+- `AIDEV_REMOTE_BUILDER_URL`: the OpenAI base, for example `http://HOST:8082/v1`. An explicit value always wins over
+  the default URL.
+- `AIDEV_REMOTE_BUILDER_KEY`: the key itself, instead of the Doppler lookup.
 - `AIDEV_REMOTE_BUILDER_KEY_FILE`: the path to a file that holds the key. Set the path, never the key itself.
 - `AIDEV_REMOTE_BUILDER_MODEL`: the model name to request (default `qwen3-coder-30b`).
 
@@ -226,8 +231,9 @@ Before each local-builder start, aidev sends a 2 s probe, `GET /models`, to the 
 unreachable, aidev prints one stderr line and falls through to the on-device 30B, then to Zen. If it is healthy, the
 local `edit.lock` and the idle unload are skipped, because the remote does not use the local GPU. If the remote dies
 during a job, aidev kills pi, prints a partial-edit warning and exits 3 (escalate), so check the work dir before you
-retry. With the settings unset, nothing changes. aidev never logs the URL or the key. The real endpoint is set up in
-another repo.
+retry. The gateway returns 503 when the G14 is off, which counts as offline. The endpoint is deliberately not
+monitored or alerted on: only aidev tracks online or offline, through the probe and the 5 s mid-job monitor (3
+failures stop pi). aidev never logs the URL or the key.
 
 When a builder pane repeats 'successfully completed task T<n>' (two or more times in its last 80 scrollback
 lines), or says it in mail to the plan pane, `wait-task` and `watch` interrupt it (Escape, then ctrl+c if
