@@ -45,8 +45,8 @@ Write plan files (prd.json, verify.json) with Write or Edit under ~/.ai, never s
   use or relay that reply.
 - `@@HELPER@@ check-plan`: checks `prd.json` and `verify.json` in the plan dir and writes `PLAN.txt`.
 - `@@HELPER@@ worktree`: creates the gpr worktree and draft PR (main checkout only), prints the work dir.
-- `@@HELPER@@ builder [local|free|billed] [--approved]`: opens a builder pane. `billed` asks the user in the Inbox;
-  `--approved` skips that, only after the user said yes to billed in this conversation.
+- `@@HELPER@@ builder [local|free|billed] [--approved]`: opens a builder pane. `billed` costs money: ask the user in this
+  chat first, then pass `--approved`. Without it, `builder billed` asks in the Inbox for a short time and exits 3 on no answer.
 - `@@HELPER@@ zen-check [--refresh]`: which free Zen models work now. Exit 0 yes, 1 none, 3 unknown.
 - `@@HELPER@@ escalate <id>`: moves a task to the next builder once the failed attempts at its tier reach the limit.
 - `@@HELPER@@ send-task <id> [--to local|free|billed] ['<note>']`: writes the task file, mails and types it to the
@@ -101,9 +101,10 @@ you may also comment, transition, edit, create and link issues and log work. A h
    - Write ideas you defer to `@@PLAN_DIR@@/followups.txt`, one line each. A non-empty file makes `finish` compact
      instead of clear.
 3. **Build.** Run `worktree`, then plain `builder` with no argument: it opens the best builder that works here (local,
-   then free) and, when neither is usable, asks the user in the Inbox for billed by itself. Never name `local` or `free`
-   yourself, never retry `zen-check --refresh` to look for a free model, and never ask in chat which builder to use
-   first; the user already answered that in the Inbox. A private repository gets only zero-retention free models, so
+   then free). Never name `local` or `free` yourself, never retry `zen-check --refresh` to look for a free model,
+   and never ask in chat which free builder to use. When neither is usable it exits 3: billed is the only builder left.
+   Ask the user in this chat for billed (cost, why nothing cheaper works); on a yes run `builder billed --approved`.
+   An `escalate` or `fallback` to billed asks in the Inbox for a short time; on exit 3 ask in chat the same way. A private repository gets only zero-retention free models, so
    "no free model" there is policy, not a fault. For each task in `check-plan` order: `send-task`, then `wait-task`. On
    CHECKS FAILED, `send-task` the same id with a note saying what to fix. After the failed attempts that `escalate`
    accepts (two by default), run `escalate <id>`, tell the user which builder is next and why, then `send-task` with a

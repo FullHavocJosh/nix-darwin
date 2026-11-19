@@ -21,8 +21,8 @@ Helpers the Claude pane runs from its own pane (so with its grants; AIDEV_TUIOS_
     check-plan                    check plan/prd.json and plan/verify.json with aistack's rules
     worktree                      create the gpr worktree and draft PR for the plan (main checkout only)
     builder [local|free|billed] [--approved]
-                                  open a builder pane in the work dir; billed costs money and asks you first
-                                  unless --approved (the user already approved it in the plan pane's chat)
+                                  open a builder pane in the work dir; billed costs money: the plan pane asks the
+                                  user in its chat and passes --approved; without it a capped Inbox ask is the fallback
     send-task <id> [note...]      reset the builder's context (AIDEV_NO_RESET=1 skips), write the task file,
                                   mail it to the builder and tell it to start
     wait-task <id> [seconds]      wait for the builder's reply, then run the task's verify commands
@@ -50,7 +50,8 @@ Rules the design rests on:
     Claude's pane, because Claude holds grants it lacks. Lumo holds read and has no tools, so Claude types to it with
     ask-agent and reads the reply from Lumo's pi session file.
   - The harness decides "done": verify runs each task's commands with shlex.split and no shell.
-  - A billed builder starts only after you say yes in the tuios Inbox (ask-human).
+  - A billed builder starts only after you say yes: in the plan pane's chat (builder billed --approved), else in the
+    tuios Inbox (ask-human, capped by AIDEV_BILLED_ASK_TIMEOUT_S).
 """
 
 import copy
@@ -106,6 +107,18 @@ TASK_MAX_FILES = 3
 REPLY_ECHO_MAX = int(os.environ.get("AIDEV_TUIOS_REPLY_ECHO_MAX", "300"))
 TASK_MAX_READ = int(os.environ.get("AIDEV_TUIOS_TASK_MAX_READ", "36000"))  # bytes of named files one task may read
 ASK_TIMEOUT_MS = 3_600_000  # the most ask-human waits
+BILLED_ASK_TIMEOUT_S = 120  # without --approved, the billed Inbox ask gives up after this long
+
+
+def billed_ask_timeout_s():
+    """How long the billed Inbox ask waits: AIDEV_BILLED_ASK_TIMEOUT_S when a positive int, else BILLED_ASK_TIMEOUT_S."""
+    try:
+        value = int(os.environ["AIDEV_BILLED_ASK_TIMEOUT_S"])
+    except (KeyError, ValueError):
+        return BILLED_ASK_TIMEOUT_S
+    return value if value > 0 else BILLED_ASK_TIMEOUT_S
+
+
 ASK_MAX_BYTES = 160  # tuios refuses a longer ask-human question (invalid_params)
 AT_REST = ("idle", "done", "errored")
 DONE_RE = re.compile(r"(?:I(?:'ve| have)\s+)?successfully completed task\s+(T\d+)", re.IGNORECASE)
@@ -304,15 +317,17 @@ def notify_local(text):
         pass
 
 
-def ask_human(session, question, options):
-    """The person's answer from the tuios Inbox (ctrl+t i). Only an attached client can answer, so a model cannot
-    answer for the person. AIDEV_TUIOS_FAKE_HUMAN (tests) reads answers from a file instead."""
+def ask_human(session, question, options, timeout_s=None):
+    """The person's answer from the tuios Inbox (ctrl+t i), waiting at most timeout_s seconds (default ASK_TIMEOUT_MS).
+    Only an attached client can answer, so a model cannot answer for the person. AIDEV_TUIOS_FAKE_HUMAN (tests) reads
+    answers from a file instead."""
+    ms = int(timeout_s * 1000) if timeout_s else ASK_TIMEOUT_MS
     if os.environ.get("AIDEV_TUIOS_FAKE_HUMAN"):
         return fake_human(question, options)
     notify_local(f"{short(question)} - answer in the tuios Inbox (ctrl+t i)")
     opts = [x for o in options for x in ("-o", o)]
-    _code, out, err = tuios("ask-human", "-s", session, short(question), *opts, "--timeout", str(ASK_TIMEOUT_MS),
-                            "--json", timeout=ASK_TIMEOUT_MS / 1000 + 30)
+    _code, out, err = tuios("ask-human", "-s", session, short(question), *opts, "--timeout", str(ms),
+                            "--json", timeout=ms / 1000 + 30)
     try:
         data = json.loads(out)
     except ValueError:
@@ -1575,7 +1590,7 @@ def cmd_worktree(run, _argv):
 
 def auto_builder(run):
     """The builder to open when none is named: local when the 30B file exists, else free when a free Zen model is
-    usable, else billed (cmd_builder then asks the user in the Inbox, so the plan pane never has to ask in chat)."""
+    usable, else billed (cmd_builder then tells the plan pane to ask the user in its chat and pass --approved)."""
     if local_builder_available():
         return "local"
     zs = zen_status(run)
@@ -1588,6 +1603,7 @@ def auto_builder(run):
 def cmd_builder(run, argv):
     approved = "--approved" in argv
     argv = [w for w in argv if w != "--approved"]
+    auto = not argv
     kind = norm_kind(argv[0]) if argv else auto_builder(run)
     if kind not in BUILDERS:
         print(f"usage: builder [{'|'.join(BUILDERS)}] [--approved]")
@@ -1603,12 +1619,20 @@ def cmd_builder(run, argv):
         return 0
     if kind == "billed" and approved:
         run.event("billed_approved", by="plan pane")
-    elif kind == "billed" and ask_human(run.session, "aidev: build with Claude Code (billed)?",
-                                        ["yes", "no"]) != "yes":
-        print("the user said no to a billed builder")
-        return 1
+    elif kind == "billed" and auto:
+        print("billed is the only builder left and costs money: ask the user in this chat, then run "
+              "`builder billed --approved` on a yes")
+        return 3
+    elif kind == "billed":
+        timeout_s = billed_ask_timeout_s()
+        answer = ask_human(run.session, "aidev: build with Claude Code (billed)?", ["yes", "no"], timeout_s)
+        if answer != "yes":
+            print("the user said no to a billed builder" if answer else
+                  f"no answer in the Inbox within {timeout_s}s: ask the user in this chat, then run "
+                  "`builder billed --approved` on a yes")
+            return 1 if answer else 3
     if kind == "free" and not zen_usable(s := zen_status(run)):
-        print(f"free Zen is not usable: {s['detail']}. Use `builder billed` (asks the user first).")
+        print(f"free Zen is not usable: {s['detail']}. Ask the user in this chat, then run `builder billed --approved`.")
         return 1
     ok, msg = start_builder(run, kind, name, WS[name], wd)
     if ok or name in run.data["panes"]:
