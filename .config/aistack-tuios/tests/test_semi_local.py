@@ -91,6 +91,41 @@ def main():
     check("AIDEV_SEMI_LOCAL=off: unavailable", a.semi_local_available() is False)
     os.environ.pop("AIDEV_SEMI_LOCAL")
 
+    class Done:
+        def __init__(self, returncode, stdout):
+            self.returncode, self.stdout = returncode, stdout
+
+    def stub(result, calls):
+        def run(cmd, *args, **kwargs):
+            calls.append((cmd, kwargs))
+            if isinstance(result, BaseException):
+                raise result
+            return result
+        return run
+
+    real_run = a.subprocess.run
+    try:
+        calls = []
+        a.subprocess.run = stub(Done(0, "200"), calls)
+        check("mock curl 200: available", a.semi_local_available() is True)
+        cmd, kwargs = calls[0]
+        check("probe is /usr/bin/curl ... /health, no shell",
+              isinstance(cmd, list) and cmd[0] == "/usr/bin/curl" and cmd[-1] == f"http://127.0.0.1:{port}/health"
+              and not kwargs.get("shell"), calls[0])
+        for name, result in (("curl exit 7", Done(7, "")), ("curl 503", Done(0, "503")),
+                             ("curl timeout", a.subprocess.TimeoutExpired("curl", 1)),
+                             ("curl OSError 65", OSError(65, "No route to host"))):
+            a.subprocess.run = stub(result, [])
+            check(name + ": unavailable", a.semi_local_available() is False)
+        calls = []
+        a.subprocess.run = stub(Done(0, "200"), calls)
+        os.environ["AIDEV_SEMI_LOCAL"] = "off"
+        check("kill switch: unavailable, curl not run", a.semi_local_available() is False and not calls)
+        os.environ.pop("AIDEV_SEMI_LOCAL")
+    finally:
+        a.subprocess.run = real_run
+        os.environ.pop("AIDEV_SEMI_LOCAL", None)
+
     print("auto_builder")
     real = (a.semi_local_available, a.local_builder_available, a.zen_status, a.zen_usable)
     try:
