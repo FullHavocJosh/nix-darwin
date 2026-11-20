@@ -1,5 +1,13 @@
-{ pkgs, lib, ... }:
+# off by default, enabled per host in flake.nix
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 let
+  cfg = config.local.clipcascade;
+
   # Upstream Apple Silicon release, pinned by version and hash.
   # dontFixup keeps the ad-hoc code signature intact (fixup would rewrite binaries and break it).
   clipcascade = pkgs.stdenvNoCC.mkDerivation {
@@ -44,6 +52,7 @@ let
       MacMiniM1*)
         DOPPLER_CONFIG_NAME="root_macmini"
         ;;
+      # MacBookM3Pro*) work Mac: add a case with its Doppler config once the user creates CLIPCASCADE_PASSWORD there
       *)
         echo "clipcascade-password: unknown hostname '$HOSTNAME', cannot determine Doppler config" >&2
         exit 1
@@ -64,40 +73,57 @@ let
   '';
 in
 {
-  environment.systemPackages = [
-    clipcascade
-    clipcascadePassword
-  ];
+  options.local.clipcascade.enable = lib.mkEnableOption "the ClipCascade clipboard sync client";
 
-  # Start the client at login. Must be a user LaunchAgent so it runs in the GUI session
-  # (clipboard access needs it). Relaunch only after a failed exit, not after a normal quit.
-  launchd.user.agents.clipcascade.serviceConfig = {
-    Label = "org.nixos.clipcascade";
-    ProgramArguments = [ "/Applications/Nix Apps/ClipCascade.app/Contents/MacOS/ClipCascade" ];
-    RunAtLoad = true;
-    KeepAlive.SuccessfulExit = false;
-    ProcessType = "Interactive";
-    StandardOutPath = "/tmp/clipcascade.log";
-    StandardErrorPath = "/tmp/clipcascade.error.log";
+  # Seeded into DATA only on first run; a host syncing with a different server overrides these.
+  options.local.clipcascade.serverUrl = lib.mkOption {
+    type = lib.types.strMatching "^https://.+";
+    default = "https://clip.rollet.family";
+    description = "REST URL of the sync server.";
   };
 
-  # Seed the non-secret server settings once. The user enters credentials once in the client UI,
-  # and the app rewrites DATA itself, so nix never overwrites an existing file.
-  # Never write username, password, hash or the E2EE key here.
-  system.activationScripts.postActivation.text = lib.mkAfter ''
-    clipcascade_data="/Users/havoc/Library/Application Support/ClipCascade/DATA"
-    if [ ! -e "$clipcascade_data" ]; then
-      echo "seeding ClipCascade settings..." >&2
-      sudo -u havoc mkdir -p "$(dirname "$clipcascade_data")"
-      sudo -u havoc tee "$clipcascade_data" > /dev/null <<'EOF'
-    {
-      "server_url": "https://clip.rollet.family",
-      "websocket_url": "wss://clip.rollet.family/clipsocket",
-      "cipher_enabled": true,
-      "save_password": false,
-      "use_keyring": true
-    }
-    EOF
-    fi
-  '';
+  options.local.clipcascade.websocketUrl = lib.mkOption {
+    type = lib.types.strMatching "^wss://.+";
+    default = "wss://clip.rollet.family/clipsocket";
+    description = "WebSocket URL of the sync server.";
+  };
+
+  config = lib.mkIf cfg.enable {
+    environment.systemPackages = [
+      clipcascade
+      clipcascadePassword
+    ];
+
+    # Start the client at login. Must be a user LaunchAgent so it runs in the GUI session
+    # (clipboard access needs it). Relaunch only after a failed exit, not after a normal quit.
+    launchd.user.agents.clipcascade.serviceConfig = {
+      Label = "org.nixos.clipcascade";
+      ProgramArguments = [ "/Applications/Nix Apps/ClipCascade.app/Contents/MacOS/ClipCascade" ];
+      RunAtLoad = true;
+      KeepAlive.SuccessfulExit = false;
+      ProcessType = "Interactive";
+      StandardOutPath = "/tmp/clipcascade.log";
+      StandardErrorPath = "/tmp/clipcascade.error.log";
+    };
+
+    # Seed the non-secret server settings once. The user enters credentials once in the client UI,
+    # and the app rewrites DATA itself, so nix never overwrites an existing file.
+    # Never write username, password, hash or the E2EE key here.
+    system.activationScripts.postActivation.text = lib.mkAfter ''
+      clipcascade_data="/Users/havoc/Library/Application Support/ClipCascade/DATA"
+      if [ ! -e "$clipcascade_data" ]; then
+        echo "seeding ClipCascade settings..." >&2
+        sudo -u havoc mkdir -p "$(dirname "$clipcascade_data")"
+        sudo -u havoc tee "$clipcascade_data" > /dev/null <<'EOF'
+      {
+        "server_url": "${cfg.serverUrl}",
+        "websocket_url": "${cfg.websocketUrl}",
+        "cipher_enabled": true,
+        "save_password": false,
+        "use_keyring": true
+      }
+      EOF
+      fi
+    '';
+  };
 }

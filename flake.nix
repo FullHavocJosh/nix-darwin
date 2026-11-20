@@ -34,6 +34,7 @@
           ./nix-modules/macos/llamacpp-local.nix
           ./nix-modules/macos/lumo.nix # loopback only, own keys and sign-in (local.lumo.lan defaults to false)
           ./nix-modules/macos/clipcascade.nix
+          { local.clipcascade.enable = true; }
           nix-homebrew.darwinModules.nix-homebrew
         ];
       };
@@ -52,6 +53,7 @@
           ./nix-modules/macos/lumo.nix
           { local.lumo.lan = true; } # serve Lumo to every device on the network
           ./nix-modules/macos/clipcascade.nix
+          { local.clipcascade.enable = true; }
           nix-homebrew.darwinModules.nix-homebrew
         ];
       };
@@ -65,6 +67,8 @@
           ./nix-modules/macos/config.nix
           ./nix-modules/macos/launchd-ensure.nix
           ./nix-modules/macos/work.nix
+          ./nix-modules/macos/clipcascade.nix
+          # { local.clipcascade.enable = true; } # uncomment to enable once company policy allows syncing the work clipboard to clip.rollet.family
           ./nix-modules/macos/llamacpp-local.nix
           nix-homebrew.darwinModules.nix-homebrew
         ];
