@@ -57,7 +57,7 @@ def main():
     os.environ["AIDEV_TUIOS_HOME"] = tmp
     a = load("aidev", os.path.join(ROOT, "aidev_tuios.py"))
 
-    secret = "sk-semi-secret-0123456789"
+    secret = "not-a-real-key-marker"
     key_file = os.path.join(tmp, "api-key")
     with open(os.open(key_file, os.O_WRONLY | os.O_CREAT, 0o600), "w") as f:
         f.write(secret)
@@ -72,7 +72,7 @@ def main():
     check("503: unavailable", a.semi_local_available() is False)
     status[0] = 200
 
-    real_url, real_timeout = a.SEMI_URL, a.SEMI_TIMEOUT_S
+    real_timeout = a.SEMI_TIMEOUT_S
     srv.shutdown()
     srv.server_close()
     a.SEMI_TIMEOUT_S = 0.5
