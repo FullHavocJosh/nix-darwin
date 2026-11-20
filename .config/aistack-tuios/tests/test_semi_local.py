@@ -163,6 +163,16 @@ def main():
     check("semi apiKey reads the key file at runtime", str(semi.get("apiKey", "")).startswith("!cat "), semi)
     check("key contents are not in the body", secret not in (body or ""))
     check("key contents are not in models.json", secret not in models_text)
+    check("semi body runs pi without the coder wrapper",
+          isinstance(body, str) and "coder_pi" not in body and "pi --model semi/qwen3-coder-30b" in body, body)
+    real_lba = a.local_builder_available
+    a.write_git_guard = lambda r: a.write_text(os.path.join(r.dir, "bin", "guard", "git"), "")
+    a.local_builder_available = lambda: True
+    try:
+        local_body = a.build_body(run, cfg, "local")
+    finally:
+        a.write_git_guard, a.local_builder_available = real_gg, real_lba
+    check("local body still uses the coder wrapper", isinstance(local_body, str) and "coder_pi" in local_body, local_body)
 
     print("next_tier")
     check("semi-local then local", a.next_tier("semi-local", "available") == "local")

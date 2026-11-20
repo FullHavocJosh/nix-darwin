@@ -1123,8 +1123,7 @@ def build_body(run, cfg, kind, name=None):
             return None
         model = write_build_pi(cfg, "semi-local")
         sid = pane.setdefault("session_id", str(uuid.uuid4()))
-        argv = [sys.executable, os.path.join(AISTACK, "coder_pi.py"), "--hold", "--", "pi", "--model", model,
-                "--name", "aidev build-semi-local", "--no-skills", "--session-id", sid]
+        argv = ["pi", "--model", model, "--name", "aidev build-semi-local", "--no-skills", "--session-id", sid]
         pane["builder"] = "Qwen3-Coder-30B on the G14 (free)"
         return (pane_path + f"cd {shlex.quote(wd)}\nexport AIDEV_TUIOS_BUILDER=1\n"
                 f"export PI_CODING_AGENT_DIR={shlex.quote(cfg['pi_build'])}\n" + with_system_prompt(argv, sysp))
@@ -3020,8 +3019,7 @@ def edit_headless(run, kind, task_text, limit):
         if not semi_local_available():
             return "", no_builder_why(kind)
         env["PI_CODING_AGENT_DIR"] = cfg["pi_build"]
-        argv = [sys.executable, os.path.join(AISTACK, "coder_pi.py"), "--hold", "--", "pi", "--model",
-                write_build_pi(cfg, "semi-local"), "--no-skills", "-p", task_text]
+        argv = ["pi", "--model", write_build_pi(cfg, "semi-local"), "--no-skills", "-p", task_text]
     else:
         model = zen_model(run.project)
         if not model:
