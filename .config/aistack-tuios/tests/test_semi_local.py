@@ -91,6 +91,41 @@ def main():
     check("AIDEV_SEMI_LOCAL=off: unavailable", a.semi_local_available() is False)
     os.environ.pop("AIDEV_SEMI_LOCAL")
 
+    class Done:
+        def __init__(self, returncode, stdout):
+            self.returncode, self.stdout = returncode, stdout
+
+    def stub(result, calls):
+        def run(cmd, *args, **kwargs):
+            calls.append((cmd, kwargs))
+            if isinstance(result, BaseException):
+                raise result
+            return result
+        return run
+
+    real_run = a.subprocess.run
+    try:
+        calls = []
+        a.subprocess.run = stub(Done(0, "200"), calls)
+        check("mock curl 200: available", a.semi_local_available() is True)
+        cmd, kwargs = calls[0]
+        check("probe is /usr/bin/curl ... /health, no shell",
+              isinstance(cmd, list) and cmd[0] == "/usr/bin/curl" and cmd[-1] == f"http://127.0.0.1:{port}/health"
+              and not kwargs.get("shell"), calls[0])
+        for name, result in (("curl exit 7", Done(7, "")), ("curl 503", Done(0, "503")),
+                             ("curl timeout", a.subprocess.TimeoutExpired("curl", 1)),
+                             ("curl OSError 65", OSError(65, "No route to host"))):
+            a.subprocess.run = stub(result, [])
+            check(name + ": unavailable", a.semi_local_available() is False)
+        calls = []
+        a.subprocess.run = stub(Done(0, "200"), calls)
+        os.environ["AIDEV_SEMI_LOCAL"] = "off"
+        check("kill switch: unavailable, curl not run", a.semi_local_available() is False and not calls)
+        os.environ.pop("AIDEV_SEMI_LOCAL")
+    finally:
+        a.subprocess.run = real_run
+        os.environ.pop("AIDEV_SEMI_LOCAL", None)
+
     print("auto_builder")
     real = (a.semi_local_available, a.local_builder_available, a.zen_status, a.zen_usable)
     try:
@@ -128,6 +163,16 @@ def main():
     check("semi apiKey reads the key file at runtime", str(semi.get("apiKey", "")).startswith("!cat "), semi)
     check("key contents are not in the body", secret not in (body or ""))
     check("key contents are not in models.json", secret not in models_text)
+    check("semi body runs pi without the coder wrapper",
+          isinstance(body, str) and "coder_pi" not in body and "pi --model semi/qwen3-coder-30b" in body, body)
+    real_lba = a.local_builder_available
+    a.write_git_guard = lambda r: a.write_text(os.path.join(r.dir, "bin", "guard", "git"), "")
+    a.local_builder_available = lambda: True
+    try:
+        local_body = a.build_body(run, cfg, "local")
+    finally:
+        a.write_git_guard, a.local_builder_available = real_gg, real_lba
+    check("local body still uses the coder wrapper", isinstance(local_body, str) and "coder_pi" in local_body, local_body)
 
     print("next_tier")
     check("semi-local then local", a.next_tier("semi-local", "available") == "local")

@@ -117,7 +117,7 @@ SEMI_TIMEOUT_S = float(os.environ.get("AIDEV_SEMI_LOCAL_TIMEOUT_S") or "2")
 
 
 def semi_local_available():
-    """The semi-local builder can run: not switched off, the key file is readable and the G14 /health answers 200."""
+    """The semi-local builder can run: not switched off, the key file is readable and the G14 /health answers 200 to curl."""
     if (os.environ.get("AIDEV_SEMI_LOCAL") or "").strip().lower() in ("off", "0", "no", "false"):
         return False
     if not (os.path.isfile(SEMI_KEY_FILE) and os.access(SEMI_KEY_FILE, os.R_OK)):
@@ -125,10 +125,11 @@ def semi_local_available():
     base = SEMI_URL.rstrip("/")
     base = base.removesuffix("/v1")
     try:
-        with urllib.request.urlopen(base.rstrip("/") + "/health", timeout=SEMI_TIMEOUT_S) as resp:
-            return resp.status == 200
-    except (OSError, ValueError, urllib.error.URLError):
+        r = subprocess.run(["/usr/bin/curl", "-s", "-m", str(SEMI_TIMEOUT_S), "-o", "/dev/null", "-w", "%{http_code}",
+                            base + "/health"], capture_output=True, text=True, timeout=SEMI_TIMEOUT_S + 1)
+    except (OSError, subprocess.SubprocessError):
         return False
+    return r.returncode == 0 and r.stdout.strip() == "200"
 
 
 LUMO_MODEL = os.environ.get("AISTACK_LUMO_MODEL") or "lumo-max"
@@ -1122,8 +1123,7 @@ def build_body(run, cfg, kind, name=None):
             return None
         model = write_build_pi(cfg, "semi-local")
         sid = pane.setdefault("session_id", str(uuid.uuid4()))
-        argv = [sys.executable, os.path.join(AISTACK, "coder_pi.py"), "--hold", "--", "pi", "--model", model,
-                "--name", "aidev build-semi-local", "--no-skills", "--session-id", sid]
+        argv = ["pi", "--model", model, "--name", "aidev build-semi-local", "--no-skills", "--session-id", sid]
         pane["builder"] = "Qwen3-Coder-30B on the G14 (free)"
         return (pane_path + f"cd {shlex.quote(wd)}\nexport AIDEV_TUIOS_BUILDER=1\n"
                 f"export PI_CODING_AGENT_DIR={shlex.quote(cfg['pi_build'])}\n" + with_system_prompt(argv, sysp))
@@ -3019,8 +3019,7 @@ def edit_headless(run, kind, task_text, limit):
         if not semi_local_available():
             return "", no_builder_why(kind)
         env["PI_CODING_AGENT_DIR"] = cfg["pi_build"]
-        argv = [sys.executable, os.path.join(AISTACK, "coder_pi.py"), "--hold", "--", "pi", "--model",
-                write_build_pi(cfg, "semi-local"), "--no-skills", "-p", task_text]
+        argv = ["pi", "--model", write_build_pi(cfg, "semi-local"), "--no-skills", "-p", task_text]
     else:
         model = zen_model(run.project)
         if not model:
