@@ -75,14 +75,15 @@ OAuth once through `/mcp`) and the GitHub MCP (`@edjl/github-mcp`, through the l
 `JIRA_WRITES` (comment, transition, edit, create, link, worklog), and builder panes keep
 the tuios MCP only.
 
-| Workspace | Pane           | Model                                                              | Grants                           |
-| --------- | -------------- | ------------------------------------------------------------------ | -------------------------------- |
-| 1         | `plan`         | Claude Code, advisor off: plans, sends tasks, verifies, reviews    | read, write, fan, files, respond |
-| 1         | `nvim`         | your editor, with a bare `zsh` window next to it                   | default                          |
-| 1         | `research`     | pi on Lumo through lumo-tamer, no tools: web lookups               | read                             |
-| 1         | `build-local`  | pi on the on-device 30B; Claude opens it when the plan is approved | read, write                      |
-| 1         | `build-free`   | escalation: pi on a free Zen model                                 | read, write                      |
-| 1         | `build-billed` | escalation: Claude Code (billed, asks you first)                   | read, write                      |
+| Workspace | Pane               | Model                                                              | Grants                           |
+| --------- | ------------------ | ------------------------------------------------------------------ | -------------------------------- |
+| 1         | `plan`             | Claude Code, advisor off: plans, sends tasks, verifies, reviews    | read, write, fan, files, respond |
+| 1         | `nvim`             | your editor, with a bare `zsh` window next to it                   | default                          |
+| 1         | `research`         | pi on Lumo through lumo-tamer, no tools: web lookups               | read                             |
+| 1         | `build-semi-local` | pi on the Qwen3-Coder-30B on the G14                               | read, write                      |
+| 1         | `build-local`      | pi on the on-device 30B; Claude opens it when the plan is approved | read, write                      |
+| 1         | `build-free`       | escalation: pi on a free Zen model                                 | read, write                      |
+| 1         | `build-billed`     | escalation: Claude Code (billed, asks you first)                   | read, write                      |
 
 The billed builder's settings use `acceptEdits`, allow the plan's verify commands by exact text and the read-only
 commands, and deny git writes, `gh`, `rm -rf` and `sudo` (deny wins over allow). Edits to the plan directory and to the run's `state.json` and `events.jsonl` are denied too. Each run has its own plan directory and worktree record (`meta_path`) under `runs/<id>/`, so concurrent runs of one project never share a plan, worktree or PR; finish archives the plan to `runs/<id>/plan-done-<time>`.
@@ -152,7 +153,7 @@ dir) and `/clear` otherwise; `AIDEV_TUIOS_FINISH_RESET=off` turns that off.
 Zen has no balance API, so `zen_models.py status` probes each candidate free model with one tiny `opencode run` (the
 oczen MCP tool `zen_free_models` reports the same to any Claude session). Results are cached for ten minutes. The free
 builder opens on the first available free model, and an exhausted or missing free tier is skipped by `builder free`,
-`aidev -p` and `escalate`. `escalate` moves a task from local to free to billed after `AIDEV_TUIOS_ESCALATE_AFTER`
+`aidev -p` and `escalate`. `escalate` moves a task from semi-local to local to free to billed after `AIDEV_TUIOS_ESCALATE_AFTER`
 failures at a tier (default 2), and from local straight to billed when no free model is usable. Billed always asks in
 the Inbox.
 
@@ -237,6 +238,22 @@ failures stop pi). aidev never logs the URL or the key.
 
 When a builder pane repeats 'successfully completed task T<n>' (two or more times in its last 80 scrollback
 lines), or says it in mail to the plan pane, `wait-task` and `watch` interrupt it (Escape, then ctrl+c if
-needed) and reset it with its reset command (`/new` for local and free, `/clear` for billed) without closing
+needed) and reset it with its reset command (`/new` for semi-local, local and free, `/clear` for billed) without closing
 the window, and print `builder X looped on completion; reset`. A reply already mailed on the task thread
 stays the normal result and verify still runs. Set `AIDEV_TUIOS_LOOP_STOP=off` to disable it.
+
+#### Semi-local builder
+
+The semi-local builder (pane `build-semi-local`) is pi pointed at the Qwen3-Coder-30B llama.cpp server on the G14.
+aidev tries it first, falls back to the on-device `build-local` when the G14 is offline, then to the free and billed
+chain. Selecting `build-local` explicitly is unchanged. These settings override the defaults:
+
+- `AIDEV_SEMI_LOCAL=off`: disables the semi-local tier.
+- `AIDEV_SEMI_LOCAL_URL`: the OpenAI base (default `http://192.168.144.30:8082/v1`).
+- `AIDEV_SEMI_LOCAL_KEY_FILE`: the path to the key file (default `~/.config/llama-g14/api-key`, mode 0600). pi reads it
+  at runtime and aidev never prints it.
+- `AIDEV_SEMI_LOCAL_MODEL`: the model name to request.
+- `AIDEV_SEMI_LOCAL_TIMEOUT_S`: the availability probe timeout in seconds (default 2).
+
+The G14 counts as available when `GET /health` returns 200. It is offline when it is off or a game runs. Then aidev
+falls back to `build-local`.

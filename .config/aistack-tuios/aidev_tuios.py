@@ -28,7 +28,7 @@ Helpers the Claude pane runs from its own pane (so with its grants; AIDEV_TUIOS_
     wait-task <id> [seconds]      wait for the builder's reply, then run the task's verify commands
     verify <id>                   run the task's verify commands again
     watch [seconds]               block until new mail or a new Lumo exchange arrives, print it (run in background)
-    escalate <id>                 after repeated failures at a builder, open the next tier (local, free, billed)
+    escalate <id>                 after repeated failures at a builder, open the next tier (semi-local, local, free, billed)
     fallback <id>                 when the free builder hits its usage limit, try the next free model, else the billed builder
     approvals [approve|deny]      show the prompt the builder waits on, or answer it (needs the respond grant)
     zen-check [--refresh]         show each free Zen model's state; exit 0 available, 3 unknown, 1 none usable
@@ -40,8 +40,9 @@ Panes, all on one workspace (nvim's, else the lowest free one), each named after
 
     plan     Claude Code: talks with you, reads the code, plans, sends tasks, verifies, reviews   read,write,fan,files
     research pi on Lumo through lumo-tamer, no tools: web lookups on what Claude sends it        read
-    build-local / build-free / build-billed   builders: pi on the on-device 30B, OpenCode on a free Zen model,
-             Claude on a billed model; Claude opens them                                   read,write
+    build-semi-local / build-local / build-free / build-billed   builders, in this order: pi on the Qwen3-Coder-30B on
+             the G14, pi on the on-device 30B, OpenCode on a free Zen model, Claude on a billed model;
+             Claude opens them                                                             read,write
     nvim     nvim, only in a session of its own (in your session you have yours)                default
 
 Rules the design rests on:
@@ -109,6 +110,27 @@ def local_builder_available():
     return rb.configured() and rb.probe()[0]
 
 
+SEMI_URL = os.environ.get("AIDEV_SEMI_LOCAL_URL") or "http://192.168.144.30:8082/v1"
+SEMI_KEY_FILE = os.path.expanduser(os.environ.get("AIDEV_SEMI_LOCAL_KEY_FILE") or "~/.config/llama-g14/api-key")
+SEMI_ALIAS = os.environ.get("AIDEV_SEMI_LOCAL_MODEL") or "qwen3-coder-30b"
+SEMI_TIMEOUT_S = float(os.environ.get("AIDEV_SEMI_LOCAL_TIMEOUT_S") or "2")
+
+
+def semi_local_available():
+    """The semi-local builder can run: not switched off, the key file is readable and the G14 /health answers 200."""
+    if (os.environ.get("AIDEV_SEMI_LOCAL") or "").strip().lower() in ("off", "0", "no", "false"):
+        return False
+    if not (os.path.isfile(SEMI_KEY_FILE) and os.access(SEMI_KEY_FILE, os.R_OK)):
+        return False
+    base = SEMI_URL.rstrip("/")
+    base = base.removesuffix("/v1")
+    try:
+        with urllib.request.urlopen(base.rstrip("/") + "/health", timeout=SEMI_TIMEOUT_S) as resp:
+            return resp.status == 200
+    except (OSError, ValueError, urllib.error.URLError):
+        return False
+
+
 LUMO_MODEL = os.environ.get("AISTACK_LUMO_MODEL") or "lumo-max"
 LUMO_TIMEOUT_S = int(os.environ.get("AIDEV_TUIOS_LUMO_TIMEOUT_S", "540"))
 VERIFY_TIMEOUT_S = int(os.environ.get("AISTACK_VERIFY_TIMEOUT_S", "300"))
@@ -153,12 +175,13 @@ GRANTS = {PLAN: "read,write,fan,files,respond,admin", RESEARCH: "read", "build":
 # Each pane's workspace: every aidev pane is on workspace 1 in a session of its own. In another session they all
 # share the nvim window's workspace, else the lowest free one (assign_workspaces). The map is kept in the run's
 # state.json as "ws".
-WS_OWN = {PLAN: 1, RESEARCH: 1, "build-local": 1, "build-free": 1, "build-billed": 1, "dev": 1}
+WS_OWN = {PLAN: 1, RESEARCH: 1, "build-semi-local": 1, "build-local": 1, "build-free": 1, "build-billed": 1, "dev": 1}
 WS = dict(WS_OWN)
-# Builder kinds: local (the on-device 30B), free (a free Zen model), billed (Claude Code). Old names stay as aliases.
-BUILDERS = {"local": "build-local", "free": "build-free", "billed": "build-billed"}
+# Builder kinds, tried in this order: semi-local (the 30B on the G14), local (the on-device 30B), free (a free Zen
+# model), billed (Claude Code). Old names stay as aliases.
+BUILDERS = {"semi-local": "build-semi-local", "local": "build-local", "free": "build-free", "billed": "build-billed"}
 ESCALATE_AFTER = int(os.environ.get("AIDEV_TUIOS_ESCALATE_AFTER", "2"))
-KIND_ALIASES = {"30b": "local", "pickle": "free", "claude": "billed"}
+KIND_ALIASES = {"semi": "semi-local", "g14": "semi-local", "30b": "local", "pickle": "free", "claude": "billed"}
 LEGACY_BUILDER_PANES = ("build", "build-pickle", "build-claude")
 
 
@@ -170,7 +193,7 @@ def norm_kind(word):
 
 
 # How each builder clears its conversation before a new task: pi starts a new session, Claude Code clears the context.
-RESET_CMD = {"local": "/new", "free": "/new", "billed": "/clear"}
+RESET_CMD = {"semi-local": "/new", "local": "/new", "free": "/new", "billed": "/clear"}
 RESET_WAIT = int(os.environ.get("AIDEV_TUIOS_RESET_WAIT", "90"))
 LUMO_RESET = "/new"
 # A builder that compacts has overflowed its context: it loses file paths and decisions mid-task, so a retry on the
@@ -790,15 +813,20 @@ def write_lumo_pi(cfg, lumo, model=None):
 PI_BUILD_EXTENSIONS = ("pi-stop-after-reply.ts",)
 
 
-def write_build_pi(cfg):
+def write_build_pi(cfg, kind="local"):
     """The local builder's pi model list, plus aidev's pi extensions beside the tuios one (they stop the builder
-    after its reply mail)."""
+    after its reply mail). kind 'semi-local' adds the G14 provider; its key is read at runtime, never written."""
     spec = importlib.util.spec_from_file_location("local_edit_mcp", os.path.join(AISTACK, "local_edit_mcp.py"))
     le = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(le)
-    wj(os.path.join(cfg["pi_build"], "models.json"), {"providers": {"coder": {
+    providers = {"coder": {
         "baseUrl": le.BASE + "/v1", "api": "openai-completions", "apiKey": "sk-local",
-        "models": [{"id": le.ALIAS, "reasoning": False, "contextWindow": le.CTX, "maxTokens": 8192}]}}})
+        "models": [{"id": le.ALIAS, "reasoning": False, "contextWindow": le.CTX, "maxTokens": 8192}]}}
+    if kind == "semi-local":
+        providers["semi"] = {
+            "baseUrl": SEMI_URL, "api": "openai-completions", "apiKey": "!cat " + shlex.quote(SEMI_KEY_FILE),
+            "models": [{"id": SEMI_ALIAS, "reasoning": False, "contextWindow": le.CTX, "maxTokens": 8192}]}
+    wj(os.path.join(cfg["pi_build"], "models.json"), {"providers": providers})
     ext = os.path.join(cfg["pi_build"], "extensions")
     os.makedirs(ext, exist_ok=True)
     for name in PI_BUILD_EXTENSIONS:
@@ -811,7 +839,7 @@ def write_build_pi(cfg):
         data = {}
     data["compaction"] = {**(data.get("compaction") or {}), "enabled": False}
     wj(path, data)
-    return f"coder/{le.ALIAS}"
+    return f"semi/{SEMI_ALIAS}" if kind == "semi-local" else f"coder/{le.ALIAS}"
 
 
 def repo_private(project):
@@ -1049,7 +1077,7 @@ def builder_sandbox():
 
 
 def build_body(run, cfg, kind, name=None):
-    """The launcher body of builder `kind` (local, free, billed) in pane `name`, or None when that builder does not
+    """The launcher body of builder `kind` (semi-local, local, free, billed) in pane `name`, or None when that builder does not
     exist here. It replies by mail to run.data["reply_to"]: the plan pane in a run, the caller of `aidev -p` in an
     edit. AIDEV_TUIOS_BUILDER=1 in its environment stops it from starting aidev -p or --handoff itself (a loop)."""
     kind = norm_kind(kind) or kind
@@ -1089,6 +1117,16 @@ def build_body(run, cfg, kind, name=None):
         pane["builder"] = "on-device Qwen3-Coder-30B (free)"
         return (pane_path + f"cd {shlex.quote(wd)}\nexport AIDEV_TUIOS_BUILDER=1\n"
                 f"export PI_CODING_AGENT_DIR={shlex.quote(cfg['pi_build'])}\n" + with_system_prompt(argv, sysp))
+    if kind == "semi-local":
+        if not semi_local_available():
+            return None
+        model = write_build_pi(cfg, "semi-local")
+        sid = pane.setdefault("session_id", str(uuid.uuid4()))
+        argv = [sys.executable, os.path.join(AISTACK, "coder_pi.py"), "--hold", "--", "pi", "--model", model,
+                "--name", "aidev build-semi-local", "--no-skills", "--session-id", sid]
+        pane["builder"] = "Qwen3-Coder-30B on the G14 (free)"
+        return (pane_path + f"cd {shlex.quote(wd)}\nexport AIDEV_TUIOS_BUILDER=1\n"
+                f"export PI_CODING_AGENT_DIR={shlex.quote(cfg['pi_build'])}\n" + with_system_prompt(argv, sysp))
     if not zen_key_present():
         return None
     model = run.data.get("zen_model") or zen_model(run.project)
@@ -1121,6 +1159,8 @@ def builder_cost_label(model):
 
 
 def no_builder_why(kind):
+    if kind == "semi-local":
+        return "the G14 llama server is offline or its key file is missing"
     if kind == "local":
         return f"no model file {CODER_FILE}"
     if not zen_key_present():
@@ -1599,14 +1639,17 @@ def cmd_worktree(run, _argv):
 
 
 def auto_builder(run):
-    """The builder to open when none is named: local when the 30B file exists, else free when a free Zen model is
-    usable, else billed (cmd_builder then tells the plan pane to ask the user in its chat and pass --approved)."""
+    """The builder to open when none is named: semi-local when the G14 server is up, else local when the 30B file
+    exists, else free when a free Zen model is usable, else billed (cmd_builder then tells the plan pane to ask the
+    user in its chat and pass --approved)."""
+    if semi_local_available():
+        return "semi-local"
     if local_builder_available():
         return "local"
     zs = zen_status(run)
     if zen_usable(zs):
         return "free"
-    print(f"no local 30B and free Zen is not usable ({zs['detail']}): only the billed builder is left")
+    print(f"no semi-local, no local 30B and free Zen is not usable ({zs['detail']}): only the billed builder is left")
     return "billed"
 
 
@@ -1733,12 +1776,15 @@ def tier_of(builder):
     return next((k for k, n in BUILDERS.items() if n == builder), None)
 
 
-def next_tier(kind, zen_state):
-    """The builder kind after `kind` (local, free, billed), skipping free when no free Zen model is usable."""
+def next_tier(kind, zen_state, local_ok=True):
+    """The builder kind after `kind` (semi-local, local, free, billed), skipping local when local_ok is False and
+    free when no free Zen model is usable."""
     order = list(BUILDERS)
     if kind not in order:
         return None
     for nxt in order[order.index(kind) + 1:]:
+        if nxt == "local" and not local_ok:
+            continue
         if nxt == "free" and zen_state in ("exhausted", "none"):
             continue
         return nxt
@@ -1763,8 +1809,8 @@ def cmd_escalate(run, argv):
     if t.get("status") != "failed" or (n < ESCALATE_AFTER and not t.get("compacted")):
         print(f"{tid}: {n} of {ESCALATE_AFTER} attempts used at {builder}; send-task again with a note")
         return 1
-    zen = zen_status(run)["state"] if kind == "local" else "available"
-    nxt = next_tier(kind, zen)
+    zen = zen_status(run)["state"] if kind in ("semi-local", "local") else "available"
+    nxt = next_tier(kind, zen, local_ok=local_builder_available() if kind == "semi-local" else True)
     if nxt is None:
         print("no higher builder: ask the user")
         return 2
@@ -1777,7 +1823,7 @@ def cmd_escalate(run, argv):
         if code != 0:
             print(f"could not close {builder} (the plan pane lacks the admin grant): close that pane by hand")
     t.pop("compacted", None)
-    reason = "free Zen is not usable, skipping it" if kind == "local" and nxt == "billed" else ""
+    reason = "free Zen is not usable, skipping it" if kind in ("semi-local", "local") and nxt == "billed" else ""
     run.event("escalate", task=tid, frm=builder, to=BUILDERS[nxt], why=reason)
     print(f"escalated {builder} -> {BUILDERS[nxt]}" + (f" ({reason})" if reason else ""))
     print(f"Next: {HELPER} send-task {tid} '<note>'")
@@ -2025,7 +2071,7 @@ def cmd_send_task(run, argv):
     if research_gate(run):
         return 3
     if not argv:
-        print("usage: send-task <id> [--to local|free|billed] [note for the builder]; resets the builder's "
+        print("usage: send-task <id> [--to semi-local|local|free|billed] [note for the builder]; resets the builder's "
               "context first unless AIDEV_NO_RESET=1")
         return 2
     tid, rest = argv[0], argv[1:]
@@ -2033,7 +2079,7 @@ def cmd_send_task(run, argv):
     if rest and rest[0] == "--to":
         kind = norm_kind(rest[1] if len(rest) > 1 else "")
         if not kind:
-            print("usage: send-task <id> [--to local|free|billed] [note for the builder]")
+            print("usage: send-task <id> [--to semi-local|local|free|billed] [note for the builder]")
             return 2
         builder, rest = BUILDERS[kind], rest[2:]
     note = " ".join(rest).strip()
@@ -2969,6 +3015,12 @@ def edit_headless(run, kind, task_text, limit):
         env["PI_CODING_AGENT_DIR"] = cfg["pi_build"]
         argv = [sys.executable, os.path.join(AISTACK, "coder_pi.py"), "--hold", "--", "pi", "--model",
                 write_build_pi(cfg), "--no-skills", "-p", task_text]
+    elif kind == "semi-local":
+        if not semi_local_available():
+            return "", no_builder_why(kind)
+        env["PI_CODING_AGENT_DIR"] = cfg["pi_build"]
+        argv = [sys.executable, os.path.join(AISTACK, "coder_pi.py"), "--hold", "--", "pi", "--model",
+                write_build_pi(cfg, "semi-local"), "--no-skills", "-p", task_text]
     else:
         model = zen_model(run.project)
         if not model:
@@ -3011,14 +3063,16 @@ def cmd_edit(argv):
     task_path = write_text(os.path.join(run.dir, "tasks", "edit.md"), task_text + "\n")
     run.save()
     before, why = tree_state(cwd), ""
-    for i, kind in enumerate(("local", "free")):
+    for i, kind in enumerate(("semi-local", "local", "free")):
+        if kind == "semi-local" and not semi_local_available():
+            continue
         if kind == "local" and not local_builder_available():
             continue
         if kind == "free" and not zen_usable(zs := zen_status(run)):
             print(f"aidev -p: free Zen is not usable ({zs['detail']}); not trying it", file=sys.stderr)
             continue
         if i and why:
-            print(f"aidev -p: the 30B did not finish ({why.splitlines()[0]}); trying a free Zen model", file=sys.stderr)
+            print(f"aidev -p: the local builder did not finish ({why.splitlines()[0]}); trying a free Zen model", file=sys.stderr)
             task_path = write_text(task_path, task_text + f"\n\nAn earlier attempt left this: {why}\n")
         if in_tuios:
             reply, err = edit_in_pane(run, kind, task_path, limit)
