@@ -33,6 +33,7 @@
           ./nix-modules/macos/timemachine-exclusions.nix
           ./nix-modules/macos/llamacpp-local.nix
           ./nix-modules/macos/lumo.nix # loopback only, own keys and sign-in (local.lumo.lan defaults to false)
+          ./nix-modules/macos/clipcascade.nix
           nix-homebrew.darwinModules.nix-homebrew
         ];
       };
@@ -50,6 +51,7 @@
           ./nix-modules/macos/llamacpp-local.nix
           ./nix-modules/macos/lumo.nix
           { local.lumo.lan = true; } # serve Lumo to every device on the network
+          ./nix-modules/macos/clipcascade.nix
           nix-homebrew.darwinModules.nix-homebrew
         ];
       };
