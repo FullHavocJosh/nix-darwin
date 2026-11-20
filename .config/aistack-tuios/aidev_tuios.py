@@ -110,26 +110,76 @@ def local_builder_available():
     return rb.configured() and rb.probe()[0]
 
 
-SEMI_URL = os.environ.get("AIDEV_SEMI_LOCAL_URL") or "http://192.168.144.30:8082/v1"
-SEMI_KEY_FILE = os.path.expanduser(os.environ.get("AIDEV_SEMI_LOCAL_KEY_FILE") or "~/.config/llama-g14/api-key")
+SEMI_URL = os.environ.get("AIDEV_SEMI_LOCAL_URL") or load_remote_builder().DEFAULT_URL
+SEMI_KEY_FILE = os.path.expanduser(os.environ.get("AIDEV_SEMI_LOCAL_KEY_FILE") or "")
 SEMI_ALIAS = os.environ.get("AIDEV_SEMI_LOCAL_MODEL") or "qwen3-coder-30b"
-SEMI_TIMEOUT_S = float(os.environ.get("AIDEV_SEMI_LOCAL_TIMEOUT_S") or "2")
+SEMI_TIMEOUT_S = float(os.environ.get("AIDEV_SEMI_LOCAL_TIMEOUT_S") or "4")
+
+
+def semi_key_cache():
+    """The 0600 file that holds the gateway key for pi's '!cat' apiKey."""
+    return os.path.join(os.path.expanduser(os.environ.get("AI_HOME") or "~/.ai"), "cache", "aidev_tuios", "semi-key")
+
+
+def _readable(path):
+    return bool(path) and os.path.isfile(path) and os.access(path, os.R_OK)
+
+
+def semi_key_file():
+    """Path of a file that holds the gateway bearer key, or None. The order: AIDEV_SEMI_LOCAL_KEY_FILE,
+    AIDEV_REMOTE_BUILDER_KEY_FILE, then a cache file filled from the remote builder's key (env or Doppler). The key
+    is never printed or logged."""
+    if _readable(SEMI_KEY_FILE):
+        return SEMI_KEY_FILE
+    rb_file = os.path.expanduser(os.environ.get("AIDEV_REMOTE_BUILDER_KEY_FILE") or "")
+    if _readable(rb_file):
+        return rb_file
+    cache = semi_key_cache()
+    try:
+        if os.path.getsize(cache) > 0:
+            return cache
+    except OSError:
+        pass
+    key = load_remote_builder().read_key()
+    if not key:
+        return None
+    try:
+        os.makedirs(os.path.dirname(cache), exist_ok=True)
+        fd = os.open(cache, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(key)
+    except OSError:
+        return None
+    return cache
 
 
 def semi_local_available():
-    """The semi-local builder can run: not switched off, the key file is readable and the G14 /health answers 200 to curl."""
+    """The semi-local builder can run: not switched off, a key resolves and an authenticated GET of the gateway
+    /models answers 200 with the model alias. A 401 on the cached key drops the cache file."""
     if (os.environ.get("AIDEV_SEMI_LOCAL") or "").strip().lower() in ("off", "0", "no", "false"):
         return False
-    if not (os.path.isfile(SEMI_KEY_FILE) and os.access(SEMI_KEY_FILE, os.R_OK)):
+    path = semi_key_file()
+    if path is None:
         return False
-    base = SEMI_URL.rstrip("/")
-    base = base.removesuffix("/v1")
     try:
-        r = subprocess.run(["/usr/bin/curl", "-s", "-m", str(SEMI_TIMEOUT_S), "-o", "/dev/null", "-w", "%{http_code}",
-                            base + "/health"], capture_output=True, text=True, timeout=SEMI_TIMEOUT_S + 1)
+        with open(path) as fh:
+            key = fh.read().strip()
+    except OSError:
+        return False
+    try:
+        r = subprocess.run(["/usr/bin/curl", "-s", "-m", str(SEMI_TIMEOUT_S), "-K", "-", "-w", "\n%{http_code}",
+                            SEMI_URL.rstrip("/") + "/models"], input=f'header = "Authorization: Bearer {key}"\n',
+                           capture_output=True, text=True, timeout=SEMI_TIMEOUT_S + 1)
     except (OSError, subprocess.SubprocessError):
         return False
-    return r.returncode == 0 and r.stdout.strip() == "200"
+    body, _, status = r.stdout.rpartition("\n")
+    if r.returncode == 0 and status.strip() == "401" and path == semi_key_cache():
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        return False
+    return r.returncode == 0 and status.strip() == "200" and SEMI_ALIAS in body
 
 
 LUMO_MODEL = os.environ.get("AISTACK_LUMO_MODEL") or "lumo-max"
@@ -824,9 +874,11 @@ def write_build_pi(cfg, kind="local"):
         "baseUrl": le.BASE + "/v1", "api": "openai-completions", "apiKey": "sk-local",
         "models": [{"id": le.ALIAS, "reasoning": False, "contextWindow": le.CTX, "maxTokens": 8192}]}}
     if kind == "semi-local":
-        providers["semi"] = {
-            "baseUrl": SEMI_URL, "api": "openai-completions", "apiKey": "!cat " + shlex.quote(SEMI_KEY_FILE),
-            "models": [{"id": SEMI_ALIAS, "reasoning": False, "contextWindow": le.CTX, "maxTokens": 8192}]}
+        key_path = semi_key_file()
+        if key_path:
+            providers["semi"] = {
+                "baseUrl": SEMI_URL, "api": "openai-completions", "apiKey": "!cat " + shlex.quote(key_path),
+                "models": [{"id": SEMI_ALIAS, "reasoning": False, "contextWindow": le.CTX, "maxTokens": 8192}]}
     wj(os.path.join(cfg["pi_build"], "models.json"), {"providers": providers})
     ext = os.path.join(cfg["pi_build"], "extensions")
     os.makedirs(ext, exist_ok=True)

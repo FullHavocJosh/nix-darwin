@@ -1,5 +1,5 @@
 """Tests for aidev's semi-local builder (aidev_tuios.py semi_local_available, auto_builder, build_body, next_tier): the
-G14 llama server /health gates it, the bearer key is read at runtime and never written. Needs no tuios daemon, no
+authenticated GET of the gateway /models gates it, the bearer key is read at runtime and never written. Needs no tuios daemon, no
 model and no network beyond 127.0.0.1.
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_semi_local.py
 """
@@ -34,30 +34,41 @@ def load(name, path):
 
 
 def serve(status):
-    """A 127.0.0.1 server answering `status` on /health; returns (server, port)."""
+    """A 127.0.0.1 server: GET /models answers `status` with the alias list when the bearer key is test-key, else 401;
+    status "hang" holds the request for 2 s; returns (server, port)."""
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
-            self.send_response(status[0] if self.path == "/health" else 404)
-            self.send_header("Content-Length", "0")
+            if self.path != "/v1/models":
+                code, body = 404, b""
+            elif self.headers.get("Authorization") != "Bearer test-key":
+                code, body = 401, b""
+            elif status[0] == "hang":
+                time.sleep(2)
+                code, body = 200, b""
+            else:
+                code, body = status[0], json.dumps({"data": [{"id": "qwen3-coder-30b"}]}).encode()
+            self.send_response(code)
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
+            self.wfile.write(body)
 
         def log_message(self, *args):
             pass
 
-    srv = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv, srv.server_address[1]
 
 
 def main():
     for var in ("AIDEV_TUIOS_SESSION", "AIDEV_TUIOS_RUN", "AIDEV_TUIOS_PROJECT", "AIDEV_TUIOS_BUILDER",
-                "AIDEV_SEMI_LOCAL"):
+                "AIDEV_SEMI_LOCAL", "AIDEV_SEMI_LOCAL_URL", "AIDEV_REMOTE_BUILDER_KEY_FILE"):
         os.environ.pop(var, None)
     tmp = os.path.realpath(tempfile.mkdtemp(prefix="aidev-test-home-"))
     os.environ["AIDEV_TUIOS_HOME"] = tmp
     a = load("aidev", os.path.join(ROOT, "aidev_tuios.py"))
 
-    secret = "not-a-real-key-marker"
+    secret = "test-key"
     key_file = os.path.join(tmp, "api-key")
     with open(os.open(key_file, os.O_WRONLY | os.O_CREAT, 0o600), "w") as f:
         f.write(secret)
@@ -67,29 +78,45 @@ def main():
     a.SEMI_KEY_FILE = key_file
 
     print("semi_local_available")
-    check("online: /health 200", a.semi_local_available() is True)
+    check("online: /models 200 with the alias", a.semi_local_available() is True)
     status[0] = 503
     check("503: unavailable", a.semi_local_available() is False)
     status[0] = 200
+    a.SEMI_KEY_FILE = os.path.join(tmp, "wrong-key")
+    with open(os.open(a.SEMI_KEY_FILE, os.O_WRONLY | os.O_CREAT, 0o600), "w") as f:
+        f.write("wrong")
+    check("401 (wrong key): unavailable", a.semi_local_available() is False)
+    a.SEMI_KEY_FILE = key_file
 
     real_timeout = a.SEMI_TIMEOUT_S
-    srv.shutdown()
-    srv.server_close()
+    status[0] = "hang"
     a.SEMI_TIMEOUT_S = 0.5
     t0 = time.time()
     ok = a.semi_local_available()
-    check("closed port: unavailable within 3 s", ok is False and time.time() - t0 < 3, time.time() - t0)
+    check("timeout: unavailable within 3 s", ok is False and time.time() - t0 < 3, time.time() - t0)
     a.SEMI_TIMEOUT_S = real_timeout
+    status[0] = 200
 
-    srv, port = serve(status)
-    a.SEMI_URL = f"http://127.0.0.1:{port}/v1"
-    a.SEMI_KEY_FILE = os.path.join(tmp, "no-such-key")
-    check("missing key file: unavailable", a.semi_local_available() is False)
-    a.SEMI_KEY_FILE = key_file
-    check("key file back: available", a.semi_local_available() is True)
-    os.environ["AIDEV_SEMI_LOCAL"] = "off"
-    check("AIDEV_SEMI_LOCAL=off: unavailable", a.semi_local_available() is False)
-    os.environ.pop("AIDEV_SEMI_LOCAL")
+    real_lrb, real_ai_home = a.load_remote_builder, os.environ.get("AI_HOME")
+
+    class NoKey:
+        @staticmethod
+        def read_key():
+            return None
+
+    ai_home = os.path.join(tmp, "ai-home")
+    try:
+        a.SEMI_KEY_FILE = ""
+        a.load_remote_builder = lambda: NoKey
+        os.environ["AI_HOME"] = ai_home
+        check("no key anywhere: unavailable", a.semi_local_available() is False)
+    finally:
+        a.SEMI_KEY_FILE = key_file
+        a.load_remote_builder = real_lrb
+        if real_ai_home is None:
+            os.environ.pop("AI_HOME", None)
+        else:
+            os.environ["AI_HOME"] = real_ai_home
 
     class Done:
         def __init__(self, returncode, stdout):
@@ -106,25 +133,55 @@ def main():
     real_run = a.subprocess.run
     try:
         calls = []
-        a.subprocess.run = stub(Done(0, "200"), calls)
+        a.subprocess.run = stub(Done(0, '{"data":[{"id":"qwen3-coder-30b"}]}\n200'), calls)
         check("mock curl 200: available", a.semi_local_available() is True)
         cmd, kwargs = calls[0]
-        check("probe is /usr/bin/curl ... /health, no shell",
-              isinstance(cmd, list) and cmd[0] == "/usr/bin/curl" and cmd[-1] == f"http://127.0.0.1:{port}/health"
+        check("probe is /usr/bin/curl ... /models, no shell",
+              isinstance(cmd, list) and cmd[0] == "/usr/bin/curl" and cmd[-1] == f"http://127.0.0.1:{port}/v1/models"
               and not kwargs.get("shell"), calls[0])
-        for name, result in (("curl exit 7", Done(7, "")), ("curl 503", Done(0, "503")),
+        check("curl argv holds no key", not any(secret in str(part) for part in cmd), cmd)
+        check("curl stdin holds the bearer header", "Authorization: Bearer test-key" in (kwargs.get("input") or ""),
+              kwargs.get("input"))
+        for name, result in (("curl exit 7", Done(7, "")), ("curl 503", Done(0, "\n503")),
                              ("curl timeout", a.subprocess.TimeoutExpired("curl", 1)),
                              ("curl OSError 65", OSError(65, "No route to host"))):
             a.subprocess.run = stub(result, [])
             check(name + ": unavailable", a.semi_local_available() is False)
         calls = []
-        a.subprocess.run = stub(Done(0, "200"), calls)
+        a.subprocess.run = stub(Done(0, '{"data":[{"id":"qwen3-coder-30b"}]}\n200'), calls)
         os.environ["AIDEV_SEMI_LOCAL"] = "off"
         check("kill switch: unavailable, curl not run", a.semi_local_available() is False and not calls)
         os.environ.pop("AIDEV_SEMI_LOCAL")
     finally:
         a.subprocess.run = real_run
         os.environ.pop("AIDEV_SEMI_LOCAL", None)
+
+    print("semi_key_file cache")
+    class AbcKey:
+        @staticmethod
+        def read_key():
+            return "abc"
+
+    ai_home = os.path.join(tmp, "ai-home-cache")
+    try:
+        a.SEMI_KEY_FILE = ""
+        a.load_remote_builder = lambda: AbcKey
+        os.environ["AI_HOME"] = ai_home
+        path = a.semi_key_file()
+        expect = os.path.join(ai_home, "cache", "aidev_tuios", "semi-key")
+        check("cache file path is <AI_HOME>/cache/aidev_tuios/semi-key", path == expect, path)
+        check("cache file mode is 0600", os.stat(expect).st_mode & 0o777 == 0o600)
+        with open(expect) as f:
+            check("cache file holds the key", f.read() == "abc")
+    except OSError as e:
+        check("cache file written", False, e)
+    finally:
+        a.SEMI_KEY_FILE = key_file
+        a.load_remote_builder = real_lrb
+        if real_ai_home is None:
+            os.environ.pop("AI_HOME", None)
+        else:
+            os.environ["AI_HOME"] = real_ai_home
 
     print("auto_builder")
     real = (a.semi_local_available, a.local_builder_available, a.zen_status, a.zen_usable)
@@ -173,6 +230,16 @@ def main():
     finally:
         a.write_git_guard, a.local_builder_available = real_gg, real_lba
     check("local body still uses the coder wrapper", isinstance(local_body, str) and "coder_pi" in local_body, local_body)
+
+    print("write_build_pi")
+    pi_cfg = {"pi_build": os.path.join(tmp, "pi-build-gw")}
+    a.write_build_pi(pi_cfg, "semi-local")
+    with open(os.path.join(pi_cfg["pi_build"], "models.json")) as f:
+        gw_text = f.read()
+    gw = json.loads(gw_text).get("providers", {}).get("semi", {})
+    check("models.json semi.baseUrl is SEMI_URL", gw.get("baseUrl") == a.SEMI_URL, gw)
+    check("models.json semi.apiKey is a '!cat ' command", str(gw.get("apiKey", "")).startswith("!cat "), gw)
+    check("models.json does not contain the key", secret not in gw_text)
 
     print("next_tier")
     check("semi-local then local", a.next_tier("semi-local", "available") == "local")
