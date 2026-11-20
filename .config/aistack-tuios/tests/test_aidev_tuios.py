@@ -17,6 +17,7 @@ import time
 
 os.environ["AISTACK_ZEN_KEY"] = "1"
 os.environ["AIDEV_REMOTE_BUILDER"] = "off"  # no test may reach the real default gateway
+os.environ["AIDEV_SEMI_LOCAL"] = "off"  # no test may probe the G14
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)  # .config/aistack-tuios

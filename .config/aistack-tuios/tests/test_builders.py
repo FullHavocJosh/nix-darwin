@@ -11,6 +11,7 @@ import sys
 import tempfile
 
 os.environ["AISTACK_ZEN_KEY"] = "1"  # zen_models.key_present: existing tests assume a host with a Zen API key
+os.environ["AIDEV_SEMI_LOCAL"] = "off"  # never probe the G14 over the network
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)  # .config/aistack-tuios
@@ -43,8 +44,10 @@ def main():
     check("aliases map to kinds", [a.norm_kind(k) for k in ("30b", "pickle", "claude")] == ["local", "free", "billed"])
     check("upper case and spaces are accepted", a.norm_kind(" Billed ") == "billed" and a.norm_kind("30B") == "local")
     check("an unknown word is None", a.norm_kind("x") is None)
-    check("builder pane names", a.BUILDERS == {"local": "build-local", "free": "build-free", "billed": "build-billed"},
-          a.BUILDERS)
+    check("semi-local and its alias map to semi-local", a.norm_kind("semi-local") == "semi-local"
+          and a.norm_kind("semi") == "semi-local")
+    check("builder pane names", a.BUILDERS == {"semi-local": "build-semi-local", "local": "build-local",
+                                               "free": "build-free", "billed": "build-billed"}, a.BUILDERS)
     check("reset commands cover every kind", set(a.RESET_CMD) == set(a.BUILDERS), a.RESET_CMD)
 
     print("pane grants")
@@ -482,12 +485,13 @@ def main():
     a.count_attempt(tt, "build-local")
     a.count_attempt(tt, "build-free")
     check("count_attempt per builder", tt.get("by") == {"build-local": 2, "build-free": 1}, tt)
-    check("tier_of", [a.tier_of(n) for n in ("build-local", "build-free", "build-billed", "x", None)]
-          == ["local", "free", "billed", None, None])
+    check("tier_of", [a.tier_of(n) for n in ("build-local", "build-free", "build-billed", "build-semi-local", "x", None)]
+          == ["local", "free", "billed", "semi-local", None, None])
     check("next_tier table", [a.next_tier(*c) for c in (("local", "available"), ("local", "exhausted"),
                                                        ("local", "none"), ("free", "available"),
-                                                       ("billed", "available"), ("x", "available"))]
-          == ["free", "billed", "billed", "billed", None, None])
+                                                       ("billed", "available"), ("x", "available"),
+                                                       ("semi-local", "available"))]
+          == ["free", "billed", "billed", "billed", None, None, "local"])
     erun = a.Run(p, "20260101-000002")
     ecalls, eclosed, ezen = [], [], ["available"]
     ereal = (a.zen_status, a.cmd_builder, a.tuios)
