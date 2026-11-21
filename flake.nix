@@ -52,6 +52,14 @@
           ./nix-modules/macos/llamacpp-local.nix
           ./nix-modules/macos/lumo.nix
           { local.lumo.lan = true; } # serve Lumo to every device on the network
+          ./nix-modules/macos/llama-reviewer-proxy.nix
+          # the Mini has a DHCP reservation for this address
+          {
+            local.llamaReviewerProxy = {
+              enable = true;
+              address = "192.168.144.4";
+            };
+          }
           ./nix-modules/macos/clipcascade.nix
           { local.clipcascade.enable = true; }
           nix-homebrew.darwinModules.nix-homebrew

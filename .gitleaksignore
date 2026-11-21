@@ -1,1 +1,4 @@
 ede931a41f6273fab640717733a265940b8d4be5:.config/aistack-tuios/tests/test_semi_local.py:generic-api-key:60
+# Fake keys in a test fixture removed in the next commit
+61fd9464c8e073ea57c9e43c2203bac161ffdf58:scripts/test-llama-reviewer-proxy.sh:generic-api-key:85
+61fd9464c8e073ea57c9e43c2203bac161ffdf58:scripts/test-llama-reviewer-proxy.sh:generic-api-key:134
