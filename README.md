@@ -10,7 +10,7 @@ A comprehensive, declarative development environment configuration for **macOS**
 - **Multiple Profile Support** - Personal and work configurations with profile-specific packages
 - **Complete Dev Environment** - Shell (zsh), editor (Neovim), terminal (tuios), window management, and more
 - **Security-First Approach** - Smart gitignore patterns, secrets detection, environment variable management
-- **Local LLM Integration** - llama.cpp (Qwen3.5-9B) served on 127.0.0.1 only, kept running by a launchd daemon
+- **Local LLM Integration** - llama.cpp (Qwen3.5-9B) served on 127.0.0.1 only, kept running by a launchd daemon (the Mini's copy is also reachable through an authenticated nginx proxy)
 - **CI** - GitHub Actions (`.github/workflows/validate.yml`) evaluates every darwin configuration, runs shellcheck and gitleaks
 - **MCP Server Ecosystem** - Auto-registered Claude Code MCP servers for GitHub, Terraform, AWS, Slack, and more
 
@@ -148,7 +148,34 @@ Defined in `flake.nix`:
 
 #### Shared (all macOS profiles, via `packages-tui.nix`)
 
-- **llama-server** launchd daemon: serves `qwen/qwen3.5-9b` (Qwen3.5-9B Q4_K_M GGUF, 128K context) on `127.0.0.1:8080` only; the bind address is hard-coded and `_validate_llamacpp` rejects any other `LLAMA_CPP_HOST`. Used for gpc/gpa/gpr and opencode. The GGUF is downloaded to `~/.models` (sha256-verified) on `darwin-rebuild switch`. No LM Studio, no LM Link: no device calls another device's model.
+- **llama-server** launchd daemon: serves `qwen/qwen3.5-9b` (Qwen3.5-9B Q4_K_M GGUF, 128K context) on `127.0.0.1:8080` only; the bind address is hard-coded and `_validate_llamacpp` rejects any other `LLAMA_CPP_HOST`. Used for gpc/gpa/gpr and opencode. The GGUF is downloaded to `~/.models` (sha256-verified) on `darwin-rebuild switch`. No LM Studio, no LM Link: no device calls another device's model, except that the Mini's 9B is reachable only through the authenticated reviewer proxy below.
+
+#### Reviewer proxy (MacMiniM1 only)
+
+`nix-modules/macos/llama-reviewer-proxy.nix` adds an nginx LaunchDaemon, `llama-reviewer-proxy`, that forwards `/v1/` to
+the loopback 9B. The 9B itself stays on `127.0.0.1:8080`; `llamacpp-local.nix` is unchanged.
+
+- Address: `192.168.144.4:8083` (a DHCP reservation; never `0.0.0.0`).
+- Key: `~/.config/llama-reviewer/api-key`, mode `0600`, owner `havoc`. nginx reads it at every start. It is never in the
+  store, the plist, the logs or the arguments. Keep a copy in Doppler.
+- Fails closed: with no key, an empty key or a loose file mode nothing is served. See `/tmp/llama-reviewer-proxy.error.log`.
+- The 9B has one slot, so requests queue in llama-server; `proxy_read_timeout` is 600s. Streaming is unbuffered.
+- Rotate the key: write the new key to the file with `umask 077`, run
+  `sudo launchctl kickstart -k system/org.nixos.llama-reviewer-proxy`, then update Doppler and the gateway.
+- Application firewall: at each switch the module runs `socketfilterfw --add` and `--unblockapp` for the nginx store path.
+  By hand: `sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add PATH`, then `--unblockapp PATH`. If a prompt
+  appears on the headless Mini, allow it from the GUI session.
+- Turn it off: set `local.llamaReviewerProxy.enable = false` in `flake.nix` and switch, or for now
+  `sudo launchctl bootout system/org.nixos.llama-reviewer-proxy`.
+- Smoke test after a switch, from this Mac and from another LAN host:
+
+```sh
+KEY=$(cat ~/.config/llama-reviewer/api-key)
+curl -s -o /dev/null -w '%{http_code}\n' http://192.168.144.4:8083/v1/models                                # 401
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $KEY" http://192.168.144.4:8083/v1/models  # 200
+```
+
+`scripts/test-llama-reviewer-proxy.sh` is the config test.
 
 #### Lumo (lumo-tamer, on every personal Mac)
 
