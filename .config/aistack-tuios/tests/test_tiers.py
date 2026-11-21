@@ -36,7 +36,9 @@ for w in ('', 'tier-5', 'nope', None):
 
 check("TIER_IDS", mod.TIER_IDS == ('tier-0', 'tier-1', 'tier-2', 'tier-3', 'tier-4'))
 check("defaults ctx", [mod.DEFAULTS[t]['ctx'] for t in mod.TIER_IDS] == [32768, 16384, 65536, 0, 0])
-check("tier-1 off by default", mod.DEFAULTS['tier-1']['enabled'] is False)
+check("tier-1 on by default", mod.DEFAULTS['tier-1']['enabled'] is True)
+check("tier-1 alias default", mod.DEFAULTS['tier-1']['alias'] == 'qwen2.5-coder-7b')
+check("tier-1 url default", mod.DEFAULTS['tier-1']['url'] == 'https://llm.rollet.family/t1/v1')
 
 old_env = os.environ.get('AIDEV_TIERS_FILE')
 try:
@@ -55,7 +57,7 @@ try:
         check("unknown key ignored", 'bogus' not in t['tier-1'])
         check("wrong types ignored", t['tier-2'] == mod.DEFAULTS['tier-2'])
         check("unknown tier ignored", 'tier-9' not in t)
-        check("defaults untouched", mod.DEFAULTS['tier-1']['ctx'] == 16384 and mod.DEFAULTS['tier-1']['enabled'] is False)
+        check("defaults untouched", mod.DEFAULTS['tier-1']['ctx'] == 16384 and mod.DEFAULTS['tier-1']['enabled'] is True)
         with open(p, 'w') as f:
             f.write('{not json')
         check("bad file gives defaults", mod.load_tiers() == mod.DEFAULTS)

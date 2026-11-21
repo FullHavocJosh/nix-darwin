@@ -50,14 +50,16 @@ def main():
     check("next_tier tier-0", a.next_tier("tier-0", "available") == "tier-3")
     check("next_tier tier-3", a.next_tier("tier-3", "available") == "tier-4")
 
-    check("tier1_available off by default", a.tier1_available() is False)
-    real = (a.semi_local_available, a.local_builder_available, a.tier1_available, a.zen_status, a.zen_usable)
+    real = (a.semi_local_available, a.local_builder_available, a.tier1_available, a.zen_status, a.zen_usable,
+            a.probe_gateway)
     try:
+        a.probe_gateway = lambda url, alias, key_path: False
+        check("tier1_available off by default", a.tier1_available() is False)
         a.semi_local_available, a.local_builder_available = (lambda: True), (lambda: True)
         a.tier1_available = lambda: True
         a.zen_status, a.zen_usable = (lambda run, refresh=False: "available"), (lambda s: s == "available")
         check("tier_online tier-0", a.tier_online("tier-0") is True)
-        check("tier_online tier-1 (disabled)", a.tier_online("tier-1") is False)
+        check("tier_online tier-1", a.tier_online("tier-1") is True)
         check("tier_online tier-2", a.tier_online("tier-2") is True)
         check("tier_online tier-3", a.tier_online("tier-3") is True)
         check("tier_online tier-4", a.tier_online("tier-4") is True)
@@ -69,7 +71,12 @@ def main():
         check("tier_online tier-3 none", a.tier_online("tier-3") is False)
         check("tier_online tier-4 always", a.tier_online("tier-4") is True)
     finally:
-        a.semi_local_available, a.local_builder_available, a.tier1_available, a.zen_status, a.zen_usable = real
+        (a.semi_local_available, a.local_builder_available, a.tier1_available, a.zen_status, a.zen_usable,
+         a.probe_gateway) = real
+
+    check("tier_url tier-1", a.tier_url("tier-1") == "https://llm.rollet.family/t1/v1", a.tier_url("tier-1"))
+    check("tier_alias tier-1", a.tier_alias("tier-1") == "qwen2.5-coder-7b", a.tier_alias("tier-1"))
+    check("tier_url tier-2", a.tier_url("tier-2") == "https://llm.rollet.family/v1", a.tier_url("tier-2"))
 
     cfg = {"pi_build": os.path.join(tmp, "pi-build")}
     key = os.path.join(tmp, "key")
@@ -89,6 +96,16 @@ def main():
             check(f"write_build_pi {tid} ctx", m["contextWindow"] == a.tiers()[tid]["ctx"], str(m["contextWindow"]))
     finally:
         a.semi_key_file = real_key
+    seen = []
+    real_probe, real_key = a.probe_gateway, a.semi_key_file
+    a.probe_gateway = lambda url, alias, key_path: seen.append((url, alias)) or False
+    a.semi_key_file = lambda: key
+    try:
+        a.tier1_available()
+        check("tier1 probe url", len(seen) == 1 and seen[0][0].endswith("/t1/v1"), str(seen))
+        check("tier1 probe alias", len(seen) == 1 and seen[0][1] == "qwen2.5-coder-7b", str(seen))
+    finally:
+        a.probe_gateway, a.semi_key_file = real_probe, real_key
     why = a.no_builder_why("tier-1")
     check("no_builder_why tier-1", isinstance(why, str) and bool(why))
 

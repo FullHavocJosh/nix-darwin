@@ -10,12 +10,13 @@ import os
 TIER_IDS = ('tier-0', 'tier-1', 'tier-2', 'tier-3', 'tier-4')
 
 _URL = 'https://llm.rollet.family/v1'
+_URL_T1 = 'https://llm.rollet.family/t1/v1'
 
 DEFAULTS = {
     'tier-0': {'pane': 'build-local-tier-0', 'label': 'local 30B', 'kind': 'pi', 'ctx': 32768,
                'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 32},
     'tier-1': {'pane': 'build-local-tier-1', 'label': 'G14 small ctx', 'kind': 'pi', 'ctx': 16384,
-               'alias': 'qwen3-coder-30b-t1', 'url': _URL, 'enabled': False, 'min_ram_gb': 0},
+               'alias': 'qwen2.5-coder-7b', 'url': _URL_T1, 'enabled': True, 'min_ram_gb': 0},
     'tier-2': {'pane': 'build-local-tier-2', 'label': 'G14 large ctx', 'kind': 'pi', 'ctx': 65536,
                'alias': 'qwen3-coder-30b', 'url': _URL, 'enabled': True, 'min_ram_gb': 0},
     'tier-3': {'pane': 'build-free-tier-3', 'label': 'free cloud', 'kind': 'opencode', 'ctx': 0,
