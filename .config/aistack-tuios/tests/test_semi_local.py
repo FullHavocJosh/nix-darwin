@@ -189,11 +189,11 @@ def main():
         a.zen_status = lambda run, refresh=False: {"state": "available", "model": "m", "detail": ""}
         a.zen_usable = lambda s: True
         a.semi_local_available, a.local_builder_available = (lambda: True), (lambda: True)
-        check("semi up: semi-local", a.auto_builder(None) == "semi-local")
+        check("semi up: semi-local", a.auto_builder(None) == "tier-2")
         a.semi_local_available = lambda: False
-        check("semi down, local up: local", a.auto_builder(None) == "local")
+        check("semi down, local up: local", a.auto_builder(None) == "tier-0")
         a.local_builder_available = lambda: False
-        check("both down, zen usable: free", a.auto_builder(None) == "free")
+        check("both down, zen usable: free", a.auto_builder(None) == "tier-3")
     finally:
         a.semi_local_available, a.local_builder_available, a.zen_status, a.zen_usable = real
 
@@ -206,9 +206,9 @@ def main():
     a.write_git_guard = lambda r: a.write_text(os.path.join(r.dir, "bin", "guard", "git"), "")
     try:
         status[0] = 503
-        check("semi down: build_body is None", a.build_body(run, cfg, "semi-local") is None)
+        check("semi down: build_body is None", a.build_body(run, cfg, "tier-2") is None)
         status[0] = 200
-        body = a.build_body(run, cfg, "semi-local")
+        body = a.build_body(run, cfg, "tier-2")
     finally:
         a.write_git_guard = real_gg
     check("semi up: body names the semi model", isinstance(body, str) and "semi/qwen3-coder-30b" in body, body)
@@ -226,14 +226,14 @@ def main():
     a.write_git_guard = lambda r: a.write_text(os.path.join(r.dir, "bin", "guard", "git"), "")
     a.local_builder_available = lambda: True
     try:
-        local_body = a.build_body(run, cfg, "local")
+        local_body = a.build_body(run, cfg, "tier-0")
     finally:
         a.write_git_guard, a.local_builder_available = real_gg, real_lba
     check("local body still uses the coder wrapper", isinstance(local_body, str) and "coder_pi" in local_body, local_body)
 
     print("write_build_pi")
     pi_cfg = {"pi_build": os.path.join(tmp, "pi-build-gw")}
-    a.write_build_pi(pi_cfg, "semi-local")
+    a.write_build_pi(pi_cfg, "tier-2")
     with open(os.path.join(pi_cfg["pi_build"], "models.json")) as f:
         gw_text = f.read()
     gw = json.loads(gw_text).get("providers", {}).get("semi", {})
@@ -242,8 +242,8 @@ def main():
     check("models.json does not contain the key", secret not in gw_text)
 
     print("next_tier")
-    check("semi-local then local", a.next_tier("semi-local", "available") == "local")
-    check("semi-local without local then free", a.next_tier("semi-local", "available", local_ok=False) == "free")
+    check("tier-2 then tier-3", a.next_tier("tier-2", "available") == "tier-3")
+    check("semi-local without local then free", a.next_tier("tier-2", "available", local_ok=False) == "tier-3")
 
     srv.shutdown()
     print()

@@ -65,7 +65,7 @@ def main():
         result = a.auto_builder(fake_run)
     output = stdout_capture.getvalue()
     
-    check("gateway up: semi-local picked", result == "semi-local")
+    check("gateway up: semi-local picked", result == "tier-2")
     # Restore original functions after scenario 1
     a.semi_local_available = original_semi_local_available
     
@@ -89,7 +89,7 @@ def main():
         result = a.auto_builder(fake_run)
     output = stdout_capture.getvalue()
     
-    check("gateway down, 16GB, model present, zen usable: free picked", result == "free")
+    check("gateway down, 16GB, model present, zen usable: free picked", result == "tier-3")
     check("output contains RAM info", "16 GB" in output)
     # Restore original function after scenario 2
     a.local_builder_available = original_local_builder_available
@@ -105,7 +105,7 @@ def main():
         result = a.auto_builder(fake_run)
     output = stdout_capture.getvalue()
     
-    check("gateway down, 16GB, no zen key: billed picked", result == "billed")
+    check("gateway down, 16GB, no zen key: billed picked", result == "tier-4")
     check("output contains OPENCODE_ZEN_API_KEY", "OPENCODE_ZEN_API_KEY" in output)
     
     # Test scenario 4: gateway down, AIDEV_HOST_RAM_GB=64, model file present - should pick local
@@ -122,7 +122,7 @@ def main():
         result = a.auto_builder(fake_run)
     output = stdout_capture.getvalue()
     
-    check("gateway down, 64GB, model present: local picked", result == "local")
+    check("gateway down, 64GB, model present: local picked", result == "tier-0")
     # Restore original function after scenario 4
     a.local_builder_available = original_local_builder_available
     
@@ -133,31 +133,31 @@ def main():
     a.zen_status = lambda run, refresh=False: {"state": "none", "model": None, "detail": "no key", "models": []}
     a.zen_usable = lambda s: False
     
-    fake_run = FakeRun(data={"unready": ["semi-local"]})
+    fake_run = FakeRun(data={"unready": ["tier-2"]})
     stdout_capture = io.StringIO()
     with redirect_stdout(stdout_capture):
         result = a.auto_builder(fake_run)
     output = stdout_capture.getvalue()
     
-    check("unready pane: semi-local skipped", result == "billed")
-    check("skip message shown", "skip semi-local: its pane never became ready" in output)
+    check("unready pane: semi-local skipped", result == "tier-4")
+    check("skip message shown", "skip tier-2: its pane never became ready" in output)
     
     # Test scenario 6: next_tier order - semi-local->local->free->billed with variations
     print("Scenario 6: next_tier order tests")
     # Test next_tier function - based on the notes, need to use 'available' state so free is returned
-    check("next_tier: semi-local -> local", a.next_tier("semi-local", "available") == "local")
-    check("next_tier: local -> free", a.next_tier("local", "available") == "free")
-    check("next_tier: free -> billed", a.next_tier("free", "available") == "billed")
-    check("next_tier: billed -> None", a.next_tier("billed", "available") is None)
+    check("next_tier: tier-2 -> tier-3", a.next_tier("tier-2", "available") == "tier-3")
+    check("next_tier: local -> free", a.next_tier("tier-0", "available") == "tier-3")
+    check("next_tier: free -> billed", a.next_tier("tier-3", "available") == "tier-4")
+    check("next_tier: billed -> None", a.next_tier("tier-4", "available") is None)
     
     # Test with local_ok=False should skip local
-    check("next_tier: semi-local -> free (local skipped)", a.next_tier("semi-local", "available", False) == "free")
+    check("next_tier: semi-local -> free (local skipped)", a.next_tier("tier-2", "available", False) == "tier-3")
     
     # Test with zen_state="exhausted" should skip free
-    check("next_tier: semi-local -> local (zen exhausted)", a.next_tier("semi-local", "exhausted", True) == "local")
+    check("next_tier: tier-2 -> tier-4 (zen exhausted)", a.next_tier("tier-2", "exhausted", True) == "tier-4")
     
     # Test with zen_state="none" should skip free
-    check("next_tier: local -> billed (free skipped, zen none)", a.next_tier("local", "none") == "billed")
+    check("next_tier: local -> billed (free skipped, zen none)", a.next_tier("tier-0", "none") == "tier-4")
     
     # Restore original functions
     a.semi_local_available = original_semi_local_available

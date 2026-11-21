@@ -12,3 +12,5 @@
    function and the lines to change.
 5. After every edit of the plan files run check-plan and fix every problem it prints before you send a task.
 6. Report each builder reply to the user in two lines.
+7. Run the helper's tiers subcommand first and size each task to the smallest online tier among tier-1 and
+   tier-2; a story may carry an optional "tier": 2 key to pin a big task to tier 2.
