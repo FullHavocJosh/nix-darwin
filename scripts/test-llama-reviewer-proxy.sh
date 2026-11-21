@@ -54,6 +54,11 @@ write_key() {
 	chmod "$mode" "$file"
 }
 
+# Print a random 40-char alphanumeric key (subshell and || true keep pipefail quiet on SIGPIPE)
+gen_key() {
+	(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40) || true
+}
+
 # Cases that need no nginx
 
 # 1. Exit 1: key file missing
@@ -66,7 +71,7 @@ expect_exit 1 "empty key file" \
 	run_proxy "$tmp_dir/empty-key" NGINX_BIN=/usr/bin/true
 
 # 3. Exit 1: key file mode 644
-write_key "$tmp_dir/open-key" "abcdefghijklmnopqrstuvwxyz0123456789ABCD" 644
+write_key "$tmp_dir/open-key" "$(gen_key)" 644
 expect_exit 1 "key file mode 644" \
 	run_proxy "$tmp_dir/open-key" NGINX_BIN=/usr/bin/true
 
@@ -82,7 +87,7 @@ expect_exit 1 "key with a semicolon" \
 	run_proxy "$tmp_dir/semi-key" NGINX_BIN=/usr/bin/true
 
 # 5. Exit 1: LISTEN_ADDR 0.0.0.0 with a valid key
-good_key="abcdefghijklmnopqrstuvwxyz0123456789ABCD"
+good_key="$(gen_key)"
 write_key "$tmp_dir/good-key" "$good_key"
 expect_exit 1 "LISTEN_ADDR 0.0.0.0" \
 	run_proxy "$tmp_dir/good-key" NGINX_BIN=/usr/bin/true LISTEN_ADDR=0.0.0.0
@@ -131,7 +136,7 @@ else
 		grep -qF 'listen 127.0.0.1:' "$conf"
 
 	# 11. Rotation: a new key changes the config
-	new_key="ZYXWVUTSRQPONMLKJIHGFEDCBA9876543210zyxw"
+	new_key="$(gen_key)"
 	write_key "$tmp_dir/good-key" "$new_key"
 	run_rc=0
 	run_proxy "$tmp_dir/good-key" NGINX_BIN="$nginx_bin" >"$out" 2>&1 || run_rc=$?
