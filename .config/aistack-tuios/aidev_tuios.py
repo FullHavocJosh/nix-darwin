@@ -258,7 +258,8 @@ def tier_online(tid, run=None):
             if tid == "tier-4":
                 return True
             if run is None:
-                run = types.SimpleNamespace(project=os.environ.get("AIDEV_TUIOS_PROJECT") or os.getcwd())
+                run = types.SimpleNamespace(project=os.environ.get("AIDEV_TUIOS_PROJECT") or os.getcwd(),
+                                     data={}, save=lambda: None)
             return zen_usable(zen_status(run))
         if not cfg["enabled"]:
             return False
