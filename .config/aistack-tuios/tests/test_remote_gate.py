@@ -45,14 +45,45 @@ def main():
     os.environ["AIDEV_REMOTE_BUILDER_URL"] = "http://g14:8080"
     check("no model file, only url: unavailable", not a.local_builder_available())
     os.environ["AIDEV_REMOTE_BUILDER_KEY_FILE"] = os.path.join(tmp, "key")
+    # Stub the remote builder probe for this test case
+    original_load_remote_builder = a.load_remote_builder
+    class FakeRemoteBuilder:
+        @staticmethod
+        def configured():
+            return True
+        @staticmethod
+        def probe():
+            return (True, "")
+    a.load_remote_builder = FakeRemoteBuilder
     check("no model file, both env vars: available", a.local_builder_available())
+    # Restore original
+    a.load_remote_builder = original_load_remote_builder
 
     for var in ("AIDEV_REMOTE_BUILDER_URL", "AIDEV_REMOTE_BUILDER_KEY_FILE"):
         os.environ.pop(var, None)
     with open(model, "w") as f:
         f.write("x")
     a.CODER_FILE = model
+    # Test with 64GB RAM
+    os.environ["AIDEV_HOST_RAM_GB"] = "64"
     check("model file, env unset: available", a.local_builder_available())
+
+    # Test various RAM scenarios
+    a.CODER_FILE = model
+    os.environ["AIDEV_HOST_RAM_GB"] = "16"
+    reason = a.local_skip_reason()
+    check("file present with AIDEV_HOST_RAM_GB=16 is unavailable", "host has 16 GB, needs 32 GB" in reason)
+    
+    # Test with 64GB RAM and file present
+    os.environ["AIDEV_HOST_RAM_GB"] = "64"
+    reason = a.local_skip_reason()
+    check("file present at 64 is available", reason is None)
+    
+    # Test with no file but 64GB RAM
+    a.CODER_FILE = os.path.join(tmp, "missing.gguf")
+    os.environ["AIDEV_HOST_RAM_GB"] = "64"
+    reason = a.local_skip_reason()
+    check("no file at 64 GB: reason contains the file path", "missing.gguf" in reason)
 
     print()
     print("FAILED: " + ", ".join(FAILS) if FAILS else "all passed")

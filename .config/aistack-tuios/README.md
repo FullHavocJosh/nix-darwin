@@ -223,12 +223,13 @@ endpoint. These settings override the defaults:
 
 - `AIDEV_REMOTE_BUILDER=off`: disables the defaults and uses no remote tier.
 - `AIDEV_REMOTE_BUILDER_URL`: the OpenAI base, for example `http://HOST:8082/v1`. An explicit value always wins over
-  the default URL.
+  the default URL. AIDEV_REMOTE_BUILDER_URL is an explicit opt-in for build-local only; the gateway default no longer
+  applies to local.
 - `AIDEV_REMOTE_BUILDER_KEY`: the key itself, instead of the Doppler lookup.
 - `AIDEV_REMOTE_BUILDER_KEY_FILE`: the path to a file that holds the key. Set the path, never the key itself.
 - `AIDEV_REMOTE_BUILDER_MODEL`: the model name to request (default `qwen3-coder-30b`).
 
-Before each local-builder start, aidev sends a 2 s probe, `GET /models`, to the remote. If the remote is
+Before each local-builder start, aidev sends a 4 s probe, `GET /models`, to the remote. If the remote is
 unreachable, aidev prints one stderr line and falls through to the on-device 30B, then to Zen. If it is healthy, the
 local `edit.lock` and the idle unload are skipped, because the remote does not use the local GPU. If the remote dies
 during a job, aidev kills pi, prints a partial-edit warning and exits 3 (escalate), so check the work dir before you
@@ -249,11 +250,11 @@ aidev tries it first, falls back to the on-device `build-local` when the G14 is 
 chain. Selecting `build-local` explicitly is unchanged. These settings override the defaults:
 
 - `AIDEV_SEMI_LOCAL=off`: disables the semi-local tier.
-- `AIDEV_SEMI_LOCAL_URL`: the OpenAI base (default `http://192.168.144.30:8082/v1`).
-- `AIDEV_SEMI_LOCAL_KEY_FILE`: the path to the key file (default `~/.config/llama-g14/api-key`, mode 0600). pi reads it
-  at runtime and aidev never prints it.
+- `AIDEV_SEMI_LOCAL_URL`: the OpenAI base (default `https://llm.rollet.family/v1`).
+- `AIDEV_SEMI_LOCAL_KEY_FILE`: the path to the key file (no default). pi reads it at runtime and aidev never prints it.
 - `AIDEV_SEMI_LOCAL_MODEL`: the model name to request.
-- `AIDEV_SEMI_LOCAL_TIMEOUT_S`: the availability probe timeout in seconds (default 2).
+- `AIDEV_SEMI_LOCAL_TIMEOUT_S`: the availability probe timeout in seconds (default 4).
 
-The G14 counts as available when `GET /health` returns 200. It is offline when it is off or a game runs. Then aidev
-falls back to `build-local`.
+The G14 counts as available when an authenticated GET of /models returns 200 and lists the model. It is offline when it is off or a game runs. Then aidev falls back to `build-local`.
+
+The order is semi-local, local, free, billed; local needs the model file and 32 GB RAM; free needs a Zen API key; each skipped tier prints a reason.

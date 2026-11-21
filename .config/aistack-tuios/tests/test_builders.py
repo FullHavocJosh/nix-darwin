@@ -495,7 +495,7 @@ def main():
     erun = a.Run(p, "20260101-000002")
     ecalls, eclosed, ezen = [], [], ["available"]
     ereal = (a.zen_status, a.cmd_builder, a.tuios)
-    a.zen_status = lambda r, refresh=False: {"state": ezen[0], "detail": ""}
+    a.zen_status = lambda r, refresh=False: {"state": ezen[0], "detail": "free Zen is not usable"}
     a.cmd_builder = lambda r, argv: (ecalls.append(argv), ecode[0])[1]
     a.tuios = lambda *args, **kw: (eclosed.append(args[1]) if args[0] == "close-window" else None) or (0, "", "")
     ecode = [0]
