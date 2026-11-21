@@ -38,6 +38,7 @@ def main():
     tmp = os.path.realpath(tempfile.mkdtemp(prefix="aidev-test-home-"))
     os.environ["AIDEV_TUIOS_HOME"] = tmp
     a = load("aidev", os.path.join(ROOT, "aidev_tuios.py"))
+    a.tier1_available = lambda: False  # tier-1 is on by default: keep the test off the live gateway
     
     # Set up a fake run object for testing
     class FakeRun:

@@ -44,8 +44,8 @@ def main():
     check("4000 characters pass at ctx 65536", a.size_problems(story(big), ctx=65536) == [])
     over = a.size_problems(story(big), ctx=16384)
     check("4000 characters fail at ctx 16384", len(over) == 1 and "characters" in over[0] and "16384" in over[0], over)
-    check("default ctx is tier-2 when no tier is online", a.default_target_ctx() == 65536, a.default_target_ctx())
-    check("default ctx lets 4000 characters pass", a.size_problems(story(big)) == [])
+    check("default ctx is tier-1 when no tier is online", a.default_target_ctx() == 16384, a.default_target_ctx())
+    check("default ctx fails 4000 characters", len(a.size_problems(story(big))) == 1)
     a.tier_online = lambda tid, run=None: tid == "tier-2"
     check("default ctx is the online tier", a.default_target_ctx() == 65536)
     a.tiers = lambda: {"tier-0": {"ctx": 32768, "enabled": True}, "tier-1": {"ctx": 16384, "enabled": True},
