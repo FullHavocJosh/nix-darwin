@@ -118,9 +118,9 @@ def select_tier(need, state, tiers, min_tier=0):
         return 'tier-2', f'tier-2: large task, {why}'
     if _usable('tier-2', state, tiers, min_tier) and ctx('tier-2') < need:
         return None, f"split: need {need} tokens, tier-2 ctx {ctx('tier-2')}"
-    if not any(_usable(t, state, tiers, min_tier) for t in ('tier-1', 'tier-2')):
-        if _usable('tier-0', state, tiers, min_tier) and ctx('tier-0') >= need:
-            return 'tier-0', 'tier-0: G14 tiers offline'
+    g14_up = any(_usable(t, state, tiers, min_tier) for t in ('tier-1', 'tier-2'))
+    if not g14_up and _usable('tier-0', state, tiers, min_tier) and ctx('tier-0') >= need:
+        return 'tier-0', 'tier-0: G14 tiers offline'
     if _usable('tier-3', state, tiers, min_tier):
         return 'tier-3', 'tier-3: no local tier fits'
     return 'tier-4', 'tier-4: last resort'
