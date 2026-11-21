@@ -17,7 +17,7 @@ a = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(a)
 
 FAILS = []
-BUILDER = "build-local"  # a BUILDERS value, so loop_stop finds its kind
+BUILDER = "build-local-tier-2"  # a BUILDERS value, so loop_stop finds its tier
 
 
 def check(name, cond, extra=""):
@@ -60,6 +60,7 @@ def loop_stop_case(screen, replied=False, state="idle", info=None):
 
 
 def main():
+    global BUILDER
     real = {
         name: getattr(a, name)
         for name in (
@@ -82,7 +83,7 @@ def main():
     result, calls, resets, printed, events = loop_stop_case(looped)
     check(
         "three phrases reset the pane",
-        result is True and resets == [("pane", BUILDER, a.RESET_CMD["local"])],
+        result is True and resets == [("pane", BUILDER, a.RESET_CMD["tier-2"])],
         f"{result} {resets}",
     )
     check(
@@ -91,6 +92,18 @@ def main():
     )
     check("the stop is printed", "looped on completion; reset" in printed, printed)
     check("one event is recorded", len(events) == 1, str(events))
+
+    new_builder = BUILDER
+    BUILDER = "build-semi-local"  # an old pane name kept in a run's saved state
+    try:
+        result, _calls, resets, _printed, _events = loop_stop_case(looped)
+        check(
+            "an old pane name does not raise",
+            result is True and len(resets) == 1,
+            f"{result} {resets}",
+        )
+    finally:
+        BUILDER = new_builder
 
     result, _calls, resets, _printed, _events = loop_stop_case(once)
     check(
@@ -147,14 +160,14 @@ def main():
     )
 
     a.tuios = lambda *_args, **_kw: (0, "", "")
-    a.tier_of = lambda *_args, **_kw: "local"
+    a.tier_of = lambda *_args, **_kw: "tier-2"
     a.thread_replies = lambda *_args, **_kw: []
     check(
         "wait_reply reports the loop",
         a.wait_reply("s", "me", "249", BUILDER, 5, on_poll=lambda: True)
         == ("looped", ""),
     )
-    a.thread_replies = lambda *_args, **_kw: [(1, "build-local", "done")]
+    a.thread_replies = lambda *_args, **_kw: [(1, "build-local-tier-2", "done")]
     check(
         "wait_reply prefers a real reply",
         a.wait_reply("s", "me", "249", BUILDER, 5, on_poll=lambda: True)

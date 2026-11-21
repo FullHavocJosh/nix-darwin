@@ -40,14 +40,17 @@ def main():
 
     print("builder kinds")
     check("canonical kinds map to themselves",
-          [a.norm_kind(k) for k in ("local", "free", "billed")] == ["local", "free", "billed"])
-    check("aliases map to kinds", [a.norm_kind(k) for k in ("30b", "pickle", "claude")] == ["local", "free", "billed"])
-    check("upper case and spaces are accepted", a.norm_kind(" Billed ") == "billed" and a.norm_kind("30B") == "local")
+          [a.norm_kind(k) for k in ("tier-0", "tier-1", "tier-2", "tier-3", "tier-4")]
+          == ["tier-0", "tier-1", "tier-2", "tier-3", "tier-4"])
+    check("aliases map to kinds", [a.norm_kind(k) for k in ("semi-local", "local", "free", "billed", "semi", "g14", "30b", "pickle", "claude")]
+          == ["tier-2", "tier-0", "tier-3", "tier-4", "tier-2", "tier-2", "tier-0", "tier-3", "tier-4"])
+    check("upper case and spaces are accepted", a.norm_kind(" Billed ") == "tier-4" and a.norm_kind("30B") == "tier-0")
     check("an unknown word is None", a.norm_kind("x") is None)
-    check("semi-local and its alias map to semi-local", a.norm_kind("semi-local") == "semi-local"
-          and a.norm_kind("semi") == "semi-local")
-    check("builder pane names", a.BUILDERS == {"semi-local": "build-semi-local", "local": "build-local",
-                                               "free": "build-free", "billed": "build-billed"}, a.BUILDERS)
+    check("semi-local and its alias map to tier-2", a.norm_kind("semi-local") == "tier-2"
+          and a.norm_kind("semi") == "tier-2")
+    check("builder pane names", a.BUILDERS == {"tier-0": "build-local-tier-0", "tier-1": "build-local-tier-1",
+                                               "tier-2": "build-local-tier-2", "tier-3": "build-free-tier-3",
+                                               "tier-4": "build-billed-tier-4"}, a.BUILDERS)
     check("reset commands cover every kind", set(a.RESET_CMD) == set(a.BUILDERS), a.RESET_CMD)
 
     print("pane grants")
@@ -102,15 +105,15 @@ def main():
         a.tuios_json, a.shutil.which, a.tuios = real
 
     print("workspaces")
-    names = list(a.BUILDERS.values())
+    names = list(a.BUILDERS.values()) + ["build-semi-local", "build-local", "build-free", "build-billed"]
     check("WS_OWN has the builder panes on 1", all(a.WS_OWN.get(n) == 1 for n in names), a.WS_OWN)
     check("WS_OWN has no key build", "build" not in a.WS_OWN)
     p = os.path.realpath(tempfile.mkdtemp(prefix="aidev-test-proj-"))
     run = a.Run(p, "20260101-000001")
     run.data["ws"] = {a.PLAN: 3, a.RESEARCH: 4, "build": 4}
     check("assign_workspaces accepts a saved map", a.assign_workspaces(run, "s", own=False) is None)
-    check("a saved map lacking build-local gets the research workspace",
-          all(run.data["ws"].get(n) == 4 for n in names) and a.WS["build-local"] == 4, run.data["ws"])
+    check("a saved map lacking the builder panes gets the research workspace",
+          all(run.data["ws"].get(n) == 4 for n in a.BUILDERS.values()) and a.WS["build-local-tier-0"] == 4, run.data["ws"])
 
     print("builder command")
     calls, closed, asked = [], [], []
@@ -124,33 +127,33 @@ def main():
     try:
         run.data["work_dir"] = p
         check("builder x returns 2", a.cmd_builder(run, ["x"]) == 2 and not calls)
-        check("builder 30b opens build-local", a.cmd_builder(run, ["30b"]) == 0 and calls == [("local", "build-local")],
+        check("builder 30b opens build-local-tier-0",
+              a.cmd_builder(run, ["30b"]) == 0 and calls == [("tier-0", "build-local-tier-0")],
               calls)
         del calls[:]
         check("builder CLAUDE asks the human, a no returns 1",
               a.cmd_builder(run, ["CLAUDE"]) == 1 and len(asked) == 1 and not calls, (asked, calls))
         check("no_builder_why(local) names the model file", a.CODER_FILE in a.no_builder_why("local"))
-        a.window_named = lambda s, n: {"custom_name": n} if n in ("build-local", "build") else None
+        a.window_named = lambda s, n: {"custom_name": n} if n in ("build-local-tier-0", "build") else None
         a.finish_work(run)
-        check("finish_work closes the new and the legacy pane", sorted(closed) == ["build", "build-local"], closed)
+        check("finish_work closes the new and the legacy pane", sorted(closed) == ["build", "build-local-tier-0"], closed)
     finally:
         a.tuios, a.tuios_json, a.window_named, a.agent_state, a.start_builder, a.ask_human = real
 
     print("task size")
     def story(desc):
         return {"userStories": [{"id": "T1", "title": "t", "description": desc, "acceptanceCriteria": ["ok"]}]}
-    check("500 characters naming 2 files is fine", a.size_problems(story("a.py b.md " + "x" * 480)) == [])
-    big = a.size_problems(story("x" * 3000))
+    check("500 characters naming 2 files is fine", a.size_problems(story("a.py b.md " + "x" * 480), ctx=16384) == [])
+    big = a.size_problems(story("x" * 3000), ctx=16384)
     check("3000 characters is flagged", len(big) == 1 and "characters" in big[0], big)
-    many = a.size_problems(story("edit a.py b.py c.py d.py"))
+    many = a.size_problems(story("edit a.py b.py c.py d.py"), ctx=16384)
     check("4 files is flagged", len(many) == 1 and "files" in many[0], many)
     os.environ["AIDEV_TUIOS_TASK_MAX_CHARS"] = "100"
     try:
-        small = load("aidev_small", os.path.join(ROOT, "aidev_tuios.py"))
+        check("AIDEV_TUIOS_TASK_MAX_CHARS is read per call",
+              any("characters" in x for x in a.size_problems(story("x" * 150), ctx=16384)))
     finally:
         del os.environ["AIDEV_TUIOS_TASK_MAX_CHARS"]
-    check("AIDEV_TUIOS_TASK_MAX_CHARS is read at load time",
-          small.TASK_MAX_CHARS == 100 and any("characters" in x for x in small.size_problems(story("x" * 150))))
     check("task_prompt tells the builder to read by region",
           "Never read a whole large file" in a.task_prompt({"name": "p"}, story("d")["userStories"][0], "true", []))
     check("task_prompt tells the builder to read only named files",
@@ -165,12 +168,12 @@ def main():
     root = tempfile.mkdtemp(prefix="aidev-test-read-")
     with open(os.path.join(root, "a.py"), "w") as fh:
         fh.write("x" * 50000)
-    deep = a.size_problems(story("change a.py to add a counter"), root)
+    deep = a.size_problems(story("change a.py to add a counter"), root, ctx=16384)
     check("a task naming a 50000-byte file with no region is flagged",
           len(deep) == 1 and "bytes" in deep[0] and "line region" in deep[0], deep)
-    deep = a.size_problems(story("change a.py in function foo() (line ~10)"), root)
+    deep = a.size_problems(story("change a.py in function foo() (line ~10)"), root, ctx=16384)
     check("a line region caps the file at 6000 bytes", deep == [], deep)
-    deep = a.size_problems(story("change a.py to add a counter"))
+    deep = a.size_problems(story("change a.py to add a counter"), ctx=16384)
     check("no root keeps the old behaviour", deep == [], deep)
 
     print("free builder agent")
@@ -486,12 +489,12 @@ def main():
     a.count_attempt(tt, "build-free")
     check("count_attempt per builder", tt.get("by") == {"build-local": 2, "build-free": 1}, tt)
     check("tier_of", [a.tier_of(n) for n in ("build-local", "build-free", "build-billed", "build-semi-local", "x", None)]
-          == ["local", "free", "billed", "semi-local", None, None])
-    check("next_tier table", [a.next_tier(*c) for c in (("local", "available"), ("local", "exhausted"),
-                                                       ("local", "none"), ("free", "available"),
-                                                       ("billed", "available"), ("x", "available"),
-                                                       ("semi-local", "available"))]
-          == ["free", "billed", "billed", "billed", None, None, "local"])
+          == ["tier-0", "tier-3", "tier-4", "tier-2", None, None])
+    check("next_tier table", [a.next_tier(*c) for c in (("tier-0", "available"), ("tier-0", "exhausted"),
+                                                       ("tier-0", "none"), ("tier-3", "available"),
+                                                       ("tier-4", "available"), ("x", "available"),
+                                                       ("tier-2", "available"))]
+          == ["tier-3", "tier-4", "tier-4", "tier-4", None, None, "tier-3"])
     erun = a.Run(p, "20260101-000002")
     ecalls, eclosed, ezen = [], [], ["available"]
     ereal = (a.zen_status, a.cmd_builder, a.tuios)
@@ -517,14 +520,14 @@ def main():
         check("escalate refuses after one failure", code == 1 and not ecalls, (code, out))
         code, out = esc("failed", {"build-local": 1}, compacted=True)
         check("escalate accepts a compacted failure after one attempt",
-              code == 0 and ecalls == [["free"]] and "attempts used" not in out
+              code == 0 and ecalls == [["tier-3"]] and "attempts used" not in out
               and "compacted" not in erun.data["tasks"]["T1"], (code, ecalls, out, erun.data["tasks"]["T1"]))
         code, out = esc("failed", {"build-local": 2})
-        check("escalate local to free", code == 0 and ecalls == [["free"]] and eclosed == ["build-local"]
+        check("escalate local to free", code == 0 and ecalls == [["tier-3"]] and eclosed == ["build-local"]
               and "build-local -> build-free" in out, (code, ecalls, eclosed, out))
         ezen[0] = "exhausted"
         code, out = esc("failed", {"build-local": 2})
-        check("escalate local to billed when free is exhausted", code == 0 and ecalls == [["billed"]]
+        check("escalate local to billed when free is exhausted", code == 0 and ecalls == [["tier-4"]]
               and "not usable" in out, (code, ecalls, out))
         ezen[0] = "available"
         code, out = esc("failed", {"build-billed": 2}, "build-billed")
@@ -657,11 +660,11 @@ def main():
         check("escalate says the pane could not be closed", code == 0 and "close that pane by hand" in buf.getvalue(),
               (code, buf.getvalue()))
         a.tuios = lambda *args, **kw: (0, "", "")
-        a.window_named = lambda session, name: {"name": name} if name == "build-local" else None
+        a.window_named = lambda session, name: {"name": name} if name == "build-local-tier-0" else None
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             a.cmd_finish(frun, [])
-        check("finish lists builder panes still open", "still open" in buf.getvalue() and "build-local" in buf.getvalue(),
+        check("finish lists builder panes still open", "still open" in buf.getvalue() and "build-local-tier-0" in buf.getvalue(),
               buf.getvalue())
         a.window_named = lambda session, name: None
         buf = io.StringIO()
@@ -735,7 +738,7 @@ def main():
         f.write("x\n")
     rrun = type("R", (), {})()
     rrun.session = "s"
-    rrun.data = {"panes": {"build-free": {"script": script_path}}, "zen_model": None}
+    rrun.data = {"panes": {"build-free-tier-3": {"script": script_path}}, "zen_model": None}
     rrun.save = lambda self=None: None
     calls = []
     real_tuios = a.tuios
@@ -817,7 +820,7 @@ def main():
         with contextlib.redirect_stdout(buf):
             code = a.cmd_fallback(frun, ["T2"])
         text = buf.getvalue()
-        check("fallback tried model goes to billed", code == 0 and fcb and fcb[-1] == ["billed"]
+        check("fallback tried model goes to billed", code == 0 and fcb and fcb[-1] == ["tier-4"]
               and "no free model left" in text, (code, text, fcb))
         check("fallback types /exit into free pane", any("/exit" in " ".join(c) for c in ftuios), ftuios)
     finally:

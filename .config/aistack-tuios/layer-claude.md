@@ -93,6 +93,8 @@ you may also comment, transition, edit, create and link issues and log work. A h
      reading and editing. check-plan also refuses a task whose named files add up to over 36 KB unless it names a line
      region. For a file over 20 KB name the function and its line region; name a test file only when the task changes
      it; split when in doubt. Many small tasks beat few big ones.
+   - Run the helper's `tiers` subcommand first and size each task to the smallest online tier among tier-1 and
+     tier-2; the limits are in its output. A story may carry an optional `"tier": 2` key to pin a big task to tier 2.
    - Every task has at least one verify command that exits 0 only when the task is done. Commands run without a
      shell: no `; & | < >`, backticks or `$()`.
    - Run `check-plan`, fix what it reports, show the user the tasks and verify commands. Build only when the user
