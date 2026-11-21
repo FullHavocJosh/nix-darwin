@@ -382,12 +382,7 @@ The panes talk by tuios mail (session commands: [Terminal: tuios](#terminal-tuio
 Plan, tasks, check output and events are files under `~/.ai/aidev_tuios/<project>-<hash>/` (`plan/`, `runs/<id>/`).
 The changes stay uncommitted in the work dir; you commit with `gpa`. Details:
 [.config/aistack-tuios/README.md](.config/aistack-tuios/README.md).
-`build-local` uses a remote llama-server by default: the G14 behind the llm-gateway at `https://llm.rollet.family/v1`.
-The key is fetched at runtime from Doppler (`LLM_PUBLIC_API_KEY` in `FullHavocJosh/root_hetzner-cluster`), or comes
-from `AIDEV_REMOTE_BUILDER_KEY` or `AIDEV_REMOTE_BUILDER_KEY_FILE`. `AIDEV_REMOTE_BUILDER=off` disables the defaults,
-and an explicit `AIDEV_REMOTE_BUILDER_URL` always wins. A 2 s probe and a 5 s mid-job monitor decide online or
-offline; offline falls back to the on-device 30B, then Zen. The gateway returns 503 when the G14 is off. The endpoint
-is deliberately not monitored or alerted on. See "Remote builder" in that README.
+`build-local` runs the on-device 30B and needs the model file and 32 GB of RAM. The G14 behind the llm-gateway at `https://llm.rollet.family/v1` is the separate `build-semi-local` builder, tried first. `AIDEV_REMOTE_BUILDER_URL` is an explicit opt-in that sends `build-local` to a remote server too. The order is semi-local, local, free, billed; each tier is used only when this device can run it, and `builder` prints `skip <tier>: <reason>` for each tier it skips. The key comes from `AIDEV_SEMI_LOCAL_KEY_FILE`, `AIDEV_REMOTE_BUILDER_KEY_FILE` or Doppler (`LLM_PUBLIC_API_KEY` in `FullHavocJosh/root_hetzner-cluster`). The gateway returns 503 when the G14 is off. See "Remote builder" in that README.
 Tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_aidev_tuios.py` (tests dir
 `.config/aistack-tuios/tests`).
 Remote builder tests: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack/tests/test_remote_builder.py`.

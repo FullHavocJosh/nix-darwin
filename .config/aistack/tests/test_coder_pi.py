@@ -422,5 +422,28 @@ check(
     r.stderr,
 )
 
+# Test that without AIDEV_REMOTE_BUILDER_URL, no network probe occurs
+# and the local path runs with exit code 3 and appropriate stderr
+print("testing explicit opt-in for remote path")
+# Clear AIDEV_REMOTE_* vars
+for k in (
+    "AIDEV_REMOTE_BUILDER_URL",
+    "AIDEV_REMOTE_BUILDER_KEY_FILE",
+    "AIDEV_REMOTE_BUILDER_MODEL",
+    "AIDEV_REMOTE_BUILDER_KEY",
+):
+    os.environ.pop(k, None)
+# Explicitly unset AIDEV_REMOTE_BUILDER_URL
+os.environ["AIDEV_REMOTE_BUILDER"] = "off"
+# Make sure the model file doesn't exist to trigger the local path
+r = run(["--print"], env={"LOCAL_EDIT_MODEL_FILE": T + "/missing.gguf"})
+check(
+    "without AIDEV_REMOTE_BUILDER_URL set, no network probe occurs and local path runs with exit code 3",
+    r.returncode == 3
+    and "32 GB" in r.stderr
+    and "remote builder unavailable" not in r.stderr,
+    (r.returncode, r.stderr),
+)
+
 print("\nFAILED: %s" % FAILS if FAILS else "\nALL PASSED")
 sys.exit(1 if FAILS else 0)

@@ -20,7 +20,7 @@ Helpers the Claude pane runs from its own pane (so with its grants; AIDEV_TUIOS_
     ask-lumo <question...>        type the question to the Lumo pane (tuios ask-agent) and print its whole reply
     check-plan                    check plan/prd.json and plan/verify.json with aistack's rules
     worktree                      create the gpr worktree and draft PR for the plan (main checkout only)
-    builder [local|free|billed] [--approved]
+    builder [semi-local|local|free|billed] [--approved]
                                   open a builder pane in the work dir; billed costs money: the plan pane asks the
                                   user in its chat and passes --approved; without it a capped Inbox ask is the fallback
     send-task <id> [note...]      reset the builder's context (AIDEV_NO_RESET=1 skips), write the task file,
@@ -28,7 +28,8 @@ Helpers the Claude pane runs from its own pane (so with its grants; AIDEV_TUIOS_
     wait-task <id> [seconds]      wait for the builder's reply, then run the task's verify commands
     verify <id>                   run the task's verify commands again
     watch [seconds]               block until new mail or a new Lumo exchange arrives, print it (run in background)
-    escalate <id>                 after repeated failures at a builder, open the next tier (semi-local, local, free, billed)
+    escalate <id>                 after repeated failures at a builder, open the next tier (semi-local, local, free, billed);
+                                  each tier only when this device can run it
     fallback <id>                 when the free builder hits its usage limit, try the next free model, else the billed builder
     approvals [approve|deny]      show the prompt the builder waits on, or answer it (needs the respond grant)
     zen-check [--refresh]         show each free Zen model's state; exit 0 available, 3 unknown, 1 none usable
@@ -41,7 +42,8 @@ Panes, all on one workspace (nvim's, else the lowest free one), each named after
     plan     Claude Code: talks with you, reads the code, plans, sends tasks, verifies, reviews   read,write,fan,files
     research pi on Lumo through lumo-tamer, no tools: web lookups on what Claude sends it        read
     build-semi-local / build-local / build-free / build-billed   builders, in this order: pi on the Qwen3-Coder-30B on
-             the G14, pi on the on-device 30B, OpenCode on a free Zen model, Claude on a billed model;
+             the G14, pi on the on-device 30B (needs the model file and 32 GB RAM), OpenCode on a free Zen model
+             (needs a Zen API key), Claude on a billed model (after the user says yes);
              Claude opens them                                                             read,write
     nvim     nvim, only in a session of its own (in your session you have yours)                default
 
@@ -92,6 +94,7 @@ CLAUDE_MODEL = os.environ.get("AIDEV_TUIOS_CLAUDE_MODEL") or os.environ.get("AIS
 CLAUDE_EFFORT = os.environ.get("AIDEV_TUIOS_CLAUDE_EFFORT") or os.environ.get("AISTACK_CLAUDE_EFFORT") or "medium"
 CODER_FILE = os.path.expanduser(os.environ.get("LOCAL_EDIT_MODEL_FILE")
                                 or "~/.models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf")
+LOCAL_MIN_RAM_GB = 32
 
 
 def load_remote_builder():
@@ -102,12 +105,41 @@ def load_remote_builder():
     return rb
 
 
+def host_ram_gb():
+    """The host's RAM in GB, from AIDEV_HOST_RAM_GB when set (tests), else sysctl -n hw.memsize divided by 1073741824 (1024^3), 0 on any error."""
+    if "AIDEV_HOST_RAM_GB" in os.environ:
+        try:
+            return int(os.environ["AIDEV_HOST_RAM_GB"])
+        except ValueError:
+            return 0
+    try:
+        r = subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, check=False)
+        if r.returncode == 0:
+            return int(r.stdout.strip()) // 1073741824
+    except (OSError, ValueError):
+        pass
+    return 0
+
+
+def local_skip_reason():
+    """None when the model file exists and host has enough RAM, else a string with the reason."""
+    if not os.path.isfile(CODER_FILE):
+        if host_ram_gb() >= LOCAL_MIN_RAM_GB:
+            return f"no on-device 30B: model file {CODER_FILE} is missing"
+        else:
+            return f"no on-device 30B: host has {host_ram_gb()} GB, needs 32 GB; model file {CODER_FILE} is missing"
+    elif host_ram_gb() < LOCAL_MIN_RAM_GB:
+        return f"no on-device 30B: host has {host_ram_gb()} GB, needs 32 GB"
+    return None
+
+
 def local_builder_available():
-    """The local builder can run: the model file exists, or the remote builder answers its 2 s probe."""
-    if os.path.isfile(CODER_FILE):
+    """The local builder can run: the model file exists and host has 32 GB RAM, or the remote builder answers its 2 s probe."""
+    if local_skip_reason() is None:
         return True
+    # Only allow remote builder when explicitly opted in
     rb = load_remote_builder()
-    return rb.configured() and rb.probe()[0]
+    return bool(os.environ.get("AIDEV_REMOTE_BUILDER_URL") and rb.configured() and rb.probe()[0])
 
 
 SEMI_URL = os.environ.get("AIDEV_SEMI_LOCAL_URL") or load_remote_builder().DEFAULT_URL
@@ -903,7 +935,7 @@ def repo_private(project):
     return os.environ.get("AIDEV_TUIOS_REPO_PRIVATE") or private  # tests: a scratch repo has no GitHub remote
 
 
-NO_ZEN_KEY = "no OpenCode Zen API key on this host: OpenCode builders are off"
+NO_ZEN_KEY = "no OpenCode Zen API key (OPENCODE_ZEN_API_KEY) on this host: OpenCode builders are off"
 
 
 def zen_key_present():
@@ -1212,8 +1244,11 @@ def builder_cost_label(model):
 
 def no_builder_why(kind):
     if kind == "semi-local":
-        return "the G14 llama server is offline or its key file is missing"
+        return "the gateway is unreachable, the key is missing or the model alias is not served"
     if kind == "local":
+        reason = local_skip_reason()
+        if reason:
+            return reason
         return f"no model file {CODER_FILE}"
     if not zen_key_present():
         return NO_ZEN_KEY
@@ -1691,18 +1726,26 @@ def cmd_worktree(run, _argv):
 
 
 def auto_builder(run):
-    """The builder to open when none is named: semi-local when the G14 server is up, else local when the 30B file
-    exists, else free when a free Zen model is usable, else billed (cmd_builder then tells the plan pane to ask the
-    user in its chat and pass --approved)."""
-    if semi_local_available():
-        return "semi-local"
-    if local_builder_available():
-        return "local"
-    zs = zen_status(run)
-    if zen_usable(zs):
-        return "free"
-    print(f"no semi-local, no local 30B and free Zen is not usable ({zs['detail']}): only the billed builder is left")
-    return "billed"
+    """The builder to open when none is named: the order is fixed: semi-local when the G14 server is up, else local
+    when the 30B file exists, else free when a free Zen model is usable, else billed (cmd_builder then tells the plan
+    pane to ask the user in its chat and pass --approved)."""
+    unready = (run.data.get('unready') or []) if run is not None else []
+    for kind in ('semi-local', 'local', 'free'):
+        if kind in unready:
+            why = 'its pane never became ready'
+        elif kind == 'semi-local':
+            why = None if semi_local_available() else no_builder_why(kind)
+        elif kind == 'local':
+            why = None if local_builder_available() else (local_skip_reason() or no_builder_why(kind))
+        else:
+            zs = zen_status(run)
+            why = None if zen_usable(zs) else zs['detail']
+        if why is None:
+            print(f'builder: {kind}')
+            return kind
+        print(f'skip {kind}: {why}')
+    print('builder: billed (needs your approval)')
+    return 'billed'
 
 
 def cmd_builder(run, argv):
@@ -1740,11 +1783,16 @@ def cmd_builder(run, argv):
         print(f"free Zen is not usable: {s['detail']}. Ask the user in this chat, then run `builder billed --approved`.")
         return 1
     ok, msg = start_builder(run, kind, name, WS[name], wd)
-    if ok or name in run.data["panes"]:
-        run.data["builder"] = name
-        run.save()
     print(msg)
-    return 0 if ok else 1
+    if ok:
+        run.data['builder'] = name
+        run.save()
+        return 0
+    tuios('close-window', name, '-s', run.session)
+    run.data.setdefault('unready', []).append(kind)
+    run.save()
+    print(f'not ready: {kind} is not chosen; run builder again for the next tier')
+    return 1
 
 
 def set_script_model(path, model):
@@ -1861,8 +1909,8 @@ def cmd_escalate(run, argv):
     if t.get("status") != "failed" or (n < ESCALATE_AFTER and not t.get("compacted")):
         print(f"{tid}: {n} of {ESCALATE_AFTER} attempts used at {builder}; send-task again with a note")
         return 1
-    zen = zen_status(run)["state"] if kind in ("semi-local", "local") else "available"
-    nxt = next_tier(kind, zen, local_ok=local_builder_available() if kind == "semi-local" else True)
+    zs = zen_status(run) if kind in ('semi-local', 'local') else {'state': 'available', 'detail': ''}
+    nxt = next_tier(kind, zs['state'], local_ok=local_builder_available())
     if nxt is None:
         print("no higher builder: ask the user")
         return 2
@@ -1875,7 +1923,8 @@ def cmd_escalate(run, argv):
         if code != 0:
             print(f"could not close {builder} (the plan pane lacks the admin grant): close that pane by hand")
     t.pop("compacted", None)
-    reason = "free Zen is not usable, skipping it" if kind in ("semi-local", "local") and nxt == "billed" else ""
+    order = list(BUILDERS)
+    reason = '; '.join(f"skipped {k}: {(local_skip_reason() or no_builder_why('local')) if k == 'local' else zs['detail']}" for k in order[order.index(kind) + 1:order.index(nxt)])
     run.event("escalate", task=tid, frm=builder, to=BUILDERS[nxt], why=reason)
     print(f"escalated {builder} -> {BUILDERS[nxt]}" + (f" ({reason})" if reason else ""))
     print(f"Next: {HELPER} send-task {tid} '<note>'")

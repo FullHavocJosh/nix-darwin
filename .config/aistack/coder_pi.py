@@ -22,6 +22,10 @@ it stops the command and the wrapper exits 3 with a partial-edit warning (once: 
 
 Exit codes: pi's (or the command's) own, or 3 when the 30B is not available (not downloaded on hosts below 32 GB,
 or it failed to load); the driver then moves on to the next agent (Big Pickle, then Claude). Stdlib only.
+
+The remote path runs only when AIDEV_REMOTE_BUILDER_URL is set explicitly (opt-in), the semi-local tier is
+the default route to the G14. When the remote URL is not set explicitly, the local path runs with no network
+probe.
 """
 
 import fcntl
@@ -189,7 +193,9 @@ def main(argv):
     if hold and not cmd:
         print("usage: coder_pi.py --hold -- <command...>", file=sys.stderr)
         return 2
-    if rb.configured():
+    # The remote path is only used when AIDEV_REMOTE_BUILDER_URL is explicitly set
+    remote_url = os.environ.get('AIDEV_REMOTE_BUILDER_URL', '').strip()
+    if remote_url:
         ok, why = rb.probe()
         if ok:
             # the remote machine owns its model: no local lock, no idle unload, no local server
