@@ -215,20 +215,44 @@ def probe_gateway(url, alias, key_path):
             key = fh.read().strip()
     except OSError:
         return False
-    try:
-        r = subprocess.run(["/usr/bin/curl", "-s", "-m", str(SEMI_TIMEOUT_S), "-K", "-", "-w", "\n%{http_code}",
-                            url.rstrip("/") + "/models"], input=f'header = "Authorization: Bearer {key}"\n',
-                           capture_output=True, text=True, timeout=SEMI_TIMEOUT_S + 1)
-    except (OSError, subprocess.SubprocessError):
-        return False
-    body, _, status = r.stdout.rpartition("\n")
-    if r.returncode == 0 and status.strip() == "401" and key_path == semi_key_cache():
+    
+    # Retry at most once on 502, 503, 504, curl failure, or exception
+    for attempt in range(2):
         try:
-            os.unlink(key_path)
-        except OSError:
-            pass
-        return False
-    return r.returncode == 0 and status.strip() == "200" and alias in body
+            r = subprocess.run(["/usr/bin/curl", "-s", "-m", str(SEMI_TIMEOUT_S), "-K", "-", "-w", "\n%{http_code}",
+                                url.rstrip("/") + "/models"], input=f'header = "Authorization: Bearer {key}"\n',
+                               capture_output=True, text=True, timeout=SEMI_TIMEOUT_S + 1)
+        except (OSError, subprocess.SubprocessError):
+            if attempt == 0:  # First attempt failed, retry after 1s
+                time.sleep(1.0)
+                continue
+            else:  # Second attempt also failed
+                return False
+
+        body, _, status = r.stdout.rpartition("\n")
+
+        # If returncode is 0 and status is 200 with the alias, it's a success
+        if r.returncode == 0 and status.strip() == "200" and alias in body:
+            return True
+
+        # If it's a 401, drop the cache file and return False immediately (no retry)
+        if r.returncode == 0 and status.strip() == "401" and key_path == semi_key_cache():
+            try:
+                os.unlink(key_path)
+            except OSError:
+                pass
+            return False
+
+        # If it's a 502, 503, or 504, or non-zero return code, retry after 1s (but only on first attempt)
+        if (attempt == 0 and 
+            (r.returncode != 0 or status.strip() in ("502", "503", "504"))):
+            time.sleep(1.0)
+            continue
+
+        # If we get here, it's a final failure that doesn't warrant a retry
+        break
+
+    return False
 
 
 def semi_local_available():
