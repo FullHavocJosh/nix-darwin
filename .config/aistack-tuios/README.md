@@ -81,7 +81,7 @@ the tuios MCP only.
 | 1         | `nvim`                | your editor, with a bare `zsh` window next to it                   | default                          |
 | 1         | `research`            | pi on Lumo through lumo-tamer, no tools: web lookups               | read                             |
 | 1         | `build-local-tier-2`  | pi on the Qwen3-Coder-30B on the G14, large ctx                    | read, write                      |
-| 1         | `build-local-tier-1`  | pi on the Qwen3-Coder-30B on the G14, small ctx (off by default)   | read, write                      |
+| 1         | `build-local-tier-1`  | pi on the Qwen3.5-9B on the G14 (Cait), 65536 ctx                  | read, write                      |
 | 1         | `build-local-tier-0`  | pi on the on-device 30B; Claude opens it when the plan is approved | read, write                      |
 | 1         | `build-free-tier-3`   | escalation: pi on a free Zen model                                 | read, write                      |
 | 1         | `build-billed-tier-4` | escalation: Claude Code (billed, asks you first)                   | read, write                      |
@@ -248,13 +248,13 @@ stays the normal result and verify still runs. Set `AIDEV_TUIOS_LOOP_STOP=off` t
 
 aidev has five builder tiers, from a registry in `aidev_tiers.py`:
 
-| Id     | Pane                  | Host                | Ctx (tokens)  | Endpoint                                       |
-| ------ | --------------------- | ------------------- | ------------- | ---------------------------------------------- |
-| tier-0 | `build-local-tier-0`  | on-device 30B       | 32768         | none (local model file)                        |
-| tier-1 | `build-local-tier-1`  | G14, small ctx      | 16384         | `https://llm.rollet.family/v1`, off by default |
-| tier-2 | `build-local-tier-2`  | G14, large ctx      | 65536         | `https://llm.rollet.family/v1`                 |
-| tier-3 | `build-free-tier-3`   | free Zen model      | model-defined | Zen                                            |
-| tier-4 | `build-billed-tier-4` | Claude Code, billed | model-defined | Anthropic                                      |
+| Id     | Pane                  | Host                | Ctx (tokens)  | Endpoint                          |
+| ------ | --------------------- | ------------------- | ------------- | --------------------------------- |
+| tier-0 | `build-local-tier-0`  | on-device 30B       | 32768         | none (local model file)           |
+| tier-1 | `build-local-tier-1`  | G14 9B (Cait)       | 65536         | `https://llm.rollet.family/t1/v1` |
+| tier-2 | `build-local-tier-2`  | G14, large ctx      | 65536         | `https://llm.rollet.family/v1`    |
+| tier-3 | `build-free-tier-3`   | free Zen model      | model-defined | Zen                               |
+| tier-4 | `build-billed-tier-4` | Claude Code, billed | model-defined | Anthropic                         |
 
 Task size limits scale with the target tier's context window. The tiers config file is `~/.config/aidev/tiers`
 followed by the extension `.json`, or the path in `AIDEV_TIERS_FILE`. It overrides keys per tier: `ctx`, `enabled`,
@@ -263,6 +263,8 @@ followed by the extension `.json`, or the path in `AIDEV_TIERS_FILE`. It overrid
 Selection: aidev routes a task to tier-1 or tier-2 by size and availability (a small task goes to tier-1 when it is
 enabled and online, otherwise tier-2). Tier-0 is used only when both G14 tiers are offline. After that comes tier-3,
 then tier-4. If a task fits no tier-2 ctx while tier-2 is online, aidev reports that the task must be split.
+
+Tier-1 is the Qwen3.5-9B: it scored 4 of 9 coding cases in the bench, so it suits small, well-specified tasks.
 
 Old names stay as aliases: semi-local is tier-2, local is tier-0, free is tier-3 and billed is tier-4 (the old
 `build-semi-local`, `build-local`, `build-free` and `build-billed` pane names map the same way).

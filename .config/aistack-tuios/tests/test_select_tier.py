@@ -41,7 +41,7 @@ SMALL, LARGE = 12000, 20000
 check("estimate_tokens", mod.estimate_tokens(3500, 4000) == 14000, str(mod.estimate_tokens(3500, 4000)))
 check("estimate_tokens int", isinstance(mod.estimate_tokens(10, 10), int))
 
-T = tiers()
+T = tiers(tier_1={"ctx": 16384})
 sel = mod.select_tier
 r = sel(SMALL, st(t1='idle', t2='idle'), T)
 check("small, both idle -> tier-1", r[0] == 'tier-1' and r[1], str(r))
