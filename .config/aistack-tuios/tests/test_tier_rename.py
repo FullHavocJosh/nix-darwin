@@ -75,7 +75,7 @@ def main():
          a.probe_gateway) = real
 
     check("tier_url tier-1", a.tier_url("tier-1") == "https://llm.rollet.family/t1/v1", a.tier_url("tier-1"))
-    check("tier_alias tier-1", a.tier_alias("tier-1") == "qwen2.5-coder-7b", a.tier_alias("tier-1"))
+    check("tier_alias tier-1", a.tier_alias("tier-1") == "qwen3.5-9b", a.tier_alias("tier-1"))
     check("tier_url tier-2", a.tier_url("tier-2") == "https://llm.rollet.family/v1", a.tier_url("tier-2"))
 
     cfg = {"pi_build": os.path.join(tmp, "pi-build")}
@@ -103,9 +103,40 @@ def main():
     try:
         a.tier1_available()
         check("tier1 probe url", len(seen) == 1 and seen[0][0].endswith("/t1/v1"), str(seen))
-        check("tier1 probe alias", len(seen) == 1 and seen[0][1] == "qwen2.5-coder-7b", str(seen))
+        check("tier1 probe alias", len(seen) == 1 and seen[0][1] == "qwen3.5-9b", str(seen))
     finally:
         a.probe_gateway, a.semi_key_file = real_probe, real_key
+
+    # Add a more thorough probe test with subprocess stubbing
+    try:
+        os.environ.pop("AIDEV_TIER1", None)
+        # Restore the real probe_gateway, set semi_key_file to return the key path, and stub subprocess.run
+        a.probe_gateway = real_probe
+        a.semi_key_file = lambda: key
+        
+        # Stub subprocess.run to return a successful response for qwen3.5-9b
+        class Done:
+            def __init__(self, returncode, stdout):
+                self.returncode = returncode
+                self.stdout = stdout
+        
+        original_run = a.subprocess.run
+        a.subprocess.run = lambda *args, **kwargs: Done(0, '{"data":[{"id":"qwen3.5-9b"}]}\n200')
+        
+        # Check that tier1_available returns True when qwen3.5-9b is found
+        check("tier1_available with qwen3.5-9b", a.tier1_available() is True)
+        
+        # Stub subprocess.run to return a response for a different model
+        a.subprocess.run = lambda *args, **kwargs: Done(0, '{"data":[{"id":"qwen2.5-coder-7b"}]}\n200')
+        
+        # Check that tier1_available returns False when qwen2.5-coder-7b is found (not the expected alias)
+        check("tier1_available with qwen2.5-coder-7b", a.tier1_available() is False)
+        
+    finally:
+        # Restore the original subprocess.run, probe_gateway, and semi_key_file
+        a.subprocess.run = original_run
+        a.probe_gateway = real_probe
+        a.semi_key_file = real_key
     why = a.no_builder_why("tier-1")
     check("no_builder_why tier-1", isinstance(why, str) and bool(why))
 

@@ -39,6 +39,8 @@ def story(desc, **extra):
 
 def main():
     a = load("aidev", os.path.join(ROOT, "aidev_tuios.py"))
+    a.tiers = lambda: {"tier-0": {"ctx": 32768, "enabled": True}, "tier-1": {"ctx": 16384, "enabled": True},
+                       "tier-2": {"ctx": 65536, "enabled": True}}
     a.tier_online = lambda tid, run=None: False
     big = "x" * 4000
     check("4000 characters pass at ctx 65536", a.size_problems(story(big), ctx=65536) == [])
@@ -48,8 +50,6 @@ def main():
     check("default ctx fails 4000 characters", len(a.size_problems(story(big))) == 1)
     a.tier_online = lambda tid, run=None: tid == "tier-2"
     check("default ctx is the online tier", a.default_target_ctx() == 65536)
-    a.tiers = lambda: {"tier-0": {"ctx": 32768, "enabled": True}, "tier-1": {"ctx": 16384, "enabled": True},
-                       "tier-2": {"ctx": 65536, "enabled": True}}
     check("default ctx is the smallest online ctx", a.default_target_ctx() == 65536)
     a.tier_online = lambda tid, run=None: False
     check("default ctx is the smallest enabled ctx when none is online", a.default_target_ctx() == 16384)

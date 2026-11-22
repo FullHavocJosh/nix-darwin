@@ -1267,7 +1267,7 @@ def build_body(run, cfg, kind, name=None):
         sid = pane.setdefault("session_id", str(uuid.uuid4()))
         argv = ["pi", "--model", model, "--name", f"aidev {name}", "--no-skills", "--session-id", sid]
         pane["builder"] = ("Qwen3-Coder-30B on Josh G14 (free)" if kind == "tier-2"
-                           else "Qwen3-Coder-30B on Cait G14 (free)")
+                           else "Qwen3.5-9B on Cait G14 (free)")
         return (pane_path + f"cd {shlex.quote(wd)}\nexport AIDEV_TUIOS_BUILDER=1\n"
                 f"export PI_CODING_AGENT_DIR={shlex.quote(cfg['pi_build'])}\n" + with_system_prompt(argv, sysp))
     if not zen_key_present():
