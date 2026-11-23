@@ -9,7 +9,7 @@ import os
 
 TIER_IDS = ('tier-0', 'tier-1', 'tier-2', 'tier-3', 'tier-4')
 
-# MAX_OUTPUT_TOKENS: tier-0 runs at about 13 tok/s; the G14 30B runs at about 35 tok/s so 8192 tokens
+# MAX_OUTPUT_TOKENS: tier-0 runs at about 37 tok/s; the G14 30B runs at about 35 tok/s so 8192 tokens
 # is about 235 s and a 400 line file write is about 5000 tokens; do not set lower.
 MAX_OUTPUT_TOKENS = {'tier-0': 4096, 'tier-1': 8192, 'tier-2': 8192}
 
@@ -17,8 +17,8 @@ _URL = 'https://llm.rollet.family/v1'
 _URL_T1 = 'https://llm.rollet.family/t1/v1'
 
 DEFAULTS = {
-    'tier-0': {'pane': 'build-local-tier-0', 'label': 'local 30B', 'kind': 'pi', 'ctx': 32768,
-               'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 32, 'max_tokens': 4096},
+    'tier-0': {'pane': 'build-local-tier-0', 'label': 'local gpt-oss-20b', 'kind': 'pi', 'ctx': 32768,
+               'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 24, 'max_tokens': 4096},
     'tier-1': {'pane': 'build-local-tier-1', 'label': 'G14 9B', 'kind': 'pi', 'ctx': 65536,
                'alias': 'qwen3.5-9b', 'url': _URL_T1, 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 8192},
     'tier-2': {'pane': 'build-local-tier-2', 'label': 'G14 large ctx', 'kind': 'pi', 'ctx': 65536,

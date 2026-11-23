@@ -30,16 +30,17 @@ let
   # one slot (--parallel 1) gets the whole window. Same file the shell helpers source.
   profileFile = pkgs.writeText "llama-profile.sh" (builtins.readFile ../../.config/llama/profile.sh);
 
-  # The on-demand coder model for local edits (.config/aistack/local_edit_mcp.py, the local-edit MCP server). The daemon
-  # below does not serve it: the MCP server loads it for an edit and unloads it after 2 idle minutes, because at
-  # ~19 GB it cannot stay loaded next to the 9B. Measured 2026-10-15 on the M2 Pro: 267 tok/s prefill and 24.8 tok/s
-  # generation (the 9B: 146 / 10.6), a 10-line edit in 84 s. Downloaded only on hosts with 32 GB or more.
-  coderModel = {
-    hfRepo = "lmstudio-community/Qwen3-Coder-30B-A3B-Instruct-GGUF";
-    file = "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf";
-    sizeBytes = 18632186176;
-    sha256 = "79ad15a5ee3caddc3f4ff0db33a14454a5a3eb503d7fa1c1e35feafc579de486";
-    minRamGb = 32;
+  # The on-demand tier-0 builder and local_edit model (.config/aistack/local_edit_mcp.py loads it on port 8082 with
+  # -ngl 99 -c 32768 -np 1 -fa on --jinja, f16 KV, and unloads it after 2 idle minutes; it peaks near 6.7 GB RSS next
+  # to the always-on 9B; measured 37.6 tok/s generation on the M2 Pro with reasoning effort low); downloaded only on
+  # hosts with 24 GB or more; the Qwen3-Coder-30B is no longer downloaded by this module (gpt-oss replaces it in tier-0;
+  # a copy already in ~/.models stays until the user deletes it).
+  gptOssModel = {
+    hfRepo = "ggml-org/gpt-oss-20b-GGUF";
+    file = "gpt-oss-20b-MXFP4.gguf";
+    sizeBytes = 12109566624;
+    sha256 = "27cd6c432c7672cb812a92f611cf3ba7bbc35928262bb1e1253ff4ee6ae35901";
+    minRamGb = 24;
   };
 
   mkDownloader =
@@ -93,7 +94,7 @@ let
       fi
     '';
   modelDownloader = mkDownloader "local" model;
-  coderDownloader = mkDownloader "coder" coderModel;
+  gptOssDownloader = mkDownloader "gptOss" gptOssModel;
 
   serverLauncher = pkgs.writeShellScript "llama-server-local-launcher" ''
     #!/usr/bin/env bash
@@ -150,8 +151,8 @@ in
   environment.variables = {
     LLAMA_CPP_HOST = lib.mkForce "http://${bindHost}:${toString port}";
     LOCAL_LLM_MODEL = modelAlias;
-    # local_edit_mcp.py's coder model (absent on hosts below 32 GB, where the tool reports it is unavailable)
-    LOCAL_EDIT_MODEL_FILE = "/Users/${username}/.models/${coderModel.file}";
+    # gpt-oss local_edit model (absent on hosts below 24 GB; the tool reports it is unavailable)
+    LOCAL_EDIT_MODEL_FILE = "/Users/${username}/.models/${gptOssModel.file}";
   };
 
   # Must be `postActivation` (via lib.mkAfter, which merges with the other
@@ -162,7 +163,7 @@ in
   system.activationScripts.postActivation.text = lib.mkAfter ''
     sudo --set-home -u ${username} bash <<'USERSCRIPT'
     mkdir -p "$HOME/.models"
-    nohup bash -c '${modelDownloader}; ${coderDownloader}' </dev/null >>"$HOME/.models/download.log" 2>&1 &
+    nohup bash -c '${modelDownloader}; ${gptOssDownloader}' </dev/null >>"$HOME/.models/download.log" 2>&1 &
     disown
     echo "[llama-model-downloader-local] Model check running in background -- tail ~/.models/download.log"
     USERSCRIPT

@@ -4,28 +4,28 @@ The daily terminal and AI stack, on tuios, with Claude Code as the backbone of a
 talks to by tuios mail. The commands are in `.zsh_functions/tuios/`. `ai` and `ainfo` use no multiplexer and are
 unchanged.
 
-| Command                            | What it does                                                                                         |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `dev`                              | reattach the daemon's sessions; with none, create nix-darwin, terraform-infrastructure and           |
-|                                    | home-infrastructure where cloned. Layout: workspace 1 holds nvim, aidev's Claude, Lumo and           |
-|                                    | the builders. Where `~/ai-info` exists it also ensures an `ai-info` session and a manage window      |
-|                                    | (never twice).                                                                                       |
-| `devim [name]`                     | that layout for the current directory, always a new session                                          |
-|                                    | workspace 1 opens nvim and a `pick` pane (`aidev_pick.py`): choose Claude, 9B or 30B in advisor      |
-|                                    | mode while green check, yellow ? or red x show what is usable; a red x never blocks a choice         |
-| `nxvim`, `psvim`, `hivim`, `itvim` | the session of one project, skipped where it is not cloned                                           |
-| `hiwt <branch>`                    | a new home-infrastructure worktree and branch in `.worktrees/`, with a session of its own            |
-| `peerdev <session>`                | a session on the peer Mac through tuios host link                                                    |
-| `nxpeer`, `hipeer`                 | peerdev for nix-darwin and home-infrastructure sessions                                              |
-| `mmdev`, `himmdev`, `nxmmdev`      | old names, kept as aliases of `peerdev`, `hipeer`, `nxpeer`                                          |
-| `aidev [task]`                     | Claude, Lumo and a builder, in the current tuios session (else session `<repo>`)                     |
-| `aidev --resume`                   | reopen the Claude and Lumo panes of an unfinished run after a daemon restart, conversations included |
-| `aidev -p "<change>" [files]`      | one edit by a free builder, blocking; `AIDEV_TEST_CMD` must pass                                     |
-| `aidev --handoff <dir>`            | a run for a plan another session wrote (`/aidev-handoff`); one JSON line, no attach                  |
-| `aidev --rfc <name> [words]`       | a run whose Claude plans from an RFC in `~/.ai/rfcs`                                                 |
-| `aidev --direct [words]`           | a free builder, interactive, in this terminal (gpa's fix windows use it)                             |
-| `aidev_status`                     | the latest run's work dir, builder and tasks                                                         |
-| `ai_tuios [-c] [message]`          | one Claude Code pane in session `<dir>` (`-c` continues the last one here)                           |
+| Command                            | What it does                                                                                            |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `dev`                              | reattach the daemon's sessions; with none, create nix-darwin, terraform-infrastructure and              |
+|                                    | home-infrastructure where cloned. Layout: workspace 1 holds nvim, aidev's Claude, Lumo and              |
+|                                    | the builders. Where `~/ai-info` exists it also ensures an `ai-info` session and a manage window         |
+|                                    | (never twice).                                                                                          |
+| `devim [name]`                     | that layout for the current directory, always a new session                                             |
+|                                    | workspace 1 opens nvim and a `pick` pane (`aidev_pick.py`): choose Claude, 9B or gpt-oss-20b in advisor |
+|                                    | mode while green check, yellow ? or red x show what is usable; a red x never blocks a choice            |
+| `nxvim`, `psvim`, `hivim`, `itvim` | the session of one project, skipped where it is not cloned                                              |
+| `hiwt <branch>`                    | a new home-infrastructure worktree and branch in `.worktrees/`, with a session of its own               |
+| `peerdev <session>`                | a session on the peer Mac through tuios host link                                                       |
+| `nxpeer`, `hipeer`                 | peerdev for nix-darwin and home-infrastructure sessions                                                 |
+| `mmdev`, `himmdev`, `nxmmdev`      | old names, kept as aliases of `peerdev`, `hipeer`, `nxpeer`                                             |
+| `aidev [task]`                     | Claude, Lumo and a builder, in the current tuios session (else session `<repo>`)                        |
+| `aidev --resume`                   | reopen the Claude and Lumo panes of an unfinished run after a daemon restart, conversations included    |
+| `aidev -p "<change>" [files]`      | one edit by a free builder, blocking; `AIDEV_TEST_CMD` must pass                                        |
+| `aidev --handoff <dir>`            | a run for a plan another session wrote (`/aidev-handoff`); one JSON line, no attach                     |
+| `aidev --rfc <name> [words]`       | a run whose Claude plans from an RFC in `~/.ai/rfcs`                                                    |
+| `aidev --direct [words]`           | a free builder, interactive, in this terminal (gpa's fix windows use it)                                |
+| `aidev_status`                     | the latest run's work dir, builder and tasks                                                            |
+| `ai_tuios [-c] [message]`          | one Claude Code pane in session `<dir>` (`-c` continues the last one here)                              |
 
 gpr points the current session's `nvim` and `zsh` windows at its new worktree. gpa's manual-fix choices open nvim
 and aidev on a free workspace of the current session.
@@ -75,16 +75,16 @@ OAuth once through `/mcp`) and the GitHub MCP (`@edjl/github-mcp`, through the l
 `JIRA_WRITES` (comment, transition, edit, create, link, worklog), and builder panes keep
 the tuios MCP only.
 
-| Workspace | Pane                  | Model                                                              | Grants                           |
-| --------- | --------------------- | ------------------------------------------------------------------ | -------------------------------- |
-| 1         | `plan`                | Claude Code, advisor off: plans, sends tasks, verifies, reviews    | read, write, fan, files, respond |
-| 1         | `nvim`                | your editor, with a bare `zsh` window next to it                   | default                          |
-| 1         | `research`            | pi on Lumo through lumo-tamer, no tools: web lookups               | read                             |
-| 1         | `build-local-tier-2`  | pi on the Qwen3-Coder-30B on the G14, large ctx                    | read, write                      |
-| 1         | `build-local-tier-1`  | pi on the Qwen3.5-9B on the G14 (Cait), 65536 ctx                  | read, write                      |
-| 1         | `build-local-tier-0`  | pi on the on-device 30B; Claude opens it when the plan is approved | read, write                      |
-| 1         | `build-free-tier-3`   | escalation: pi on a free Zen model                                 | read, write                      |
-| 1         | `build-billed-tier-4` | escalation: Claude Code (billed, asks you first)                   | read, write                      |
+| Workspace | Pane                  | Model                                                                                                               | Grants                           |
+| --------- | --------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| 1         | `plan`                | Claude Code, advisor off: plans, sends tasks, verifies, reviews                                                     | read, write, fan, files, respond |
+| 1         | `nvim`                | your editor, with a bare `zsh` window next to it                                                                    | default                          |
+| 1         | `research`            | pi on Lumo through lumo-tamer, no tools: web lookups                                                                | read                             |
+| 1         | `build-local-tier-2`  | pi on the Qwen3-Coder-30B on the G14, large ctx                                                                     | read, write                      |
+| 1         | `build-local-tier-1`  | pi on the Qwen3.5-9B on the G14 (Cait), 65536 ctx                                                                   | read, write                      |
+| 1         | `build-local-tier-0`  | pi on the on-device gpt-oss-20b (MXFP4, reasoning effort low, ctx 32768); Claude opens it when the plan is approved | read, write                      |
+| 1         | `build-free-tier-3`   | escalation: pi on a free Zen model                                                                                  | read, write                      |
+| 1         | `build-billed-tier-4` | escalation: Claude Code (billed, asks you first)                                                                    | read, write                      |
 
 The billed builder's settings use `acceptEdits`, allow the plan's verify commands by exact text and the read-only
 commands, and deny git writes, `gh`, `rm -rf` and `sudo` (deny wins over allow). Edits to the plan directory and to the run's `state.json` and `events.jsonl` are denied too. Each run has its own plan directory and worktree record (`meta_path`) under `runs/<id>/`, so concurrent runs of one project never share a plan, worktree or PR; finish archives the plan to `runs/<id>/plan-done-<time>`.
@@ -167,7 +167,7 @@ automatically only after the Go model reports a usage limit. Private repos are u
 Agents reach them through
 `~/.local/bin/aidev` (`../aistack/aidev-cli`), which allows only `-p` and `--handoff`.
 
-- `aidev -p "<change>" [files]`: one edit in this directory. Inside tuios the on-device 30B opens in a pane on a free
+- `aidev -p "<change>" [files]`: one edit in this directory. Inside tuios the on-device gpt-oss-20b opens in a pane on a free
   workspace (you can watch it and type into it), gets the change by mail and a typed prompt, and replies by mail to the
   caller's pane. The change counts only when the tree changed and `AIDEV_TEST_CMD` (a shell command) exits 0; otherwise
   a free Zen model tries once more, where one fits the repo. The pane closes afterwards, and the script prints each
@@ -182,7 +182,7 @@ Agents reach them through
   gpr worktree and draft PR in a main checkout, and opens Claude and Lumo with Claude told to build the approved plan.
   It prints `started`, `run_id`, `session`, `work_dir`, `pr_url`.
 - `aidev --rfc <name> [words]`: a normal run whose first prompt names the RFC file; Claude reads it and plans from it.
-- `aidev --direct [words]`: pi on the on-device 30B in this terminal, else OpenCode on a free Zen model.
+- `aidev --direct [words]`: pi on the on-device gpt-oss-20b in this terminal, else OpenCode on a free Zen model.
 - A builder pane carries `AIDEV_TUIOS_BUILDER=1`, and `-p` and `--handoff` refuse to run there.
 
 tuios agent features must be on: `[agents] enabled = true` in `../tuios/config.toml`. After a change to that file, run
@@ -238,7 +238,7 @@ endpoint. These settings override the defaults:
 - `AIDEV_REMOTE_BUILDER_MODEL`: the model name to request (default `qwen3-coder-30b`).
 
 Before each local-builder start, aidev sends a 4 s probe, `GET /models`, to the remote. If the remote is
-unreachable, aidev prints one stderr line and falls through to the on-device 30B, then to Zen. If it is healthy, the
+unreachable, aidev prints one stderr line and falls through to the on-device gpt-oss-20b, then to Zen. If it is healthy, the
 local `edit.lock` and the idle unload are skipped, because the remote does not use the local GPU. If the remote dies
 during a job, aidev kills pi, prints a partial-edit warning and exits 3 (escalate), so check the work dir before you
 retry. The gateway returns 503 when the G14 is off, which counts as offline. The endpoint is deliberately not
@@ -255,13 +255,13 @@ stays the normal result and verify still runs. Set `AIDEV_TUIOS_LOOP_STOP=off` t
 
 aidev has five builder tiers, from a registry in `aidev_tiers.py`:
 
-| Id     | Pane                  | Host                | Ctx (tokens)  | Endpoint                          |
-| ------ | --------------------- | ------------------- | ------------- | --------------------------------- |
-| tier-0 | `build-local-tier-0`  | on-device 30B       | 32768         | none (local model file)           |
-| tier-1 | `build-local-tier-1`  | G14 9B (Cait)       | 65536         | `https://llm.rollet.family/t1/v1` |
-| tier-2 | `build-local-tier-2`  | G14, large ctx      | 65536         | `https://llm.rollet.family/v1`    |
-| tier-3 | `build-free-tier-3`   | free Zen model      | model-defined | Zen                               |
-| tier-4 | `build-billed-tier-4` | Claude Code, billed | model-defined | Anthropic                         |
+| Id     | Pane                  | Host                  | Ctx (tokens)  | Endpoint                          |
+| ------ | --------------------- | --------------------- | ------------- | --------------------------------- |
+| tier-0 | `build-local-tier-0`  | on-device gpt-oss-20b | 32768         | none (local model file)           |
+| tier-1 | `build-local-tier-1`  | G14 9B (Cait)         | 65536         | `https://llm.rollet.family/t1/v1` |
+| tier-2 | `build-local-tier-2`  | G14, large ctx        | 65536         | `https://llm.rollet.family/v1`    |
+| tier-3 | `build-free-tier-3`   | free Zen model        | model-defined | Zen                               |
+| tier-4 | `build-billed-tier-4` | Claude Code, billed   | model-defined | Anthropic                         |
 
 Task size limits scale with the target tier's context window. The tiers config file is `~/.config/aidev/tiers`
 followed by the extension `.json`, or the path in `AIDEV_TIERS_FILE`. It overrides keys per tier: `ctx`, `enabled`,
@@ -292,4 +292,4 @@ billed chain. Selecting `build-local-tier-0` explicitly is unchanged. These sett
 
 The G14 counts as available when an authenticated GET of /models returns 200 and lists the model. It is offline when it is off or a game runs. Then aidev falls back to `build-local-tier-0`.
 
-The order is tier-2, tier-0, tier-3, tier-4; tier-0 needs the model file and 32 GB RAM; tier-3 needs a Zen API key; each skipped tier prints a reason.
+The order is tier-2, tier-0, tier-3, tier-4; tier-0 runs the on-device gpt-oss-20b (MXFP4, reasoning effort low, ctx 32768) and needs the model file and 24 GB RAM; tier-3 needs a Zen API key; each skipped tier prints a reason.

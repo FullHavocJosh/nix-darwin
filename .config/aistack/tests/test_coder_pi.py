@@ -135,7 +135,7 @@ def watcher_alive():
 
 
 print("pi on the 30B")
-r = run(["--print", "--mode", "json", "--model", "coder/qwen3-coder-30b"])
+r = run(["--print", "--mode", "json", "--model", "coder/gpt-oss-20b"])
 rec = json.load(open(REC))
 check(
     "pi runs with the caller's arguments",
@@ -144,7 +144,7 @@ check(
     and rec["argv"][1].endswith("worktree-guard.ts")
     and os.path.isfile(rec["argv"][1])
     and rec["argv"][2:]
-    == ["--print", "--mode", "json", "--model", "coder/qwen3-coder-30b"],
+    == ["--print", "--mode", "json", "--model", "coder/gpt-oss-20b"],
     (r.returncode, r.stderr, rec),
 )
 check("the task prompt reaches pi on stdin", rec["stdin"] == "build task T1")
@@ -155,8 +155,10 @@ prov = (rec["models"] or {}).get("providers", {}).get("coder", {})
 check(
     "pi's agent dir points the coder provider at the 30B server",
     prov.get("baseUrl") == f"http://127.0.0.1:{PORT}/v1"
-    and prov["models"][0]["id"] == "qwen3-coder-30b"
-    and prov["models"][0]["reasoning"] is False,
+    and prov["models"][0]["id"] == "gpt-oss-20b"
+    and prov["models"][0]["reasoning"] is True
+    and prov["models"][0]["compat"]["chatTemplateKwargs"] == {"reasoning_effort": "low"}
+    and prov["models"][0]["samplingParams"]["temperature"] == 0,
     prov,
 )
 check(
@@ -192,7 +194,7 @@ check(
 r = run(["--print"], env={"LOCAL_EDIT_MODEL_FILE": T + "/missing.gguf"})
 check(
     "no 30B on this host: exit 3 so the driver moves on",
-    r.returncode == 3 and "32 GB" in r.stderr,
+    r.returncode == 3 and "24 GB" in r.stderr,
     (r.returncode, r.stderr),
 )
 
@@ -440,7 +442,7 @@ r = run(["--print"], env={"LOCAL_EDIT_MODEL_FILE": T + "/missing.gguf"})
 check(
     "without AIDEV_REMOTE_BUILDER_URL set, no network probe occurs and local path runs with exit code 3",
     r.returncode == 3
-    and "32 GB" in r.stderr
+    and "24 GB" in r.stderr
     and "remote builder unavailable" not in r.stderr,
     (r.returncode, r.stderr),
 )

@@ -2,7 +2,7 @@
 """Claude Code PreToolUse hook (Edit|Write|MultiEdit|NotebookEdit): sends multi-file edits to the free edit tools.
 
 Hand edits are billed output that stays in the conversation. When Claude starts on the third different file by hand
-within one user request, this hook refuses that edit and points to local_edit (on-device Qwen3-Coder-30B) or
+within one user request, this hook refuses that edit and points to local_edit (on-device gpt-oss-20b) or
 oczen_edit (OpenCode Zen Big Pickle). Measured: 7 edits in 6 files took 3 turns and $0.09 through local_edit, 18
 turns and $0.16 by hand. Editing a file already edited in this request, by hand or by a delegation (fixing up
 its result), is always allowed. Write is exempt and not counted: it carries the whole file Claude wrote, so a
@@ -31,7 +31,7 @@ DELEGATES = {"mcp__local-edit__local_edit", "mcp__oczen__oczen_edit"}
 MAX_HAND_FILES = int(os.environ.get("CLAUDE_EDIT_ROUTER_FILES", "3"))
 HOME = os.path.expanduser("~")
 STATE_DIR = os.environ.get("CLAUDE_EDIT_ROUTER_STATE") or os.path.join(os.path.expanduser(os.environ.get("AI_HOME") or os.path.join(HOME, ".ai")), "guard", "edit-router")
-CODER_MODEL = os.environ.get("LOCAL_EDIT_MODEL_FILE") or os.path.join(HOME, ".models", "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf")
+CODER_MODEL = os.environ.get("LOCAL_EDIT_MODEL_FILE") or os.path.join(HOME, ".models", "gpt-oss-20b-MXFP4.gguf")
 
 
 def zen_key_present():
