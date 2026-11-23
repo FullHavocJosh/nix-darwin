@@ -300,6 +300,7 @@ def tier_online(tid, run=None):
 LUMO_MODEL = os.environ.get("AISTACK_LUMO_MODEL") or "lumo-max"
 LUMO_TIMEOUT_S = int(os.environ.get("AIDEV_TUIOS_LUMO_TIMEOUT_S", "540"))
 VERIFY_TIMEOUT_S = int(os.environ.get("AISTACK_VERIFY_TIMEOUT_S", "300"))
+LAST_CHECK_EXIT = None  # exit code of the last AIDEV_TEST_CMD run by check_edit, None when it did not run
 TASK_MAX_FILES = 3
 REPLY_ECHO_MAX = int(os.environ.get("AIDEV_TUIOS_REPLY_ECHO_MAX", "300"))
 ASK_TIMEOUT_MS = 3_600_000  # the most ask-human waits
@@ -2078,7 +2079,12 @@ def count_attempt(t, builder):
 
 
 def tier_of(builder):
-    return aidev_tiers.norm_tier(builder)
+    tier = aidev_tiers.norm_tier(builder)
+    if tier is None:
+        m = re.search(r"-(tier-\d)$", str(builder or ""))
+        if m:
+            tier = aidev_tiers.norm_tier(m.group(1))
+    return tier
 
 
 def keeps_builder(builder_pane):
@@ -3550,11 +3556,14 @@ def tree_state(cwd):
 def check_edit(cwd, before, test_cmd):
     """Why the edit is not done, or "" when it is: the tree must have changed and AIDEV_TEST_CMD (a shell command
     the caller set) must exit 0."""
+    global LAST_CHECK_EXIT
+    LAST_CHECK_EXIT = None
     if tree_state(cwd) == before:
         return "it changed nothing"
     if test_cmd:
         r = subprocess.run(test_cmd, shell=True, cwd=cwd, capture_output=True, text=True, timeout=VERIFY_TIMEOUT_S,
                            stdin=subprocess.DEVNULL, check=False)
+        LAST_CHECK_EXIT = r.returncode
         if r.returncode:
             return f"AIDEV_TEST_CMD exits {r.returncode}:\n{(r.stdout + r.stderr)[-2000:]}"
     return ""
@@ -3565,18 +3574,35 @@ def edit_in_pane(run, kind, task_path, limit):
     ws = ai_workspace(run.session)
     if not ws:
         return "", "no free workspace in this session"
-    name = f"edit-{kind}-{time.strftime('%H%M%S')}"
+    name = f"{run.id}-{kind}"
     ok, msg = start_builder(run, kind, name, ws, run.data["work_dir"])
     print(msg, file=sys.stderr)
     if not ok:
         return "", msg
     try:
+        win = window_named(run.session, name) or {}
+        info = {"event": "pane", "name": name, "window_id": win.get("window_id"), "session": run.session,
+                "tier": kind, "run_dir": run.dir}
+        write_text(os.path.join(run.dir, "pane.json"), json.dumps(info) + "\n")
+        print(json.dumps(info), flush=True)
+        t = run.data["tasks"]["edit"]
+        t["attempts"] += 1
+        t["builder"] = name
+        t.pop("tripped", None)
+        t.pop("trip_reason", None)
+        log = tool_log_path(run, name)
+        t["guard"] = {**aidev_guard.TaskGuard(calls_known=tier_of(name) in ("tier-0", "tier-1", "tier-2")).to_dict(),
+                      "offset": os.path.getsize(log) if os.path.exists(log) else 0}
+        run.save()
         mid = mail_task(run, name, "edit", f"Edit: do the change in {task_path}, in {run.data['work_dir']}.",
                         f"aidev edit: read {task_path} and make exactly that change in {run.data['work_dir']}. "
                         + reply_line(run, "@@MID@@"))
         if not mid:
             return "", "mailing the builder failed"
-        status, reply = wait_reply(run.session, os.environ["TUIOS_PANE_ID"], mid, name, limit)
+        status, reply = wait_reply(run.session, os.environ["TUIOS_PANE_ID"], mid, name, limit,
+                                   on_poll=lambda: guard_poll(run, name, "edit"))
+        if status == "looped":
+            return "", f"guard stopped the builder: {t.get('trip_reason') or 'guard'}"
         if status in ("gone", "timeout"):
             return reply, f"the builder {'closed' if status == 'gone' else f'did not finish in {limit} s'}"
         return reply, ""
@@ -3586,6 +3612,8 @@ def edit_in_pane(run, kind, task_path, limit):
 
 def edit_headless(run, kind, task_text, limit):
     """One attempt of `aidev -p` without tuios: the same builder as a one-shot command in this terminal."""
+    if kind == "tier-4":
+        return "", "the billed builder needs a tuios pane"
     cfg = pane_configs(run.project)
     env = {**os.environ, "AIDEV_TUIOS_BUILDER": "1"}
     if kind == "tier-0":
@@ -3613,20 +3641,63 @@ def edit_headless(run, kind, task_text, limit):
     return (r.stdout + r.stderr)[-1500:], (f"the builder exited {r.returncode}" if r.returncode else "")
 
 
+def edit_options(argv):
+    """Parse the flags of `aidev -p`: --cwd DIR / --worktree DIR (also --cwd=DIR) and --billed.
+
+    Returns {words, cwd, tier4, err}; words are the remaining args. Without a flag cwd is the current directory."""
+    words, tier4, err, target = [], False, "", None
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        i += 1
+        if a in ("-p", "--print"):
+            continue
+        if a == "--billed":
+            tier4 = True
+        elif a in ("--cwd", "--worktree"):
+            if i >= len(argv):
+                err = f"{a} needs a directory"
+                break
+            target = argv[i]
+            i += 1
+        elif a.startswith(("--cwd=", "--worktree=")):
+            target = a.split("=", 1)[1]
+            if not target:
+                err = f"{a.split('=', 1)[0]} needs a directory"
+                break
+        else:
+            words.append(a)
+    cwd = os.path.realpath(os.getcwd())
+    if not err and target is not None:
+        if not os.path.isdir(target):
+            err = f"{target} is not an existing directory"
+        elif subprocess.run(["git", "-C", target, "rev-parse", "--is-inside-work-tree"], capture_output=True,
+                            check=False).returncode != 0:
+            err = f"{target} is not inside a git work tree"
+        else:
+            cwd = os.path.realpath(target)
+    return {"words": words, "cwd": cwd, "tier4": tier4, "err": err}
+
+
 def cmd_edit(argv):
     """aidev -p "<change>" [files...]: one edit by a free builder in this directory: the on-device 30B, then a free
     Zen model when the 30B leaves it unchanged or AIDEV_TEST_CMD failing. Inside tuios the builder works in a pane on
     a free workspace (you can watch and type into it) and replies by mail; elsewhere it runs headless. Blocks until
     done; exit 0 only when the tree changed and AIDEV_TEST_CMD passes."""
-    words = [a for a in argv if a not in ("-p", "--print")]
+    global LAST_CHECK_EXIT
+    opts = edit_options(argv)
+    if opts["err"]:
+        print(f"aidev -p: {opts['err']}", file=sys.stderr)
+        return 2
+    words = opts["words"]
     if not words:
-        print('usage: aidev -p "<exact change. Change nothing else.>" [files...]', file=sys.stderr)
+        print('usage: aidev -p "<exact change. Change nothing else.>" [files...] [--cwd DIR] [--billed]', file=sys.stderr)
         return 2
     if os.environ.get("AIDEV_TUIOS_BUILDER"):
         print("aidev -p: refused inside an aidev builder pane (it would start a builder from a builder)",
               file=sys.stderr)
         return 2
-    cwd = os.path.realpath(os.getcwd())
+    cwd = opts["cwd"]
     project = project_root(cwd)
     test_cmd = os.environ.get("AIDEV_TEST_CMD") or ""
     in_tuios = bool(os.environ.get("TUIOS_ENV") and os.environ.get("TUIOS_SESSION") and os.environ.get("TUIOS_PANE_ID"))
@@ -3639,35 +3710,62 @@ def cmd_edit(argv):
                  + (f"\n\nThis check must exit 0 when you are done; run it yourself: {test_cmd}" if test_cmd else "")
                  + "\n\nRead the code first and follow its conventions. Change only what this asks. No git commits.")
     task_path = write_text(os.path.join(run.dir, "tasks", "edit.md"), task_text + "\n")
+    run.data["tasks"] = {"edit": {"status": "pending", "attempts": 0, "notes": []}}
     run.save()
-    before, why = tree_state(cwd), ""
-    for i, kind in enumerate(("tier-2", "tier-1", "tier-0", "tier-3")):
+    before, why, last_kind = tree_state(cwd), "", None
+    kinds = ("tier-2", "tier-1", "tier-0", "tier-3")
+    if opts["tier4"]:
+        kinds = ("tier-2", "tier-1", "tier-0", "tier-3", "tier-4")
+    for i, kind in enumerate(kinds):
         if kind == "tier-3":
             if not tier_online(kind, run):
                 print(f"aidev -p: free Zen is not usable ({zen_status(run)['detail']}); not trying it", file=sys.stderr)
                 continue
+        elif kind == "tier-4":
+            if not opts["tier4"]:
+                print("aidev -p: tier-4 is billed; use --billed", file=sys.stderr)
+                continue
         elif not tier_online(kind):
             continue
         if i and why:
-            print(f"aidev -p: the local builder did not finish ({why.splitlines()[0]}); trying a free Zen model", file=sys.stderr)
-            task_path = write_text(task_path, task_text + f"\n\nAn earlier attempt left this: {why}\n")
-        if in_tuios:
-            reply, err = edit_in_pane(run, kind, task_path, limit)
-        else:
-            reply, err = edit_headless(run, kind, open(task_path).read(), limit)
-        why = err or check_edit(cwd, before, test_cmd)
-        run.event("edit", builder=kind, ok=not why, why=why[:500], reply=reply[:500])
-        print(f"{kind} builder: {reply.strip()[:1500] or '(no reply)'}")
+            print(f"aidev -p: the local builder did not finish ({why.splitlines()[0]}); trying the next builder", file=sys.stderr)
+            notes = run.data["tasks"]["edit"]["notes"]
+            task_path = write_text(task_path, task_text + f"\n\nAn earlier attempt left this: {why}\n"
+                                   + ("\n" + "\n".join(notes) + "\n" if notes else ""))
+        last_kind = kind
+        et =run.data["tasks"]["edit"]
+        et["notes"], et["overflows"] = [], 0
+        for _pass in range(2):
+            LAST_CHECK_EXIT = None
+            if in_tuios:
+                reply, err = edit_in_pane(run, kind, task_path, limit)
+            else:
+                reply, err = edit_headless(run, kind, open(task_path).read(), limit)
+            why = err or check_edit(cwd, before, test_cmd)
+            run.event("edit", builder=kind, ok=not why, why=why[:500], reply=reply[:500])
+            print(f"{kind} builder: {reply.strip()[:1500] or '(no reply)'}")
+            et = run.data["tasks"]["edit"]
+            if not why or not why.startswith("guard stopped") or et.get("tripped") or not et["notes"]:
+                break
+            task_path = write_text(task_path, task_text + "\n\n" + "\n".join(et["notes"]) + "\n")
         if not why:
             break
     run.data["result"] = "done" if not why else why[:500]
     run.save()
     stat = subprocess.run(["git", "-C", cwd, "diff", "--stat"], capture_output=True, text=True, check=False).stdout
     print(stat.rstrip() or "(no tracked file changed)")
+    changed = subprocess.run(["git", "-C", cwd, "diff", "--name-only"], capture_output=True, text=True,
+                             check=False).stdout.split()
+    changed += subprocess.run(["git", "-C", cwd, "ls-files", "--others", "--exclude-standard"], capture_output=True,
+                              text=True, check=False).stdout.split()
+    final = json.dumps({"ok": not why, "tier": last_kind, "files": sorted(set(changed)), "check_exit": LAST_CHECK_EXIT,
+                        "run_dir": run.dir})
     if why:
         print(f"aidev -p: not done: {why}", file=sys.stderr)
+        print(final)
         return 1
     print("aidev -p: done" + (" (AIDEV_TEST_CMD passes)" if test_cmd else "") + f"; log {run.dir}")
+    print(final)
     return 0
 
 
