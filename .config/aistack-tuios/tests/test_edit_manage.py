@@ -1,0 +1,169 @@
+"""Tests for `aidev -p` as a manageable edit (aidev_tuios.py): --cwd/--billed parsing, tier-4 only with --billed, the
+final JSON result line, and the stable builder pane name with pane.json. No tuios daemon, no model, no network.
+Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_edit_manage.py
+"""
+import importlib.util
+import io
+import json
+import os
+import subprocess
+import sys
+import tempfile
+
+os.environ["AISTACK_ZEN_KEY"] = "1"
+os.environ["AIDEV_REMOTE_BUILDER"] = "off"
+os.environ["AIDEV_SEMI_LOCAL"] = "off"
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)  # .config/aistack-tuios
+os.environ.setdefault("AISTACK_DIR", os.path.realpath(os.path.join(ROOT, "..", "aistack")))
+FAILS = []
+
+
+def check(name, cond, extra=""):
+    print(("  PASS " if cond else "  FAIL ") + name + (f"  [{extra}]" if extra and not cond else ""))
+    if not cond:
+        FAILS.append(name)
+
+
+def load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def make_repo():
+    p = os.path.realpath(tempfile.mkdtemp(prefix="aidev-test-edit-"))
+    with open(os.path.join(p, "calc.py"), "w") as fh:
+        fh.write("def add(a, b):\n    return a + b\n")
+    subprocess.run(["git", "init", "-q"], cwd=p, check=False)
+    subprocess.run(["git", "add", "."], cwd=p, check=False)
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "init"], cwd=p,
+                   check=False)
+    return p
+
+
+def run_edit(a, repo, argv):
+    """cmd_edit(argv) from inside repo; (rc, stdout)."""
+    cwd0 = os.getcwd()
+    os.chdir(repo)
+    real_stdout, sys.stdout = sys.stdout, io.StringIO()
+    try:
+        rc = a.cmd_edit(argv)
+        out = sys.stdout.getvalue()
+    finally:
+        sys.stdout = real_stdout
+        os.chdir(cwd0)
+    return rc, out
+
+
+def main():
+    os.environ["AIDEV_TUIOS_HOME"] = os.path.realpath(tempfile.mkdtemp(prefix="aidev-test-home-"))
+    os.environ.pop("AIDEV_TUIOS_BUILDER", None)
+    a = load("aidev", os.path.join(ROOT, "aidev_tuios.py"))
+    repo = make_repo()
+
+    print("edit_options")
+    o = a.edit_options(["-p", "change it", "one", "--cwd", repo, "--billed"])
+    check("--cwd sets the real path", o["cwd"] == os.path.realpath(repo), o)
+    check("--billed is set", o["tier4"] is True)
+    check("words are the rest", o["words"] == ["change it", "one"], o["words"])
+    check("no error", not o["err"], o["err"])
+    o = a.edit_options(["-p", "x", f"--cwd={repo}"])
+    check("--cwd=DIR works", o["cwd"] == os.path.realpath(repo) and not o["err"] and o["tier4"] is False, o)
+    o = a.edit_options(["-p", "x", "--cwd", os.path.join(repo, "nope")])
+    check("a missing dir gives an error", bool(o["err"]), o)
+
+    saved_env = {k: os.environ.get(k) for k in ("TUIOS_ENV", "TUIOS_SESSION", "TUIOS_PANE_ID", "AIDEV_TEST_CMD",
+                                                "AIDEV_TUIOS_BUILDER")}
+    names = ("edit_headless", "tier_online", "zen_status", "ai_workspace", "start_builder", "window_named",
+             "mail_task", "wait_reply", "tuios", "reply_line")
+    real = {n: getattr(a, n) for n in names}
+    real_coder = a.CODER_FILE
+    try:
+        os.environ.pop("TUIOS_ENV", None)
+        os.environ.pop("AIDEV_TEST_CMD", None)
+        a.tier_online = lambda tid, run=None: tid in ("tier-0", "tier-4")
+        a.zen_status = lambda r, refresh=False: {"state": "off", "model": "", "detail": "off", "models": []}
+
+        print("tier order")
+        kinds = []
+
+        def fake_nothing(run, kind, task_text, limit):
+            kinds.append(kind)
+            if kind == "tier-4":
+                return "", "the billed builder needs a tuios pane"
+            return f"{kind} did nothing", ""
+
+        a.edit_headless = fake_nothing
+        run_edit(a, repo, ["-p", "change it"])
+        check("without --billed tier-4 is never tried", "tier-4" not in kinds and kinds == ["tier-0"], kinds)
+        del kinds[:]
+        run_edit(a, repo, ["-p", "change it", "--billed"])
+        check("--billed tries tier-0 then tier-4", kinds == ["tier-0", "tier-4"], kinds)
+
+        print("final JSON line")
+        os.environ["AIDEV_TEST_CMD"] = "exit 0"
+
+        def fake_writes(run, kind, task_text, limit):
+            with open(os.path.join(run.data["work_dir"], "new.txt"), "w") as fh:
+                fh.write("hi\n")
+            return f"{kind} wrote", ""
+
+        a.edit_headless = fake_writes
+        rc, out = run_edit(a, repo, ["-p", "add new.txt"])
+        res = json.loads(out.strip().splitlines()[-1])
+        check("success: keys", all(k in res for k in ("ok", "tier", "files", "check_exit", "run_dir")), res)
+        check("success: ok, tier, files, check_exit",
+              res["ok"] is True and res["tier"] == "tier-0" and "new.txt" in res["files"] and res["check_exit"] == 0
+              and rc == 0, (rc, res))
+        os.remove(os.path.join(repo, "new.txt"))
+        a.edit_headless = lambda run, kind, task_text, limit: (f"{kind} did nothing", "")
+        rc, out = run_edit(a, repo, ["-p", "change it"])
+        res = json.loads(out.strip().splitlines()[-1])
+        check("failure: ok is false", res["ok"] is False and rc == 1 and "run_dir" in res and "tier" in res, (rc, res))
+        os.environ.pop("AIDEV_TEST_CMD", None)
+
+        print("pane name")
+        a.ai_workspace = lambda session: 1
+        a.start_builder = lambda run, kind, name, ws, cwd: (calls.append(name), (True, "ok"))[1]
+        a.window_named = lambda session, name: {"window_id": "w1"}
+        a.mail_task = lambda run, builder, subject, mail_text, prompt: "m1"
+        a.wait_reply = lambda session, me, thread, builder, limit, on_poll=None: ("reply", "done")
+        a.tuios = lambda *args, **kw: (0, "", "")
+        a.reply_line = lambda run, mid: "x"
+        calls = []
+        os.environ["TUIOS_PANE_ID"] = "p"
+        run = a.Run(repo, "edit-20260101-000000")
+        run.data.update(phase="edit", work_dir=repo, session="s", reply_to="p",
+                        tasks={"edit": {"status": "pending", "attempts": 0, "notes": []}})
+        task_path = a.write_text(os.path.join(run.dir, "tasks", "edit.md"), "do it\n")
+        real_stdout, sys.stdout = sys.stdout, io.StringIO()
+        try:
+            reply, err = a.edit_in_pane(run, "tier-2", task_path, 30)
+            printed = sys.stdout.getvalue()
+        finally:
+            sys.stdout = real_stdout
+        want = "edit-20260101-000000-tier-2"
+        check("edit_in_pane returns the reply", reply == "done" and not err, (reply, err))
+        check("start_builder gets the stable name", calls == [want], calls)
+        pj = os.path.join(run.dir, "pane.json")
+        check("pane.json exists with the name", os.path.exists(pj) and json.load(open(pj)).get("name") == want)
+        line = json.loads(printed.strip().splitlines()[-1]) if printed.strip() else {}
+        check("stdout line is the same JSON", os.path.exists(pj) and line == json.load(open(pj)), line)
+    finally:
+        for n, v in real.items():
+            setattr(a, n, v)
+        a.CODER_FILE = real_coder
+        for k, v in saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    print(f"\n{len(FAILS)} failed" if FAILS else "\nall passed")
+    return 1 if FAILS else 0
+
+
+sys.exit(main())

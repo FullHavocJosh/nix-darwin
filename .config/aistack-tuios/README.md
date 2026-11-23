@@ -173,6 +173,11 @@ Agents reach them through
   a free Zen model tries once more, where one fits the repo. The pane closes afterwards, and the script prints each
   builder's reply and `git diff --stat`. Outside tuios the same builders run headless. Exit 0 means done.
   `AIDEV_TUIOS_EDIT_TIMEOUT_S` (540) caps each attempt.
+  `--cwd DIR` / `--worktree DIR` edit the given work tree instead of the current directory. The builder pane is named
+  `<run id>-tier-N`; its details are printed as one JSON line and written to `<run dir>/pane.json`. The guard (turns,
+  loops, wall time, no progress, context overflow) runs while the pane works, with the same `AIDEV_GUARD_*` limits as
+  `wait-task`, and escalates to the next tier. Tier-4 (billed) is used only with `--billed`. The last stdout line is a
+  JSON result with `ok`, `tier`, `files`, `check_exit`, `run_dir`.
 - `aidev --handoff <dir>`: checks `prd.json` and `verify.json` with aistack's rules (`problems` on failure), creates the
   gpr worktree and draft PR in a main checkout, and opens Claude and Lumo with Claude told to build the approved plan.
   It prints `started`, `run_id`, `session`, `work_dir`, `pr_url`.
@@ -202,6 +207,8 @@ tuios agent features must be on: `[agents] enabled = true` in `../tuios/config.t
 - `plan_bash_guard.py`: PreToolUse hook for the plan pane; denies grep and find in Bash and points to rg and fd.
 - `layer-claude.md`, `layer-lumo.md`, `layer-build.md`: each pane's system prompt.
 - `tests/test_aidev_tuios.py`: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_aidev_tuios.py`.
+- `tests/test_edit_guard.py`: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_edit_guard.py`.
+- `tests/test_edit_manage.py`: `PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_edit_manage.py`.
 - `../tuios/config.toml`: tuios config (agents on, herdr protocol emulation off, strict pane grants). The functions in
   `.zsh_functions/tuios/` set `XDG_CONFIG_HOME` so tuios reads it; check with `tuios config files`.
 - Per-pane tuios hooks (Claude Code settings, the pi extension, the OpenCode plugin) are generated under
