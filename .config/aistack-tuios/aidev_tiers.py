@@ -9,20 +9,24 @@ import os
 
 TIER_IDS = ('tier-0', 'tier-1', 'tier-2', 'tier-3', 'tier-4')
 
+# MAX_OUTPUT_TOKENS: tier-0 runs at about 13 tok/s; the G14 30B runs at about 35 tok/s so 8192 tokens
+# is about 235 s and a 400 line file write is about 5000 tokens; do not set lower.
+MAX_OUTPUT_TOKENS = {'tier-0': 4096, 'tier-1': 8192, 'tier-2': 8192}
+
 _URL = 'https://llm.rollet.family/v1'
 _URL_T1 = 'https://llm.rollet.family/t1/v1'
 
 DEFAULTS = {
     'tier-0': {'pane': 'build-local-tier-0', 'label': 'local 30B', 'kind': 'pi', 'ctx': 32768,
-               'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 32},
+               'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 32, 'max_tokens': 4096},
     'tier-1': {'pane': 'build-local-tier-1', 'label': 'G14 9B', 'kind': 'pi', 'ctx': 65536,
-               'alias': 'qwen3.5-9b', 'url': _URL_T1, 'enabled': True, 'min_ram_gb': 0},
+               'alias': 'qwen3.5-9b', 'url': _URL_T1, 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 8192},
     'tier-2': {'pane': 'build-local-tier-2', 'label': 'G14 large ctx', 'kind': 'pi', 'ctx': 65536,
-               'alias': 'qwen3-coder-30b', 'url': _URL, 'enabled': True, 'min_ram_gb': 0},
+               'alias': 'qwen3-coder-30b', 'url': _URL, 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 8192},
     'tier-3': {'pane': 'build-free-tier-3', 'label': 'free cloud', 'kind': 'opencode', 'ctx': 0,
-               'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 0},
+               'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 0},
     'tier-4': {'pane': 'build-billed-tier-4', 'label': 'billed Claude', 'kind': 'claude', 'ctx': 0,
-               'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 0},
+               'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 0},
 }
 
 _OLD = {
@@ -50,7 +54,7 @@ def tiers_path():
 
 
 def _valid(key, value):
-    if key in ('ctx', 'min_ram_gb'):
+    if key in ('ctx', 'min_ram_gb', 'max_tokens'):
         return isinstance(value, int) and not isinstance(value, bool) and value >= 0
     if key == 'enabled':
         return isinstance(value, bool)
@@ -140,3 +144,13 @@ def next_tier_id(tier_id, state, tiers):
     if target == 'tier-3' and not state.get('tier-3', {}).get('online'):
         return 'tier-4'
     return target
+
+
+def max_output_tokens(tier_id, tiers=None):
+    """Return the max output tokens for a tier. Uses the given tiers dict, or DEFAULTS, or MAX_OUTPUT_TOKENS.
+    Returns 8192 when missing."""
+    if tiers is None:
+        tiers = DEFAULTS
+    if tier_id in tiers and 'max_tokens' in tiers[tier_id]:
+        return tiers[tier_id]['max_tokens']
+    return MAX_OUTPUT_TOKENS.get(tier_id, 8192)
