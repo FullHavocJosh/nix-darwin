@@ -78,6 +78,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 if HERE not in sys.path:  # planner_local.py sits next to this file; importlib loaders do not add its dir
     sys.path.insert(0, HERE)
 
+import aidev_guard
 import aidev_tiers
 import planner_local
 import pr_status
@@ -970,7 +971,7 @@ def write_lumo_pi(cfg, lumo, model=None):
         "models": [{"id": model or LUMO_MODEL, "reasoning": False}]}}})
 
 
-PI_BUILD_EXTENSIONS = ("pi-stop-after-reply.ts",)
+PI_BUILD_EXTENSIONS = ("pi-stop-after-reply.ts", "pi-tool-log.ts")
 PI_PROVIDER = {"tier-1": "semi1", "tier-2": "semi"}  # pi provider name of a gateway tier
 
 
@@ -983,14 +984,15 @@ def write_build_pi(cfg, kind="tier-0"):
     spec.loader.exec_module(le)
     providers = {"coder": {
         "baseUrl": le.BASE + "/v1", "api": "openai-completions", "apiKey": "sk-local",
-        "models": [{"id": le.ALIAS, "reasoning": False, "contextWindow": le.CTX, "maxTokens": 8192}]}}
+        "models": [{"id": le.ALIAS, "reasoning": False, "contextWindow": le.CTX, "maxTokens": aidev_tiers.max_output_tokens("tier-0", tiers())}]}}
     if kind in ("tier-1", "tier-2"):
         key_path = semi_key_file()
         if key_path:
-            providers[PI_PROVIDER[kind]] = {
-                "baseUrl": tier_url(kind), "api": "openai-completions", "apiKey": "!cat " + shlex.quote(key_path),
-                "models": [{"id": tier_alias(kind), "reasoning": False, "contextWindow": tiers()[kind]["ctx"],
-                            "maxTokens": 8192}]}
+            for pkind, pname in PI_PROVIDER.items():
+                providers[pname] = {
+                    "baseUrl": tier_url(pkind), "api": "openai-completions", "apiKey": "!cat " + shlex.quote(key_path),
+                    "models": [{"id": tier_alias(pkind), "reasoning": False, "contextWindow": tiers()[pkind]["ctx"],
+                                "maxTokens": aidev_tiers.max_output_tokens(pkind, tiers())}]}
     wj(os.path.join(cfg["pi_build"], "models.json"), {"providers": providers})
     ext = os.path.join(cfg["pi_build"], "extensions")
     os.makedirs(ext, exist_ok=True)
@@ -1030,6 +1032,8 @@ def zen_key_present():
     except Exception:
         return False
 
+def tool_log_path(run, name):
+    return os.path.join(run.dir, 'toollog', f'{name}.jsonl')
 
 def zen_model(project):
     """The free Zen model for this repository, or None (no key, or nothing offered)."""
@@ -1283,6 +1287,7 @@ def build_body(run, cfg, kind, name=None):
                 "--name", f"aidev {name}", "--no-skills", "--session-id", sid]
         pane["builder"] = "on-device Qwen3-Coder-30B (free)"
         return (pane_path + f"cd {shlex.quote(wd)}\nexport AIDEV_TUIOS_BUILDER=1\n"
+                f"export AIDEV_TOOL_LOG={shlex.quote(tool_log_path(run, name))}\n"
                 f"export PI_CODING_AGENT_DIR={shlex.quote(cfg['pi_build'])}\n" + with_system_prompt(argv, sysp))
     if kind in ("tier-1", "tier-2"):
         if not (semi_local_available() if kind == "tier-2" else tier1_available()):
@@ -1293,6 +1298,7 @@ def build_body(run, cfg, kind, name=None):
         pane["builder"] = ("Qwen3-Coder-30B on Josh G14 (free)" if kind == "tier-2"
                            else "Qwen3.5-9B on Cait G14 (free)")
         return (pane_path + f"cd {shlex.quote(wd)}\nexport AIDEV_TUIOS_BUILDER=1\n"
+                f"export AIDEV_TOOL_LOG={shlex.quote(tool_log_path(run, name))}\n"
                 f"export PI_CODING_AGENT_DIR={shlex.quote(cfg['pi_build'])}\n" + with_system_prompt(argv, sysp))
     if not zen_key_present():
         return None
@@ -1309,6 +1315,7 @@ def build_body(run, cfg, kind, name=None):
     oc_dir = write_builder_opencode(cfg, verify)
     # OPENCODE_CONFIG_DIR adds the tuios state plugin to the user's own opencode config, for this pane only
     return (pane_path + f"cd {shlex.quote(wd)}\nexport AIDEV_TUIOS_BUILDER=1\n"
+            f"export AIDEV_TOOL_LOG={shlex.quote(tool_log_path(run, name))}\n"
             f"export OPENCODE_CONFIG_DIR={shlex.quote(oc_dir)}\n"
             f"opencode mini --agent build --model {shlex.quote(opencode_model(model))} --prompt {shlex.quote(first)}")
 
@@ -1347,6 +1354,44 @@ def free_workspace(session):
     return next((n for n in range(1, 10) if n not in used), None)
 
 
+def builder_model_ok(session, name, kind, strict=True):
+    r"""Check that a tier-1 or tier-2 pane runs on the expected provider.
+    
+    Captures the last 6 lines of pane `name` in `session`, takes the last non-blank line,
+    and looks for the pi footer model with re.search(r'\(([\w.-]+)\)\s+(\S+)\s*$') giving (provider, alias).
+    For kind 'tier-1' or 'tier-2' expected = (PI_PROVIDER[kind], tier_alias(kind)); return (True, '')
+    when the match equals it, else (False, f'{provider}/{alias}' or 'unknown').
+    For any other kind return (True, '').
+    When strict=False and the footer does not parse, return (True, '') instead of (False, 'unknown').
+    """
+    kind = norm_kind(kind) or kind
+    if kind not in ("tier-1", "tier-2"):
+        return True, ""
+    
+    footer_lines = pane_text(session, name, 6)
+    lines = [ln for ln in (footer_lines or "").splitlines() if ln.strip()]
+    
+    if kind in ("tier-1", "tier-2"):
+        # Use reversed(lines) to get the last non-blank line (footer at bottom)
+        last_nonblank = lines[-1] if lines else ""
+    else:
+        last_nonblank = ""
+    
+    if not last_nonblank:
+        return (False, "unknown") if strict else (True, "")
+    
+    match = re.search(r'\(([\w.-]+)\)\s+(\S+)\s*$', last_nonblank)
+    if match:
+        provider, alias = match.group(1), match.group(2)
+        expected_provider, expected_alias = PI_PROVIDER[kind], tier_alias(kind)
+        
+        if provider == expected_provider and alias == expected_alias:
+            return True, ""
+        return False, f"{provider}/{alias}"
+    
+    return (False, "unknown") if strict else (True, "")
+
+
 def start_builder(run, kind, name, ws, cwd):
     """Builder `kind` in a new pane `name` on workspace `ws` of the run's session, through tuios start-agent (the
     caller needs fan or admin; admin includes fan), which returns once the agent is ready. (ok, message)."""
@@ -1371,6 +1416,21 @@ def start_builder(run, kind, name, ws, cwd):
     run.data["panes"][name].update(script=script, cwd=cwd, grants=GRANTS["build"])
     run.event("builder", name=name, ok=code == 0)
     run.save()
+    
+    # Check that tier-1 or tier-2 pane runs on the expected provider
+    if kind in ("tier-1", "tier-2"):
+        ok, shown = builder_model_ok(run.session, name, kind, strict=True)
+        # The footer may not be rendered yet when start-agent returns; re-check up to 10 times
+        if not ok and shown == "unknown":
+            for _ in range(10):
+                time.sleep(1)
+                ok, shown = builder_model_ok(run.session, name, kind, strict=True)
+                if not ok:
+                    break
+        if not ok:
+            tuios("close-window", name, "-s", run.session)
+            return False, f"{name} started on {shown}, not the tier model: pane closed"
+    
     return code == 0, (f"{name}: {run.data['panes'][name].get('builder')}. start-agent (exit {code}): {note}"
                        f"{(out or err).strip()[-500:]}")
 
@@ -1542,7 +1602,7 @@ NEVER_GIT = ("You must never run git checkout, restore, stash, reset, clean, com
              "Do not undo, revert or remove changes you did not make in this task.")
 
 
-def task_prompt(prd, story, verify_cmds, notes, wd=None):
+def task_prompt(prd, story, verify_cmds, notes, wd=None, progress_path=None):
     verify_cmds = [verify_cmds] if isinstance(verify_cmds, str) else verify_cmds
     lines = [f"# Task {story['id']}: {story.get('title', '')}", "", f"Plan: {prd.get('name', '')}",
              str(prd.get("description") or "")]
@@ -1563,6 +1623,9 @@ def task_prompt(prd, story, verify_cmds, notes, wd=None):
               ("- Files can be big: rg -n for the name, then read about 60 lines around it. "
                "Never read a whole large file."),
               "- When you need a decision you cannot safely make, say so in your reply and stop."]
+    if progress_path:
+        lines.append(f"- Keep a short progress note in {progress_path} (done so far, next step), "
+                     "update it after each file you finish.")
     return "\n".join(lines) + "\n"
 
 
@@ -1926,6 +1989,9 @@ def cmd_builder(run, argv):
     if ok:
         run.data['builder'] = name
         run.save()
+        # Start the reaper process if not disabled
+        if not os.environ.get('AIDEV_TUIOS_NO_REAPER'):
+            ensure_reaper(run)
         return 0
     tuios('close-window', name, '-s', run.session)
     run.data.setdefault('unready', []).append(kind)
@@ -2047,7 +2113,7 @@ def cmd_escalate(run, argv):
         print("no builder pane")
         return 1
     n = t.get("by", {}).get(builder, 0)
-    if t.get("status") != "failed" or (n < ESCALATE_AFTER and not t.get("compacted")):
+    if t.get("status") != "failed" or (n < ESCALATE_AFTER and not t.get("compacted") and not t.get("tripped")):
         print(f"{tid}: {n} of {ESCALATE_AFTER} attempts used at {builder}; send-task again with a note")
         return 1
     zs = zen_status(run) if kind in ('tier-0', 'tier-1', 'tier-2') else {'state': 'available', 'detail': ''}
@@ -2064,6 +2130,7 @@ def cmd_escalate(run, argv):
         if code != 0:
             print(f"could not close {builder} (the plan pane lacks the admin grant): close that pane by hand")
     t.pop("compacted", None)
+    t.pop("tripped", None)
     order = list(aidev_tiers.TIER_IDS)
     reason = '; '.join(f"skipped {k}: {(local_skip_reason() or no_builder_why(k)) if k == 'tier-0' else zs['detail']}" for k in order[order.index(kind) + 1:order.index(nxt)])
     run.event("escalate", task=tid, frm=builder, to=BUILDERS[nxt], why=reason)
@@ -2269,6 +2336,98 @@ def loop_stop(run, builder, tid, replied=False):
     return True
 
 
+def guard_state(run, t, builder):
+    """The task's TaskGuard: aidev_guard.TaskGuard.from_dict(t['guard'], calls_known=tier_of(builder) in ('tier-0','tier-1','tier-2')) when t.get('guard') else a new TaskGuard with the same calls_known."""
+    if t.get('guard'):
+        return aidev_guard.TaskGuard.from_dict(t['guard'], calls_known=tier_of(builder) in ('tier-0','tier-1','tier-2'))
+    return aidev_guard.TaskGuard(calls_known=tier_of(builder) in ('tier-0','tier-1','tier-2'))
+
+
+def guard_poll(run, builder, tid):
+    """Returns True when it tripped. t = run.data['tasks'].get(tid); return False when t is missing or has no 'guard' key or the guard env AIDEV_GUARD=off. Read new calls with aidev_guard.read_tool_log(tool_log_path(run, builder), t['guard'].get('offset', 0)); diff_hash = sha1 hex of git_out(wd, 'diff') + git_out(wd, 'ls-files', '--others', '--exclude-standard') with wd = run.data['work_dir']. reason = guard.observe(calls, diff_hash) or aidev_guard.context_trip(text) or ('context overflow' if OVERFLOW_RE.search(text) else None), where text = pane_text(run.session, builder, 12) (OVERFLOW_RE is the existing module regex, it matches the server's exceed_context_size_error text). Store t['guard'] = {**guard.to_dict(), 'offset': new_offset}; run.save(). When reason is None return False. Skip the trip (return False) when the builder waits on an approval (same check as loop_stop: agent_state needs_input and agent_info blocked_by approval). A verified task only trips on the reason 'turn after done'; any other reason is stored but ignored. On a trip call guard_trip."""
+    t = run.data['tasks'].get(tid)
+    if not t or not t.get('guard') or os.environ.get('AIDEV_GUARD', '').lower() == 'off':
+        return False
+    
+    # Check if builder waits on an approval
+    if agent_state(run.session, builder) == "needs_input" and \
+            agent_info(run.session, builder).get("blocked_by") == "approval":
+        return False
+    
+    # Read new tool calls
+    calls, new_offset = aidev_guard.read_tool_log(tool_log_path(run, builder), t['guard'].get('offset', 0))
+    
+    # Compute diff hash
+    wd = run.data['work_dir']
+    diff = git_out(wd, 'diff')
+    ls_files = git_out(wd, 'ls-files', '--others', '--exclude-standard')
+    diff_hash = hashlib.sha1((diff + ls_files).encode()).hexdigest()
+    
+    # Get guard
+    guard = guard_state(run, t, builder)
+    
+    # Get pane text for context overflow check
+    text = pane_text(run.session, builder, 12)
+    
+    # Check for trips
+    reason = guard.observe(calls, diff_hash) or aidev_guard.context_trip(text) or ('context overflow' if OVERFLOW_RE.search(text) else None)
+    
+    # Store updated guard state
+    t['guard'] = {**guard.to_dict(), 'offset': new_offset}
+    run.save()
+    
+    if reason is None:
+        return False
+    
+    # A verified task only trips on a turn after done; the wall clock would fail it long after it finished
+    if t.get('status') == 'verified' and reason != 'turn after done':
+        return False
+    
+    # Trip occurred
+    guard_trip(run, builder, tid, reason)
+    return True
+
+
+def guard_trip(run, builder, tid, reason):
+    """Like loop_stop's stop path: tuios send-keys escape, wait_rest(run.session, builder, 10) else ctrl+c, then reset_pane(run, builder, RESET_CMD.get(tier_of(builder), '/new')). When t['status'] is 'verified' (reason 'turn after done') do nothing more than that and the event. Otherwise set t['status']='failed' and t['trip_reason']=reason. A reason in aidev_guard.CONTEXT_REASONS increments t['overflows'] (default 0), appends aidev_guard.handoff_note(attempt, reason, git_out(run.data['work_dir'], 'diff'), progress) instead of the generic note, with progress = the text of run.dir/tasks/<tid>-progress.txt (empty when missing), and sets t['tripped'] only when t['overflows'] >= aidev_guard.OVERFLOW_ESCALATE_AFTER: the first overflow retries on the same tier with the handoff, the second escalates. Any other reason sets t['tripped']=reason at once and appends '- Attempt N: stopped by the guard (<reason>); the builder was reset. Do less per step, avoid repeating a call, and finish with the done mail.'. Then run.event('guard_trip', builder=builder, task=tid, reason=reason), print f'builder {builder} stopped by the guard ({reason}); reset', run.save(); return True."""
+    t = run.data['tasks'].get(tid)
+    tuios("send-keys", "-s", run.session, "-w", builder, "escape")
+    if not wait_rest(run.session, builder, 10):
+        tuios("send-keys", "-s", run.session, "-w", builder, "ctrl+c")
+    
+    kind = tier_of(builder)
+    reset_pane(run, builder, RESET_CMD.get(kind, "/new"))
+    
+    # If task is verified, just return without further processing
+    if t.get('status') == 'verified' and reason == 'turn after done':
+        run.event('guard_trip', builder=builder, task=tid, reason=reason)
+        return True
+    
+    # Mark task as failed and add trip info
+    t['status'] = 'failed'
+    t['trip_reason'] = reason
+    attempt = t.get('attempts', 1)
+    if reason in aidev_guard.CONTEXT_REASONS:
+        t['overflows'] = t.get('overflows', 0) + 1
+        progress_path = os.path.join(run.dir, 'tasks', f'{tid}-progress.txt')
+        try:
+            with open(progress_path) as fh:
+                progress = fh.read()
+        except OSError:
+            progress = ''
+        t['notes'].append(aidev_guard.handoff_note(attempt, reason,
+                                                  git_out(run.data['work_dir'], 'diff'), progress))
+        if t['overflows'] >= aidev_guard.OVERFLOW_ESCALATE_AFTER:
+            t['tripped'] = reason
+    else:
+        t['tripped'] = reason
+        t['notes'].append(f'- Attempt {attempt}: stopped by the guard ({reason}); the builder was reset. Do less per step, avoid repeating a call, and finish with the done mail.')
+    run.event('guard_trip', builder=builder, task=tid, reason=reason)
+    print(f'builder {builder} stopped by the guard ({reason}); reset')
+    run.save()
+    return True
+
+
 def compaction_count(session, builder):
     """How many compaction markers the builder's scrollback holds. A compaction means it ran out of context."""
     code, out, _err = tuios("capture-pane", "-s", session, "-w", builder, "--scrollback", "--lines", "600")
@@ -2302,11 +2461,19 @@ def prepare_builder(run, builder):
     kind = tier_of(builder)
     if kind is None:
         return True  # a legacy pane
-    if reset_builder(run, builder):
-        return True
-    print(f'refusing to send: {builder} is not at rest or did not reset. '
-          f'Wait until it is idle, then run send-task again.')
-    return False
+    if not reset_builder(run, builder):
+        print(f'refusing to send: {builder} is not at rest or did not reset. '
+              f'Wait until it is idle, then run send-task again.')
+        return False
+
+    # Check that tier-1 or tier-2 pane runs on the expected provider
+    if kind in ("tier-1", "tier-2"):
+        ok, shown = builder_model_ok(run.session, builder, kind, strict=False)
+        if not ok:
+            print(f'refusing to send: {builder} runs {shown}, not its tier model; close the pane and run builder again')
+            return False
+    
+    return True
 
 
 def cmd_send_task(run, argv):
@@ -2349,11 +2516,28 @@ def cmd_send_task(run, argv):
         run.event("select_tier", task=tid, tier=tier, why=reason)
         picked = f"tier: {tier} ({reason})"
     if not builder or not window_named(run.session, builder):
+        # Check if we can recover by creating a new builder when attempts > 0
+        if (run.data["tasks"].get(tid) or {}).get("attempts", 0) > 0 and not to:
+            # Try to create a new builder for this tier
+            tier = tier_of(builder)
+            if tier:
+                code = cmd_builder(run, [tier])
+                if code != 0:
+                    print("no builder pane: run builder first")
+                    return 1
+                # Return the code when non-zero
+                return code
         print("no builder pane: run builder first")
         return 1
     if picked:
         print(picked)
     if not prepare_builder(run, builder):
+        return 1
+    kind = tier_of(builder)
+    need = task_need(stories[tid], run.project)
+    ok, why = aidev_guard.preflight(kind, need, aidev_tiers.max_output_tokens(kind, tiers()))
+    if not ok:
+        print(why)
         return 1
     t = run.data["tasks"].setdefault(tid, {"status": "pending", "attempts": 0, "notes": []})
     t["attempts"] += 1
@@ -2362,10 +2546,14 @@ def cmd_send_task(run, argv):
     t["overflow_base"] = overflow_count(run.session, builder)
     t["compacted"] = False
     t["builder"] = builder
+    t.pop('tripped', None)
+    path = tool_log_path(run, builder)
+    t['guard'] = {**aidev_guard.TaskGuard(calls_known=tier_of(builder) in ('tier-0','tier-1','tier-2')).to_dict(), 'offset': os.path.getsize(path) if os.path.exists(path) else 0}
     if note:
         t["notes"].append(f"- Before attempt {t['attempts']}: {note}")
+    progress_path = os.path.join(run.dir, "tasks", f"{tid}-progress.txt")
     path = write_text(os.path.join(run.dir, "tasks", f"{tid}.md"),
-                      task_prompt(prd, stories[tid], verify[tid], t["notes"], wd=wd))
+                      task_prompt(prd, stories[tid], verify[tid], t["notes"], wd=wd, progress_path=progress_path))
     snapshot_work(run, f"{tid}-attempt{t['attempts']}-before")
     warn = ""
     if t["attempts"] == 1 and check_already_passes(verify[tid], wd, os.path.join(run.dir, "tasks", f"{tid}-baseline.txt")):
@@ -2436,11 +2624,16 @@ def cmd_wait_task(run, argv):
         print(f"{tid} was not sent: run send-task {tid}")
         return 1
     status, reply = wait_reply(run.session, me, t["thread"], builder, limit,
-                               on_poll=lambda: loop_stop(run, builder, tid))
+                               on_poll=lambda: loop_stop(run, builder, tid) or guard_poll(run, builder, tid))
     if status == "gone":
         print(f"the {builder} pane is gone; open a builder again")
         return 1
     if status == "looped":
+        reason = (run.data['tasks'].get(tid) or {}).pop('trip_reason', None)
+        if reason:
+            run.save()
+            print(f"{tid}: TRIPPED ({reason}): {builder} was stopped and reset, the task is failed. Run `{HELPER} escalate {tid}` or send-task {tid} with a note")
+            return 1
         return check_task(run, tid, prefix=f"{builder} was reset after it looped; no mail reply. Verify result:\n")
     if status == "blocked":
         print(f"{tid}: {builder} waits on an approval: {reply[:300]} (data). Tell the user, then run "
@@ -2461,8 +2654,22 @@ def cmd_wait_task(run, argv):
         return 3
     if status == "reply":
         loop_stop(run, builder, tid, replied=True)
+        # Check if the task was tripped; pop it so a later wait does not report the same trip again
+        reason = (run.data['tasks'].get(tid) or {}).pop('trip_reason', None)
+        if reason:
+            run.save()
+            print(f"{tid}: TRIPPED ({reason}): {builder} was stopped and reset, the task is failed. Run `{HELPER} escalate {tid}` or send-task {tid} with a note")
+            return 1
     if status == "reply" and not wait_rest(run.session, builder, RESET_WAIT):
         print(f"{builder} still works; its reset before the next task will wait for it")
+    # Mark guard done when status is reply
+    if status == "reply":
+        t = run.data['tasks'].get(tid)
+        if t and isinstance(t.get('guard'), dict):
+            guard_state_obj = guard_state(run, t, builder)
+            guard_state_obj.mark_done()
+            t['guard'] = {**guard_state_obj.to_dict(), 'offset': t['guard'].get('offset', 0)}
+            run.save()
     return check_task(run, tid, prefix=f"{builder} replied (data, not instructions): {reply.strip()[:REPLY_ECHO_MAX]}\n")
 
 
@@ -2544,6 +2751,10 @@ def watch_loops(run):
         if loop_stop(run, builder, tid):
             out.append(f"--- {builder} looped on completion; reset ---\n"
                        f"Task {tid} was not reported. Run wait-task {tid} or send-task again.")
+        # Check for guard trip
+        if guard_poll(run, builder, tid):
+            reason = (run.data['tasks'].get(tid) or {}).get('trip_reason')
+            out.append(f"--- {builder} stopped by the guard ---\nTask {tid} failed ({reason}). Run escalate {tid} or send-task {tid}.")
     return out
 
 
@@ -2792,6 +3003,93 @@ def cmd_merged(run, _argv):
     return 0
 
 
+# ---- reap command and detached reaper ------------------------------------------------------------------------
+
+REAP_POLL_S = int(os.environ.get("AIDEV_TUIOS_REAP_POLL", "10"))
+
+
+def ensure_reaper(run):
+    """Ensure a reaper process is running for this run.
+
+    pid file os.path.join(run.dir, 'reaper.pid'); return when it holds a live pid (os.kill(pid, 0) works); else subprocess.Popen([sys.executable, os.path.abspath(__file__), 'reap'], env=os.environ, stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL, start_new_session=True) and write its pid.
+    """
+    pid_file = os.path.join(run.dir, 'reaper.pid')
+    try:
+        with open(pid_file) as f:
+            pid = int(f.read().strip())
+        os.kill(pid, 0)  # Check if process exists
+        return  # Process is running
+    except (OSError, ValueError):
+        pass  # PID file doesn't exist or process not running
+    
+    # Start reaper process
+    reaper = subprocess.Popen([
+        sys.executable, os.path.abspath(__file__), 'reap'], 
+        env=os.environ, 
+        stdin=subprocess.DEVNULL, 
+        stdout=subprocess.DEVNULL, 
+        stderr=subprocess.DEVNULL, 
+        start_new_session=True
+    )
+    
+    with open(pid_file, 'w') as f:
+        f.write(str(reaper.pid))
+
+
+def reap_pass(run, tracker, now=None):
+    """Reap idle builder panes.
+
+    Reload run.data = rj(run.path) or run.data. For each pane name in BUILDERS.values() that has window_named(run.session, name):
+    state = agent_state(run.session, name); since = tracker.update(name, state); tasks = (run.data.get('tasks') or {}).values();
+    task_queued = any((t.get('builder') or run.data.get('builder')) == name and t.get('status') in ('sent','pending') for t in tasks);
+    plan_done = bool(tasks) and all(t.get('status') == 'verified' for t in tasks) (or no work_dir in run.data: a finished run);
+    if aidev_guard.reap_due(state, since, (now or time.time()), task_queued, plan_done):
+        tuios('close-window', name, '-s', run.session);
+        tracker.forget(name);
+        run.event('reap', builder=name, why='plan done' if plan_done else 'idle');
+        print(f'reaped {name}'). Also for every task with status 'verified' and a 'guard' dict whose builder is open and still working,
+    call guard_poll(run, builder, tid) so a turn after done is stopped. Return the number of windows still open among BUILDERS.values().
+    """
+    run.data = rj(run.path) or run.data
+    open_count = 0
+    for name in BUILDERS.values():
+        if window_named(run.session, name):
+            state = agent_state(run.session, name)
+            since = tracker.update(name, state)
+            tasks = (run.data.get('tasks') or {}).values()
+            task_queued = any((t.get('builder') or run.data.get('builder')) == name and t.get('status') in ('sent','pending') for t in tasks)
+            plan_done = bool(tasks) and all(t.get('status') == 'verified' for t in tasks) or 'work_dir' not in run.data
+            if aidev_guard.reap_due(state, since, (now or time.time()), task_queued, plan_done):
+                tuios('close-window', name, '-s', run.session)
+                tracker.forget(name)
+                run.event('reap', builder=name, why='plan done' if plan_done else 'idle')
+                print(f'reaped {name}')
+            else:
+                open_count += 1
+            # Check for tasks with status 'verified' and guard still active
+            for tid, t in (run.data.get('tasks') or {}).items():
+                if t.get('status') == 'verified' and t.get('guard') and t.get('builder') == name:
+                    guard_poll(run, name, tid)
+    return open_count
+
+
+def cmd_reap(run, argv):
+    """reap [--once]: reap idle builder panes.
+
+    Loop: n = reap_pass(...); with --once return 0 after one pass; otherwise sleep REAP_POLL_S (module constant = 10, env AIDEV_TUIOS_REAP_POLL) and stop with return 0 when n == 0.
+    """
+    tracker = aidev_guard.RestTracker()
+    if '--once' in argv:
+        reap_pass(run, tracker)
+        return 0
+
+    while True:
+        n = reap_pass(run, tracker)
+        if n == 0:
+            return 0
+        time.sleep(REAP_POLL_S)
+
+
 def cmd_approvals(run, argv):
     """approvals [approve|deny]: show the prompt the builder waits on (fenced as data), or answer it."""
     action = argv[0] if argv else ""
@@ -2991,7 +3289,7 @@ HELPERS = {"tiers": cmd_tiers, "ask-lumo": cmd_ask_lumo, "check-plan": cmd_check
            "approvals": cmd_approvals, "zen-check": cmd_zen_check, "finish": cmd_finish, "commit": cmd_commit,
            "pr-status": cmd_pr_status, "gprr": cmd_gprr, "pr-describe": cmd_pr_describe,
            "merged": cmd_merged, "plan-sid": cmd_plan_sid, "explore": cmd_explore,
-           "review-diff": cmd_review_diff}
+           "review-diff": cmd_review_diff, "reap": cmd_reap}
 
 
 # ---- entry points ---------------------------------------------------------------------------------------------
