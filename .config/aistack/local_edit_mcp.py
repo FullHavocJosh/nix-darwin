@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""local-edit MCP server: one targeted file edit on the on-device coder model (Qwen3-Coder-30B-A3B), so Claude Code
+"""local-edit MCP server: one targeted file edit on the on-device coder model (gpt-oss-20b), so Claude Code
 can hand an edit to a free local model instead of writing every line itself. Registered from
 .config/mcp/claude-desktop-mcp.json. Nothing leaves the machine: the model server listens on loopback only.
 
@@ -10,11 +10,11 @@ The model sees as little as possible: one file per call, and with start_line/end
 read-only lines around it (whole files only up to LOCAL_EDIT_WHOLE_LINES). Its reply replaces exactly those lines, so
 nothing outside the region can change. If test_cmd fails, the model gets one fix attempt with the failure output.
 
-The 30B model needs ~19 GB, too much to keep loaded next to the always-on 9B (gpa/gpc, pi, ainfo). So it is loaded on
-demand: the first call starts llama-server on LOCAL_EDIT_PORT (~25 s to load), and the server is stopped once no edit
-has run for LOCAL_EDIT_IDLE_S (120 s). A server another Claude session already started is reused, edits run one at a
-time across sessions, and nobody stops the server while an edit holds the lock. Hosts below 32 GB do not download the
-model; the tool then says it is unavailable. Stdlib only.
+The gpt-oss-20b model (12 GB file, about 6.7 GB resident) is still loaded on demand, so it stays out of the way of the always-on 9B (gpa/gpc, pi, ainfo): the first call starts llama-server on
+LOCAL_EDIT_PORT (~25 s to load), and the server is stopped once no edit has run for LOCAL_EDIT_IDLE_S (120 s). A
+server another Claude session already started is reused, edits run one at a time across sessions, and nobody stops
+the server while an edit holds the lock. Hosts below 24 GB do not download the model; the tool then says it is
+unavailable. Stdlib only.
 """
 
 import difflib
@@ -29,8 +29,8 @@ import time
 import urllib.request
 
 HOME = os.path.expanduser("~")
-MODEL_FILE = os.environ.get("LOCAL_EDIT_MODEL_FILE") or os.path.join(HOME, ".models", "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf")
-ALIAS = os.environ.get("LOCAL_EDIT_ALIAS", "qwen3-coder-30b")
+MODEL_FILE = os.environ.get("LOCAL_EDIT_MODEL_FILE") or os.path.join(HOME, ".models", "gpt-oss-20b-MXFP4.gguf")
+ALIAS = os.environ.get("LOCAL_EDIT_ALIAS", "gpt-oss-20b")
 PORT = int(os.environ.get("LOCAL_EDIT_PORT", "8082"))
 CTX = int(os.environ.get("LOCAL_EDIT_CTX", "32768"))
 IDLE_S = int(os.environ.get("LOCAL_EDIT_IDLE_S", "120"))
@@ -42,7 +42,8 @@ LLAMA_SERVER = os.environ.get("LLAMA_SERVER_BIN") or shutil.which("llama-server"
 WHOLE_MAX_LINES = int(os.environ.get("LOCAL_EDIT_WHOLE_LINES", "200"))  # larger files need a line range
 RANGE_MAX_LINES = int(os.environ.get("LOCAL_EDIT_RANGE_LINES", "250"))
 CONTEXT_LINES = int(os.environ.get("LOCAL_EDIT_CONTEXT_LINES", "5"))  # read-only lines shown around the region
-MAX_OUT_TOKENS = int(os.environ.get("LOCAL_EDIT_MAX_TOKENS", "6144"))
+MAX_OUT_TOKENS = int(os.environ.get("LOCAL_EDIT_MAX_TOKENS", "4096"))
+EFFORT = os.environ.get("LOCAL_EDIT_REASONING_EFFORT", "low")
 STATE = os.path.join(os.environ.get("LOCAL_EDIT_STATE_DIR") or os.path.join(os.path.expanduser(os.environ.get("AI_HOME") or os.path.join(HOME, ".ai")), "cache", "local-edit"))
 LOCK = os.path.join(STATE, "edit.lock")  # held while an edit runs, by whichever session runs it
 LAST = os.path.join(STATE, "last-used")  # mtime = last time any session used the model
@@ -84,15 +85,14 @@ def ensure_server():
         return None
     if not os.path.isfile(MODEL_FILE):
         return (f"the local coder model is not on this machine ({MODEL_FILE}); it is downloaded only on hosts with "
-                "32 GB or more. Make the edit yourself.")
+                "24 GB or more. Make the edit yourself.")
     if not os.path.exists(LLAMA_SERVER):
         return f"llama-server not found ({LLAMA_SERVER})"
     os.makedirs(STATE, exist_ok=True)
     log = open(os.path.join(STATE, "server.log"), "w")
     server = subprocess.Popen(
         [LLAMA_SERVER, "--model", MODEL_FILE, "--alias", ALIAS, "--host", "127.0.0.1", "--port", str(PORT),
-         "--ctx-size", str(CTX), "--parallel", "1", "--jinja", "--n-gpu-layers", "99", "--flash-attn", "on",
-         "--cache-type-k", "q8_0", "--cache-type-v", "q8_0"],
+         "--ctx-size", str(CTX), "--parallel", "1", "--jinja", "--n-gpu-layers", "99", "--flash-attn", "on", "--cache-type-k", "f16", "--cache-type-v", "f16"],
         stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
     )
     with open(PIDFILE, "w") as fh:
@@ -301,6 +301,17 @@ def build_prompt(req, region, failure=None):
     return "\n".join(parts)
 
 
+def pi_model_entry(max_tokens=None):
+    """The pi model-list entry for the local server."""
+    return {"id": ALIAS, "reasoning": True, "contextWindow": CTX,
+            "maxTokens": max_tokens or MAX_OUT_TOKENS,
+            "samplingParams": {"temperature": 0},
+            "compat": {"thinkingFormat": "chat-template",
+                       "chatTemplateKwargs": {"reasoning_effort": EFFORT},
+                       "supportsReasoningEffort": False, "supportsDeveloperRole": False,
+                       "maxTokensField": "max_tokens"}}
+
+
 def complete(prompt, region):
     """One chat completion on the local model. Returns (text, error)."""
     max_tokens = min(MAX_OUT_TOKENS, max(512, int(len(region) / 3 * 1.6) + 512))
@@ -308,6 +319,7 @@ def complete(prompt, region):
     if est > CTX * 0.9:
         return None, f"the request is too large for the model's {CTX}-token context; give a smaller line range"
     body = {"model": ALIAS, "temperature": 0, "max_tokens": max_tokens,
+            "chat_template_kwargs": {"reasoning_effort": EFFORT},
             "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}]}
     req = urllib.request.Request(BASE + "/v1/chat/completions", data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})

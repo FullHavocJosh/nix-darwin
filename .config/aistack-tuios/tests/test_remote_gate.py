@@ -72,7 +72,7 @@ def main():
     a.CODER_FILE = model
     os.environ["AIDEV_HOST_RAM_GB"] = "16"
     reason = a.local_skip_reason()
-    check("file present with AIDEV_HOST_RAM_GB=16 is unavailable", "host has 16 GB, needs 32 GB" in reason)
+    check("file present with AIDEV_HOST_RAM_GB=16 is unavailable", "host has 16 GB, needs 24 GB" in reason)
     
     # Test with 64GB RAM and file present
     os.environ["AIDEV_HOST_RAM_GB"] = "64"

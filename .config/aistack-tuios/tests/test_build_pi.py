@@ -2,6 +2,7 @@
 """Test that write_build_pi writes the builder's pi model list and copies aidev's pi extensions."""
 
 import importlib.util
+import json
 import os
 import sys
 import tempfile
@@ -32,6 +33,19 @@ def main():
         model = a.write_build_pi(cfg)
         check("returns a coder/ model", isinstance(model, str) and model.startswith("coder/"), repr(model))
         check("model list exists", os.path.isfile(os.path.join(tmp, "models.json")))
+        try:
+            with open(os.path.join(tmp, "models.json")) as f:
+                models = json.load(f)["providers"]["coder"]["models"]
+        except Exception as e:
+            models = []
+            check("models.json parses with a coder provider", False, str(e))
+        entry = next((m for m in models if m.get("id") == model.split("/", 1)[1]), {})
+        check("coder model id is the local alias", bool(entry), repr(models))
+        check("coder model reasoning true", entry.get("reasoning") is True, repr(entry))
+        check("coder model temperature 0", entry.get("samplingParams", {}).get("temperature") == 0, repr(entry))
+        check("coder model reasoning_effort low",
+              entry.get("compat", {}).get("chatTemplateKwargs", {}).get("reasoning_effort") == "low", repr(entry))
+        check("coder model maxTokens 4096", entry.get("maxTokens") == 4096, repr(entry))
         for name in a.PI_BUILD_EXTENSIONS:
             dst = os.path.join(tmp, "extensions", name)
             check(f"{name} copied", os.path.isfile(dst))

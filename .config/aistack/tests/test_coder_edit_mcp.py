@@ -32,11 +32,13 @@ subprocess.run(f"cd {MAIN} && git init -q && git add . && git -c user.name=t -c 
 MODEL = T + "/model.gguf"
 open(MODEL, "w").write("stub")
 PROMPTS = T + "/prompts.jsonl"
+ARGS = T + "/server_args.json"
 
 # stub llama-server: /v1/models lists --alias; /v1/chat/completions edits the <region> per the instruction
 open(BIN + "/llama-server", "w").write("""#!/usr/bin/env python3
 import http.server, json, os, re, sys, time
 a = sys.argv; port = int(a[a.index('--port') + 1]); alias = a[a.index('--alias') + 1]
+open(os.environ['STUB_ARGS'], 'w').write(json.dumps(a))
 time.sleep(0.5)
 class H(http.server.BaseHTTPRequestHandler):
     def reply(self, obj):
@@ -46,7 +48,8 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         user = body['messages'][-1]['content']
-        open(os.environ['STUB_PROMPTS'], 'a').write(json.dumps({'user': user, 'max_tokens': body['max_tokens']}) + '\\n')
+        open(os.environ['STUB_PROMPTS'], 'a').write(json.dumps({'user': user, 'max_tokens': body['max_tokens'],
+                'temperature': body.get('temperature'), 'ctk': body.get('chat_template_kwargs'), 'model': body.get('model')}) + '\\n')
         region = re.search(r'<region lines="[^"]*">\\n(.*?)\\n?</region>', user, re.S).group(1)
         instr = re.search(r'Instruction: (.*)', user).group(1)
         finish = 'stop'
@@ -79,7 +82,7 @@ def free_port():
 
 PORT = free_port()
 ENV = {**os.environ, "LOCAL_EDIT_MODEL_FILE": MODEL, "LOCAL_EDIT_PORT": str(PORT), "LOCAL_EDIT_STATE_DIR": STATE,
-       "LLAMA_SERVER_BIN": BIN + "/llama-server", "LOCAL_EDIT_IDLE_S": "3", "STUB_PROMPTS": PROMPTS}
+       "LLAMA_SERVER_BIN": BIN + "/llama-server", "LOCAL_EDIT_IDLE_S": "3", "STUB_PROMPTS": PROMPTS, "STUB_ARGS": ARGS}
 
 
 class Session:
@@ -127,6 +130,14 @@ check("the model sees only the region and 5 context lines on each side",
       "line_195" in p and "line_194" not in p and "line_205" in p and "line_206" not in p and len(p) < 1200, p)
 check("context lines are numbered, the region is not", "  199| line_199" in p and '<region lines="200-200">\nline_200 = 200\n</region>' in p, p)
 check("max_tokens is sized to the region, not the whole window", last_prompt()["max_tokens"] <= 1024, last_prompt())
+check("the request uses temperature 0, max_tokens <= 4096 and reasoning_effort low",
+      last_prompt()["temperature"] == 0 and last_prompt()["max_tokens"] <= 4096
+      and last_prompt()["ctk"] == {"reasoning_effort": "low"}, last_prompt())
+srv_args = json.load(open(ARGS))
+check("the server is started with alias gpt-oss-20b", srv_args[srv_args.index("--alias") + 1] == "gpt-oss-20b"
+      and last_prompt()["model"] == "gpt-oss-20b", srv_args)
+check("the server uses an f16 KV cache", srv_args[srv_args.index("--cache-type-k") + 1] == "f16"
+      and srv_args[srv_args.index("--cache-type-v") + 1] == "f16", srv_args)
 
 err, out = s.call({"instruction": "RENAME line_1 x", "file": "src/big.py"})
 check("a large file without a range is refused, asking for start_line/end_line", err and "start_line and end_line" in out["error"], out)
@@ -172,8 +183,21 @@ check("closing the session stops the server", not serving())
 print("unavailable")
 s = Session({**ENV, "LOCAL_EDIT_MODEL_FILE": T + "/missing.gguf"})
 err, out = s.call({"instruction": "RENAME a b", "file": "src/a.py"})
-check("no model file: unavailable, make the edit yourself", err and "32 GB" in out.get("error", ""), out)
+check("no model file: unavailable, make the edit yourself", err and "24 GB" in out.get("error", ""), out)
 s.close()
+
+print("pi model entry")
+import importlib.util
+
+spec = importlib.util.spec_from_file_location("local_edit_mcp", SERVER)
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+entry = mod.pi_model_entry()
+check("pi_model_entry names the alias and reasons", entry["id"] == "gpt-oss-20b" and entry["reasoning"] is True, entry)
+check("pi_model_entry carries temperature 0 and reasoning_effort low",
+      entry["samplingParams"]["temperature"] == 0
+      and entry["compat"]["chatTemplateKwargs"] == {"reasoning_effort": "low"}, entry)
+check("pi_model_entry maxTokens is at most 4096", entry["maxTokens"] <= 4096, entry)
 
 print("\nFAILED: %s" % FAILS if FAILS else "\nALL PASSED")
 sys.exit(1 if FAILS else 0)

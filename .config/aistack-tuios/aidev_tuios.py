@@ -43,7 +43,7 @@ Panes, all on one workspace (nvim's, else the lowest free one), each named after
     plan     Claude Code: talks with you, reads the code, plans, sends tasks, verifies, reviews   read,write,fan,files
     research pi on Lumo through lumo-tamer, no tools: web lookups on what Claude sends it        read
     build-local-tier-0 / build-local-tier-1 / build-local-tier-2 / build-free-tier-3 / build-billed-tier-4   builders:
-             pi on the on-device 30B (needs the model file and 32 GB RAM), pi on the G14 with a small context, pi on
+             pi on the on-device gpt-oss-20b (needs the model file and 24 GB RAM), pi on the G14 with a small context, pi on
              the G14 with a large context, OpenCode on a free Zen model (needs a Zen API key), Claude on a billed
              model (after the user says yes); Claude opens them                            read,write
     nvim     nvim, only in a session of its own (in your session you have yours)                default
@@ -97,8 +97,8 @@ TENV = {**os.environ,
 CLAUDE_MODEL = os.environ.get("AIDEV_TUIOS_CLAUDE_MODEL") or os.environ.get("AISTACK_CLAUDE_MODEL") or "sonnet"
 CLAUDE_EFFORT = os.environ.get("AIDEV_TUIOS_CLAUDE_EFFORT") or os.environ.get("AISTACK_CLAUDE_EFFORT") or "medium"
 CODER_FILE = os.path.expanduser(os.environ.get("LOCAL_EDIT_MODEL_FILE")
-                                or "~/.models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf")
-LOCAL_MIN_RAM_GB = 32
+                                or "~/.models/gpt-oss-20b-MXFP4.gguf")
+LOCAL_MIN_RAM_GB = 24
 
 
 def load_remote_builder():
@@ -129,16 +129,16 @@ def local_skip_reason():
     """None when the model file exists and host has enough RAM, else a string with the reason."""
     if not os.path.isfile(CODER_FILE):
         if host_ram_gb() >= LOCAL_MIN_RAM_GB:
-            return f"no on-device 30B: model file {CODER_FILE} is missing"
+            return f"no on-device gpt-oss-20b: model file {CODER_FILE} is missing"
         else:
-            return f"no on-device 30B: host has {host_ram_gb()} GB, needs 32 GB; model file {CODER_FILE} is missing"
+            return f"no on-device gpt-oss-20b: host has {host_ram_gb()} GB, needs {LOCAL_MIN_RAM_GB} GB; model file {CODER_FILE} is missing"
     elif host_ram_gb() < LOCAL_MIN_RAM_GB:
-        return f"no on-device 30B: host has {host_ram_gb()} GB, needs 32 GB"
+        return f"no on-device gpt-oss-20b: host has {host_ram_gb()} GB, needs {LOCAL_MIN_RAM_GB} GB"
     return None
 
 
 def local_builder_available():
-    """The local builder can run: the model file exists and host has 32 GB RAM, or the remote builder answers its 2 s probe."""
+    """The local builder can run: the model file exists and host has 24 GB RAM, or the remote builder answers its 2 s probe."""
     if local_skip_reason() is None:
         return True
     # Only allow remote builder when explicitly opted in
@@ -985,7 +985,7 @@ def write_build_pi(cfg, kind="tier-0"):
     spec.loader.exec_module(le)
     providers = {"coder": {
         "baseUrl": le.BASE + "/v1", "api": "openai-completions", "apiKey": "sk-local",
-        "models": [{"id": le.ALIAS, "reasoning": False, "contextWindow": le.CTX, "maxTokens": aidev_tiers.max_output_tokens("tier-0", tiers())}]}}
+        "models": [le.pi_model_entry(aidev_tiers.max_output_tokens("tier-0", tiers()))]}}
     if kind in ("tier-1", "tier-2"):
         key_path = semi_key_file()
         if key_path:
@@ -1286,7 +1286,7 @@ def build_body(run, cfg, kind, name=None):
         sid = pane.setdefault("session_id", str(uuid.uuid4()))
         argv = [sys.executable, os.path.join(AISTACK, "coder_pi.py"), "--hold", "--", "pi", "--model", model,
                 "--name", f"aidev {name}", "--no-skills", "--session-id", sid]
-        pane["builder"] = "on-device Qwen3-Coder-30B (free)"
+        pane["builder"] = "on-device gpt-oss-20b (free)"
         return (pane_path + f"cd {shlex.quote(wd)}\nexport AIDEV_TUIOS_BUILDER=1\n"
                 f"export AIDEV_TOOL_LOG={shlex.quote(tool_log_path(run, name))}\n"
                 f"export PI_CODING_AGENT_DIR={shlex.quote(cfg['pi_build'])}\n" + with_system_prompt(argv, sysp))
@@ -1930,7 +1930,7 @@ def cmd_worktree(run, _argv):
 
 def auto_builder(run):
     """The builder to open when none is named: the order is fixed: tier-2 when the G14 server is up, else tier-1, else
-    tier-0 when the 30B file exists, else tier-3 when a free Zen model is usable, else tier-4 (cmd_builder then tells
+    tier-0 when the gpt-oss-20b file exists, else tier-3 when a free Zen model is usable, else tier-4 (cmd_builder then tells
     the plan pane to ask the user in its chat and pass --approved)."""
     unready = [norm_kind(k) or k for k in ((run.data.get('unready') or []) if run is not None else [])]
     for kind in ('tier-2', 'tier-1', 'tier-0', 'tier-3'):
@@ -2791,7 +2791,7 @@ def cmd_watch(run, argv):
 
 def finish_work(run):
     """Close this piece of work. The panes stay for the next one, so the run stays open: its work dir, builder and
-    tasks move to "finished", and the builder pane closes (it worked in that work dir; it frees the 30B too).
+    tasks move to "finished", and the builder pane closes (it worked in that work dir; it frees the gpt-oss-20b too).
     Returns the work dir; prints nothing."""
     wd = run.data.get("work_dir") or run.project
     for name in list(BUILDERS.values()) + list(LEGACY_BUILDER_PANES):
@@ -3607,7 +3607,7 @@ def edit_in_pane(run, kind, task_path, limit):
             return reply, f"the builder {'closed' if status == 'gone' else f'did not finish in {limit} s'}"
         return reply, ""
     finally:
-        tuios("close-window", name, "-s", run.session)  # frees the 30B for the next job; the diff stays
+        tuios("close-window", name, "-s", run.session)  # frees the gpt-oss-20b for the next job; the diff stays
 
 
 def edit_headless(run, kind, task_text, limit):
@@ -3680,8 +3680,8 @@ def edit_options(argv):
 
 
 def cmd_edit(argv):
-    """aidev -p "<change>" [files...]: one edit by a free builder in this directory: the on-device 30B, then a free
-    Zen model when the 30B leaves it unchanged or AIDEV_TEST_CMD failing. Inside tuios the builder works in a pane on
+    """aidev -p "<change>" [files...]: one edit by a free builder in this directory: the on-device gpt-oss-20b, then a free
+    Zen model when the gpt-oss-20b leaves it unchanged or AIDEV_TEST_CMD failing. Inside tuios the builder works in a pane on
     a free workspace (you can watch and type into it) and replies by mail; elsewhere it runs headless. Blocks until
     done; exit 0 only when the tree changed and AIDEV_TEST_CMD passes."""
     global LAST_CHECK_EXIT
@@ -3771,7 +3771,7 @@ def cmd_edit(argv):
 
 def cmd_direct(argv):
     """aidev --direct [words...]: an interactive free builder in this terminal (gpa's fix windows type this): pi on
-    the on-device 30B, else OpenCode on a free Zen model. The words are its first message."""
+    the on-device gpt-oss-20b, else OpenCode on a free Zen model. The words are its first message."""
     words = " ".join(a for a in argv if a != "--direct").strip()
     project = project_root(os.getcwd())
     cfg = pane_configs(project)

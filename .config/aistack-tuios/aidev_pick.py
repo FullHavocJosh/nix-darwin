@@ -12,7 +12,7 @@ line (Zen, Go, OpenRouter) only report; they are what the cloud builders and fal
   2 Claude (plan):    aidev start with planner forced to claude (AIDEV_TUIOS_PLANNER=claude)
   3 9B (advisor):     pi on the always-on llama-server (:8080), advisor prompt, read-only tools
   4 9B (plan):        aidev start with planner forced to local (AIDEV_TUIOS_PLANNER=local)
-  5 30B (advisor):    pi on the Qwen3-Coder-30B (loaded on demand), advisor prompt, read-only tools
+  5 30B (advisor):    pi on the gpt-oss-20b (loaded on demand), advisor prompt, read-only tools
   6 Manage session: only in ~/ai-info; runs ~/ai-info/manage/launch.sh
 """
 import importlib.util
@@ -113,9 +113,9 @@ def check_9b():
 
 def check_30b():
     path = os.environ.get("LOCAL_EDIT_MODEL_FILE") or os.path.expanduser(
-        "~/.models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf")
+        "~/.models/gpt-oss-20b-MXFP4.gguf")
     if not os.path.isfile(path):
-        return set_state("30b", "bad", "model file missing (hosts below 32 GB do not download it)")
+        return set_state("30b", "bad", "model file missing (hosts below 24 GB do not download it)")
     try:
         get_json("http://127.0.0.1:8082/health", timeout=2)
         loaded = "loaded"

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""aidev's free builder: pi on the on-device Qwen3-Coder-30B-A3B.
+"""aidev's free builder: pi on the on-device gpt-oss-20b.
 
 aidev's build-local pane runs this (with --hold) with pi's own arguments
-(`--print --mode json --model coder/qwen3-coder-30b ...`) and the task prompt on stdin. It:
+(`--print --mode json --model coder/gpt-oss-20b ...`) and the task prompt on stdin. It:
 
-  - shares the 30B with the local-edit MCP server (local_edit_mcp.py): the same llama-server on port 8082, the same
-    edit.lock, so one 30B job runs at a time on this machine, and the same last-used file and 2-minute idle unload;
-  - points pi at that server through its own agent dir (models.json: provider `coder`, 32k context);
+  - shares the gpt-oss-20b (12 GB file, about 6.7 GB resident at ctx 32768) with the local-edit MCP server (local_edit_mcp.py): the same llama-server on port 8082, the same
+    edit.lock, so one local-model job runs at a time on this machine, and the same last-used file and 2-minute idle unload;
+  - points pi at that server through its own agent dir (models.json: provider `coder`, 32k context, reasoning effort low);
   - after pi exits, leaves a detached watcher (`local_edit_mcp.py --stop-when-idle`) that unloads the model once
     nothing has used it for LOCAL_EDIT_IDLE_S.
 
@@ -20,7 +20,7 @@ line and falls through to the local path above. In hold mode the command gets a 
 dir (PI_CODING_AGENT_DIR) with the remote models.json. A monitor thread re-probes every 5 s; after 3 failures
 it stops the command and the wrapper exits 3 with a partial-edit warning (once: nothing returns to the remote).
 
-Exit codes: pi's (or the command's) own, or 3 when the 30B is not available (not downloaded on hosts below 32 GB,
+Exit codes: pi's (or the command's) own, or 3 when the local model is not available (not downloaded on hosts below 24 GB,
 or it failed to load); the driver then moves on to the next agent (Big Pickle, then Claude). Stdlib only.
 
 The remote path runs only when AIDEV_REMOTE_BUILDER_URL is set explicitly (opt-in), the semi-local tier is
@@ -92,15 +92,9 @@ def write_models():
                     "baseUrl": le.BASE + "/v1",
                     "api": "openai-completions",
                     "apiKey": "sk-local",
-                    # Qwen3-Coder has no thinking mode; its window is the server's --ctx-size
-                    "models": [
-                        {
-                            "id": le.ALIAS,
-                            "reasoning": False,
-                            "contextWindow": le.CTX,
-                            "maxTokens": 8192,
-                        }
-                    ],
+                    # gpt-oss reasons at effort low through compat.chatTemplateKwargs; its window is the
+                    # server's --ctx-size
+                    "models": [le.pi_model_entry()],
                 }
             }
         }
@@ -204,7 +198,7 @@ def main(argv):
     if not os.path.isfile(le.MODEL_FILE):
         print(
             f"coder-30b: the on-device coder model is not on this machine ({le.MODEL_FILE}); it is downloaded only "
-            "on hosts with 32 GB or more",
+            "on hosts with 24 GB or more",
             file=sys.stderr,
         )
         return 3
