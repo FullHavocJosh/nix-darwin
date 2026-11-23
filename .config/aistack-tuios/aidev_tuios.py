@@ -1393,6 +1393,24 @@ def builder_model_ok(session, name, kind, strict=True):
     return (False, "unknown") if strict else (True, "")
 
 
+def wait_builder_model(session, name, kind, wait=10):
+    """Poll the pane footer for up to `wait` re-checks (1 s apart) for a tier-1/2 model match.
+    Calls builder_model_ok once; while result is not ok and shown == 'unknown' and fewer than `wait`
+    re-checks were made, it sleeps 1 s and checks again. Returns (ok, shown). When it ends not ok
+    with shown == 'unknown' it returns (False, f'footer unknown after {wait} s'). A real wrong model
+    (shown != 'unknown') returns at once with no sleep: (False, shown)."""
+    ok, shown = builder_model_ok(session, name, kind, strict=True)
+    if not ok and shown == "unknown":
+        for _ in range(wait):
+            time.sleep(1)
+            ok, shown = builder_model_ok(session, name, kind, strict=True)
+            if ok:
+                break
+        if not ok:
+            return False, f'footer unknown after {wait} s'
+    return ok, shown
+
+
 def start_builder(run, kind, name, ws, cwd):
     """Builder `kind` in a new pane `name` on workspace `ws` of the run's session, through tuios start-agent (the
     caller needs fan or admin; admin includes fan), which returns once the agent is ready. (ok, message)."""
@@ -1412,25 +1430,18 @@ def start_builder(run, kind, name, ws, cwd):
     if code != 0 and kind == "tier-3" and oc_ready(run.session, name, 90):
         note = f"ready footer seen (start-agent exit {code}); "
         code = 0
-    if window_named(run.session, name):
-        minimize_window(run.session, name)
     run.data["panes"][name].update(script=script, cwd=cwd, grants=GRANTS["build"])
     run.event("builder", name=name, ok=code == 0)
     run.save()
     
     # Check that tier-1 or tier-2 pane runs on the expected provider
-    if kind in ("tier-1", "tier-2"):
-        ok, shown = builder_model_ok(run.session, name, kind, strict=True)
-        # The footer may not be rendered yet when start-agent returns; re-check up to 10 times
-        if not ok and shown == "unknown":
-            for _ in range(10):
-                time.sleep(1)
-                ok, shown = builder_model_ok(run.session, name, kind, strict=True)
-                if not ok:
-                    break
-        if not ok:
-            tuios("close-window", name, "-s", run.session)
-            return False, f"{name} started on {shown}, not the tier model: pane closed"
+    ok, shown = wait_builder_model(run.session, name, kind)
+    if not ok:
+        tuios("close-window", name, "-s", run.session)
+        return False, f"{name} started on {shown}, not the tier model: pane closed"
+    
+    if window_named(run.session, name):
+        minimize_window(run.session, name)
     
     return code == 0, (f"{name}: {run.data['panes'][name].get('builder')}. start-agent (exit {code}): {note}"
                        f"{(out or err).strip()[-500:]}")
