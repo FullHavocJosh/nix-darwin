@@ -50,8 +50,8 @@ def main():
     check("60K of 65536 leaves under 25%: still tier-2 but flagged", best == "tier-2" and "under 25%" in why, why)
     # nothing local fits: a cloud tier takes it, else split
     rows, best, why = t.fit_rows(90000, 800, cfg, up)
-    check("over every local window goes to tier-3", best == "tier-3", (best, why))
-    off = dict(up, **{"tier-3": {"online": False}, "tier-4": {"online": False}})
+    check("over every local window goes to tier-5", best == "tier-5", (best, why))
+    off = dict(up, **{"tier-5": {"online": False}, "tier-6": {"online": False}})
     rows, best, why = t.fit_rows(90000, 800, cfg, off)
     check("no online tier fits means split", best is None and why.startswith("split"), (best, why))
     # the largest window wins when no speed is known
@@ -93,7 +93,7 @@ def main():
     check("tiers json keeps ctx and adds room, model, thinking and speed",
           rows["tier-2"]["ctx"] == 65536 and rows["tier-2"]["room"] == 65536 - 12000
           and rows["tier-2"]["model"] == "qwen3-coder-30b" and rows["tier-2"]["thinking"] == "off"
-          and rows["tier-2"]["tg_tok_s"] == 47 and rows["tier-3"]["room"] is None, rows["tier-2"])
+          and rows["tier-2"]["tg_tok_s"] == 47 and rows["tier-5"]["room"] is None, rows["tier-2"])
 
     # fit helper
     run = types.SimpleNamespace(project=os.getcwd())

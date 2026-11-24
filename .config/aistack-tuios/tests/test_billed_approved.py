@@ -76,7 +76,7 @@ def main():
     del os.environ["AIDEV_BILLED_ASK_TIMEOUT_S"]
 
     print("builder (auto) with only billed left")
-    a.auto_builder = lambda run: "tier-4"
+    a.auto_builder = lambda run: "tier-6"
     before = len(asked)
     rc = a.cmd_builder(run, [])
     check("returns 3 without an Inbox ask", rc == 3 and len(asked) == before, (rc, asked))

@@ -25,16 +25,16 @@ WORDS = {
     'tier-0': ['tier-0', 'tier0', '0', 'build-local-tier-0', 'build-local', 'local', '30b', ' 30B '],
     'tier-1': ['tier-1', 'tier1', '1', 'build-local-tier-1'],
     'tier-2': ['tier-2', 'tier2', '2', 'build-local-tier-2', 'build-semi-local', 'semi-local', 'semi', 'g14', 'G14'],
-    'tier-3': ['tier-3', 'tier3', '3', 'build-free-tier-3', 'build-free', 'free', 'pickle'],
-    'tier-4': ['tier-4', 'tier4', '4', 'build-billed-tier-4', 'build-billed', 'billed', 'claude', 'Claude'],
+    'tier-5': ['tier-5', 'tier3', '3', 'build-free-tier-5', 'build-free', 'free', 'pickle'],
+    'tier-6': ['tier-6', 'tier4', '4', 'build-billed-tier-6', 'build-billed', 'billed', 'claude', 'Claude'],
 }
 for tid, words in WORDS.items():
     for w in words:
         check(f"norm_tier({w!r}) == {tid}", mod.norm_tier(w) == tid, str(mod.norm_tier(w)))
-for w in ('', 'tier-5', 'nope', None):
+for w in ('', 'tier-7', 'nope', None):
     check(f"norm_tier({w!r}) is None", mod.norm_tier(w) is None)
 
-check("TIER_IDS", mod.TIER_IDS == ('tier-0', 'tier-1', 'tier-2', 'tier-3', 'tier-4'))
+check("TIER_IDS", mod.TIER_IDS == ('tier-0', 'tier-1', 'tier-2', 'tier-5', 'tier-6'))
 check("defaults ctx", [mod.DEFAULTS[t]['ctx'] for t in mod.TIER_IDS] == [32768, 4096, 65536, 0, 0])
 check("tier-1 on by default", mod.DEFAULTS['tier-1']['enabled'] is True)
 check("tier-1 alias default", mod.DEFAULTS['tier-1']['alias'] == 'trash-code')

@@ -54,7 +54,7 @@ def test_send_task_guard_init():
     ))
     
     # Mock the function that returns stories
-    a.tiers = lambda: ["tier-0", "tier-1", "tier-2", "tier-3", "tier-4"]
+    a.tiers = lambda: ["tier-0", "tier-1", "tier-2", "tier-5", "tier-6"]
     a.tier_state = lambda *_args, **_kw: {}
     a.task_need = lambda *_args, **_kw: {"task": "test"}
     

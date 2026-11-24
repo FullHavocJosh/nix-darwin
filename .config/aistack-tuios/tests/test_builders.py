@@ -40,17 +40,17 @@ def main():
 
     print("builder kinds")
     check("canonical kinds map to themselves",
-          [a.norm_kind(k) for k in ("tier-0", "tier-1", "tier-2", "tier-3", "tier-4")]
-          == ["tier-0", "tier-1", "tier-2", "tier-3", "tier-4"])
+          [a.norm_kind(k) for k in ("tier-0", "tier-1", "tier-2", "tier-5", "tier-6")]
+          == ["tier-0", "tier-1", "tier-2", "tier-5", "tier-6"])
     check("aliases map to kinds", [a.norm_kind(k) for k in ("semi-local", "local", "free", "billed", "semi", "g14", "30b", "pickle", "claude")]
-          == ["tier-2", "tier-0", "tier-3", "tier-4", "tier-2", "tier-2", "tier-0", "tier-3", "tier-4"])
-    check("upper case and spaces are accepted", a.norm_kind(" Billed ") == "tier-4" and a.norm_kind("30B") == "tier-0")
+          == ["tier-2", "tier-0", "tier-5", "tier-6", "tier-2", "tier-2", "tier-0", "tier-5", "tier-6"])
+    check("upper case and spaces are accepted", a.norm_kind(" Billed ") == "tier-6" and a.norm_kind("30B") == "tier-0")
     check("an unknown word is None", a.norm_kind("x") is None)
     check("semi-local and its alias map to tier-2", a.norm_kind("semi-local") == "tier-2"
           and a.norm_kind("semi") == "tier-2")
     check("builder pane names", a.BUILDERS == {"tier-0": "build-local-tier-0", "tier-1": "build-local-tier-1",
-                                               "tier-2": "build-local-tier-2", "tier-3": "build-free-tier-3",
-                                               "tier-4": "build-billed-tier-4"}, a.BUILDERS)
+                                               "tier-2": "build-local-tier-2", "tier-5": "build-free-tier-5",
+                                               "tier-6": "build-billed-tier-6"}, a.BUILDERS)
     check("reset commands cover every kind", set(a.RESET_CMD) == set(a.BUILDERS), a.RESET_CMD)
 
     print("pane grants")
@@ -489,12 +489,12 @@ def main():
     a.count_attempt(tt, "build-free")
     check("count_attempt per builder", tt.get("by") == {"build-local": 2, "build-free": 1}, tt)
     check("tier_of", [a.tier_of(n) for n in ("build-local", "build-free", "build-billed", "build-semi-local", "x", None)]
-          == ["tier-0", "tier-3", "tier-4", "tier-2", None, None])
+          == ["tier-0", "tier-5", "tier-6", "tier-2", None, None])
     check("next_tier table", [a.next_tier(*c) for c in (("tier-0", "available"), ("tier-0", "exhausted"),
-                                                       ("tier-0", "none"), ("tier-3", "available"),
-                                                       ("tier-4", "available"), ("x", "available"),
+                                                       ("tier-0", "none"), ("tier-5", "available"),
+                                                       ("tier-6", "available"), ("x", "available"),
                                                        ("tier-2", "available"))]
-          == ["tier-3", "tier-4", "tier-4", "tier-4", None, None, "tier-0"])
+          == ["tier-5", "tier-6", "tier-6", "tier-6", None, None, "tier-0"])
     erun = a.Run(p, "20260101-000002")
     ecalls, eclosed, ezen = [], [], ["available"]
     ereal = (a.zen_status, a.cmd_builder, a.tuios)
@@ -520,14 +520,14 @@ def main():
         check("escalate refuses after one failure", code == 1 and not ecalls, (code, out))
         code, out = esc("failed", {"build-local": 1}, compacted=True)
         check("escalate accepts a compacted failure after one attempt",
-              code == 0 and ecalls == [["tier-3"]] and "attempts used" not in out
+              code == 0 and ecalls == [["tier-5"]] and "attempts used" not in out
               and "compacted" not in erun.data["tasks"]["T1"], (code, ecalls, out, erun.data["tasks"]["T1"]))
         code, out = esc("failed", {"build-local": 2})
-        check("escalate local to free", code == 0 and ecalls == [["tier-3"]] and eclosed == ["build-local"]
+        check("escalate local to free", code == 0 and ecalls == [["tier-5"]] and eclosed == ["build-local"]
               and "build-local -> build-free" in out, (code, ecalls, eclosed, out))
         ezen[0] = "exhausted"
         code, out = esc("failed", {"build-local": 2})
-        check("escalate local to billed when free is exhausted", code == 0 and ecalls == [["tier-4"]]
+        check("escalate local to billed when free is exhausted", code == 0 and ecalls == [["tier-6"]]
               and "not usable" in out, (code, ecalls, out))
         ezen[0] = "available"
         code, out = esc("failed", {"build-billed": 2}, "build-billed")
@@ -738,7 +738,7 @@ def main():
         f.write("x\n")
     rrun = type("R", (), {})()
     rrun.session = "s"
-    rrun.data = {"panes": {"build-free-tier-3": {"script": script_path}}, "zen_model": None}
+    rrun.data = {"panes": {"build-free-tier-5": {"script": script_path}}, "zen_model": None}
     rrun.save = lambda self=None: None
     calls = []
     real_tuios = a.tuios
@@ -820,7 +820,7 @@ def main():
         with contextlib.redirect_stdout(buf):
             code = a.cmd_fallback(frun, ["T2"])
         text = buf.getvalue()
-        check("fallback tried model goes to billed", code == 0 and fcb and fcb[-1] == ["tier-4"]
+        check("fallback tried model goes to billed", code == 0 and fcb and fcb[-1] == ["tier-6"]
               and "no free model left" in text, (code, text, fcb))
         check("fallback types /exit into free pane", any("/exit" in " ".join(c) for c in ftuios), ftuios)
     finally:

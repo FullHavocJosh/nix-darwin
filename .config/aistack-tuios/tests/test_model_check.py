@@ -75,10 +75,10 @@ check("tier-2 with wrong model shows wrong model", a.builder_model_ok(None, "fre
 a.pane_text = mock_pane_text("(coder) some-model")
 check("tier-0 always ok", a.builder_model_ok(None, "free", "tier-0") == (True, ""))
 
-# Test tier-3 always ok (not tier-1 or tier-2)
-check("tier-3 always ok", a.builder_model_ok(None, "free", "tier-3") == (True, ""))
+# Test tier-5 always ok (not tier-1 or tier-2)
+check("tier-5 always ok", a.builder_model_ok(None, "free", "tier-5") == (True, ""))
 
-# Test tier-4 always ok (not tier-1 or tier-2)
-check("tier-4 always ok", a.builder_model_ok(None, "free", "tier-4") == (True, ""))
+# Test tier-6 always ok (not tier-1 or tier-2)
+check("tier-6 always ok", a.builder_model_ok(None, "free", "tier-6") == (True, ""))
 
 sys.exit(1 if FAILS else 0)

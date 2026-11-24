@@ -31,9 +31,9 @@ check("defaults tier-0", mod.max_output_tokens("tier-0") == 4096, str(mod.max_ou
 check("defaults tier-1", mod.max_output_tokens("tier-1") == 8192, str(mod.max_output_tokens("tier-1")))
 check("defaults tier-2", mod.max_output_tokens("tier-2") == 8192, str(mod.max_output_tokens("tier-2")))
 
-# Test tier-3 and tier-4 are 0 (from DEFAULTS)
-check("tier-3 is 0", mod.max_output_tokens("tier-3") == 0, str(mod.max_output_tokens("tier-3")))
-check("tier-4 is 0", mod.max_output_tokens("tier-4") == 0, str(mod.max_output_tokens("tier-4")))
+# Test tier-5 and tier-6 are 0 (from DEFAULTS)
+check("tier-5 is 0", mod.max_output_tokens("tier-5") == 0, str(mod.max_output_tokens("tier-5")))
+check("tier-6 is 0", mod.max_output_tokens("tier-6") == 0, str(mod.max_output_tokens("tier-6")))
 
 # Test override file via AIDEV_TIERS_FILE in a temp dir changes tier-1
 with tempfile.TemporaryDirectory() as d:

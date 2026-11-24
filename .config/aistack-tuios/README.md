@@ -83,8 +83,8 @@ the tuios MCP only.
 | 1         | `build-local-tier-2`  | pi on the Qwen3-Coder-30B on the G14, large ctx                                                                     | read, write                      |
 | 1         | `build-local-tier-1`  | pi on the Qwen3.5-9B on the G14 (Cait), 65536 ctx                                                                   | read, write                      |
 | 1         | `build-local-tier-0`  | pi on the on-device gpt-oss-20b (MXFP4, reasoning effort low, ctx 32768); Claude opens it when the plan is approved | read, write                      |
-| 1         | `build-free-tier-3`   | escalation: pi on a free Zen model                                                                                  | read, write                      |
-| 1         | `build-billed-tier-4` | escalation: Claude Code (billed, asks you first)                                                                    | read, write                      |
+| 1         | `build-free-tier-5`   | escalation: pi on a free Zen model                                                                                  | read, write                      |
+| 1         | `build-billed-tier-6` | escalation: Claude Code (billed, asks you first)                                                                    | read, write                      |
 
 The billed builder's settings use `acceptEdits`, allow the plan's verify commands by exact text and the read-only
 commands, and deny git writes, `gh`, `rm -rf` and `sudo` (deny wins over allow). Edits to the plan directory and to the run's `state.json` and `events.jsonl` are denied too. Each run has its own plan directory and worktree record (`meta_path`) under `runs/<id>/`, so concurrent runs of one project never share a plan, worktree or PR; finish archives the plan to `runs/<id>/plan-done-<time>`.
@@ -154,8 +154,8 @@ dir) and `/clear` otherwise; `AIDEV_TUIOS_FINISH_RESET=off` turns that off.
 Zen has no balance API, so `zen_models.py status` probes each candidate free model with one tiny `opencode run` (the
 oczen MCP tool `zen_free_models` reports the same to any Claude session). Results are cached for ten minutes. The free
 builder opens on the first available free model, and an exhausted or missing free tier is skipped by `builder free`,
-`aidev -p` and `escalate`. `escalate` moves a task from tier-2 to tier-3 to tier-4 after `AIDEV_TUIOS_ESCALATE_AFTER`
-failures at a tier (default 2), and from tier-0 or tier-3 straight to tier-4 when no free model is usable. Billed always asks in
+`aidev -p` and `escalate`. `escalate` moves a task from tier-2 to tier-5 to tier-6 after `AIDEV_TUIOS_ESCALATE_AFTER`
+failures at a tier (default 2), and from tier-0 or tier-5 straight to tier-6 when no free model is usable. Billed always asks in
 the Inbox.
 
 For public repos the free builder tries each OpenCode Go model first, then the same model on Zen (the Zen twin,
@@ -252,7 +252,7 @@ failures stop pi). aidev never logs the URL or the key.
 
 When a builder pane repeats 'successfully completed task T<n>' (two or more times in its last 80 scrollback
 lines), or says it in mail to the plan pane, `wait-task` and `watch` interrupt it (Escape, then ctrl+c if
-needed) and reset it with its reset command (`/new` for tiers 0 to 3, `/clear` for tier-4) without closing
+needed) and reset it with its reset command (`/new` for tiers 0 to 3, `/clear` for tier-6) without closing
 the window, and print `builder X looped on completion; reset`. A reply already mailed on the task thread
 stays the normal result and verify still runs. Set `AIDEV_TUIOS_LOOP_STOP=off` to disable it.
 
@@ -265,20 +265,20 @@ aidev has five builder tiers, from a registry in `aidev_tiers.py`:
 | tier-0 | `build-local-tier-0`  | on-device gpt-oss-20b | 32768         | none (local model file)           |
 | tier-1 | `build-local-tier-1`  | G14 9B (Cait)         | 65536         | `https://llm.rollet.family/t1/v1` |
 | tier-2 | `build-local-tier-2`  | G14, large ctx        | 65536         | `https://llm.rollet.family/v1`    |
-| tier-3 | `build-free-tier-3`   | free Zen model        | model-defined | Zen                               |
-| tier-4 | `build-billed-tier-4` | Claude Code, billed   | model-defined | Anthropic                         |
+| tier-5 | `build-free-tier-5`   | free Zen model        | model-defined | Zen                               |
+| tier-6 | `build-billed-tier-6` | Claude Code, billed   | model-defined | Anthropic                         |
 
 Task size limits scale with the target tier's context window. The tiers config file is `~/.config/aidev/tiers`
 followed by the extension `.json`, or the path in `AIDEV_TIERS_FILE`. It overrides keys per tier: `ctx`, `enabled`,
 `url`, `alias` (the model name to request) and `min_ram_gb`.
 
 Selection: aidev routes a task to tier-1 or tier-2 by size and availability (a small task goes to tier-1 when it is
-enabled and online, otherwise tier-2). Tier-0 is used only when both G14 tiers are offline. After that comes tier-3,
-then tier-4. If a task fits no tier-2 ctx while tier-2 is online, aidev reports that the task must be split.
+enabled and online, otherwise tier-2). Tier-0 is used only when both G14 tiers are offline. After that comes tier-5,
+then tier-6. If a task fits no tier-2 ctx while tier-2 is online, aidev reports that the task must be split.
 
 Tier-1 is the Qwen3.5-9B: it scored 4 of 9 coding cases in the bench, so it suits small, well-specified tasks.
 
-Old names stay as aliases: semi-local is tier-2, local is tier-0, free is tier-3 and billed is tier-4 (the old
+Old names stay as aliases: semi-local is tier-2, local is tier-0, free is tier-5 and billed is tier-6 (the old
 `build-semi-local`, `build-local`, `build-free` and `build-billed` pane names map the same way).
 
 `aidev tiers [--json]` prints each tier with its ctx and online state, as text or JSON.
@@ -297,4 +297,4 @@ billed chain. Selecting `build-local-tier-0` explicitly is unchanged. These sett
 
 The G14 counts as available when an authenticated GET of /models returns 200 and lists the model. It is offline when it is off or a game runs. Then aidev falls back to `build-local-tier-0`.
 
-The order is tier-2, tier-0, tier-3, tier-4; tier-0 runs the on-device gpt-oss-20b (MXFP4, reasoning effort low, ctx 32768) and needs the model file and 24 GB RAM; tier-3 needs a Zen API key; each skipped tier prints a reason.
+The order is tier-2, tier-0, tier-5, tier-6; tier-0 runs the on-device gpt-oss-20b (MXFP4, reasoning effort low, ctx 32768) and needs the model file and 24 GB RAM; tier-5 needs a Zen API key; each skipped tier prints a reason.

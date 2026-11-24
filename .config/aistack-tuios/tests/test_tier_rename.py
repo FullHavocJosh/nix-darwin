@@ -37,19 +37,19 @@ def main():
     a = load("aidev", os.path.join(ROOT, "aidev_tuios.py"))
 
     check("BUILDERS", a.BUILDERS == {"tier-0": "build-local-tier-0", "tier-1": "build-local-tier-1",
-                                     "tier-2": "build-local-tier-2", "tier-3": "build-free-tier-3",
-                                     "tier-4": "build-billed-tier-4"}, str(a.BUILDERS))
+                                     "tier-2": "build-local-tier-2", "tier-5": "build-free-tier-5",
+                                     "tier-6": "build-billed-tier-6"}, str(a.BUILDERS))
     check("norm_kind semi-local", a.norm_kind("semi-local") == "tier-2")
-    check("norm_kind billed", a.norm_kind("billed") == "tier-4")
+    check("norm_kind billed", a.norm_kind("billed") == "tier-6")
     check("norm_kind bogus", a.norm_kind("bogus") is None)
     check("tier_of old pane", a.tier_of("build-semi-local") == "tier-2")
-    check("tier_of new pane", a.tier_of("build-free-tier-3") == "tier-3")
-    check("RESET_CMD tier-4", a.RESET_CMD["tier-4"] == "/clear")
+    check("tier_of new pane", a.tier_of("build-free-tier-5") == "tier-5")
+    check("RESET_CMD tier-6", a.RESET_CMD["tier-6"] == "/clear")
     check("next_tier tier-2 -> tier-0 (tier-1 offline, local ok)", a.next_tier("tier-2", "available") == "tier-0")
-    check("next_tier tier-2 local off -> tier-3", a.next_tier("tier-2", "available", local_ok=False) == "tier-3")
-    check("next_tier tier-2 no free, local off -> tier-4", a.next_tier("tier-2", "none", local_ok=False) == "tier-4")
-    check("next_tier tier-0", a.next_tier("tier-0", "available") == "tier-3")
-    check("next_tier tier-3", a.next_tier("tier-3", "available") == "tier-4")
+    check("next_tier tier-2 local off -> tier-5", a.next_tier("tier-2", "available", local_ok=False) == "tier-5")
+    check("next_tier tier-2 no free, local off -> tier-6", a.next_tier("tier-2", "none", local_ok=False) == "tier-6")
+    check("next_tier tier-0", a.next_tier("tier-0", "available") == "tier-5")
+    check("next_tier tier-5", a.next_tier("tier-5", "available") == "tier-6")
 
     real = (a.semi_local_available, a.local_builder_available, a.tier1_available, a.zen_status, a.zen_usable,
             a.probe_gateway)
@@ -67,15 +67,15 @@ def main():
         check("tier_online tier-2 gateway up", a.tier_online("tier-2") is True)
         a.gateway_health = lambda: None
         check("tier_online tier-2", a.tier_online("tier-2") is True)
-        check("tier_online tier-3", a.tier_online("tier-3") is True)
-        check("tier_online tier-4", a.tier_online("tier-4") is True)
+        check("tier_online tier-5", a.tier_online("tier-5") is True)
+        check("tier_online tier-6", a.tier_online("tier-6") is True)
         check("tier_online bogus", a.tier_online("tier-9") is False)
         a.semi_local_available, a.local_builder_available = (lambda: False), (lambda: False)
         a.zen_status = lambda run, refresh=False: "none"
         check("tier_online tier-0 offline", a.tier_online("tier-0") is False)
         check("tier_online tier-2 offline", a.tier_online("tier-2") is False)
-        check("tier_online tier-3 none", a.tier_online("tier-3") is False)
-        check("tier_online tier-4 always", a.tier_online("tier-4") is True)
+        check("tier_online tier-5 none", a.tier_online("tier-5") is False)
+        check("tier_online tier-6 always", a.tier_online("tier-6") is True)
     finally:
         (a.semi_local_available, a.local_builder_available, a.tier1_available, a.zen_status, a.zen_usable,
          a.probe_gateway) = real
