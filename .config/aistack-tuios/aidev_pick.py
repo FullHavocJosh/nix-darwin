@@ -5,8 +5,15 @@
                          (usable), a yellow ? (could not tell) or a red x (looks unusable). A red x never blocks a
                          choice: a check can be wrong.
 
-Keys: 1-5 (1-6 in ~/ai-info) or up/down + enter start a choice, r runs the checks again, s leaves a shell, q quits. The rows below the
-line (Zen, Go, OpenRouter) only report; they are what the cloud builders and fallbacks use.
+Keys: 1-9 or up/down + enter start a choice, r runs the checks again, s leaves a shell, q quits. The rows below the
+line (Zen, Go) only report; they are what the cloud builders and fallbacks use.
+
+Outside the advisor and plan modes, the picker also starts full-tool sessions:
+  pi on a node:   pi through the llm.rollet.family gateway pinned to one node (model node-<id>), one row per node,
+                  each showing whether the node is online (gateway /auto/v1/tiers), busy, its model and window
+  Claude Code:    plain claude
+  OpenCode:       plain opencode
+  OpenRouter:     pi on OpenRouter (AI_OPENROUTER_MODEL, default ~anthropic/claude-sonnet-latest)
 
   1 Claude (advisor): aidev's Claude and Lumo panes, Claude in advisor mode (AIDEV_TUIOS_ADVISOR=1)
   2 Claude (plan):    aidev start with planner forced to claude (AIDEV_TUIOS_PLANNER=claude)
@@ -39,18 +46,28 @@ GREEN, RED, YELLOW, DIM, RESET = "\x1b[32m", "\x1b[31m", "\x1b[33m", "\x1b[2m", 
 MARK = {"ok": f"{GREEN}✓{RESET}", "bad": f"{RED}✗{RESET}", "maybe": f"{YELLOW}?{RESET}",
         "wait": f"{DIM}…{RESET}"}
 
+GATEWAY_TIERS = os.environ.get("AISTACK_GATEWAY_URL") or "https://llm.rollet.family/auto/v1"
+OPENROUTER_MODEL = os.environ.get("AI_OPENROUTER_MODEL") or "~anthropic/claude-sonnet-latest"
+# the gateway's backend ids (GET /auto/v1/tiers), shown in this order; the label is the device name
+NODES = [("josh-g14", "Josh G14"), ("cait-g14", "Cait G14"), ("trashcan", "TrashCan"), ("macmini-m1", "Mac mini M1")]
+# subheader drawn above the first row of each section
+SECTIONS = {"node:josh-g14": "pi on a node (full tools, through the gateway)",
+            "claude-code": "standard sessions"}
+
 # key, label, what it starts (None: a status row only)
 def build_rows(cwd=None):
     rows = [("claude", "Claude (advisor)", True), ("claude-plan", "Claude (plan)", True),
-            ("9b", "9B (advisor)", True), ("9b-plan", "9B (plan)", True), ("30b", "30B (advisor)", True),
-            ("zen", "OpenCode Zen (free)", False), ("go", "OpenCode Go", False), ("openrouter", "OpenRouter", False)]
+            ("9b", "9B (advisor)", True), ("9b-plan", "9B (plan)", True), ("30b", "30B (advisor)", True)]
     if os.path.realpath(cwd or os.getcwd()) == os.path.realpath(os.path.expanduser("~/ai-info")):
-        rows.insert(5, ("manage", "Manage session", True))
+        rows.append(("manage", "Manage session", True))
+    rows += [("node:" + nid, "pi: " + label, True) for nid, label in NODES]
+    rows += [("claude-code", "Claude Code", True), ("opencode", "OpenCode", True), ("openrouter", "OpenRouter (pi)", True),
+             ("zen", "OpenCode Zen (free)", False), ("go", "OpenCode Go", False)]
     return rows
 
 
 ROWS = build_rows()
-MIRROR = {"claude-plan": "claude", "9b-plan": "9b"}
+MIRROR = {"claude-plan": "claude", "9b-plan": "9b", "claude-code": "claude"}
 state = {k: ("wait", "checking") for k, _l, _s in ROWS if k not in MIRROR}
 lock = threading.Lock()
 
@@ -165,6 +182,41 @@ def check_openrouter():
     set_state("openrouter", "ok" if left > 0 else "bad", detail)
 
 
+def check_opencode():
+    path = shutil.which("opencode")
+    set_state("opencode", "ok" if path else "bad", path or "opencode is not installed")
+
+
+def check_nodes():
+    """One gateway call fills every node row: online (healthy), busy (a request is running or queued), model, window."""
+    keys = ["node:" + nid for nid, _l in NODES]
+    try:
+        spec = importlib.util.spec_from_file_location("remote_builder", os.path.join(AISTACK, "remote_builder.py"))
+        rb = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(rb)
+        key = rb.read_key()
+        if not key:
+            raise OSError("no gateway key")
+        data = get_json(GATEWAY_TIERS + "/tiers", {"Authorization": "Bearer " + key}, timeout=4)
+        pool = {b["id"]: b for g in data["groups"].values() for b in g}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, ImportError, FileNotFoundError) as e:
+        for k in keys:
+            set_state(k, "maybe", f"gateway not readable ({e.__class__.__name__}); try it")
+        return
+    for (nid, _label), k in zip(NODES, keys):
+        b = pool.get(nid)
+        if b is None:
+            set_state(k, "bad", "not in the gateway pool")
+            continue
+        info = f"{b.get('model')}, {b.get('window')} ctx" + (f", rank {b['rank']}" if b.get("rank") else "")
+        if not b.get("healthy"):
+            set_state(k, "bad", "offline; " + info)
+        elif b.get("busy"):
+            set_state(k, "maybe", f"online, busy (queue {b.get('queue_depth', 0)}); " + info)
+        else:
+            set_state(k, "ok", "online; " + info)
+
+
 def check_manage():
     if not os.path.isfile(MANAGE_LAUNCH):
         return set_state("manage", "bad", "launch.sh missing")
@@ -174,7 +226,7 @@ def check_manage():
 
 
 CHECKS = {"claude": check_claude, "9b": check_9b, "30b": check_30b, "openrouter": check_openrouter,
-          "zen": check_zen_and_go}
+          "zen": check_zen_and_go, "opencode": check_opencode, "nodes": check_nodes}
 if any(key == "manage" for key, _label, _startable in ROWS):
     CHECKS["manage"] = check_manage
 
@@ -193,13 +245,15 @@ def draw(cursor):
     room = max(10, shutil.get_terminal_size().columns - 34)
     STARTABLE = len([r for r in ROWS if r[2]])
     for i, (key, label, startable) in enumerate(ROWS):
+        if key in SECTIONS:
+            out.append(f"  {DIM}---- {SECTIONS[key]} ----{RESET}\n")
         if i == STARTABLE:
             out.append(f"  {DIM}---- cloud (status only) ----{RESET}\n")
         status, detail = snap[MIRROR.get(key, key)]
         pointer = ">" if startable and i == cursor else " "
-        num = f"{i + 1}" if startable else " "
+        num = f"{i + 1}" if startable and i < 9 else " "
         out.append(f" {pointer}{num} [{MARK[status]}] {label:<22} {DIM}{detail[:room]}{RESET}\n")
-    out.append(f"\n {DIM}1-{STARTABLE} / arrows+enter start, r recheck, s shell, q quit; a red x never blocks a choice{RESET}\n")
+    out.append(f"\n {DIM}1-{min(STARTABLE, 9)} / arrows+enter start, r recheck, s shell, q quit; a red x never blocks a choice{RESET}\n")
     sys.stdout.write("".join(out))
     sys.stdout.flush()
 
@@ -268,6 +322,30 @@ def start_aidev(extra):
         return
     os.execvp('zsh', ['zsh', '-i'])
 
+SCRUBBED_ENV = {"AWS_PROFILE", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+                "AWS_BEARER_TOKEN_BEDROCK", "TRUENAS_API_KEY", "OPNSENSE_API_SECRET"}
+
+
+def node_models_json(nid):
+    """pi models.json with one provider: the gateway, model node-<id>. The key is read at request time by
+    gateway_key.py, so it never lands in the file."""
+    return {"providers": {"gateway": {"baseUrl": GATEWAY_TIERS, "api": "openai-completions",
+                                      "apiKey": "!python3 " + os.path.join(AISTACK, "gateway_key.py"),
+                                      "models": [{"id": "node-" + nid, "reasoning": False}]}}}
+
+
+def launch_node_pi(nid):
+    """A full-tool pi session on one node through the gateway (the gateway keeps thinking off for node-<id>)."""
+    agent = os.path.join(AI_HOME, "cache", "aidev_pick", "pi-node-" + nid)
+    os.makedirs(agent, exist_ok=True)
+    with open(os.path.join(agent, "models.json"), "w") as fh:
+        json.dump(node_models_json(nid), fh)
+    env = {k: v for k, v in os.environ.items() if k not in SCRUBBED_ENV}
+    env["PI_CODING_AGENT_DIR"] = agent
+    os.execvpe("pi", ["pi", "-nc", "--provider", "gateway", "--model", "node-" + nid, "--name", "pi " + nid,
+                      "--thinking", "off"], env)
+
+
 def launch(key):
     cwd = os.getcwd()
     sys.stdout.write("\x1b[?25h\x1b[H\x1b[2J")
@@ -284,6 +362,16 @@ def launch(key):
         start_aidev({'AIDEV_TUIOS_ADVISOR': '1'})
     elif key in ("claude-plan", "9b-plan"):
         start_aidev({'AIDEV_TUIOS_PLANNER': 'claude' if key == 'claude-plan' else 'local'})
+    if key.startswith("node:"):
+        return launch_node_pi(key[len("node:"):])
+    if key == "claude-code":
+        os.execvp("claude", ["claude"])
+    if key == "opencode":
+        os.execvp("opencode", ["opencode"])
+    if key == "openrouter":
+        env = {k: v for k, v in os.environ.items() if k not in SCRUBBED_ENV}
+        env["PI_LUMO_FIRST"] = "0"
+        os.execvpe("pi", ["pi", "--provider", "openrouter", "--model", OPENROUTER_MODEL, "--name", "openrouter"], env)
     mod = load_aidev()
     cfg = mod.pane_configs(mod.project_root(cwd))
     prompt = advisor_prompt()
@@ -309,7 +397,7 @@ def main():
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     cursor, startable = 0, [i for i, r in enumerate(ROWS) if r[2]]
-    num_keys = {str(n) for n in range(1, len(startable) + 1)}
+    num_keys = {str(n) for n in range(1, min(len(startable), 9) + 1)}
     start_checks()
     try:
         tty.setcbreak(fd)
