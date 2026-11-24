@@ -90,6 +90,7 @@ def test_guard_stale():
             
             # The checks
             success = True
+            success = check("send-task returns 0", result == 0) and success
             success = check("T1 verified on the same builder loses its guard", not has_guard_t1) and success
             success = check("T0 on another builder keeps its guard", has_guard_t0) and success
             success = check("T2 gets a fresh guard", "guard" in run.data["tasks"]["T2"]) and success
