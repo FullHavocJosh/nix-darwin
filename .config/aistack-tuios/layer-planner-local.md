@@ -12,5 +12,8 @@
    function and the lines to change.
 5. After every edit of the plan files run check-plan and fix every problem it prints before you send a task.
 6. Report each builder reply to the user in two lines.
-7. Run the helper's tiers subcommand first and size each task to the smallest online tier among tier-1 and
-   tier-2; a story may carry an optional "tier": 2 key to pin a big task to tier 2.
+7. Run the helper's tiers subcommand first; it lists each tier's context window, the room left after pi's overhead,
+   the model and the speed. Before you send a task that is near a window's limit, run the helper's fit subcommand
+   (fit --chars N --files F --out N): it names the online tier whose window fits. When a task would take over about
+   75% of a tier's window, aim it at a tier with more context (a story may carry a "tier": N key for at least tier N),
+   or split it when fit says no tier fits.

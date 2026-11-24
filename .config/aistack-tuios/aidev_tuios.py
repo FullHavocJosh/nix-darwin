@@ -23,7 +23,11 @@ Helpers the Claude pane runs from its own pane (so with its grants; AIDEV_TUIOS_
     builder [tier-0|tier-1|tier-2|tier-3|tier-4] [--approved]
                                   open a builder pane in the work dir; billed costs money: the plan pane asks the
                                   user in its chat and passes --approved; without it a capped Inbox ask is the fallback
-    tiers [--json]                print each builder tier: id, pane, ctx, online state and task limits (needs no run)
+    tiers [--json]                print each builder tier: id, pane, live ctx, online state, task limits, room after the
+                                  pi overhead, model and speed (needs no run)
+    fit --chars N [--files F ...] [--out N]
+                                  which online tiers have the window for a task, how much stays free, the est. seconds
+                                  and the tier to use; split when none fits
     send-task <id> [note...]      reset the builder's context (AIDEV_NO_RESET=1 skips), write the task file,
                                   mail it to the builder and tell it to start
     wait-task <id> [seconds]      wait for the builder's reply, then run the task's verify commands
@@ -277,13 +281,37 @@ _HEALTH = {"at": 0.0, "value": None}
 HEALTH_TTL_S = 5.0
 
 
-def gateway_health():
-    """{backend id: healthy} from the gateway's /auto/v1/tiers, cached for 5 s; None when it cannot be read."""
+def gateway_pool():
+    """{backend id: {healthy, window, rank, model}} from the gateway's /auto/v1/tiers, cached for 5 s; None when it
+    cannot be read."""
     now = time.monotonic()
     if now - _HEALTH["at"] > HEALTH_TTL_S:
-        _HEALTH["value"] = load_remote_builder().gateway_health()
+        fn = getattr(load_remote_builder(), "gateway_pool", None)  # an older installed remote_builder lacks it
+        try:
+            _HEALTH["value"] = fn() if fn else None
+        except Exception:
+            _HEALTH["value"] = None
         _HEALTH["at"] = now
     return _HEALTH["value"]
+
+
+def gateway_health():
+    """{backend id: healthy} from gateway_pool(); None when the gateway cannot be read."""
+    pool = gateway_pool()
+    return None if pool is None else {k: v["healthy"] for k, v in pool.items()}
+
+
+def tiers_live():
+    """tiers() with each gateway-backed tier's ctx replaced by the window the gateway reports for its backend, so
+    sizing follows the real window and not a stale default. Without a gateway answer the configured ctx stays."""
+    cfg = tiers()
+    pool = gateway_pool()
+    if pool:
+        for tid, bid in GATEWAY_BACKEND.items():
+            w = (pool.get(bid) or {}).get("window")
+            if w and tid in cfg:
+                cfg[tid]["ctx"] = w
+    return cfg
 
 
 def tier_online(tid, run=None):
@@ -1868,7 +1896,7 @@ def tier_state(run):
 def default_target_ctx():
     """The context window sizing a task: the smallest of tier-1 and tier-2 that are enabled and online, else the
     smallest enabled one, else tier-0."""
-    cfg = tiers()
+    cfg = tiers_live()
     # A tier whose window is under the ~12000 token pi overhead (the TrashCan at 4096) cannot take a task: skip it.
     enabled = [t for t in ("tier-1", "tier-2") if cfg[t]["enabled"] and cfg[t]["ctx"] > 12000]
     if not enabled:
@@ -1878,37 +1906,57 @@ def default_target_ctx():
 
 
 def size_problems(prd, root=None, ctx=None):
-    """Stories too big for the target builder tier: too many characters, too many files, or files too big to read.
+    """Stories too big for every builder tier that could take them: too many characters, too many files, or files too
+    big to read.
 
-    The limits scale with the tier context window: ctx, else default_target_ctx(); a story with an int 'tier' of 1 or 2
-    uses that enabled tier's ctx. AIDEV_TUIOS_TASK_MAX_CHARS and AIDEV_TUIOS_TASK_MAX_READ replace the scaled limits.
-    With root, the plan's project, each named file's size counts toward the read limit; a description that names a
-    line region only reads part of each file, so it counts min(size, 6000)."""
+    A story is sized against the smallest window first (ctx, else default_target_ctx(); a story with an int 'tier' of 1
+    or 2 uses that enabled tier's ctx). When it does not fit, the next larger online window is tried: dispatch picks a
+    tier by the story's size, so a story that fits a bigger tier is not a problem. Only a story that fits none, and
+    a pinned story that does not fit its tier, is reported. AIDEV_TUIOS_TASK_MAX_CHARS and AIDEV_TUIOS_TASK_MAX_READ
+    replace the scaled limits. With root, the plan's project, each named file's size counts toward the read limit; a
+    description that names a line region only reads part of each file, so it counts min(size, 6000)."""
     if ctx is None:
         ctx = default_target_ctx()
-    cfg = tiers()
+    cfg = tiers_live()
+    # windows a task can use, smallest first: gateway tiers over the pi overhead that are enabled and online
+    bigger = sorted({cfg[t]["ctx"] for t in ("tier-1", "tier-2") if cfg[t]["enabled"] and cfg[t]["ctx"] > 12000
+                     and tier_online(t)})
     out = []
     for s in prd.get("userStories", []):
-        sctx = ctx
-        tier = s.get("tier")
-        if isinstance(tier, int) and not isinstance(tier, bool) and tier in (1, 2) and cfg[f"tier-{tier}"]["enabled"]:
-            sctx = cfg[f"tier-{tier}"]["ctx"]
-        limits = aidev_tiers.limits_for_ctx(sctx) or aidev_tiers.limits_for_ctx(cfg["tier-0"]["ctx"])
-        max_chars = int(os.environ.get("AIDEV_TUIOS_TASK_MAX_CHARS") or limits["max_chars"])
-        max_read = int(os.environ.get("AIDEV_TUIOS_TASK_MAX_READ") or limits["max_read"])
-        max_files = limits["max_files"]
         desc = str(s.get("description") or "")
         text = str(s.get("title") or "") + desc + "".join(str(c) for c in s.get("acceptanceCriteria", []))
-        if len(text) > max_chars:
-            out.append(f"{s['id']}: {len(text)} characters, over {max_chars} (tier ctx {sctx}); split the task")
         files = named_files(desc)
-        if len(files) > max_files:
-            out.append(f"{s['id']}: names {len(files)} files, over {max_files} (tier ctx {sctx}); split the task")
-        if root:
-            total = read_bytes(files, desc, root)
-            if total > max_read:
-                out.append(f"{s['id']}: names about {total} bytes of files, over {max_read} (tier ctx {sctx}); "
-                           "name a line region or split the task")
+        total = read_bytes(files, desc, root) if root else 0
+
+        def check(sctx):
+            limits = aidev_tiers.limits_for_ctx(sctx) or aidev_tiers.limits_for_ctx(cfg["tier-0"]["ctx"])
+            max_chars = int(os.environ.get("AIDEV_TUIOS_TASK_MAX_CHARS") or limits["max_chars"])
+            max_read = int(os.environ.get("AIDEV_TUIOS_TASK_MAX_READ") or limits["max_read"])
+            found = []
+            if len(text) > max_chars:
+                found.append(f"{s['id']}: {len(text)} characters, over {max_chars} (tier ctx {sctx}); split the task")
+            if len(files) > limits["max_files"]:
+                found.append(f"{s['id']}: names {len(files)} files, over {limits['max_files']} (tier ctx {sctx}); "
+                             "split the task")
+            if root and total > max_read:
+                found.append(f"{s['id']}: names about {total} bytes of files, over {max_read} (tier ctx {sctx}); "
+                             "name a line region or split the task")
+            return found
+
+        tier = s.get("tier")
+        pinned = isinstance(tier, int) and not isinstance(tier, bool) and tier in (1, 2) and cfg[f"tier-{tier}"]["enabled"]
+        if pinned:
+            out.extend(check(cfg[f"tier-{tier}"]["ctx"]))
+            continue
+        tried = [ctx] + [w for w in bigger if w > ctx]
+        problems = []
+        for sctx in tried:
+            problems = check(sctx)
+            if not problems:
+                break
+        if problems and len(tried) > 1:
+            problems = [f"{p} (the largest online window, {tried[-1]}, is also too small)" for p in problems]
+        out.extend(problems)
     return out
 
 
@@ -2538,7 +2586,7 @@ def cmd_send_task(run, argv):
     open_builder = builder if builder and window_named(run.session, builder) else None
     if not to and not keeps_builder(open_builder) and (run.data["tasks"].get(tid) or {}).get("attempts", 0) == 0:
         story = stories[tid]
-        tier, reason = aidev_tiers.select_tier(task_need(story, run.project), tier_state(run), tiers(),
+        tier, reason = aidev_tiers.select_tier(task_need(story, run.project), tier_state(run), tiers_live(),
                                                min_tier=int(story.get("tier") or 0))
         if tier is None:
             print(reason)
@@ -3299,14 +3347,18 @@ def cmd_review_diff(run, argv):
 
 
 def cmd_tiers(_run, argv):
-    cfg = tiers()
+    cfg = tiers_live()
     rows = []
     for tid in aidev_tiers.TIER_IDS:
         c = cfg[tid]
         limits = aidev_tiers.limits_for_ctx(c["ctx"]) or {}
+        sp = aidev_tiers.SPEED.get(tid)
         rows.append({"id": tid, "pane": c["pane"], "kind": c["kind"], "ctx": c["ctx"] or None,
                      "online": tier_online(tid), "enabled": c["enabled"], "max_chars": limits.get("max_chars"),
-                     "max_read": limits.get("max_read"), "max_files": limits.get("max_files")})
+                     "max_read": limits.get("max_read"), "max_files": limits.get("max_files"),
+                     "room": max(0, c["ctx"] - aidev_tiers.PI_OVERHEAD) if c["ctx"] else None,
+                     "model": c["alias"] or None, "thinking": "off" if c["kind"] == "pi" else None,
+                     "pp_tok_s": sp["pp"] if sp else None, "tg_tok_s": sp["tg"] if sp else None})
     if "--json" in argv:
         print(json.dumps(rows))
         return 0
@@ -3314,11 +3366,46 @@ def cmd_tiers(_run, argv):
         line = f"{r['id']} {r['pane']} ctx {r['ctx'] or 'n/a'} {'online' if r['online'] else 'offline'}"
         if r["max_chars"] is not None:
             line += f" limits chars {r['max_chars']} read {r['max_read']} files {r['max_files']}"
+        if r["room"] is not None:
+            line += f" room {r['room']} tokens after the pi overhead"
+        if r["pp_tok_s"]:
+            line += f" speed {r['pp_tok_s']} prompt / {r['tg_tok_s']} generation tok/s"
         print(line)
     return 0
 
 
-HELPERS = {"tiers": cmd_tiers, "ask-lumo": cmd_ask_lumo, "check-plan": cmd_check_plan, "worktree": cmd_worktree, "builder": cmd_builder,
+def cmd_fit(run, argv):
+    """fit --chars N [--files F ...] [--out N]: which online tiers have the window for a task, and which to use."""
+    chars, out_tokens, files, i = 0, 800, [], 0
+    while i < len(argv):
+        if argv[i] == "--chars" and i + 1 < len(argv) and argv[i + 1].isdigit():
+            chars, i = int(argv[i + 1]), i + 2
+        elif argv[i] == "--out" and i + 1 < len(argv) and argv[i + 1].isdigit():
+            out_tokens, i = int(argv[i + 1]), i + 2
+        elif argv[i] == "--files":
+            files, i = [], i + 1
+            while i < len(argv) and not argv[i].startswith("--"):
+                files.append(argv[i])
+                i += 1
+        else:
+            print("usage: fit --chars N [--files F ...] [--out N]")
+            return 2
+    cfg = tiers_live()
+    desc = " ".join(files)
+    need = aidev_tiers.estimate_tokens(chars, read_bytes(set(files), desc, run.project) if files else 0)
+    state = {tid: {"online": tier_online(tid, run)} for tid in aidev_tiers.TIER_IDS}
+    rows, best, why = aidev_tiers.fit_rows(need, out_tokens, cfg, state)
+    print(f"need about {need} prompt tokens + {out_tokens} output")
+    for r in rows:
+        mark = "fits" if r["fits"] else "too small"
+        head = "unbounded" if r["headroom"] is None else f"{round(r['headroom'] * 100)}% free"
+        est = f", about {r['est_s']} s" if r["est_s"] is not None else ""
+        print(f"{r['id']} ctx {r['ctx'] or 'n/a'} {'online' if r['online'] else 'offline'}: {mark} ({head}{est})")
+    print(why)
+    return 0 if best else 1
+
+
+HELPERS = {"tiers": cmd_tiers, "fit": cmd_fit, "ask-lumo": cmd_ask_lumo, "check-plan": cmd_check_plan, "worktree": cmd_worktree, "builder": cmd_builder,
            "escalate": cmd_escalate, "fallback": cmd_fallback,
            "send-task": cmd_send_task, "wait-task": cmd_wait_task, "verify": cmd_verify, "watch": cmd_watch,
            "approvals": cmd_approvals, "zen-check": cmd_zen_check, "finish": cmd_finish, "commit": cmd_commit,

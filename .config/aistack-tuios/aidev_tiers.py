@@ -157,3 +157,51 @@ def max_output_tokens(tier_id, tiers=None):
     if tier_id in tiers and 'max_tokens' in tiers[tier_id]:
         return tiers[tier_id]['max_tokens']
     return MAX_OUTPUT_TOKENS.get(tier_id, 8192)
+
+
+# Measured 2026-11-24 through each host's own llama-server: cold prompt of about 20K tokens, prompt cache off.
+# pp is prompt tokens per second, tg generation tokens per second at that depth. TrashCan is the ranking-table
+# figure at shallow depth (re-measure after the Nobara 44 upgrade).
+SPEED = {
+    'tier-2': {'pp': 945, 'tg': 47, 'note': 'Josh G14, Qwen3-Coder-30B'},
+    'tier-1': {'pp': 80, 'tg': 13, 'note': 'TrashCan, Qwen2.5-Coder-7B'},
+}
+PI_OVERHEAD = 12000  # tokens pi adds before the task text
+FIT_HEADROOM = 0.25  # a tier is only recommended when at least this share of its window stays free
+
+
+def fit_rows(need, out, tiers, state, speed=None):
+    """Which tiers can take a task of `need` prompt tokens and `out` output tokens, and which one to use.
+
+    Returns (rows, best_id or None, why). Each row: id, ctx, online, fits, headroom (share of ctx left, None for
+    an unbounded cloud tier), est_s (prompt/pp + out/tg when the speed is known, else None). best is the online tier
+    with the shortest est_s among those that fit with FIT_HEADROOM; with no known speed the largest window wins. A
+    local tier is preferred over tier-3 and tier-4; None means split the task.
+    """
+    speed = SPEED if speed is None else speed
+    rows = []
+    for tid in TIER_IDS:
+        cfg = tiers[tid]
+        ctx = cfg['ctx']
+        online = bool(state.get(tid, {}).get('online')) and (tid in ('tier-3', 'tier-4') or cfg['enabled'])
+        total = need + out
+        fits = ctx <= 0 or total <= ctx
+        headroom = None if ctx <= 0 else round((ctx - total) / ctx, 2)
+        sp = speed.get(tid)
+        est = round(need / sp['pp'] + out / sp['tg'], 1) if sp and sp['pp'] and sp['tg'] else None
+        rows.append({'id': tid, 'ctx': ctx or None, 'online': online, 'fits': fits, 'headroom': headroom, 'est_s': est})
+    local = [r for r in rows if r['id'] not in ('tier-3', 'tier-4') and r['online'] and r['fits']
+             and r['headroom'] is not None and r['headroom'] >= FIT_HEADROOM]
+    if local:
+        timed = [r for r in local if r['est_s'] is not None]
+        best = min(timed, key=lambda r: r['est_s']) if timed else max(local, key=lambda r: r['ctx'])
+        return rows, best['id'], f"{best['id']}: fits with {round(best['headroom'] * 100)}% of its window free"
+    tight = [r for r in rows if r['id'] not in ('tier-3', 'tier-4') and r['online'] and r['fits']]
+    if tight:
+        best = max(tight, key=lambda r: r['ctx'])
+        return rows, best['id'], f"{best['id']}: fits but under {round(FIT_HEADROOM * 100)}% of its window is left; trim the task"
+    for tid in ('tier-3', 'tier-4'):
+        if next(r for r in rows if r['id'] == tid)['online']:
+            return rows, tid, f"{tid}: no local tier has the window for {need + out} tokens"
+    return rows, None, f"split: no online tier has the window for {need + out} tokens"
+

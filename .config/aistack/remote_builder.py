@@ -234,9 +234,9 @@ def probe(timeout=PROBE_TIMEOUT_S):
     return False, "model not listed"
 
 
-def gateway_health(timeout=PROBE_TIMEOUT_S):
-    """{backend id: healthy} for every backend in GET /auto/v1/tiers, or None when the gateway, the key
-    or the answer fails. Never raises; the key is never printed."""
+def gateway_pool(timeout=PROBE_TIMEOUT_S):
+    """{backend id: {"healthy", "window", "rank", "model"}} for every backend in GET /auto/v1/tiers, or None when
+    the gateway, the key or the answer fails. Never raises; the key is never printed."""
     key = read_key()
     if not key:
         return None
@@ -247,10 +247,17 @@ def gateway_health(timeout=PROBE_TIMEOUT_S):
         out = {}
         for backends in data["groups"].values():
             for b in backends:
-                out[b["id"]] = bool(b["healthy"])
+                out.setdefault(b["id"], {"healthy": bool(b["healthy"]), "window": int(b.get("window") or 0),
+                                         "rank": b.get("rank"), "model": b.get("model", "")})
         return out
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
+
+
+def gateway_health(timeout=PROBE_TIMEOUT_S):
+    """{backend id: healthy} from gateway_pool(), or None when the gateway cannot be read."""
+    pool = gateway_pool(timeout)
+    return None if pool is None else {k: v["healthy"] for k, v in pool.items()}
 
 
 def models_config(ctx):
