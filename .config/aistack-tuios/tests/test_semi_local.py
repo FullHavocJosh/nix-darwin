@@ -46,7 +46,7 @@ def serve(status):
                 time.sleep(2)
                 code, body = 200, b""
             else:
-                code, body = status[0], json.dumps({"data": [{"id": "qwen3-coder-30b"}]}).encode()
+                code, body = status[0], json.dumps({"data": [{"id": "node-josh-g14"}]}).encode()
             self.send_response(code)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -133,7 +133,7 @@ def main():
     real_run = a.subprocess.run
     try:
         calls = []
-        a.subprocess.run = stub(Done(0, '{"data":[{"id":"qwen3-coder-30b"}]}\n200'), calls)
+        a.subprocess.run = stub(Done(0, '{"data":[{"id":"node-josh-g14"}]}\n200'), calls)
         check("mock curl 200: available", a.semi_local_available() is True)
         cmd, kwargs = calls[0]
         check("probe is /usr/bin/curl ... /models, no shell",
@@ -148,7 +148,7 @@ def main():
             a.subprocess.run = stub(result, [])
             check(name + ": unavailable", a.semi_local_available() is False)
         calls = []
-        a.subprocess.run = stub(Done(0, '{"data":[{"id":"qwen3-coder-30b"}]}\n200'), calls)
+        a.subprocess.run = stub(Done(0, '{"data":[{"id":"node-josh-g14"}]}\n200'), calls)
         os.environ["AIDEV_SEMI_LOCAL"] = "off"
         check("kill switch: unavailable, curl not run", a.semi_local_available() is False and not calls)
         os.environ.pop("AIDEV_SEMI_LOCAL")
@@ -189,7 +189,7 @@ def main():
         a.zen_status = lambda run, refresh=False: {"state": "available", "model": "m", "detail": ""}
         a.zen_usable = lambda s: True
         a.semi_local_available, a.local_builder_available = (lambda: True), (lambda: True)
-        check("semi up: semi-local", a.auto_builder(None) == "tier-2")
+        check("semi up: semi-local", a.auto_builder(None) == "tier-4")
         a.semi_local_available = lambda: False
         check("semi down, local up: local", a.auto_builder(None) == "tier-0")
         a.local_builder_available = lambda: False
@@ -206,22 +206,22 @@ def main():
     a.write_git_guard = lambda r: a.write_text(os.path.join(r.dir, "bin", "guard", "git"), "")
     try:
         status[0] = 503
-        check("semi down: build_body is None", a.build_body(run, cfg, "tier-2") is None)
+        check("semi down: build_body is None", a.build_body(run, cfg, "tier-4") is None)
         status[0] = 200
-        body = a.build_body(run, cfg, "tier-2")
+        body = a.build_body(run, cfg, "tier-4")
     finally:
         a.write_git_guard = real_gg
-    check("semi up: body names the semi model", isinstance(body, str) and "semi/qwen3-coder-30b" in body, body)
+    check("semi up: body names the semi model", isinstance(body, str) and "gw4/node-josh-g14" in body, body)
     models_path = os.path.join(cfg["pi_build"], "models.json")
     with open(models_path) as f:
         models_text = f.read()
-    semi = json.loads(models_text).get("providers", {}).get("semi", {})
+    semi = json.loads(models_text).get("providers", {}).get("gw4", {})
     check("models.json has the semi provider", bool(semi), models_text[:300])
     check("semi apiKey reads the key file at runtime", str(semi.get("apiKey", "")).startswith("!cat "), semi)
     check("key contents are not in the body", secret not in (body or ""))
     check("key contents are not in models.json", secret not in models_text)
     check("semi body runs pi without the coder wrapper",
-          isinstance(body, str) and "coder_pi" not in body and "pi --model semi/qwen3-coder-30b" in body, body)
+          isinstance(body, str) and "coder_pi" not in body and "pi --model gw4/node-josh-g14" in body, body)
     real_lba = a.local_builder_available
     a.write_git_guard = lambda r: a.write_text(os.path.join(r.dir, "bin", "guard", "git"), "")
     a.local_builder_available = lambda: True
@@ -233,17 +233,17 @@ def main():
 
     print("write_build_pi")
     pi_cfg = {"pi_build": os.path.join(tmp, "pi-build-gw")}
-    a.write_build_pi(pi_cfg, "tier-2")
+    a.write_build_pi(pi_cfg, "tier-4")
     with open(os.path.join(pi_cfg["pi_build"], "models.json")) as f:
         gw_text = f.read()
-    gw = json.loads(gw_text).get("providers", {}).get("semi", {})
+    gw = json.loads(gw_text).get("providers", {}).get("gw4", {})
     check("models.json semi.baseUrl is SEMI_URL", gw.get("baseUrl") == a.SEMI_URL, gw)
     check("models.json semi.apiKey is a '!cat ' command", str(gw.get("apiKey", "")).startswith("!cat "), gw)
     check("models.json does not contain the key", secret not in gw_text)
 
     print("next_tier")
-    check("tier-2 then tier-5 (local off)", a.next_tier("tier-2", "available", False) == "tier-5")
-    check("semi-local without local then free", a.next_tier("tier-2", "available", local_ok=False) == "tier-5")
+    check("tier-4 then tier-5 (local off)", a.next_tier("tier-4", "available", False) == "tier-5")
+    check("semi-local without local then free", a.next_tier("tier-4", "available", local_ok=False) == "tier-5")
 
     srv.shutdown()
     print()

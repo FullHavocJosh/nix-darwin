@@ -62,28 +62,28 @@ with tempfile.TemporaryDirectory() as tmp:
 with tempfile.TemporaryDirectory() as tmp:
     cfg = {"pi_build": tmp}
     model = a.write_build_pi(cfg, kind="tier-1")
-    check("tier-1 returns semi1/ model", isinstance(model, str) and model == "semi1/trash-code", repr(model))
+    check("tier-1 returns gw1/ model", isinstance(model, str) and model == "gw1/node-trashcan", repr(model))
     model_path = os.path.join(tmp, "models.json")
     with open(model_path) as f:
         data = json.load(f)
-    tier1_max = data["providers"]["semi1"]["models"][0]["maxTokens"]
+    tier1_max = data["providers"]["gw1"]["models"][0]["maxTokens"]
     check("tier-1 provider maxTokens 8192", tier1_max == 8192, str(tier1_max))
     # Check that tier-2 provider is also written
-    tier2_max = data["providers"]["semi"]["models"][0]["maxTokens"]
+    tier2_max = data["providers"]["gw2"]["models"][0]["maxTokens"]
     check("tier-2 provider maxTokens 8192", tier2_max == 8192, str(tier2_max))
 
 # Test write_build_pi for tier-2 writes maxTokens 8192 for the tier-2 provider
 with tempfile.TemporaryDirectory() as tmp:
     cfg = {"pi_build": tmp}
     model = a.write_build_pi(cfg, kind="tier-2")
-    check("tier-2 returns semi/ model", isinstance(model, str) and model == "semi/qwen3-coder-30b", repr(model))
+    check("tier-2 returns semi/ model", isinstance(model, str) and model == "gw2/node-macmini-m1", repr(model))
     model_path = os.path.join(tmp, "models.json")
     with open(model_path) as f:
         data = json.load(f)
-    tier2_max = data["providers"]["semi"]["models"][0]["maxTokens"]
+    tier2_max = data["providers"]["gw2"]["models"][0]["maxTokens"]
     check("tier-2 provider maxTokens 8192", tier2_max == 8192, str(tier2_max))
     # Check that tier-1 provider is also written
-    tier1_max = data["providers"]["semi1"]["models"][0]["maxTokens"]
+    tier1_max = data["providers"]["gw1"]["models"][0]["maxTokens"]
     check("tier-1 provider maxTokens 8192", tier1_max == 8192, str(tier1_max))
 
 sys.exit(1 if FAILS else 0)

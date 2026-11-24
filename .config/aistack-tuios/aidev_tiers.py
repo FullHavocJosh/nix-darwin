@@ -7,25 +7,36 @@ import copy
 import json
 import os
 
-TIER_IDS = ('tier-0', 'tier-1', 'tier-2', 'tier-5', 'tier-6')
+TIER_IDS = ('tier-0', 'tier-1', 'tier-2', 'tier-3', 'tier-4', 'tier-5', 'tier-6')
+
+# The four gateway nodes, numbered by rank: tier-1 is the slowest, tier-4 the fastest (the ranks in the gateway's
+# PROXY_GROUPS). Every one is reached through https://llm.rollet.family/auto/v1 as model node-<backend id>.
+NODE_TIERS = ('tier-1', 'tier-2', 'tier-3', 'tier-4')
+NODE_BACKEND = {'tier-1': 'trashcan', 'tier-2': 'macmini-m1', 'tier-3': 'cait-g14', 'tier-4': 'josh-g14'}
+NODES_FASTEST_FIRST = tuple(reversed(NODE_TIERS))
 
 # MAX_OUTPUT_TOKENS: tier-0 runs at about 37 tok/s; the G14 30B runs at about 35 tok/s so 8192 tokens
 # is about 235 s and a 400 line file write is about 5000 tokens; do not set lower.
-MAX_OUTPUT_TOKENS = {'tier-0': 4096, 'tier-1': 8192, 'tier-2': 8192}
+MAX_OUTPUT_TOKENS = {'tier-0': 4096, 'tier-1': 8192, 'tier-2': 8192, 'tier-3': 8192, 'tier-4': 8192}
 
-_URL = 'https://llm.rollet.family/v1'
-_URL_T1 = 'https://llm.rollet.family/t1/v1'  # Cait G14 9B, a review host; kept for the review ladder
-_URL_TRASHCAN = 'https://llm.rollet.family/trashcan/v1'
+_URL = 'https://llm.rollet.family/auto/v1'  # the pool; a node-<id> model pins the request to one node
+
+
+def _node(n, label, ctx):
+    bid = NODE_BACKEND[f'tier-{n}']
+    return {'pane': f'build-local-tier-{n}', 'label': label, 'kind': 'pi', 'ctx': ctx, 'alias': 'node-' + bid,
+            'url': _URL, 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 8192}
+
 
 DEFAULTS = {
     'tier-0': {'pane': 'build-local-tier-0', 'label': 'local gpt-oss-20b', 'kind': 'pi', 'ctx': 32768,
                'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 24, 'max_tokens': 4096},
-    # tier-1 is the TrashCan (always on, slower); its gateway window is 4096 until trash-code gets a bigger ctx-size,
-    # which is below the ~12000 token pi overhead, so select_tier skips it until ctx is raised.
-    'tier-1': {'pane': 'build-local-tier-1', 'label': 'TrashCan 7B', 'kind': 'pi', 'ctx': 4096,
-               'alias': 'trash-code', 'url': _URL_TRASHCAN, 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 8192},
-    'tier-2': {'pane': 'build-local-tier-2', 'label': 'Josh G14 30B', 'kind': 'pi', 'ctx': 65536,
-               'alias': 'qwen3-coder-30b', 'url': _URL, 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 8192},
+    # The window is the default; the gateway's live window replaces it (aidev_tuios.tiers_live). The TrashCan's 8192
+    # is below the ~12000 token pi overhead, so select_tier skips it for builds.
+    'tier-1': _node(1, 'TrashCan 7B', 8192),
+    'tier-2': _node(2, 'Mac mini M1 9B', 65536),
+    'tier-3': _node(3, 'Cait G14 9B', 65536),
+    'tier-4': _node(4, 'Josh G14 30B', 65536),
     'tier-5': {'pane': 'build-free-tier-5', 'label': 'free cloud', 'kind': 'opencode', 'ctx': 0,
                'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 0},
     'tier-6': {'pane': 'build-billed-tier-6', 'label': 'billed Claude', 'kind': 'claude', 'ctx': 0,
@@ -33,12 +44,11 @@ DEFAULTS = {
 }
 
 _OLD = {
-    'build-semi-local': 'tier-2', 'build-local': 'tier-0', 'build-free': 'tier-5', 'build-billed': 'tier-6',
-    'semi-local': 'tier-2', 'local': 'tier-0', 'free': 'tier-5', 'billed': 'tier-6',
-    'semi': 'tier-2', 'g14': 'tier-2', '30b': 'tier-0', 'pickle': 'tier-5', 'claude': 'tier-6',
-    # before the renumbering free cloud was tier-3 and billed Claude tier-4; mail and notes written then still work
-    'tier-3': 'tier-5', 'tier3': 'tier-5', '3': 'tier-5', 'build-free-tier-3': 'tier-5',
-    'tier-4': 'tier-6', 'tier4': 'tier-6', '4': 'tier-6', 'build-billed-tier-4': 'tier-6',
+    'build-semi-local': 'tier-4', 'build-local': 'tier-0', 'build-free': 'tier-5', 'build-billed': 'tier-6',
+    'semi-local': 'tier-4', 'local': 'tier-0', 'free': 'tier-5', 'billed': 'tier-6',
+    'semi': 'tier-4', 'g14': 'tier-4', '30b': 'tier-0', 'pickle': 'tier-5', 'claude': 'tier-6',
+    # pane names from the first renumbering (free cloud tier-3, billed Claude tier-4); the bare ids now mean nodes
+    'build-free-tier-3': 'tier-5', 'build-billed-tier-4': 'tier-6',
 }
 
 
@@ -117,17 +127,20 @@ def select_tier(need, state, tiers, min_tier=0):
     def ctx(tid):
         return tiers[tid]['ctx']
 
-    # Fastest first: tier-2 (Josh G14), then tier-1 (TrashCan); an idle host wins over a busy faster one.
-    eligible = [t for t in ('tier-2', 'tier-1') if _usable(t, state, tiers, min_tier) and ctx(t) >= need]
+    # Fastest node first (the gateway rank: tier-4, 3, 2, 1); an idle node wins over a busy faster one.
+    eligible = [t for t in NODES_FASTEST_FIRST if _usable(t, state, tiers, min_tier) and ctx(t) >= need]
     if eligible:
         idle = [t for t in eligible if state.get(t, {}).get('idle')]
         pool = idle or eligible
         why = 'idle' if idle else 'all busy'
         return pool[0], f'{pool[0]}: fastest fit, {why}'
-    if _usable('tier-2', state, tiers, min_tier) and ctx('tier-2') < need:
-        return None, f"split: need {need} tokens, tier-2 ctx {ctx('tier-2')}"
-    build_up = any(_usable(t, state, tiers, min_tier) for t in ('tier-1', 'tier-2'))
-    if not build_up and _usable('tier-0', state, tiers, min_tier) and ctx('tier-0') >= need:
+    # a node whose window is under the pi overhead (the TrashCan at 8192) cannot hold any task, so it neither takes
+    # the split verdict nor blocks tier-0 and the cloud tiers
+    usable = [t for t in NODES_FASTEST_FIRST if _usable(t, state, tiers, min_tier) and ctx(t) > PI_OVERHEAD]
+    if usable:
+        top = usable[0]
+        return None, f"split: need {need} tokens, {top} ctx {ctx(top)}"
+    if _usable('tier-0', state, tiers, min_tier) and ctx('tier-0') >= need:
         return 'tier-0', 'tier-0: build hosts offline'
     if _usable('tier-5', state, tiers, min_tier):
         return 'tier-5', 'tier-5: no local tier fits'
@@ -135,13 +148,17 @@ def select_tier(need, state, tiers, min_tier=0):
 
 
 def next_tier_id(tier_id, state, tiers):
-    """The tier to escalate to after tier_id fails; None for tier-6 and unknown ids."""
-    if tier_id in ('tier-1', 'tier-2', 'tier-0'):
-        # Dispatch order 2 > 1 > 0 > 3 > 4: after tier-2 try tier-1, then tier-0 (only when it is online).
-        if tier_id == 'tier-2' and _usable('tier-1', state, tiers, 0):
-            return 'tier-1'
-        if tier_id in ('tier-2', 'tier-1') and _usable('tier-0', state, tiers, 0):
-            return 'tier-0'
+    """The tier to escalate to after tier_id fails; None for tier-6 and unknown ids.
+
+    Dispatch order: the nodes from fastest to slowest, then tier-0 (only when online), tier-5, tier-6."""
+    if tier_id in NODE_TIERS or tier_id == 'tier-0':
+        if tier_id in NODE_TIERS:
+            slower = [t for t in NODES_FASTEST_FIRST if int(t[-1]) < int(tier_id[-1])]
+            for t in slower:
+                if _usable(t, state, tiers, 0):
+                    return t
+            if _usable('tier-0', state, tiers, 0):
+                return 'tier-0'
         target = 'tier-5'
     elif tier_id == 'tier-5':
         target = 'tier-6'
@@ -164,10 +181,12 @@ def max_output_tokens(tier_id, tiers=None):
 
 # Measured 2026-11-24 through each host's own llama-server: cold prompt of about 20K tokens, prompt cache off.
 # pp is prompt tokens per second, tg generation tokens per second at that depth. TrashCan is the ranking-table
-# figure at shallow depth (re-measure after the Nobara 44 upgrade).
+# figure measured after the Nobara 44 upgrade.
 SPEED = {
-    'tier-2': {'pp': 945, 'tg': 47, 'note': 'Josh G14, Qwen3-Coder-30B'},
-    'tier-1': {'pp': 80, 'tg': 13, 'note': 'TrashCan, Qwen2.5-Coder-7B'},
+    'tier-4': {'pp': 945, 'tg': 47, 'note': 'Josh G14, Qwen3-Coder-30B'},
+    'tier-3': {'pp': 2829, 'tg': 41, 'note': 'Cait G14, Qwen3.5-9B'},
+    'tier-2': {'pp': 95, 'tg': 6, 'note': 'Mac mini M1, Qwen3.5-9B'},
+    'tier-1': {'pp': 33, 'tg': 8, 'note': 'TrashCan, Qwen2.5-Coder-7B (about 20K tokens deep)'},
 }
 PI_OVERHEAD = 12000  # tokens pi adds before the task text
 FIT_HEADROOM = 0.25  # a tier is only recommended when at least this share of its window stays free

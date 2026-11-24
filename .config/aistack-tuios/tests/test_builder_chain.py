@@ -39,6 +39,7 @@ def main():
     os.environ["AIDEV_TUIOS_HOME"] = tmp
     a = load("aidev", os.path.join(ROOT, "aidev_tuios.py"))
     a.tier1_available = lambda: False  # tier-1 is on by default: keep the test off the live gateway
+    a._node_probe = lambda tid: False  # tier-2 and tier-3 probe the live gateway otherwise
     
     # Set up a fake run object for testing
     class FakeRun:
@@ -66,7 +67,7 @@ def main():
         result = a.auto_builder(fake_run)
     output = stdout_capture.getvalue()
     
-    check("gateway up: semi-local picked", result == "tier-2")
+    check("gateway up: semi-local picked", result == "tier-4")
     # Restore original functions after scenario 1
     a.semi_local_available = original_semi_local_available
     
@@ -134,29 +135,29 @@ def main():
     a.zen_status = lambda run, refresh=False: {"state": "none", "model": None, "detail": "no key", "models": []}
     a.zen_usable = lambda s: False
     
-    fake_run = FakeRun(data={"unready": ["tier-2"]})
+    fake_run = FakeRun(data={"unready": ["tier-4"]})
     stdout_capture = io.StringIO()
     with redirect_stdout(stdout_capture):
         result = a.auto_builder(fake_run)
     output = stdout_capture.getvalue()
     
     check("unready pane: semi-local skipped", result == "tier-6")
-    check("skip message shown", "skip tier-2: its pane never became ready" in output)
+    check("skip message shown", "skip tier-4: its pane never became ready" in output)
     
     # Test scenario 6: next_tier order - semi-local->local->free->billed with variations
     print("Scenario 6: next_tier order tests")
     # Test next_tier function - based on the notes, need to use 'available' state so free is returned
-    check("next_tier: tier-2 -> tier-0 (tier-1 offline, local ok)", a.next_tier("tier-2", "available") == "tier-0")
-    check("next_tier: tier-2 -> tier-5 (local off)", a.next_tier("tier-2", "available", False) == "tier-5")
+    check("next_tier: tier-4 -> tier-0 (tier-1 offline, local ok)", a.next_tier("tier-4", "available") == "tier-0")
+    check("next_tier: tier-4 -> tier-5 (local off)", a.next_tier("tier-4", "available", False) == "tier-5")
     check("next_tier: local -> free", a.next_tier("tier-0", "available") == "tier-5")
     check("next_tier: free -> billed", a.next_tier("tier-5", "available") == "tier-6")
     check("next_tier: billed -> None", a.next_tier("tier-6", "available") is None)
     
     # Test with local_ok=False should skip local
-    check("next_tier: semi-local -> free (local skipped)", a.next_tier("tier-2", "available", False) == "tier-5")
+    check("next_tier: semi-local -> free (local skipped)", a.next_tier("tier-4", "available", False) == "tier-5")
     
     # Test with zen_state="exhausted" should skip free
-    check("next_tier: tier-2 -> tier-6 (zen exhausted)", a.next_tier("tier-2", "exhausted", False) == "tier-6")
+    check("next_tier: tier-4 -> tier-6 (zen exhausted)", a.next_tier("tier-4", "exhausted", False) == "tier-6")
     
     # Test with zen_state="none" should skip free
     check("next_tier: local -> billed (free skipped, zen none)", a.next_tier("tier-0", "none") == "tier-6")

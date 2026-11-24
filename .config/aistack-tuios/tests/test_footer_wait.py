@@ -40,7 +40,7 @@ def feed(lst):
 
 # Test case 1: unknown for 3 polls then the right model gives ok
 SLEEPS.clear()
-a.pane_text = feed(["", "", "", "(semi) qwen3-coder-30b"])
+a.pane_text = feed(["", "", "", "(gw2) node-macmini-m1"])
 r = a.wait_builder_model('S', 'N', 'tier-2')
 check("unknown for 3 polls then right model gives ok", r == (True, "") and len(SLEEPS) == 3)
 
@@ -61,7 +61,7 @@ check("wrong model refuses at once with no sleep", r == (False, "coder/some-mode
 
 # Test case 4: empty string is an empty pane, so builder_model_ok returns unknown
 SLEEPS.clear()
-a.pane_text = feed(["(semi) qwen3-coder-30b"])
+a.pane_text = feed(["(gw2) node-macmini-m1"])
 r = a.wait_builder_model('S', 'N', 'tier-2')
 check("empty string is an empty pane, so builder_model_ok returns unknown", r == (True, "") and len(SLEEPS) == 0)
 

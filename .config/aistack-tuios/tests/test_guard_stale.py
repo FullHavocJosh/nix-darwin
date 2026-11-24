@@ -75,14 +75,14 @@ def test_guard_stale():
         a.overflow_count = mock_overflow_count
         
         # Set up the test tasks
-        run.data["tasks"]["T1"] = {"status": "verified", "attempts": 1, "notes": [], "builder": "build-free-tier-3", "guard": {"offset": 0}}
+        run.data["tasks"]["T1"] = {"status": "verified", "attempts": 1, "notes": [], "builder": "build-free-tier-5", "guard": {"offset": 0}}
         run.data["tasks"]["T0"] = {"status": "verified", "attempts": 1, "notes": [], "builder": "build-local-tier-0", "guard": {"offset": 0}}
         run.data["tasks"]["T2"] = {"status": "pending", "attempts": 0, "notes": []}
         
         # Test that the function works correctly
         try:
             # Call the send task function (this should trigger our fix)
-            result = a.cmd_send_task(run, ["T2", "--to", "tier-3"])
+            result = a.cmd_send_task(run, ["T2", "--to", "tier-5"])
             
             # Check if T1's guard was removed (it should be on the same builder)
             has_guard_t1 = "guard" in run.data["tasks"]["T1"]
@@ -131,8 +131,8 @@ def test_guard_stale():
         
     # Set up the test tasks
     run.data["tasks"] = {}
-    run.data["tasks"]["T1"] = {"status": "verified", "attempts": 1, "notes": [], "builder": "build-free-tier-3", "guard": {"offset": 0}}
-    run.data["tasks"]["T2"] = {"status": "sent", "attempts": 1, "notes": [], "builder": "build-free-tier-3"}
+    run.data["tasks"]["T1"] = {"status": "verified", "attempts": 1, "notes": [], "builder": "build-free-tier-5", "guard": {"offset": 0}}
+    run.data["tasks"]["T2"] = {"status": "sent", "attempts": 1, "notes": [], "builder": "build-free-tier-5"}
     
     # Stub functions
     a.window_named = mock_window_named
@@ -150,8 +150,8 @@ def test_guard_stale():
     mock_guard_poll.polled = []
     
     # Now set T2 to verified and give T1 its guard back
-    run.data["tasks"]["T2"] = {"status": "verified", "attempts": 1, "notes": [], "builder": "build-free-tier-3"}
-    run.data["tasks"]["T1"] = {"status": "verified", "attempts": 1, "notes": [], "builder": "build-free-tier-3", "guard": {"offset": 0}}
+    run.data["tasks"]["T2"] = {"status": "verified", "attempts": 1, "notes": [], "builder": "build-free-tier-5"}
+    run.data["tasks"]["T1"] = {"status": "verified", "attempts": 1, "notes": [], "builder": "build-free-tier-5", "guard": {"offset": 0}}
     
     # Run reap_pass again
     a.reap_pass(run, tracker)

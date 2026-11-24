@@ -40,16 +40,17 @@ def main():
 
     print("builder kinds")
     check("canonical kinds map to themselves",
-          [a.norm_kind(k) for k in ("tier-0", "tier-1", "tier-2", "tier-5", "tier-6")]
-          == ["tier-0", "tier-1", "tier-2", "tier-5", "tier-6"])
+          [a.norm_kind(k) for k in ("tier-0", "tier-1", "tier-2", "tier-3", "tier-4", "tier-5", "tier-6")]
+          == ["tier-0", "tier-1", "tier-2", "tier-3", "tier-4", "tier-5", "tier-6"])
     check("aliases map to kinds", [a.norm_kind(k) for k in ("semi-local", "local", "free", "billed", "semi", "g14", "30b", "pickle", "claude")]
-          == ["tier-2", "tier-0", "tier-5", "tier-6", "tier-2", "tier-2", "tier-0", "tier-5", "tier-6"])
+          == ["tier-4", "tier-0", "tier-5", "tier-6", "tier-4", "tier-4", "tier-0", "tier-5", "tier-6"])
     check("upper case and spaces are accepted", a.norm_kind(" Billed ") == "tier-6" and a.norm_kind("30B") == "tier-0")
     check("an unknown word is None", a.norm_kind("x") is None)
-    check("semi-local and its alias map to tier-2", a.norm_kind("semi-local") == "tier-2"
-          and a.norm_kind("semi") == "tier-2")
+    check("semi-local and its alias map to tier-4", a.norm_kind("semi-local") == "tier-4"
+          and a.norm_kind("semi") == "tier-4")
     check("builder pane names", a.BUILDERS == {"tier-0": "build-local-tier-0", "tier-1": "build-local-tier-1",
-                                               "tier-2": "build-local-tier-2", "tier-5": "build-free-tier-5",
+                                               "tier-2": "build-local-tier-2", "tier-3": "build-local-tier-3",
+                                               "tier-4": "build-local-tier-4", "tier-5": "build-free-tier-5",
                                                "tier-6": "build-billed-tier-6"}, a.BUILDERS)
     check("reset commands cover every kind", set(a.RESET_CMD) == set(a.BUILDERS), a.RESET_CMD)
 
@@ -141,6 +142,8 @@ def main():
         a.tuios, a.tuios_json, a.window_named, a.agent_state, a.start_builder, a.ask_human = real
 
     print("task size")
+    a.gateway_pool = lambda: None  # sizing must not depend on the live gateway
+    a.tier_online = lambda tid, run=None: False
     def story(desc):
         return {"userStories": [{"id": "T1", "title": "t", "description": desc, "acceptanceCriteria": ["ok"]}]}
     check("500 characters naming 2 files is fine", a.size_problems(story("a.py b.md " + "x" * 480), ctx=16384) == [])
@@ -489,7 +492,7 @@ def main():
     a.count_attempt(tt, "build-free")
     check("count_attempt per builder", tt.get("by") == {"build-local": 2, "build-free": 1}, tt)
     check("tier_of", [a.tier_of(n) for n in ("build-local", "build-free", "build-billed", "build-semi-local", "x", None)]
-          == ["tier-0", "tier-5", "tier-6", "tier-2", None, None])
+          == ["tier-0", "tier-5", "tier-6", "tier-4", None, None])
     check("next_tier table", [a.next_tier(*c) for c in (("tier-0", "available"), ("tier-0", "exhausted"),
                                                        ("tier-0", "none"), ("tier-5", "available"),
                                                        ("tier-6", "available"), ("x", "available"),

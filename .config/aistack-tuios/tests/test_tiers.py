@@ -24,9 +24,11 @@ def check(name, cond, extra=""):
 WORDS = {
     'tier-0': ['tier-0', 'tier0', '0', 'build-local-tier-0', 'build-local', 'local', '30b', ' 30B '],
     'tier-1': ['tier-1', 'tier1', '1', 'build-local-tier-1'],
-    'tier-2': ['tier-2', 'tier2', '2', 'build-local-tier-2', 'build-semi-local', 'semi-local', 'semi', 'g14', 'G14'],
-    'tier-5': ['tier-5', 'tier3', '3', 'build-free-tier-5', 'build-free', 'free', 'pickle'],
-    'tier-6': ['tier-6', 'tier4', '4', 'build-billed-tier-6', 'build-billed', 'billed', 'claude', 'Claude'],
+    'tier-2': ['tier-2', 'tier2', '2', 'build-local-tier-2'],
+    'tier-3': ['tier-3', 'tier3', '3', 'build-local-tier-3'],
+    'tier-4': ['tier-4', 'tier4', '4', 'build-local-tier-4', 'build-semi-local', 'semi-local', 'semi', 'g14', 'G14'],
+    'tier-5': ['tier-5', 'tier5', '5', 'build-free-tier-5', 'build-free', 'build-free-tier-3', 'free', 'pickle'],
+    'tier-6': ['tier-6', 'tier6', '6', 'build-billed-tier-6', 'build-billed', 'build-billed-tier-4', 'billed', 'claude', 'Claude'],
 }
 for tid, words in WORDS.items():
     for w in words:
@@ -34,11 +36,11 @@ for tid, words in WORDS.items():
 for w in ('', 'tier-7', 'nope', None):
     check(f"norm_tier({w!r}) is None", mod.norm_tier(w) is None)
 
-check("TIER_IDS", mod.TIER_IDS == ('tier-0', 'tier-1', 'tier-2', 'tier-5', 'tier-6'))
-check("defaults ctx", [mod.DEFAULTS[t]['ctx'] for t in mod.TIER_IDS] == [32768, 4096, 65536, 0, 0])
+check("TIER_IDS", mod.TIER_IDS == ('tier-0', 'tier-1', 'tier-2', 'tier-3', 'tier-4', 'tier-5', 'tier-6'))
+check("defaults ctx", [mod.DEFAULTS[t]['ctx'] for t in mod.TIER_IDS] == [32768, 8192, 65536, 65536, 65536, 0, 0])
 check("tier-1 on by default", mod.DEFAULTS['tier-1']['enabled'] is True)
-check("tier-1 alias default", mod.DEFAULTS['tier-1']['alias'] == 'trash-code')
-check("tier-1 url default", mod.DEFAULTS['tier-1']['url'] == 'https://llm.rollet.family/trashcan/v1')
+check("tier-1 alias default", mod.DEFAULTS['tier-1']['alias'] == 'node-trashcan')
+check("tier-1 url default", mod.DEFAULTS['tier-1']['url'] == 'https://llm.rollet.family/auto/v1')
 
 old_env = os.environ.get('AIDEV_TIERS_FILE')
 try:
@@ -57,7 +59,7 @@ try:
         check("unknown key ignored", 'bogus' not in t['tier-1'])
         check("wrong types ignored", t['tier-2'] == mod.DEFAULTS['tier-2'])
         check("unknown tier ignored", 'tier-9' not in t)
-        check("defaults untouched", mod.DEFAULTS['tier-1']['ctx'] == 4096 and mod.DEFAULTS['tier-1']['enabled'] is True)
+        check("defaults untouched", mod.DEFAULTS['tier-1']['ctx'] == 8192 and mod.DEFAULTS['tier-1']['enabled'] is True)
         with open(p, 'w') as f:
             f.write('{not json')
         check("bad file gives defaults", mod.load_tiers() == mod.DEFAULTS)
