@@ -16,6 +16,7 @@ alias sshk3sworkervm1='ssh -i ~/.ssh/id_ed25519 havoc@k3sworkervm1.rollet.family
 alias sshha='ssh -i ~/.ssh/id_ed25519 root@homeassistant.rollet.family'
 alias sshsteamdeck='ssh -i ~/.ssh/id_ed25519 deck@joshs-steamdeck.rollet.family'
 alias sshnovadeck='ssh -i ~/.ssh/id_ed25519 armada@novadeck.rollet.family'
+alias sshtrash='ssh -i ~/.ssh/id_ed25519 havoc@TrashCan.rollet.family'
 # NOBARA_LAPTOP_IP has no stable DNS hostname (DHCP reservation only) -- set it
 # in the local, gitignored ~/.zshrc_envvars (not _insecure, since it's still an
 # internal LAN IP): export NOBARA_LAPTOP_IP="192.168.144.35"
