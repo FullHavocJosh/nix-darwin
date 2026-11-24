@@ -474,14 +474,6 @@ def window_named(session, name):
     return None
 
 
-def minimize_window(session, name):
-    """Minimize window `name` (it keeps its PTY and still takes send-text and capture-pane). True when it worked."""
-    try:
-        return tuios("set-window", "-s", session, "-w", name, "--minimize")[0] == 0
-    except Exception:
-        return False
-
-
 def agent_state(session, name):
     w = window_named(session, name)
     return (w or {}).get("agent_state") or "gone"
@@ -1219,7 +1211,6 @@ def open_pane(run, session, name, script, cwd, grants):
     if code:
         print(f"aidev: could not open the {name} pane: {err.strip()[:300]}", file=sys.stderr)
         return False
-    minimize_window(session, name)
     run.data["panes"].setdefault(name, {}).update(script=script, cwd=cwd, grants=grants,
                                                   opened=time.strftime("%H:%M:%S"))
     run.save()
@@ -1485,9 +1476,6 @@ def start_builder(run, kind, name, ws, cwd):
         tuios("close-window", name, "-s", run.session)
         return False, f"{name} started on {shown}, not the tier model: pane closed"
     
-    if window_named(run.session, name):
-        minimize_window(run.session, name)
-    
     return code == 0, (f"{name}: {run.data['panes'][name].get('builder')}. start-agent (exit {code}): {note}"
                        f"{(out or err).strip()[-500:]}")
 
@@ -1501,7 +1489,6 @@ def start_dev_workspace(run, session, wd):
     if not window_named(session, "nvim"):
         tuios("new-window", "nvim", "-s", session, "--workspace", str(WS["dev"]), "--cwd", wd, "--no-focus")
         tuios("send-text", "-s", session, "-w", "nvim", "nvim\n")
-        minimize_window(session, "nvim")
     ensure_zsh_window(session, wd)
 
 
@@ -3964,7 +3951,6 @@ def cmd_ai(argv):
         ensure_zsh_window(session, cwd)
     tuios("new-window", f"claude-{sid[:8]}", "-s", session, "--cwd", cwd, "--grants", "read", "--",
           "/bin/zsh", "-c", " ".join(map(shlex.quote, argv_c)) + "; exec zsh -i")
-    minimize_window(session, f"claude-{sid[:8]}")
     return attach(session)
 
 
