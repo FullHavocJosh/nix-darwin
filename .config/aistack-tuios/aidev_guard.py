@@ -318,7 +318,7 @@ def read_tool_log(path, offset=0) -> tuple[list[dict], int]:
 
 
 # per-tier pi window; keep equal to aidev_tiers DEFAULTS ctx
-CONTEXT_WINDOW = {"tier-0": 32768, "tier-1": 65536, "tier-2": 65536}
+CONTEXT_WINDOW = {"tier-0": 32768, "tier-1": 8192, "tier-2": 65536, "tier-3": 65536, "tier-4": 65536}
 
 
 def preflight(tier_id, prompt_tokens, output_cap) -> tuple[bool, str]:

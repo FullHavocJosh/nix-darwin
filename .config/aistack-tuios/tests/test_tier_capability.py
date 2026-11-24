@@ -39,15 +39,15 @@ def main():
     t = load("aidev_tiers", os.path.join(ROOT, "aidev_tiers.py"))
     cfg = t.load_tiers()
     up = {tid: {"online": True} for tid in t.TIER_IDS}
-    # fit_rows: a 20K prompt fits tier-2 (65536) and not tier-1 (4096 by default)
+    # fit_rows: a 20K prompt fits tier-2 (65536) and not tier-1 (8192 by default)
     rows, best, why = t.fit_rows(20000, 800, cfg, up)
     r = {x["id"]: x for x in rows}
     check("tier-1 too small for 20K at its default window", r["tier-1"]["fits"] is False)
     check("tier-2 fits 20K", r["tier-2"]["fits"] is True and r["tier-2"]["headroom"] > 0.25)
-    check("best is the tier with the shortest est_s that fits", best == "tier-2", (best, why))
+    check("best is the tier with the shortest est_s that fits (Cait G14, tier-3)", best == "tier-3", (best, why))
     # a tight fit is flagged and not preferred when another has room
     rows, best, why = t.fit_rows(60000, 800, cfg, up)
-    check("60K of 65536 leaves under 25%: still tier-2 but flagged", best == "tier-2" and "under 25%" in why, why)
+    check("60K of 65536 leaves under 25%: still a node tier but flagged", best in ("tier-2", "tier-3", "tier-4") and "under 25%" in why, why)
     # nothing local fits: a cloud tier takes it, else split
     rows, best, why = t.fit_rows(90000, 800, cfg, up)
     check("over every local window goes to tier-5", best == "tier-5", (best, why))
@@ -62,12 +62,12 @@ def main():
 
     a = load("aidev", os.path.join(ROOT, "aidev_tuios.py"))
     a.tier_online = lambda tid, run=None: tid in ("tier-1", "tier-2")
-    a.gateway_pool = lambda: {"trashcan": {"healthy": True, "window": 32768, "rank": 2, "model": "m"},
+    a.gateway_pool = lambda: {"trashcan": {"healthy": True, "window": 32768, "rank": 1, "model": "m"},
                               "josh-g14": {"healthy": True, "window": 65536, "rank": 4, "model": "m"}}
     live = a.tiers_live()
     check("tiers_live takes the gateway window", live["tier-1"]["ctx"] == 32768 and live["tier-2"]["ctx"] == 65536)
     a.gateway_pool = lambda: None
-    check("tiers_live keeps the configured ctx without a gateway", a.tiers_live()["tier-1"]["ctx"] == 4096)
+    check("tiers_live keeps the configured ctx without a gateway", a.tiers_live()["tier-1"]["ctx"] == 8192)
 
     # size_problems: a story too big for the smallest online window fits the larger one
     a.tiers = lambda: {"tier-0": {"ctx": 32768, "enabled": True}, "tier-1": {"ctx": 16384, "enabled": True},
@@ -91,9 +91,9 @@ def main():
         a.cmd_tiers(None, ["--json"])
     rows = {x["id"]: x for x in json.loads(buf.getvalue())}
     check("tiers json keeps ctx and adds room, model, thinking and speed",
-          rows["tier-2"]["ctx"] == 65536 and rows["tier-2"]["room"] == 65536 - 12000
-          and rows["tier-2"]["model"] == "qwen3-coder-30b" and rows["tier-2"]["thinking"] == "off"
-          and rows["tier-2"]["tg_tok_s"] == 47 and rows["tier-5"]["room"] is None, rows["tier-2"])
+          rows["tier-4"]["ctx"] == 65536 and rows["tier-4"]["room"] == 65536 - 12000
+          and rows["tier-4"]["model"] == "node-josh-g14" and rows["tier-4"]["thinking"] == "off"
+          and rows["tier-4"]["tg_tok_s"] == 47 and rows["tier-5"]["room"] is None, rows["tier-4"])
 
     # fit helper
     run = types.SimpleNamespace(project=os.getcwd())

@@ -27,13 +27,13 @@ def mock_pane_text(footer):
     return lambda session, name, lines=15: footer + "\n"
 
 
-# Test footer '(semi1) trash-code' ok for tier-1
-a.pane_text = mock_pane_text("(semi1) trash-code")
-check("(semi1) trash-code ok for tier-1", a.builder_model_ok(None, "free", "tier-1") == (True, ""))
+# Test footer '(gw1) node-trashcan' ok for tier-1
+a.pane_text = mock_pane_text("(gw1) node-trashcan")
+check("(gw1) node-trashcan ok for tier-1", a.builder_model_ok(None, "free", "tier-1") == (True, ""))
 
-# Test footer '(semi) qwen3-coder-30b' ok for tier-2
-a.pane_text = mock_pane_text("(semi) qwen3-coder-30b")
-check("(semi) qwen3-coder-30b ok for tier-2", a.builder_model_ok(None, "free", "tier-2") == (True, ""))
+# Test footer '(gw2) node-macmini-m1' ok for tier-2
+a.pane_text = mock_pane_text("(gw2) node-macmini-m1")
+check("(gw2) node-macmini-m1 ok for tier-2", a.builder_model_ok(None, "free", "tier-2") == (True, ""))
 
 # Test footer '(openrouter) moonshotai/kimi-k2.7-code' not ok for tier-2 and shown names it
 a.pane_text = mock_pane_text("(openrouter) moonshotai/kimi-k2.7-code")
@@ -60,8 +60,8 @@ a.pane_text = mock_pane_text("\n\n\n")
 check("no footer lines not ok for tier-1", a.builder_model_ok(None, "free", "tier-1") == (False, "unknown"))
 
 # Test footer with multiple lines, only last non-blank counts
-a.pane_text = mock_pane_text("(semi1) trash-code\n\n\n")
-check("(semi1) trash-code ok for tier-1 (last non-blank)", a.builder_model_ok(None, "free", "tier-1") == (True, ""))
+a.pane_text = mock_pane_text("(gw1) node-trashcan\n\n\n")
+check("(gw1) node-trashcan ok for tier-1 (last non-blank)", a.builder_model_ok(None, "free", "tier-1") == (True, ""))
 
 # Test tier-1 with wrong model shows wrong model
 a.pane_text = mock_pane_text("(coder) wrong-model")
