@@ -102,6 +102,12 @@ def main():
             check(f"write_build_pi {tid} baseUrl", spec["baseUrl"] == a.tier_url(tid), spec["baseUrl"])
             check(f"write_build_pi {tid} id", m["id"] == a.tier_alias(tid), m["id"])
             check(f"write_build_pi {tid} ctx", m["contextWindow"] == a.tiers()[tid]["ctx"], str(m["contextWindow"]))
+        check("think_alias tier-4", a.think_alias("tier-4") == "think-josh-g14")
+        model = a.write_build_pi(cfg, "tier-4", think=True)
+        check("write_build_pi think returns the thinking twin", model == "gw4/think-josh-g14", model)
+        with open(os.path.join(cfg["pi_build"], "models.json")) as fh:
+            ids = [m["id"] for m in json.load(fh)["providers"]["gw4"]["models"]]
+        check("both aliases are listed for a node", ids == ["node-josh-g14", "think-josh-g14"], str(ids))
     finally:
         a.semi_key_file = real_key
     seen = []
