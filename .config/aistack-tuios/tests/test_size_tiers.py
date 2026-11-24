@@ -39,6 +39,7 @@ def story(desc, **extra):
 
 def main():
     a = load("aidev", os.path.join(ROOT, "aidev_tuios.py"))
+    a.gateway_pool = lambda: None  # no live gateway in tests
     a.tiers = lambda: {"tier-0": {"ctx": 32768, "enabled": True}, "tier-1": {"ctx": 16384, "enabled": True},
                        "tier-2": {"ctx": 65536, "enabled": True}}
     a.tier_online = lambda tid, run=None: False

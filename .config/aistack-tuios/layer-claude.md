@@ -47,6 +47,8 @@ Write plan files (prd.json, verify.json) with Write or Edit under ~/.ai, never s
 - `@@HELPER@@ builder [local|free|billed] [--approved]`: opens a builder pane. `billed` costs money: ask the user in this
   chat first, then pass `--approved`. Without it, `builder billed` asks in the Inbox for a short time and exits 3 on no answer.
 - `@@HELPER@@ zen-check [--refresh]`: which free Zen models work now. Exit 0 yes, 1 none, 3 unknown.
+- `@@HELPER@@ fit --chars N [--files F ...] [--out N]`: which online tiers have the context window for a task, and
+  which one to use. Run it before you size a task that is near a tier's limit.
 - `@@HELPER@@ escalate <id>`: moves a task to the next builder once the failed attempts at its tier reach the limit.
 - `@@HELPER@@ send-task <id> [--to local|free|billed] ['<note>']`: writes the task file, mails and types it to the
   builder. The note carries guidance after a failure. `--to` lets different builders work at once.
@@ -88,13 +90,20 @@ you may also comment, transition, edit, create and link issues and log work. A h
    - `verify.json`: `{"T1": ["command"]}`
    - `title` is the PR title: imperative, at most 72 characters, no `feat:` prefix. `description`: two to four
      sentences.
-   - Size every task for the on-device 30B (33k token context): at most about 2500 characters of description, at most
-     3 files, function names and line regions instead of whole files. The task has about 20k tokens (80 KB) for
-     reading and editing. check-plan also refuses a task whose named files add up to over 36 KB unless it names a line
+   - Size every task to the builder tier it will run on, not to a fixed model. Each tier has its own context window
+     (the helper's `tiers` output lists ctx, the room left after pi's ~12k token overhead, the model and measured
+     speed; the gateway tiers' windows are read live from llm.rollet.family). Keep at most 3 files and use function
+     names and line regions instead of whole files. A tier's room in tokens is about 4 characters each: a tier with
+     20k tokens of room takes about 80 KB of reading and editing. check-plan also refuses a task whose named files add up to over 36 KB unless it names a line
      region. For a file over 20 KB name the function and its line region; name a test file only when the task changes
      it; split when in doubt. Many small tasks beat few big ones.
-   - Run the helper's `tiers` subcommand first and size each task to the smallest online tier among tier-1 and
-     tier-2; the limits are in its output. A story may carry an optional `"tier": 2` key to pin a big task to tier 2.
+   - Run the helper's `tiers` subcommand first. Before you write a task that reads several or large files, run
+     `fit --chars <description length> --files <named files> [--out <expected output tokens>]`: it prints which
+     online tiers have the window for the task, how much of each window stays free and the estimated seconds, and
+     names the tier to use. If a task would take more than about 75% of a tier's window, aim it at a tier with more
+     context: dispatch already picks the fastest online tier whose window fits, and a story may carry `"tier": N` to
+     require at least that tier. When `fit` says split, no online tier has the window: cut the task into smaller
+     ones. `check-plan` accepts a task that fits a larger online tier and refuses one that fits none.
    - Every task has at least one verify command that exits 0 only when the task is done. Commands run without a
      shell: no `; & | < >`, backticks or `$()`.
    - Run `check-plan`, fix what it reports, show the user the tasks and verify commands. Build only when the user

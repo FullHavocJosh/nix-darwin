@@ -51,7 +51,9 @@ def main():
     data = json.loads(out)
     check("json has five entries", len(data) == 5)
     keys = {"id", "pane", "kind", "ctx", "online", "enabled", "max_chars", "max_read", "max_files"}
-    check("json keys", all(set(d) == keys for d in data))
+    check("json keeps every original key (manage reads them)", all(keys <= set(d) for d in data))
+    extra = {"room", "model", "thinking", "pp_tok_s", "tg_tok_s"}
+    check("json adds only the capability keys", all(set(d) == keys | extra for d in data))
     check("json online flags", [d["online"] for d in data] == [False, False, True, False, True])
     need = mod.task_need({"title": "t", "description": "d", "acceptanceCriteria": []}, None)
     check("task_need counts the overhead", need >= 12000, str(need))
