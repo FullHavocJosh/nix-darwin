@@ -58,9 +58,14 @@ def main():
         check("tier1_available off by default", a.tier1_available() is False)
         a.semi_local_available, a.local_builder_available = (lambda: True), (lambda: True)
         a.tier1_available = lambda: True
+        a.gateway_health = lambda: None  # no live gateway in tests
         a.zen_status, a.zen_usable = (lambda run, refresh=False: "available"), (lambda s: s == "available")
         check("tier_online tier-0", a.tier_online("tier-0") is True)
         check("tier_online tier-1", a.tier_online("tier-1") is True)
+        a.gateway_health = lambda: {"josh-g14": True, "trashcan": False}
+        check("tier_online tier-1 gateway down", a.tier_online("tier-1") is False)
+        check("tier_online tier-2 gateway up", a.tier_online("tier-2") is True)
+        a.gateway_health = lambda: None
         check("tier_online tier-2", a.tier_online("tier-2") is True)
         check("tier_online tier-3", a.tier_online("tier-3") is True)
         check("tier_online tier-4", a.tier_online("tier-4") is True)
