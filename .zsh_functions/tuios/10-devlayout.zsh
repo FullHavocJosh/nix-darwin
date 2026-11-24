@@ -21,7 +21,7 @@ _tuios_restore_nvim() {
 
 # Session $1 for directory $2, the dev layout: workspace 1 holds nvim, aidev's Claude, Lumo and the builders. The pane
 # `tuios new` opens becomes nvim; its command is typed into a shell, so quitting nvim leaves
-# the pane at a prompt. nvim and pick open minimized; zsh is the only visible window and has the focus.
+# the pane at a prompt. All windows stay open (never minimized); zsh has the focus.
 # A session that exists (still running, or restored by the daemon) keeps its layout and only
 # gets nvim, Claude and Lumo back (_tuios_restore).
 _tuios_devlayout() {
@@ -41,8 +41,6 @@ _tuios_devlayout() {
     --grants read,write,fan,files,respond,admin -- /bin/zsh -c \
     "export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:\$PATH; AIDEV_TUIOS_SESSION=$s python3 \$HOME/.config/aistack-tuios/aidev_pick.py" >/dev/null
   _tuios_cmd new-window zsh -s "$s" --workspace 1 --cwd "$dir" --no-focus >/dev/null
-  _tuios_cmd set-window -s "$s" -w nvim --minimize >/dev/null
-  _tuios_cmd set-window -s "$s" -w pick --minimize >/dev/null
   _tuios_cmd select-workspace 1 -s "$s" >/dev/null
   _tuios_cmd focus-window zsh -s "$s" >/dev/null
 }
