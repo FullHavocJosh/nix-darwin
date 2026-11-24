@@ -146,7 +146,8 @@ def main():
     # Test scenario 6: next_tier order - semi-local->local->free->billed with variations
     print("Scenario 6: next_tier order tests")
     # Test next_tier function - based on the notes, need to use 'available' state so free is returned
-    check("next_tier: tier-2 -> tier-3", a.next_tier("tier-2", "available") == "tier-3")
+    check("next_tier: tier-2 -> tier-0 (tier-1 offline, local ok)", a.next_tier("tier-2", "available") == "tier-0")
+    check("next_tier: tier-2 -> tier-3 (local off)", a.next_tier("tier-2", "available", False) == "tier-3")
     check("next_tier: local -> free", a.next_tier("tier-0", "available") == "tier-3")
     check("next_tier: free -> billed", a.next_tier("tier-3", "available") == "tier-4")
     check("next_tier: billed -> None", a.next_tier("tier-4", "available") is None)
@@ -155,7 +156,7 @@ def main():
     check("next_tier: semi-local -> free (local skipped)", a.next_tier("tier-2", "available", False) == "tier-3")
     
     # Test with zen_state="exhausted" should skip free
-    check("next_tier: tier-2 -> tier-4 (zen exhausted)", a.next_tier("tier-2", "exhausted", True) == "tier-4")
+    check("next_tier: tier-2 -> tier-4 (zen exhausted)", a.next_tier("tier-2", "exhausted", False) == "tier-4")
     
     # Test with zen_state="none" should skip free
     check("next_tier: local -> billed (free skipped, zen none)", a.next_tier("tier-0", "none") == "tier-4")

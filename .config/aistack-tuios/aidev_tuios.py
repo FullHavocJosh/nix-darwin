@@ -1852,7 +1852,8 @@ def default_target_ctx():
     """The context window sizing a task: the smallest of tier-1 and tier-2 that are enabled and online, else the
     smallest enabled one, else tier-0."""
     cfg = tiers()
-    enabled = [t for t in ("tier-1", "tier-2") if cfg[t]["enabled"]]
+    # A tier whose window is under the ~12000 token pi overhead (the TrashCan at 4096) cannot take a task: skip it.
+    enabled = [t for t in ("tier-1", "tier-2") if cfg[t]["enabled"] and cfg[t]["ctx"] > 12000]
     if not enabled:
         return cfg["tier-0"]["ctx"]
     online = [t for t in enabled if tier_online(t)]
