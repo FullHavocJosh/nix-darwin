@@ -210,15 +210,15 @@ def test_manage_row():
     # Test 1: another directory keeps the menu unchanged
     keys = [key for key, _label, _startable in mod.build_rows('/tmp')]
     check("no manage row outside ai-info",
-          keys == ['claude', 'claude-plan', '9b', '9b-plan', '30b', 'zen', 'go', 'openrouter'], f"{keys}")
+          keys == ['claude', 'claude-plan', '9b', '9b-plan', '30b', 'node:josh-g14', 'node:cait-g14', 'node:trashcan', 'node:macmini-m1', 'claude-code', 'opencode', 'openrouter', 'zen', 'go'], f"{keys}")
 
-    # Test 2: ~/ai-info gains the manage row between 30b and zen
+    # Test 2: ~/ai-info gains the manage row between 30b and the node rows
     rows = mod.build_rows(os.path.expanduser('~/ai-info'))
     keys = [key for key, _label, _startable in rows]
     check("manage row inside ai-info",
-          keys == ['claude', 'claude-plan', '9b', '9b-plan', '30b', 'manage', 'zen', 'go', 'openrouter'], f"{keys}")
+          keys == ['claude', 'claude-plan', '9b', '9b-plan', '30b', 'manage', 'node:josh-g14', 'node:cait-g14', 'node:trashcan', 'node:macmini-m1', 'claude-code', 'opencode', 'openrouter', 'zen', 'go'], f"{keys}")
     check("manage row is at index 5 and startable", rows[5][0] == 'manage' and rows[5][2] == True, f"{rows[5]}")
-    check("zen follows the manage row at index 6", rows[6][0] == 'zen', f"{rows[6]}")
+    check("the node rows follow the manage row at index 6", rows[6][0] == 'node:josh-g14', f"{rows[6]}")
 
     # Test 3: a symlink to ~/ai-info also counts, because build_rows compares realpaths
     if os.path.isdir(os.path.expanduser('~/ai-info')):
@@ -298,6 +298,49 @@ def test_check_manage():
         os.unlink(path)
 
 
+def test_node_rows_and_standard_sessions():
+    keys = [r[0] for r in mod.build_rows()]
+    startable = [r[0] for r in mod.build_rows() if r[2]]
+    check("node rows startable", all(("node:" + n) in startable for n, _l in mod.NODES))
+    check("standard sessions startable", all(k in startable for k in ("claude-code", "opencode", "openrouter")))
+    check("zen and go stay status only", "zen" not in startable and "go" not in startable)
+    check("status-only rows come last", keys[-2:] == ["zen", "go"])
+    mj = mod.node_models_json("trashcan")["providers"]["gateway"]
+    check("node pi model is node-<id>", mj["models"][0]["id"] == "node-trashcan")
+    check("node pi key is a command, not a key", mj["apiKey"].startswith("!") and "gateway_key.py" in mj["apiKey"])
+
+
+def test_check_nodes():
+    calls = {}
+    original_set_state, original_get_json = mod.set_state, mod.get_json
+    mod.set_state = lambda key, status, detail: calls.__setitem__(key, (status, detail))
+    tiers = {"groups": {"pool": [
+        {"id": "josh-g14", "healthy": True, "busy": False, "window": 65536, "model": "m1", "rank": 4},
+        {"id": "cait-g14", "healthy": True, "busy": True, "queue_depth": 1, "window": 65536, "model": "m2", "rank": 3},
+        {"id": "trashcan", "healthy": False, "busy": False, "window": 8192, "model": "m3", "rank": 1}]}}
+    mod.get_json = lambda url, headers=None, timeout=5: tiers
+    try:
+        d = tempfile.mkdtemp()
+        with open(os.path.join(d, "remote_builder.py"), "w") as fh:
+            fh.write("def read_key():\n    return 'k'\n")
+        original_aistack = mod.AISTACK
+        mod.AISTACK = d
+        mod.check_nodes()
+        check("online node ok", calls["node:josh-g14"][0] == "ok", str(calls.get("node:josh-g14")))
+        check("busy node maybe", calls["node:cait-g14"][0] == "maybe", str(calls.get("node:cait-g14")))
+        check("offline node bad", calls["node:trashcan"][0] == "bad" and "offline" in calls["node:trashcan"][1])
+        check("node missing from pool bad", calls["node:macmini-m1"][0] == "bad")
+        check("detail names model and window", "m1" in calls["node:josh-g14"][1] and "65536" in calls["node:josh-g14"][1])
+        calls.clear()
+        def boom(*a, **k):
+            raise OSError("down")
+        mod.get_json = boom
+        mod.check_nodes()
+        check("gateway unreachable is maybe, never bad", all(v[0] == "maybe" for v in calls.values()) and len(calls) == 4)
+    finally:
+        mod.AISTACK, mod.set_state, mod.get_json = original_aistack, original_set_state, original_get_json
+
+
 def main():
     test_plan_pane_open()
     test_start_aidev()
@@ -306,6 +349,8 @@ def main():
     test_manage_row()
     test_launch_manage()
     test_check_manage()
+    test_node_rows_and_standard_sessions()
+    test_check_nodes()
     check("All tests completed", True)
     return 1 if FAILS else 0
 
