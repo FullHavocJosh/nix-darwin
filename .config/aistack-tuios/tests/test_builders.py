@@ -538,6 +538,37 @@ def main():
         ecode[0] = 1
         code, out = esc("failed", {"build-local": 2})
         check("escalate with cmd_builder failing closes nothing", code == 1 and not eclosed, (code, eclosed, out))
+        # a node builder gets one thinking retry on the same node before it goes up a tier
+        ecode[0] = 0
+        real_lba = a.local_builder_available
+        a.local_builder_available = lambda: False
+        try:
+            erun.data.pop("think", None)
+            code, out = esc("failed", {"build-local-tier-4": 2}, "build-local-tier-4")
+            check("node failure: thinking retry on the same node", code == 0 and ecalls == [["tier-4"]]
+                  and eclosed == ["build-local-tier-4"] and erun.data["think"] == {"tier-4": True}
+                  and "think-josh-g14" in out, (code, ecalls, eclosed, out))
+            check("one more failure after the retry escalates",
+                  erun.data["tasks"]["T1"]["by"]["build-local-tier-4"] == a.ESCALATE_AFTER - 1,
+                  erun.data["tasks"]["T1"]["by"])
+            code, out = esc("failed", {"build-local-tier-4": 2}, "build-local-tier-4")
+            check("second failure with thinking on escalates", code == 0 and ecalls == [["tier-5"]]
+                  and "think" not in erun.data["tasks"]["T1"] and not erun.data["think"].get("tier-4"),
+                  (code, ecalls, erun.data.get("think"), out))
+            erun.data.pop("think", None)
+            code, out = esc("failed", {"build-local-tier-4": 1}, "build-local-tier-4", compacted=True)
+            check("a context overflow skips the thinking retry", code == 0 and ecalls == [["tier-5"]], (code, ecalls, out))
+            erun.data.pop("think", None)
+            os.environ["AIDEV_TUIOS_THINK_RETRY"] = "off"
+            code, out = esc("failed", {"build-local-tier-4": 2}, "build-local-tier-4")
+            check("the off switch skips the thinking retry", code == 0 and ecalls == [["tier-5"]], (code, ecalls, out))
+            os.environ.pop("AIDEV_TUIOS_THINK_RETRY", None)
+            erun.data.pop("think", None)
+            code, out = esc("failed", {"build-local": 2})
+            check("tier-0 and cloud builders get no thinking retry", code == 0 and ecalls == [["tier-5"]], (code, ecalls, out))
+        finally:
+            a.local_builder_available = real_lba
+            os.environ.pop("AIDEV_TUIOS_THINK_RETRY", None)
     finally:
         a.zen_status, a.cmd_builder, a.tuios = ereal
 

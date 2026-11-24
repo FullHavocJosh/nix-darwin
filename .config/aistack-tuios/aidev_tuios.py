@@ -211,6 +211,11 @@ def tier_alias(tid):
     return tiers()[tid]["alias"]
 
 
+def think_alias(tid):
+    """The gateway model that pins a request to this node with thinking ON: think-<backend id>."""
+    return "think-" + aidev_tiers.NODE_BACKEND[tid]
+
+
 def probe_gateway(url, alias, key_path):
     """An authenticated GET of url/models answers 200 with the model alias. A 401 on the cached key drops the cache file."""
     if key_path is None:
@@ -1033,9 +1038,10 @@ PI_BUILD_EXTENSIONS = ("pi-stop-after-reply.ts", "pi-tool-log.ts")
 PI_PROVIDER = {t: "gw" + t[-1] for t in aidev_tiers.NODE_TIERS}  # pi provider name of a gateway node tier
 
 
-def write_build_pi(cfg, kind="tier-0"):
+def write_build_pi(cfg, kind="tier-0", think=False):
     """The local builder's pi model list, plus aidev's pi extensions beside the tuios one (they stop the builder
-    after its reply mail). kind 'tier-1' or 'tier-2' adds that tier's gateway provider; its key is read at runtime, never written."""
+    after its reply mail). kind 'tier-1' to 'tier-4' adds the node providers; its key is read at runtime, never written.
+    With think the returned model is the node's thinking twin (think-<id>); both aliases are listed for every node."""
     kind = norm_kind(kind) or kind
     spec = importlib.util.spec_from_file_location("local_edit_mcp", os.path.join(AISTACK, "local_edit_mcp.py"))
     le = importlib.util.module_from_spec(spec)
@@ -1050,7 +1056,9 @@ def write_build_pi(cfg, kind="tier-0"):
                 providers[pname] = {
                     "baseUrl": tier_url(pkind), "api": "openai-completions", "apiKey": "!cat " + shlex.quote(key_path),
                     "models": [{"id": tier_alias(pkind), "reasoning": False, "contextWindow": tiers()[pkind]["ctx"],
-                                "maxTokens": aidev_tiers.max_output_tokens(pkind, tiers())}]}
+                                "maxTokens": aidev_tiers.max_output_tokens(pkind, tiers())},
+                               {"id": think_alias(pkind), "reasoning": True, "contextWindow": tiers()[pkind]["ctx"],
+                                "maxTokens": 2 * aidev_tiers.max_output_tokens(pkind, tiers())}]}
     wj(os.path.join(cfg["pi_build"], "models.json"), {"providers": providers})
     ext = os.path.join(cfg["pi_build"], "extensions")
     os.makedirs(ext, exist_ok=True)
@@ -1065,7 +1073,7 @@ def write_build_pi(cfg, kind="tier-0"):
     data["compaction"] = {**(data.get("compaction") or {}), "enabled": False}
     wj(path, data)
     if kind in aidev_tiers.NODE_TIERS:
-        return f"{PI_PROVIDER[kind]}/{tier_alias(kind)}"
+        return f"{PI_PROVIDER[kind]}/{think_alias(kind) if think else tier_alias(kind)}"
     return f"coder/{le.ALIAS}"
 
 
@@ -1350,7 +1358,7 @@ def build_body(run, cfg, kind, name=None):
     if kind in aidev_tiers.NODE_TIERS:
         if not node_available(kind):
             return None
-        model = write_build_pi(cfg, kind)
+        model = write_build_pi(cfg, kind, think=bool((run.data.get('think') or {}).get(kind)))
         sid = pane.setdefault("session_id", str(uuid.uuid4()))
         argv = ["pi", "--model", model, "--name", f"aidev {name}", "--no-skills", "--session-id", sid]
         pane["builder"] = f"{tiers()[kind]['label']} (free)"
@@ -1441,8 +1449,8 @@ def builder_model_ok(session, name, kind, strict=True):
         provider, alias = match.group(1), match.group(2)
         expected_provider, expected_alias = PI_PROVIDER[kind], tier_alias(kind)
         
-        if provider == expected_provider and alias == expected_alias:
-            return True, ""
+        if provider == expected_provider and alias in (expected_alias, think_alias(kind)):
+            return True, ""  # a node pane may run the plain model or its thinking twin (a retry)
         return False, f"{provider}/{alias}"
     
     return (False, "unknown") if strict else (True, "")
@@ -2228,6 +2236,29 @@ def cmd_escalate(run, argv):
     if t.get("status") != "failed" or (n < ESCALATE_AFTER and not t.get("compacted") and not t.get("tripped")):
         print(f"{tid}: {n} of {ESCALATE_AFTER} attempts used at {builder}; send-task again with a note")
         return 1
+    # A node builder that failed with thinking off gets one more attempt with thinking on (model think-<id>, the same
+    # node) before the task goes up a tier. Not after a context overflow (thinking spends more tokens), not twice.
+    think = run.data.setdefault("think", {})
+    if (kind in aidev_tiers.NODE_TIERS and not think.get(kind) and not t.get("compacted") and not t.get("tripped")
+            and (os.environ.get("AIDEV_TUIOS_THINK_RETRY") or "on").strip().lower() not in ("off", "0", "no", "false")):
+        code, _out, _err = tuios("close-window", builder, "-s", run.session)
+        if code == 0:
+            think[kind] = True
+            run.save()
+            rc = cmd_builder(run, [kind])
+            if rc == 0:
+                t = run.data["tasks"][tid]  # save() rebuilt the task dicts: write to the current one
+                t.setdefault("by", {})[builder] = ESCALATE_AFTER - 1  # one more failed attempt goes up a tier
+                run.save()
+                run.event("think_retry", task=tid, builder=builder, model=think_alias(kind))
+                print(f"retrying {tid} on {builder} with thinking on ({think_alias(kind)}); one more failure escalates")
+                print(f"Next: {HELPER} send-task {tid} '<note>'")
+                return 0
+            think.pop(kind, None)
+            print(f"the thinking retry did not start on {builder}; escalating")
+        else:
+            print(f"could not close {builder} for a thinking retry (the plan pane lacks the admin grant); escalating")
+    think.pop(kind, None)
     zs = zen_status(run) if kind in ('tier-0',) + aidev_tiers.NODE_TIERS else {'state': 'available', 'detail': ''}
     nxt = next_tier(kind, zs['state'], local_ok=local_builder_available())
     if nxt is None:

@@ -55,6 +55,11 @@ check("empty footer not ok for tier-1", a.builder_model_ok(None, "free", "tier-1
 a.pane_text = mock_pane_text("(coder) some-model")
 check("(coder) some-model not ok for tier-1", a.builder_model_ok(None, "free", "tier-1") == (False, "coder/some-model"))
 
+# Test the thinking twin is ok for its own node and wrong for another
+a.pane_text = mock_pane_text("(gw4) think-josh-g14")
+check("(gw4) think-josh-g14 ok for tier-4", a.builder_model_ok(None, "free", "tier-4") == (True, ""))
+check("(gw4) think-josh-g14 not ok for tier-3", a.builder_model_ok(None, "free", "tier-3") == (False, "gw4/think-josh-g14"))
+
 # Test no footer lines not ok for tier-1
 a.pane_text = mock_pane_text("\n\n\n")
 check("no footer lines not ok for tier-1", a.builder_model_ok(None, "free", "tier-1") == (False, "unknown"))
