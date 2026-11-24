@@ -4,7 +4,9 @@ callables that record their calls; needs no tuios daemon, no model and no networ
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_hosts_workspace.py
 """
 
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import sys
@@ -199,6 +201,24 @@ def main():
             rc = run_main(hw, table, tuios, tuios_json)
             all_calls.extend(calls)
             check("returns 1 when every window fails", rc == 1, rc)
+
+            print("main: missing table is a no-op")
+            missing = os.path.join(d, "no-table.json")
+            sys.modules.pop("aidev_tuios", None)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = hw.main(["--table", missing, "--session", "x"])
+            check("returns 0 with a missing table", rc == 0, rc)
+            check(
+                "prints 'no host table: skipping'",
+                buf.getvalue().strip() == "no host table: skipping",
+                buf.getvalue(),
+            )
+            check(
+                "does not import aidev_tuios with a missing table",
+                "aidev_tuios" not in sys.modules,
+                sys.modules.get("aidev_tuios"),
+            )
 
             print("read-only guarantee")
 

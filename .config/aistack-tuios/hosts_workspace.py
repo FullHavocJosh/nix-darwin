@@ -100,7 +100,7 @@ def open_hosts(session, hosts, workspace, tuios, tuios_json, script, cwd):
         if name not in todo_names:
             print(f"exists {name}")
             continue
-        code, out, err = tuios(
+        code, _out, err = tuios(
             "new-window",
             name,
             "-s",
@@ -135,13 +135,20 @@ def main(argv=None):
         argv: Command line arguments, defaults to sys.argv[1:]
 
     Returns:
-        0 when no host failed, else 1
+        0 when no host failed, else 1. Returns 0 without opening anything when
+        the table file is missing (prints 'no host table: skipping'), and 2 on
+        a malformed table or a missing session.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--table", type=str, default=DEFAULT_TABLE)
     parser.add_argument("--session", type=str, default=None)
     parser.add_argument("--workspace", type=int, default=WORKSPACE)
     args = parser.parse_args(argv)
+
+    # No table yet (the ai-info repo may not carry one): open nothing
+    if not os.path.isfile(os.path.expanduser(args.table)):
+        print("no host table: skipping")
+        return 0
 
     # Add the module's own directory to sys.path
     script_dir = os.path.dirname(os.path.abspath(__file__))
