@@ -20,7 +20,7 @@ Helpers the Claude pane runs from its own pane (so with its grants; AIDEV_TUIOS_
     ask-lumo <question...>        type the question to the Lumo pane (tuios ask-agent) and print its whole reply
     check-plan                    check plan/prd.json and plan/verify.json with aistack's rules
     worktree                      create the gpr worktree and draft PR for the plan (main checkout only)
-    builder [tier-0|tier-1|tier-2|tier-3|tier-4] [--approved]
+    builder [tier-0|tier-1|tier-2|tier-5|tier-6] [--approved]
                                   open a builder pane in the work dir; billed costs money: the plan pane asks the
                                   user in its chat and passes --approved; without it a capped Inbox ask is the fallback
     tiers [--json]                print each builder tier: id, pane, live ctx, online state, task limits, room after the
@@ -33,7 +33,7 @@ Helpers the Claude pane runs from its own pane (so with its grants; AIDEV_TUIOS_
     wait-task <id> [seconds]      wait for the builder's reply, then run the task's verify commands
     verify <id>                   run the task's verify commands again
     watch [seconds]               block until new mail or a new Lumo exchange arrives, print it (run in background)
-    escalate <id>                 after repeated failures at a builder, open the next tier (tier-2, tier-1, tier-0, tier-3, tier-4);
+    escalate <id>                 after repeated failures at a builder, open the next tier (tier-2, tier-1, tier-0, tier-5, tier-6);
                                   each tier only when this device can run it
     fallback <id>                 when the free builder hits its usage limit, try the next free model, else the billed builder
     approvals [approve|deny]      show the prompt the builder waits on, or answer it (needs the respond grant)
@@ -46,7 +46,7 @@ Panes, all on one workspace (nvim's, else the lowest free one), each named after
 
     plan     Claude Code: talks with you, reads the code, plans, sends tasks, verifies, reviews   read,write,fan,files
     research pi on Lumo through lumo-tamer, no tools: web lookups on what Claude sends it        read
-    build-local-tier-0 / build-local-tier-1 / build-local-tier-2 / build-free-tier-3 / build-billed-tier-4   builders:
+    build-local-tier-0 / build-local-tier-1 / build-local-tier-2 / build-free-tier-5 / build-billed-tier-6   builders:
              pi on the on-device gpt-oss-20b (needs the model file and 24 GB RAM), pi on the G14 with a small context, pi on
              the G14 with a large context, OpenCode on a free Zen model (needs a Zen API key), Claude on a billed
              model (after the user says yes); Claude opens them                            read,write
@@ -315,14 +315,14 @@ def tiers_live():
 
 
 def tier_online(tid, run=None):
-    """True when the tier can take a task now. False for an unknown id and for a disabled tier (tier-3 and tier-4
+    """True when the tier can take a task now. False for an unknown id and for a disabled tier (tier-5 and tier-6
     ignore enabled)."""
     try:
         cfg = tiers().get(tid)
         if cfg is None:
             return False
-        if tid in ("tier-3", "tier-4"):
-            if tid == "tier-4":
+        if tid in ("tier-5", "tier-6"):
+            if tid == "tier-6":
                 return True
             if run is None:
                 run = types.SimpleNamespace(project=os.environ.get("AIDEV_TUIOS_PROJECT") or os.getcwd(),
@@ -388,7 +388,7 @@ GRANTS = {PLAN: "read,write,fan,files,respond,admin", RESEARCH: "read", "build":
 WS_OWN = {PLAN: 1, RESEARCH: 1, **{aidev_tiers.DEFAULTS[t]["pane"]: 1 for t in aidev_tiers.TIER_IDS},
           "build-semi-local": 1, "build-local": 1, "build-free": 1, "build-billed": 1, "dev": 1}
 WS = dict(WS_OWN)
-# Builder kinds are tier ids, tier-0 to tier-4 (see aidev_tiers.py). Old kind and pane names stay as aliases.
+# Builder kinds are tier ids, tier-0 to tier-6 (see aidev_tiers.py). Old kind and pane names stay as aliases.
 BUILDERS = {tid: aidev_tiers.DEFAULTS[tid]["pane"] for tid in aidev_tiers.TIER_IDS}
 ESCALATE_AFTER = int(os.environ.get("AIDEV_TUIOS_ESCALATE_AFTER", "2"))
 LEGACY_BUILDER_PANES = ("build", "build-pickle", "build-claude")
@@ -400,7 +400,7 @@ def norm_kind(word):
 
 
 # How each builder clears its conversation before a new task: pi starts a new session, Claude Code clears the context.
-RESET_CMD = {"tier-0": "/new", "tier-1": "/new", "tier-2": "/new", "tier-3": "/new", "tier-4": "/clear"}
+RESET_CMD = {"tier-0": "/new", "tier-1": "/new", "tier-2": "/new", "tier-5": "/new", "tier-6": "/clear"}
 RESET_WAIT = int(os.environ.get("AIDEV_TUIOS_RESET_WAIT", "90"))
 LUMO_RESET = "/new"
 # A builder that compacts has overflowed its context: it loses file paths and decisions mid-task, so a retry on the
@@ -527,7 +527,7 @@ def pane_idle(session, name):
 
 def deliver_prompt(run, builder, text):
     '''Type `text` into builder: directly when it is an idle free builder, otherwise queue it.'''
-    if tier_of(builder) == "tier-3" and pane_idle(run.session, builder):
+    if tier_of(builder) == "tier-5" and pane_idle(run.session, builder):
         code, _out, err = tuios("send-text", "-s", run.session, "-w", builder, text)
         if code:
             print(f"typing into {builder} failed: {(err or '').strip()[:300]}", file=sys.stderr)
@@ -1294,7 +1294,7 @@ def builder_sandbox():
 
 
 def build_body(run, cfg, kind, name=None):
-    """The launcher body of builder `kind` (tier-0 to tier-4) in pane `name`, or None when that builder does not
+    """The launcher body of builder `kind` (tier-0 to tier-6) in pane `name`, or None when that builder does not
     exist here. It replies by mail to run.data["reply_to"]: the plan pane in a run, the caller of `aidev -p` in an
     edit. AIDEV_TUIOS_BUILDER=1 in its environment stops it from starting aidev -p or --handoff itself (a loop)."""
     kind = norm_kind(kind) or kind
@@ -1304,7 +1304,7 @@ def build_body(run, cfg, kind, name=None):
     guard = os.path.dirname(write_git_guard(run))
     pane_path = f"export PATH={shlex.quote(guard)}:\"$PATH\"\n"  # the guard comes first, before the agent starts
     pane = run.data["panes"].setdefault(name, {})
-    if kind == "tier-4":
+    if kind == "tier-6":
         pane["builder"] = f"Claude Code {CLAUDE_MODEL} (billed)"
         try:
             verify = load_lib(run.project, run).load_plan(run.project)[1]
@@ -1467,12 +1467,12 @@ def start_builder(run, kind, name, ws, cwd):
     script = write_script(run, name, body)
     # free builders get a short ready timeout: OpenCode v2 never loads the TUI part of the tuios state plugin, so
     # start-agent cannot see state and oc_ready reads the ready footer instead
-    ready_timeout, timeout = ("20000", 40) if kind == "tier-3" else ("300000", 330)
+    ready_timeout, timeout = ("20000", 40) if kind == "tier-5" else ("300000", 330)
     code, out, err = tuios("start-agent", f"/bin/zsh {script}", "-s", run.session, "--name", name,
                            "--grants", GRANTS["build"], "--cwd", cwd, "--workspace", str(ws),
                            "--ready-timeout", ready_timeout, timeout=timeout)
     note = ""
-    if code != 0 and kind == "tier-3" and oc_ready(run.session, name, 90):
+    if code != 0 and kind == "tier-5" and oc_ready(run.session, name, 90):
         note = f"ready footer seen (start-agent exit {code}); "
         code = 0
     run.data["panes"][name].update(script=script, cwd=cwd, grants=GRANTS["build"])
@@ -2007,15 +2007,15 @@ def cmd_worktree(run, _argv):
 
 def auto_builder(run):
     """The builder to open when none is named: the order is fixed: tier-2 when the G14 server is up, else tier-1, else
-    tier-0 when the gpt-oss-20b file exists, else tier-3 when a free Zen model is usable, else tier-4 (cmd_builder then tells
+    tier-0 when the gpt-oss-20b file exists, else tier-5 when a free Zen model is usable, else tier-6 (cmd_builder then tells
     the plan pane to ask the user in its chat and pass --approved)."""
     unready = [norm_kind(k) or k for k in ((run.data.get('unready') or []) if run is not None else [])]
-    for kind in ('tier-2', 'tier-1', 'tier-0', 'tier-3'):
+    for kind in ('tier-2', 'tier-1', 'tier-0', 'tier-5'):
         if kind in unready:
             why = 'its pane never became ready'
         elif kind == 'tier-0':
             why = None if tier_online(kind, run) else (local_skip_reason() or no_builder_why(kind))
-        elif kind == 'tier-3':
+        elif kind == 'tier-5':
             zs = zen_status(run)
             why = None if zen_usable(zs) else zs['detail']
         else:
@@ -2024,8 +2024,8 @@ def auto_builder(run):
             print(f'builder: {kind}')
             return kind
         print(f'skip {kind}: {why}')
-    print('builder: tier-4 (billed, needs your approval)')
-    return 'tier-4'
+    print('builder: tier-6 (billed, needs your approval)')
+    return 'tier-6'
 
 
 def cmd_builder(run, argv):
@@ -2034,7 +2034,7 @@ def cmd_builder(run, argv):
     auto = not argv
     kind = norm_kind(argv[0]) if argv else auto_builder(run)
     if kind not in BUILDERS:
-        print("usage: builder [tier-0|tier-1|tier-2|tier-3|tier-4] [--approved]")
+        print("usage: builder [tier-0|tier-1|tier-2|tier-5|tier-6] [--approved]")
         return 2
     name, wd = BUILDERS[kind], run.data.get("work_dir")
     if not wd:
@@ -2045,22 +2045,22 @@ def cmd_builder(run, argv):
         run.save()
         print(f"{name} is already open; it is the builder now")
         return 0
-    if kind == "tier-4" and approved:
+    if kind == "tier-6" and approved:
         run.event("billed_approved", by="plan pane")
-    elif kind == "tier-4" and auto:
-        print("tier-4 (billed) is the only builder left and costs money: ask the user in this chat, then run "
-              "`builder tier-4 --approved` on a yes")
+    elif kind == "tier-6" and auto:
+        print("tier-6 (billed) is the only builder left and costs money: ask the user in this chat, then run "
+              "`builder tier-6 --approved` on a yes")
         return 3
-    elif kind == "tier-4":
+    elif kind == "tier-6":
         timeout_s = billed_ask_timeout_s()
         answer = ask_human(run.session, "aidev: build with Claude Code (billed)?", ["yes", "no"], timeout_s)
         if answer != "yes":
             print("the user said no to a billed builder" if answer else
                   f"no answer in the Inbox within {timeout_s}s: ask the user in this chat, then run "
-                  "`builder tier-4 --approved` on a yes")
+                  "`builder tier-6 --approved` on a yes")
             return 1 if answer else 3
-    if kind == "tier-3" and not zen_usable(s := zen_status(run)):
-        print(f"free Zen is not usable: {s['detail']}. Ask the user in this chat, then run `builder tier-4 --approved`.")
+    if kind == "tier-5" and not zen_usable(s := zen_status(run)):
+        print(f"free Zen is not usable: {s['detail']}. Ask the user in this chat, then run `builder tier-6 --approved`.")
         return 1
     ok, msg = start_builder(run, kind, name, WS[name], wd)
     print(msg)
@@ -2122,7 +2122,7 @@ def oc_ready(session, name, wait=90):
 def restart_free_pane(run, model=None, wait=90):
     """Restart the free builder pane in place: exit opencode, then retype its script. Returns True when the ready
     footer ('ctrl+p menu', without 'esc interrupt') shows up within `wait` seconds, see oc_ready()."""
-    name = BUILDERS["tier-3"]
+    name = BUILDERS["tier-5"]
     try:
         session = run.session
     except AttributeError:
@@ -2165,18 +2165,18 @@ def tier_of(builder):
 
 
 def keeps_builder(builder_pane):
-    """True when send-task keeps the open builder: a tier-0, tier-3 or tier-4 pane the plan opened on purpose. Tier-1
+    """True when send-task keeps the open builder: a tier-0, tier-5 or tier-6 pane the plan opened on purpose. Tier-1
     and tier-2 panes and no pane are re-selected by size and availability."""
-    return tier_of(builder_pane) in ("tier-0", "tier-3", "tier-4")
+    return tier_of(builder_pane) in ("tier-0", "tier-5", "tier-6")
 
 
 def next_tier(kind, zen_state, local_ok=True):
-    """The tier id after `kind`: tier-3 (free) when a free Zen model is usable, else tier-4 (billed)."""
+    """The tier id after `kind`: tier-5 (free) when a free Zen model is usable, else tier-6 (billed)."""
     state = {
         "tier-0": {"online": bool(local_ok)},
         "tier-1": {"online": False},
         "tier-2": {"online": True},
-        "tier-3": {"online": zen_state not in ("exhausted", "none")},
+        "tier-5": {"online": zen_state not in ("exhausted", "none")},
     }
     return aidev_tiers.next_tier_id(kind, state, aidev_tiers.DEFAULTS)
 
@@ -2228,8 +2228,8 @@ def cmd_fallback(run, argv):
         return 2
     tid = argv[0]
     builder = run.data.get("builder")
-    if tier_of(builder) != "tier-3":
-        print(f"fallback only applies to {BUILDERS['tier-3']}")
+    if tier_of(builder) != "tier-5":
+        print(f"fallback only applies to {BUILDERS['tier-5']}")
         return 1
     run.data["zen_tried"] = [run.data.get("zen_model")]
     if callable(getattr(run, "save", None)):
@@ -2245,10 +2245,10 @@ def cmd_fallback(run, argv):
         print(f"Next: send-task {tid} with a note")
         return 0
     print("no free model left, falling back to the billed builder")
-    tuios("send-text", "-s", run.session, "-w", BUILDERS["tier-3"], "/exit")
-    tuios("send-keys", "-s", run.session, "-w", BUILDERS["tier-3"], "Enter")
-    run.event("fallback", task=tid, to="tier-4")
-    return cmd_builder(run, ["tier-4"])
+    tuios("send-text", "-s", run.session, "-w", BUILDERS["tier-5"], "/exit")
+    tuios("send-keys", "-s", run.session, "-w", BUILDERS["tier-5"], "Enter")
+    run.event("fallback", task=tid, to="tier-6")
+    return cmd_builder(run, ["tier-6"])
 
 
 def mail_task(run, builder, subject, mail_text, prompt):
@@ -2293,7 +2293,7 @@ def wait_reply(session, me, thread, builder, limit, on_poll=None):
             return "reply", replies[-1][2]
         if on_poll and on_poll():
             return "looped", ""
-        if tier_of(builder) == "tier-3" and free_limit_hit(session, builder):
+        if tier_of(builder) == "tier-5" and free_limit_hit(session, builder):
             return "limit", ""
         st = agent_state(session, builder)
         if st == "gone":
@@ -2563,7 +2563,7 @@ def cmd_send_task(run, argv):
     if research_gate(run):
         return 3
     if not argv:
-        print("usage: send-task <id> [--to tier-0|tier-1|tier-2|tier-3|tier-4] [note for the builder]; resets the builder's "
+        print("usage: send-task <id> [--to tier-0|tier-1|tier-2|tier-5|tier-6] [note for the builder]; resets the builder's "
               "context first unless AIDEV_NO_RESET=1")
         return 2
     tid, rest = argv[0], argv[1:]
@@ -2572,7 +2572,7 @@ def cmd_send_task(run, argv):
     if to:
         kind = norm_kind(rest[1] if len(rest) > 1 else "")
         if not kind:
-            print("usage: send-task <id> [--to tier-0|tier-1|tier-2|tier-3|tier-4] [note for the builder]")
+            print("usage: send-task <id> [--to tier-0|tier-1|tier-2|tier-5|tier-6] [note for the builder]")
             return 2
         builder, rest = BUILDERS[kind], rest[2:]
     note = " ".join(rest).strip()
@@ -3728,7 +3728,7 @@ def edit_in_pane(run, kind, task_path, limit):
 
 def edit_headless(run, kind, task_text, limit):
     """One attempt of `aidev -p` without tuios: the same builder as a one-shot command in this terminal."""
-    if kind == "tier-4":
+    if kind == "tier-6":
         return "", "the billed builder needs a tuios pane"
     cfg = pane_configs(run.project)
     env = {**os.environ, "AIDEV_TUIOS_BUILDER": "1"}
@@ -3829,17 +3829,17 @@ def cmd_edit(argv):
     run.data["tasks"] = {"edit": {"status": "pending", "attempts": 0, "notes": []}}
     run.save()
     before, why, last_kind = tree_state(cwd), "", None
-    kinds = ("tier-2", "tier-1", "tier-0", "tier-3")
+    kinds = ("tier-2", "tier-1", "tier-0", "tier-5")
     if opts["tier4"]:
-        kinds = ("tier-2", "tier-1", "tier-0", "tier-3", "tier-4")
+        kinds = ("tier-2", "tier-1", "tier-0", "tier-5", "tier-6")
     for i, kind in enumerate(kinds):
-        if kind == "tier-3":
+        if kind == "tier-5":
             if not tier_online(kind, run):
                 print(f"aidev -p: free Zen is not usable ({zen_status(run)['detail']}); not trying it", file=sys.stderr)
                 continue
-        elif kind == "tier-4":
+        elif kind == "tier-6":
             if not opts["tier4"]:
-                print("aidev -p: tier-4 is billed; use --billed", file=sys.stderr)
+                print("aidev -p: tier-6 is billed; use --billed", file=sys.stderr)
                 continue
         elif not tier_online(kind):
             continue
@@ -3897,7 +3897,7 @@ def cmd_direct(argv):
         os.execvpe(argv[0], argv, {**os.environ, "PI_CODING_AGENT_DIR": cfg["pi_build"]})
     model = zen_model(project)
     if not model:
-        print(f"aidev --direct: no free builder here ({no_builder_why('tier-0')}; {no_builder_why('tier-3')})",
+        print(f"aidev --direct: no free builder here ({no_builder_why('tier-0')}; {no_builder_why('tier-5')})",
               file=sys.stderr)
         return 1
     argv = ["opencode", "mini", "--model", opencode_model(model)] + (["--prompt", words] if words else [])

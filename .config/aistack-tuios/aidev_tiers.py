@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The aidev builder tier registry: five named tiers, a context size per tier, old builder names kept as aliases.
+"""The aidev builder tier registry: six named tiers, a context size per tier, old builder names kept as aliases.
 
 Stdlib only. Defaults live in DEFAULTS; ~/.config/aidev/tiers.json (or $AIDEV_TIERS_FILE) overrides keys per tier.
 """
@@ -7,7 +7,7 @@ import copy
 import json
 import os
 
-TIER_IDS = ('tier-0', 'tier-1', 'tier-2', 'tier-3', 'tier-4')
+TIER_IDS = ('tier-0', 'tier-1', 'tier-2', 'tier-5', 'tier-6')
 
 # MAX_OUTPUT_TOKENS: tier-0 runs at about 37 tok/s; the G14 30B runs at about 35 tok/s so 8192 tokens
 # is about 235 s and a 400 line file write is about 5000 tokens; do not set lower.
@@ -26,16 +26,19 @@ DEFAULTS = {
                'alias': 'trash-code', 'url': _URL_TRASHCAN, 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 8192},
     'tier-2': {'pane': 'build-local-tier-2', 'label': 'Josh G14 30B', 'kind': 'pi', 'ctx': 65536,
                'alias': 'qwen3-coder-30b', 'url': _URL, 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 8192},
-    'tier-3': {'pane': 'build-free-tier-3', 'label': 'free cloud', 'kind': 'opencode', 'ctx': 0,
+    'tier-5': {'pane': 'build-free-tier-5', 'label': 'free cloud', 'kind': 'opencode', 'ctx': 0,
                'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 0},
-    'tier-4': {'pane': 'build-billed-tier-4', 'label': 'billed Claude', 'kind': 'claude', 'ctx': 0,
+    'tier-6': {'pane': 'build-billed-tier-6', 'label': 'billed Claude', 'kind': 'claude', 'ctx': 0,
                'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 0},
 }
 
 _OLD = {
-    'build-semi-local': 'tier-2', 'build-local': 'tier-0', 'build-free': 'tier-3', 'build-billed': 'tier-4',
-    'semi-local': 'tier-2', 'local': 'tier-0', 'free': 'tier-3', 'billed': 'tier-4',
-    'semi': 'tier-2', 'g14': 'tier-2', '30b': 'tier-0', 'pickle': 'tier-3', 'claude': 'tier-4',
+    'build-semi-local': 'tier-2', 'build-local': 'tier-0', 'build-free': 'tier-5', 'build-billed': 'tier-6',
+    'semi-local': 'tier-2', 'local': 'tier-0', 'free': 'tier-5', 'billed': 'tier-6',
+    'semi': 'tier-2', 'g14': 'tier-2', '30b': 'tier-0', 'pickle': 'tier-5', 'claude': 'tier-6',
+    # before the renumbering free cloud was tier-3 and billed Claude tier-4; mail and notes written then still work
+    'tier-3': 'tier-5', 'tier3': 'tier-5', '3': 'tier-5', 'build-free-tier-3': 'tier-5',
+    'tier-4': 'tier-6', 'tier4': 'tier-6', '4': 'tier-6', 'build-billed-tier-4': 'tier-6',
 }
 
 
@@ -97,10 +100,10 @@ def estimate_tokens(desc_chars, file_bytes):
 
 
 def _usable(tid, state, tiers, min_tier):
-    """True when the tier is enabled, online and not below min_tier; tier-3 and tier-4 count as enabled."""
+    """True when the tier is enabled, online and not below min_tier; tier-5 and tier-6 count as enabled."""
     if int(tid[-1]) < min_tier:
         return False
-    if tid not in ('tier-3', 'tier-4') and not tiers.get(tid, {}).get('enabled'):
+    if tid not in ('tier-5', 'tier-6') and not tiers.get(tid, {}).get('enabled'):
         return False
     return bool(state.get(tid, {}).get('online'))
 
@@ -126,26 +129,26 @@ def select_tier(need, state, tiers, min_tier=0):
     build_up = any(_usable(t, state, tiers, min_tier) for t in ('tier-1', 'tier-2'))
     if not build_up and _usable('tier-0', state, tiers, min_tier) and ctx('tier-0') >= need:
         return 'tier-0', 'tier-0: build hosts offline'
-    if _usable('tier-3', state, tiers, min_tier):
-        return 'tier-3', 'tier-3: no local tier fits'
-    return 'tier-4', 'tier-4: last resort'
+    if _usable('tier-5', state, tiers, min_tier):
+        return 'tier-5', 'tier-5: no local tier fits'
+    return 'tier-6', 'tier-6: last resort'
 
 
 def next_tier_id(tier_id, state, tiers):
-    """The tier to escalate to after tier_id fails; None for tier-4 and unknown ids."""
+    """The tier to escalate to after tier_id fails; None for tier-6 and unknown ids."""
     if tier_id in ('tier-1', 'tier-2', 'tier-0'):
         # Dispatch order 2 > 1 > 0 > 3 > 4: after tier-2 try tier-1, then tier-0 (only when it is online).
         if tier_id == 'tier-2' and _usable('tier-1', state, tiers, 0):
             return 'tier-1'
         if tier_id in ('tier-2', 'tier-1') and _usable('tier-0', state, tiers, 0):
             return 'tier-0'
-        target = 'tier-3'
-    elif tier_id == 'tier-3':
-        target = 'tier-4'
+        target = 'tier-5'
+    elif tier_id == 'tier-5':
+        target = 'tier-6'
     else:
         return None
-    if target == 'tier-3' and not state.get('tier-3', {}).get('online'):
-        return 'tier-4'
+    if target == 'tier-5' and not state.get('tier-5', {}).get('online'):
+        return 'tier-6'
     return target
 
 
@@ -176,31 +179,31 @@ def fit_rows(need, out, tiers, state, speed=None):
     Returns (rows, best_id or None, why). Each row: id, ctx, online, fits, headroom (share of ctx left, None for
     an unbounded cloud tier), est_s (prompt/pp + out/tg when the speed is known, else None). best is the online tier
     with the shortest est_s among those that fit with FIT_HEADROOM; with no known speed the largest window wins. A
-    local tier is preferred over tier-3 and tier-4; None means split the task.
+    local tier is preferred over tier-5 and tier-6; None means split the task.
     """
     speed = SPEED if speed is None else speed
     rows = []
     for tid in TIER_IDS:
         cfg = tiers[tid]
         ctx = cfg['ctx']
-        online = bool(state.get(tid, {}).get('online')) and (tid in ('tier-3', 'tier-4') or cfg['enabled'])
+        online = bool(state.get(tid, {}).get('online')) and (tid in ('tier-5', 'tier-6') or cfg['enabled'])
         total = need + out
         fits = ctx <= 0 or total <= ctx
         headroom = None if ctx <= 0 else round((ctx - total) / ctx, 2)
         sp = speed.get(tid)
         est = round(need / sp['pp'] + out / sp['tg'], 1) if sp and sp['pp'] and sp['tg'] else None
         rows.append({'id': tid, 'ctx': ctx or None, 'online': online, 'fits': fits, 'headroom': headroom, 'est_s': est})
-    local = [r for r in rows if r['id'] not in ('tier-3', 'tier-4') and r['online'] and r['fits']
+    local = [r for r in rows if r['id'] not in ('tier-5', 'tier-6') and r['online'] and r['fits']
              and r['headroom'] is not None and r['headroom'] >= FIT_HEADROOM]
     if local:
         timed = [r for r in local if r['est_s'] is not None]
         best = min(timed, key=lambda r: r['est_s']) if timed else max(local, key=lambda r: r['ctx'])
         return rows, best['id'], f"{best['id']}: fits with {round(best['headroom'] * 100)}% of its window free"
-    tight = [r for r in rows if r['id'] not in ('tier-3', 'tier-4') and r['online'] and r['fits']]
+    tight = [r for r in rows if r['id'] not in ('tier-5', 'tier-6') and r['online'] and r['fits']]
     if tight:
         best = max(tight, key=lambda r: r['ctx'])
         return rows, best['id'], f"{best['id']}: fits but under {round(FIT_HEADROOM * 100)}% of its window is left; trim the task"
-    for tid in ('tier-3', 'tier-4'):
+    for tid in ('tier-5', 'tier-6'):
         if next(r for r in rows if r['id'] == tid)['online']:
             return rows, tid, f"{tid}: no local tier has the window for {need + out} tokens"
     return rows, None, f"split: no online tier has the window for {need + out} tokens"

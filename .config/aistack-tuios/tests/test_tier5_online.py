@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression test: tier_online('tier-3') with run=None must be True when a free Zen model is available (the run stub
+"""Regression test: tier_online('tier-5') with run=None must be True when a free Zen model is available (the run stub
 needs data and save). No network.
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_tier3_online.py
 """
@@ -40,8 +40,8 @@ def main():
     payload = json.dumps({"models": [{"model": "m", "state": "available"}], "best": "m"})
     a.subprocess.run = lambda *args, **kw: types.SimpleNamespace(returncode=0, stdout=payload, stderr="")
 
-    print("tier-3 online with run=None")
-    check("tier-3 is online", a.tier_online("tier-3") is True)
+    print("tier-5 online with run=None")
+    check("tier-5 is online", a.tier_online("tier-5") is True)
     return 1 if FAILS else 0
 
 

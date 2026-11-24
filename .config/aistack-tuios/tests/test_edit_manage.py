@@ -1,4 +1,4 @@
-"""Tests for `aidev -p` as a manageable edit (aidev_tuios.py): --cwd/--billed parsing, tier-4 only with --billed, the
+"""Tests for `aidev -p` as a manageable edit (aidev_tuios.py): --cwd/--billed parsing, tier-6 only with --billed, the
 final JSON result line, and the stable builder pane name with pane.json. No tuios daemon, no model, no network.
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_edit_manage.py
 """
@@ -84,7 +84,7 @@ def main():
     try:
         os.environ.pop("TUIOS_ENV", None)
         os.environ.pop("AIDEV_TEST_CMD", None)
-        a.tier_online = lambda tid, run=None: tid in ("tier-0", "tier-4")
+        a.tier_online = lambda tid, run=None: tid in ("tier-0", "tier-6")
         a.zen_status = lambda r, refresh=False: {"state": "off", "model": "", "detail": "off", "models": []}
 
         print("tier order")
@@ -92,16 +92,16 @@ def main():
 
         def fake_nothing(run, kind, task_text, limit):
             kinds.append(kind)
-            if kind == "tier-4":
+            if kind == "tier-6":
                 return "", "the billed builder needs a tuios pane"
             return f"{kind} did nothing", ""
 
         a.edit_headless = fake_nothing
         run_edit(a, repo, ["-p", "change it"])
-        check("without --billed tier-4 is never tried", "tier-4" not in kinds and kinds == ["tier-0"], kinds)
+        check("without --billed tier-6 is never tried", "tier-6" not in kinds and kinds == ["tier-0"], kinds)
         del kinds[:]
         run_edit(a, repo, ["-p", "change it", "--billed"])
-        check("--billed tries tier-0 then tier-4", kinds == ["tier-0", "tier-4"], kinds)
+        check("--billed tries tier-0 then tier-6", kinds == ["tier-0", "tier-6"], kinds)
 
         print("final JSON line")
         os.environ["AIDEV_TEST_CMD"] = "exit 0"

@@ -51,12 +51,12 @@ def main():
     run.data["builder"] = "build-local"
     run.data["work_dir"] = p
 
-    print("send-task T1 --to tier-3")
-    rc = a.cmd_send_task(run, ["T1", "--to", "tier-3"])
+    print("send-task T1 --to tier-5")
+    rc = a.cmd_send_task(run, ["T1", "--to", "tier-5"])
     check("send-task returns 0", rc == 0, rc)
-    check("the mail goes to build-free-tier-3", sent == ["build-free-tier-3"], sent)
+    check("the mail goes to build-free-tier-5", sent == ["build-free-tier-5"], sent)
     t = run.data["tasks"].get("T1") or {}
-    check("the task remembers build-free-tier-3", t.get("builder") == "build-free-tier-3", t.get("builder"))
+    check("the task remembers build-free-tier-5", t.get("builder") == "build-free-tier-5", t.get("builder"))
     check("the run's builder is unchanged", run.data.get("builder") == "build-local", run.data.get("builder"))
 
     print("an unknown kind is a usage error")

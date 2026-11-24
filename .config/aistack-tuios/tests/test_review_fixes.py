@@ -81,7 +81,7 @@ def test_escalate(tmp):
     )
     check(
         "escalate accepts a tripped task after one attempt",
-        code == 0 and calls == [["tier-3"]],
+        code == 0 and calls == [["tier-5"]],
         (code, calls, out),
     )
     code, out = stubbed(

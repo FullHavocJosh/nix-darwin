@@ -331,7 +331,7 @@ def preflight(tier_id, prompt_tokens, output_cap) -> tuple[bool, str]:
 
     Returns:
         (ok, reason): ok when prompt_tokens + output_cap fit the tier's window;
-        a tier not in CONTEXT_WINDOW (tier-3 and tier-4) is always ok; the
+        a tier not in CONTEXT_WINDOW (tier-5 and tier-6) is always ok; the
         reason names the split when it does not fit, else ''.
     """
     window = CONTEXT_WINDOW.get(tier_id)

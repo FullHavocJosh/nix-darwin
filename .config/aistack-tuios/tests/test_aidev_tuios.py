@@ -147,7 +147,7 @@ def main():
           f"--session-id {sid}" in body and f"--resume {sid}" in body)
     check("the first prompt is only on the first start", body.count("'first prompt'") == 1)
     check("advisor stays on for plan/review", "CLAUDE_ADVISOR=off" not in body)
-    body2 = a.claude_body(run, cfg, "build-billed-tier-4", "S", "go", p, advisor=False)
+    body2 = a.claude_body(run, cfg, "build-billed-tier-6", "S", "go", p, advisor=False)
     check("the billed builder runs with advisor off", "export CLAUDE_ADVISOR=off" in body2)
     script = a.write_script(run, "plan", body)
     check("the launcher ends in a shell, so the pane survives the agent", open(script).read().rstrip().endswith(
@@ -174,12 +174,12 @@ def main():
     r2 = a.Run(p, "20260101-000001")
     ws = r2.data.get("ws") if a.assign_workspaces(r2, "dev-x", own=False) is None else None
     check("without an nvim window plan, research and every builder get workspace 4",
-          ws and ws[a.PLAN] == 4 and ws[a.RESEARCH] == ws["build-local-tier-0"] == ws["build-billed-tier-4"] == 4 and "dev" not in ws, ws)
+          ws and ws[a.PLAN] == 4 and ws[a.RESEARCH] == ws["build-local-tier-0"] == ws["build-billed-tier-6"] == 4 and "dev" not in ws, ws)
     a.windows = lambda s: [{"workspace": 1, "custom_name": "nvim"}, {"workspace": 3}]
     r4 = a.Run(p, "20260101-000004")
     ws = r4.data.get("ws") if a.assign_workspaces(r4, "dev-x", own=False) is None else None
     check("in the dev layout Claude joins nvim's workspace, Lumo and the builders all use the same workspace",
-          ws and ws[a.PLAN] == ws[a.RESEARCH] == ws["build-local-tier-0"] == ws["build-free-tier-3"] == ws["build-billed-tier-4"] == 1, ws)
+          ws and ws[a.PLAN] == ws[a.RESEARCH] == ws["build-local-tier-0"] == ws["build-free-tier-5"] == ws["build-billed-tier-6"] == 1, ws)
     a.windows = lambda s: [{"workspace": n} for n in range(1, 10)]
     check("with every workspace used and no nvim window the run is refused", a.assign_workspaces(a.Run(p, "20260101-000002"), "s", own=False))
     a.windows = lambda s: [{"workspace": 1, "custom_name": "nvim"}] + [{"workspace": n} for n in range(2, 10)]
@@ -301,7 +301,7 @@ def main():
           rc == 1 and not mailed() and "refusing" in printed and len([c for c in reset_calls if c[0] == "capture-pane"]) == 10, (reset_calls, printed))
     reset_calls.clear()
     captured[0] = "context 0.0%/128k tokens\n"
-    hr.data["builder"] = "build-billed-tier-4"
+    hr.data["builder"] = "build-billed-tier-6"
     a.agent_state = lambda s, n: "done"
     real_stdout, sys.stdout = sys.stdout, io.StringIO()
     try:
@@ -325,7 +325,7 @@ def main():
           rc == 0 and not reset_texts() and mailed(), reset_calls)
     reset_calls.clear()
     captured[0] = "80.0%/33k (auto)\n"
-    hr.data["builder"] = "build-billed-tier-4"
+    hr.data["builder"] = "build-billed-tier-6"
     a.agent_state = lambda s, n: "none"
     a.RESET_WAIT = 0
     real_stdout, sys.stdout = sys.stdout, io.StringIO()
@@ -413,7 +413,7 @@ def main():
     mr = a.Run(p, "20260101-000010")
     mr.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}, a.RESEARCH: {"cwd": p}}, tasks={"T1": {"status": "verified"}, "T2": {"status": "sent"}})
     mr.save()
-    a.window_named = lambda s, n: {"custom_name": n, "cwd": p} if n in (a.PLAN, a.RESEARCH, "build-local-tier-0", "build-billed-tier-4", "build-free-tier-3") else None
+    a.window_named = lambda s, n: {"custom_name": n, "cwd": p} if n in (a.PLAN, a.RESEARCH, "build-local-tier-0", "build-billed-tier-6", "build-free-tier-5") else None
     a.agent_state = lambda s, n: "idle"
     merged_calls.clear()
     real_stdout, sys.stdout = sys.stdout, io.StringIO()
@@ -478,7 +478,7 @@ def main():
     mr4.data.update(phase="open", session="s", ws=dict(a.WS_OWN), panes={a.PLAN: {"cwd": p}, a.RESEARCH: {"cwd": p}}, tasks={"T1": {"status": "verified"}}, work_dir=None)
     mr4.save()
     def merged_win4(s, n):
-        if n in (a.PLAN, a.RESEARCH, "build-local-tier-0", "build-free-tier-3", "build-billed-tier-4"): return {"custom_name": n, "cwd": p}
+        if n in (a.PLAN, a.RESEARCH, "build-local-tier-0", "build-free-tier-5", "build-billed-tier-6"): return {"custom_name": n, "cwd": p}
         return None
     a.window_named = merged_win4
     a.agent_state = lambda s, n: "idle"
@@ -493,8 +493,8 @@ def main():
     texts = [c for c in merged_calls if c[0] == "send-text"]
     check("merged resets different builders with correct commands", rc == 0 and 
           any(len(t) > 5 and t[4] == "build-local-tier-0" and t[5] == "/new" for t in texts) and
-          any(len(t) > 5 and t[4] == "build-free-tier-3" and t[5] == "/new" for t in texts) and
-          any(len(t) > 5 and t[4] == "build-billed-tier-4" and t[5] == "/clear" for t in texts), (texts, printed))
+          any(len(t) > 5 and t[4] == "build-free-tier-5" and t[5] == "/new" for t in texts) and
+          any(len(t) > 5 and t[4] == "build-billed-tier-6" and t[5] == "/clear" for t in texts), (texts, printed))
 
     # Case 5
     mr5 = a.Run(p, "20260101-000014")
@@ -693,7 +693,7 @@ def main():
 
     def fake_headless(run, kind, task_text, limit):
         attempts.append(kind)
-        if kind == "tier-3":
+        if kind == "tier-5":
             with open(os.path.join(run.data["work_dir"], "calc.py"), "a") as fh:
                 fh.write("\n\ndef sub(a, b):\n    return a - b\n")
         return f"{kind} did its turn", ""
@@ -702,7 +702,7 @@ def main():
     os.environ.pop("TUIOS_ENV", None)
     os.environ["AIDEV_TEST_CMD"] = "python3 -c 'import calc; calc.sub'"
     real_headless, real_coder, real_zen, real_online = a.edit_headless, a.CODER_FILE, a.zen_status, a.tier_online
-    a.tier_online = lambda tid, run=None: tid in ("tier-0", "tier-3")
+    a.tier_online = lambda tid, run=None: tid in ("tier-0", "tier-5")
     a.edit_headless, a.CODER_FILE = fake_headless, os.path.join(ep, "calc.py")  # any existing file: "the 30B is here"
     a.zen_status = lambda r, refresh=False: {"state": "available", "model": "big-pickle", "detail": "", "models": []}
     cwd0 = os.getcwd()
@@ -714,7 +714,7 @@ def main():
     finally:
         sys.stdout = real_stdout
     check("-p tries the 30B, then the Zen builder when the check still fails",
-          rc == 0 and attempts == ["tier-0", "tier-3"] and "aidev -p: done" in printed, (rc, attempts, printed[-400:]))
+          rc == 0 and attempts == ["tier-0", "tier-5"] and "aidev -p: done" in printed, (rc, attempts, printed[-400:]))
     check("-p never becomes the project's run", a.Run(ep).id.startswith("edit-") is False)
     os.environ["AIDEV_TUIOS_BUILDER"] = "1"
     check("-p is refused inside a builder pane", a.cmd_edit(["x"]) == 2)

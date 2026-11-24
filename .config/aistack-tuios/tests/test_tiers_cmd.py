@@ -39,14 +39,14 @@ def run_cmd(mod, argv):
 def main():
     sys.path.insert(0, ROOT)
     mod = load("aidev_tuios", os.path.join(ROOT, "aidev_tuios.py"))
-    mod.tier_online = lambda tid, run=None: tid in ("tier-2", "tier-4")
+    mod.tier_online = lambda tid, run=None: tid in ("tier-2", "tier-6")
     code, out = run_cmd(mod, [])
     lines = out.splitlines()
     check("text exits 0", code == 0)
     check("text has five lines", len(lines) == 5, out)
     check("tier-2 line", lines[2].startswith("tier-2 build-local-tier-2 ctx 65536 online limits chars "), lines[2])
     check("offline tier shows offline", "offline" in lines[0] and "online" not in lines[0], lines[0])
-    check("tier-3 ctx n/a", "ctx n/a" in lines[3], lines[3])
+    check("tier-5 ctx n/a", "ctx n/a" in lines[3], lines[3])
     code, out = run_cmd(mod, ["--json"])
     data = json.loads(out)
     check("json has five entries", len(data) == 5)
@@ -66,19 +66,19 @@ def main():
 
     mod.zen_status = fake_zen
     try:
-        online = mod.tier_online("tier-3")
+        online = mod.tier_online("tier-5")
     except Exception as e:
         online = repr(e)
-    check("tier_online tier-3 without a run", online is False, str(online))
+    check("tier_online tier-5 without a run", online is False, str(online))
     check("tier_online passes a project", len(seen) == 1 and bool(seen[0]), str(seen))
     mod = load("aidev_tuios3", os.path.join(ROOT, "aidev_tuios.py"))
     mod.zen_status = lambda run, refresh=False: run.project.nope
     code, out = run_cmd(mod, [])
     check("cmd_tiers with a raising zen_status", code == 0 and len(out.splitlines()) == 5, out)
-    for pane, want in (("build-local-tier-0", True), ("build-free-tier-3", True), ("build-billed-tier-4", True),
+    for pane, want in (("build-local-tier-0", True), ("build-free-tier-5", True), ("build-billed-tier-6", True),
                        ("build-local-tier-1", False), ("build-local-tier-2", False), ("", False), (None, False)):
         check(f"keeps_builder {pane!r}", mod.keeps_builder(pane) is want)
-    for pane in ("tier-0", "tier-3", "tier-4"):
+    for pane in ("tier-0", "tier-5", "tier-6"):
         check(f"keeps_builder {pane}", mod.keeps_builder(pane) is True)
     if FAILS:
         print(f"{len(FAILS)} failed")

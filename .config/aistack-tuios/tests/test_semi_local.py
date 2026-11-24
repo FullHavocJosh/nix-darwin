@@ -193,7 +193,7 @@ def main():
         a.semi_local_available = lambda: False
         check("semi down, local up: local", a.auto_builder(None) == "tier-0")
         a.local_builder_available = lambda: False
-        check("both down, zen usable: free", a.auto_builder(None) == "tier-3")
+        check("both down, zen usable: free", a.auto_builder(None) == "tier-5")
     finally:
         a.semi_local_available, a.local_builder_available, a.zen_status, a.zen_usable = real
 
@@ -242,8 +242,8 @@ def main():
     check("models.json does not contain the key", secret not in gw_text)
 
     print("next_tier")
-    check("tier-2 then tier-3 (local off)", a.next_tier("tier-2", "available", False) == "tier-3")
-    check("semi-local without local then free", a.next_tier("tier-2", "available", local_ok=False) == "tier-3")
+    check("tier-2 then tier-5 (local off)", a.next_tier("tier-2", "available", False) == "tier-5")
+    check("semi-local without local then free", a.next_tier("tier-2", "available", local_ok=False) == "tier-5")
 
     srv.shutdown()
     print()
