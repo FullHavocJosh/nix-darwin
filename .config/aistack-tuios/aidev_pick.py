@@ -19,7 +19,7 @@ Outside the advisor and plan modes, the picker also starts full-tool sessions:
   2 Claude (plan):    aidev start with planner forced to claude (AIDEV_TUIOS_PLANNER=claude)
   3 9B (advisor):     pi on the always-on llama-server (:8080), advisor prompt, read-only tools
   4 9B (plan):        aidev start with planner forced to local (AIDEV_TUIOS_PLANNER=local)
-  5 30B (advisor):    pi on the gpt-oss-20b (loaded on demand), advisor prompt, read-only tools
+  5 gpt-oss-20b (advisor): pi on the gpt-oss-20b (loaded on demand), advisor prompt, read-only tools
   6 Manage session: only in ~/ai-info; runs ~/ai-info/manage/launch.sh
 """
 import importlib.util
@@ -57,7 +57,7 @@ SECTIONS = {"node:josh-g14": "pi on a node (full tools, through the gateway)",
 # key, label, what it starts (None: a status row only)
 def build_rows(cwd=None):
     rows = [("claude", "Claude (advisor)", True), ("claude-plan", "Claude (plan)", True),
-            ("9b", "9B (advisor)", True), ("9b-plan", "9B (plan)", True), ("30b", "30B (advisor)", True)]
+            ("9b", "9B (advisor)", True), ("9b-plan", "9B (plan)", True), ("30b", "gpt-oss-20b (advisor)", True)]
     if os.path.realpath(cwd or os.getcwd()) == os.path.realpath(os.path.expanduser("~/ai-info")):
         rows.append(("manage", "Manage session", True))
     rows += [("node:" + nid, "pi: " + label, True) for nid, label in NODES]
@@ -386,7 +386,7 @@ def launch(key):
         os.execvpe("pi", argv, {**os.environ, "PI_CODING_AGENT_DIR": agent})
     model = mod.write_build_pi(cfg)
     argv = [sys.executable, os.path.join(AISTACK, "coder_pi.py"), "--hold", "--", "pi", "--model", model,
-            "--name", "advisor 30b"] + common
+            "--name", "advisor gpt-oss-20b"] + common
     os.execvpe(argv[0], argv, {**os.environ, "PI_CODING_AGENT_DIR": cfg["pi_build"]})
 
 
