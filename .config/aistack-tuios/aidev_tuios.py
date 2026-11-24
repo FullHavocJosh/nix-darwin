@@ -1631,30 +1631,49 @@ NEVER_GIT = ("You must never run git checkout, restore, stash, reset, clean, com
              "Do not undo, revert or remove changes you did not make in this task.")
 
 
-def task_prompt(prd, story, verify_cmds, notes, wd=None, progress_path=None):
+def task_prompt(prd, story, verify_cmds, notes, wd=None, progress_path=None, retry_files=None):
     verify_cmds = [verify_cmds] if isinstance(verify_cmds, str) else verify_cmds
-    lines = [f"# Task {story['id']}: {story.get('title', '')}", "", f"Plan: {prd.get('name', '')}",
-             str(prd.get("description") or "")]
-    if wd:
-        lines += ["", "## Work dir",
-                  (f"Every file you read or change is under {wd}. Use paths relative to it. Never use ~ or an absolute "
-                   "path outside it: ~/.config is a link into the main checkout, which must stay untouched.")]
-    lines += ["", "## What to do", str(story.get("description") or ""), "",
-              "## Done when"] + [f"- {c}" for c in story.get("acceptanceCriteria", [])] + [
-              "", "## Checks run after your turn (no shell; each must exit 0)"] + [f"- `{c}`" for c in verify_cmds]
+    
+    # Build the lists for consistent formatting
+    header_lines = [f"# Task {story['id']}: {story.get('title', '')}", "", f"Plan: {prd.get('name', '')}", str(prd.get("description") or "")]
+    
+    workdir = (["", "## Work dir",
+                (f"Every file you read or change is under {wd}. Use paths relative to it. Never use ~ or an absolute "
+                 "path outside it: ~/.config is a link into the main checkout, which must stay untouched.")] if wd else [])
+    
+    what_to_do = ["", "## What to do", str(story.get("description") or ""), "",
+                  "## Done when"] + [f"- {c}" for c in story.get("acceptanceCriteria", [])]
+    
+    checks = ["", "## Checks run after your turn (no shell; each must exit 0)"] + [f"- `{c}`" for c in verify_cmds]
+    
+    rules = ["", "## Rules", "- Read the existing code first and follow its conventions.",
+             "- Do this task only. No git commits, no files unrelated to it.", f"- {NEVER_GIT}",
+             "- Read only the files this task names, and only the parts you need.",
+             "- Search with rg, never grep or find.",
+             "- Run the checks above yourself before you stop.",
+             ("- Files can be big: rg -n for the name, then read about 60 lines around it. "
+              "Never read a whole large file."),
+             "- When you need a decision you cannot safely make, say so in your reply and stop."]
+    
+    if progress_path:
+        rules.append(f"- Keep a short progress note in {progress_path} (done so far, next step), "
+                     "update it after each file you finish.")
+    
+    if retry_files:
+        # Retry prompt format
+        lines = [f"# Task {story['id']}, retry: fix only", "", f"Plan: {prd.get('name', '')}"] + workdir
+        lines += ["", "## Already done", "The work dir already holds uncommitted edits, this task's and earlier tasks', in these files:"]
+        lines += [f"- {f}" for f in retry_files]
+        lines += ["Do not redo the task and do not apply those edits again. Read the changed region before you edit it.",
+                  "", "## What to fix"] + list(notes or [])
+        lines += ["", "## Goal (context only)"] + [f"- {c}" for c in story.get("acceptanceCriteria", [])]
+        return "\n".join(lines + checks + rules) + "\n"
+    
+    # Original prompt format
+    lines = header_lines + workdir + what_to_do + checks
     if notes:
         lines += ["", "## Earlier attempts and notes from Claude"] + notes
-    lines += ["", "## Rules", "- Read the existing code first and follow its conventions.",
-              "- Do this task only. No git commits, no files unrelated to it.", f"- {NEVER_GIT}",
-              "- Read only the files this task names, and only the parts you need.",
-              "- Search with rg, never grep or find.",
-              "- Run the checks above yourself before you stop.",
-              ("- Files can be big: rg -n for the name, then read about 60 lines around it. "
-               "Never read a whole large file."),
-              "- When you need a decision you cannot safely make, say so in your reply and stop."]
-    if progress_path:
-        lines.append(f"- Keep a short progress note in {progress_path} (done so far, next step), "
-                     "update it after each file you finish.")
+    lines += rules
     return "\n".join(lines) + "\n"
 
 
@@ -2437,10 +2456,11 @@ def guard_trip(run, builder, tid, reason):
     if t.get('status') == 'verified' and reason == 'turn after done':
         run.event('guard_trip', builder=builder, task=tid, reason=reason)
         return True
-    
+
     # Mark task as failed and add trip info
     t['status'] = 'failed'
     t['trip_reason'] = reason
+    t['handoff'] = True  # any trip means the builder did not finish: the retry resends the whole task
     attempt = t.get('attempts', 1)
     if reason in aidev_guard.CONTEXT_REASONS:
         t['overflows'] = t.get('overflows', 0) + 1
@@ -2582,13 +2602,24 @@ def cmd_send_task(run, argv):
     t["compacted"] = False
     t["builder"] = builder
     t.pop('tripped', None)
+    # Drop the guard of any other verified task on the same builder
+    for other_tid, other_task in run.data["tasks"].items():
+        if (other_task.get("status") == "verified" and 
+            other_task.get("builder") == builder and 
+            other_tid != tid):
+            other_task.pop("guard", None)
     path = tool_log_path(run, builder)
     t['guard'] = {**aidev_guard.TaskGuard(calls_known=tier_of(builder) in ('tier-0','tier-1','tier-2')).to_dict(), 'offset': os.path.getsize(path) if os.path.exists(path) else 0}
     if note:
         t["notes"].append(f"- Before attempt {t['attempts']}: {note}")
     progress_path = os.path.join(run.dir, "tasks", f"{tid}-progress.txt")
+    handoff = t.pop('handoff', False)
+    retry_files = None
+    if t["attempts"] > 1 and wd and not handoff:
+        changed = git_out(wd, "diff", "--name-only") + git_out(wd, "ls-files", "--others", "--exclude-standard")
+        retry_files = [f for f in changed.splitlines() if f.strip()]
     path = write_text(os.path.join(run.dir, "tasks", f"{tid}.md"),
-                      task_prompt(prd, stories[tid], verify[tid], t["notes"], wd=wd, progress_path=progress_path))
+                      task_prompt(prd, stories[tid], verify[tid], t["notes"], wd=wd, progress_path=progress_path, retry_files=retry_files))
     snapshot_work(run, f"{tid}-attempt{t['attempts']}-before")
     warn = ""
     if t["attempts"] == 1 and check_already_passes(verify[tid], wd, os.path.join(run.dir, "tasks", f"{tid}-baseline.txt")):
@@ -3083,7 +3114,8 @@ def reap_pass(run, tracker, now=None):
         tracker.forget(name);
         run.event('reap', builder=name, why='plan done' if plan_done else 'idle');
         print(f'reaped {name}'). Also for every task with status 'verified' and a 'guard' dict whose builder is open and still working,
-    call guard_poll(run, builder, tid) so a turn after done is stopped. Return the number of windows still open among BUILDERS.values().
+    call guard_poll(run, builder, tid) so a turn after done is stopped. Guard polling is skipped while a task is queued for that builder.
+    Return the number of windows still open among BUILDERS.values().
     """
     run.data = rj(run.path) or run.data
     open_count = 0
@@ -3103,7 +3135,7 @@ def reap_pass(run, tracker, now=None):
                 open_count += 1
             # Check for tasks with status 'verified' and guard still active
             for tid, t in (run.data.get('tasks') or {}).items():
-                if t.get('status') == 'verified' and t.get('guard') and t.get('builder') == name:
+                if t.get('status') == 'verified' and t.get('guard') and t.get('builder') == name and not task_queued:
                     guard_poll(run, name, tid)
     return open_count
 
