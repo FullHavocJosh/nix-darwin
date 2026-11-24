@@ -47,6 +47,7 @@ declare -A SSH_TARGETS=(
 	["ha"]="root@homeassistant.rollet.family"
 	["steamdeck"]="deck@joshs-steamdeck.rollet.family"
 	["novadeck"]="armada@novadeck.rollet.family"
+	["trashcan"]="havoc@TrashCan.rollet.family"
 )
 
 echo -e "${YELLOW}This script will copy your SSH public key to the following servers:${NC}"
@@ -70,9 +71,9 @@ check_host_reachable() {
 	# nc uses the system resolver (host and bash /dev/tcp fail on IPs and on
 	# mDNS/Tailscale-resolved names); fall back to /dev/tcp only without nc
 	if command -v nc &>/dev/null; then
-		nc -z -w 5 "$hostname" 22 &>/dev/null
+		nc -z -w 3 "$hostname" 22 &>/dev/null
 	else
-		timeout 5 bash -c "cat < /dev/null > /dev/tcp/$hostname/22" 2>/dev/null
+		timeout 3 bash -c "cat < /dev/null > /dev/tcp/$hostname/22" 2>/dev/null
 	fi
 }
 
@@ -80,18 +81,8 @@ check_host_reachable() {
 setup_ssh_key() {
 	local name=$1
 	local target=$2
-	local hostname=$(echo "$target" | cut -d'@' -f2)
 
 	echo -e "\n${YELLOW}Setting up SSH key for $name ($target)...${NC}"
-
-	# Check if host is reachable first
-	echo -e "  Checking if host is reachable..."
-	if ! check_host_reachable "$target"; then
-		echo -e "${YELLOW}⚠ Host $hostname appears to be offline or unreachable - skipping${NC}"
-		return 2 # Return 2 to indicate skip/offline
-	fi
-
-	echo -e "  Host is reachable, proceeding..."
 
 	# SSH options for better timeout handling
 	local SSH_OPTS="-o ConnectTimeout=10 -o ConnectionAttempts=1 -o BatchMode=no"
@@ -142,6 +133,24 @@ setup_ssh_key() {
 	fi
 }
 
+# Probe all hosts up front so online hosts can be configured without
+# waiting for offline hosts to time out
+PROBE_DIR=$(mktemp -d)
+trap 'rm -rf "$PROBE_DIR"' EXIT
+
+for name in "${!SSH_TARGETS[@]}"; do
+	(
+		target=${SSH_TARGETS[$name]}
+		if check_host_reachable "$target"; then
+			echo online > "$PROBE_DIR/$name.tmp"
+		else
+			echo offline > "$PROBE_DIR/$name.tmp"
+		fi
+		mv "$PROBE_DIR/$name.tmp" "$PROBE_DIR/$name"
+	) &
+done
+echo -e "${YELLOW}Probing ${#SSH_TARGETS[@]} hosts in background...${NC}"
+
 # Track success/failure/skipped
 SUCCESS_COUNT=0
 FAILED_COUNT=0
@@ -149,20 +158,42 @@ SKIPPED_COUNT=0
 declare -a FAILED_HOSTS
 declare -a SKIPPED_HOSTS
 
-# Setup each server
-for name in "${!SSH_TARGETS[@]}"; do
-	setup_ssh_key "$name" "${SSH_TARGETS[$name]}"
-	result=$?
+# Configure hosts as their probes report, online first
+PENDING=("${!SSH_TARGETS[@]}")
+while [[ ${#PENDING[@]} -gt 0 ]]; do
+	progressed=0
+	STILL=()
+	for name in "${PENDING[@]}"; do
+		status=$(cat "$PROBE_DIR/$name" 2>/dev/null)
+		if [[ $status == online ]]; then
+			setup_ssh_key "$name" "${SSH_TARGETS[$name]}"
+			result=$?
 
-	if [[ $result -eq 0 ]]; then
-		((SUCCESS_COUNT++))
-	elif [[ $result -eq 2 ]]; then
-		((SKIPPED_COUNT++))
-		SKIPPED_HOSTS+=("$name")
+			if [[ $result -eq 0 ]]; then
+				((SUCCESS_COUNT++))
+			elif [[ $result -eq 2 ]]; then
+				((SKIPPED_COUNT++))
+				SKIPPED_HOSTS+=("$name")
+			else
+				((FAILED_COUNT++))
+				FAILED_HOSTS+=("$name")
+			fi
+			progressed=1
+		elif [[ $status == offline ]]; then
+			((SKIPPED_COUNT++))
+			SKIPPED_HOSTS+=("$name")
+			echo -e "${YELLOW}⚠ $name appears to be offline or unreachable - skipping${NC}"
+			progressed=1
+		else
+			STILL+=("$name")
+		fi
+	done
+	if [[ ${#STILL[@]} -gt 0 ]]; then
+		PENDING=("${STILL[@]}")
 	else
-		((FAILED_COUNT++))
-		FAILED_HOSTS+=("$name")
+		PENDING=()
 	fi
+	[[ $progressed -eq 0 ]] && sleep 0.2
 done
 
 # Summary
@@ -189,4 +220,4 @@ fi
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "You can now test the connections with your aliases:"
-echo "  sshmacbook, sshg14, sshazeroth, sshtestazeroth, sshmini, sshtruenas, ssh6rx26x1, sshcaitsg14, sshxps13, sshopnsense, ssh705g4, ssh4kfjsn2, ssh2fgjsn2, sshk3sworkervm0, sshk3sworkervm1, sshha, sshsteamdeck, sshnovadeck"
+echo "  sshmacbook, sshg14, sshazeroth, sshtestazeroth, sshmini, sshtruenas, ssh6rx26x1, sshcaitsg14, sshxps13, sshopnsense, ssh705g4, ssh4kfjsn2, ssh2fgjsn2, sshk3sworkervm0, sshk3sworkervm1, sshha, sshsteamdeck, sshnovadeck, sshtrash"
