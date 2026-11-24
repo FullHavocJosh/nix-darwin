@@ -95,7 +95,8 @@ def read_key():
                 return fh.read().strip()
         except OSError:
             return None
-    env_key = os.environ.get(KEY_ENV, "").strip()
+    # AISTACK_GATEWAY_KEY is the name gpa/gpr (zsh) and pi read; accept it here so one env var serves every client
+    env_key = (os.environ.get(KEY_ENV, "") or os.environ.get("AISTACK_GATEWAY_KEY", "")).strip()
     if env_key:
         return env_key
     try:

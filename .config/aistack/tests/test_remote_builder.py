@@ -336,6 +336,10 @@ with open(rb.DEVICE_KEY_FILE, "w") as fh:
 rb.reset_key_cache()
 check("read_key() uses the device key file before Doppler", rb.read_key() == "devfilekey", None)
 os.unlink(rb.DEVICE_KEY_FILE)
+os.environ["AISTACK_GATEWAY_KEY"] = " shared-env-key \n"
+rb.reset_key_cache()
+check("read_key() accepts AISTACK_GATEWAY_KEY, stripped", rb.read_key() == "shared-env-key", None)
+os.environ.pop("AISTACK_GATEWAY_KEY", None)
 write_stub('#!/bin/sh\necho "key-$3"\n')
 os.environ[rb.DEVICE_ENV] = "macbook-m2pro"
 rb.reset_key_cache()
