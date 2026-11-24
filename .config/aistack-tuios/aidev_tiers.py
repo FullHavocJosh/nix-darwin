@@ -14,14 +14,17 @@ TIER_IDS = ('tier-0', 'tier-1', 'tier-2', 'tier-3', 'tier-4')
 MAX_OUTPUT_TOKENS = {'tier-0': 4096, 'tier-1': 8192, 'tier-2': 8192}
 
 _URL = 'https://llm.rollet.family/v1'
-_URL_T1 = 'https://llm.rollet.family/t1/v1'
+_URL_T1 = 'https://llm.rollet.family/t1/v1'  # Cait G14 9B, a review host; kept for the review ladder
+_URL_TRASHCAN = 'https://llm.rollet.family/trashcan/v1'
 
 DEFAULTS = {
     'tier-0': {'pane': 'build-local-tier-0', 'label': 'local gpt-oss-20b', 'kind': 'pi', 'ctx': 32768,
                'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 24, 'max_tokens': 4096},
-    'tier-1': {'pane': 'build-local-tier-1', 'label': 'G14 9B', 'kind': 'pi', 'ctx': 65536,
-               'alias': 'qwen3.5-9b', 'url': _URL_T1, 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 8192},
-    'tier-2': {'pane': 'build-local-tier-2', 'label': 'G14 large ctx', 'kind': 'pi', 'ctx': 65536,
+    # tier-1 is the TrashCan (always on, slower); its gateway window is 4096 until trash-code gets a bigger ctx-size,
+    # which is below the ~12000 token pi overhead, so select_tier skips it until ctx is raised.
+    'tier-1': {'pane': 'build-local-tier-1', 'label': 'TrashCan 7B', 'kind': 'pi', 'ctx': 4096,
+               'alias': 'trash-code', 'url': _URL_TRASHCAN, 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 8192},
+    'tier-2': {'pane': 'build-local-tier-2', 'label': 'Josh G14 30B', 'kind': 'pi', 'ctx': 65536,
                'alias': 'qwen3-coder-30b', 'url': _URL, 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 8192},
     'tier-3': {'pane': 'build-free-tier-3', 'label': 'free cloud', 'kind': 'opencode', 'ctx': 0,
                'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 0},
@@ -111,21 +114,18 @@ def select_tier(need, state, tiers, min_tier=0):
     def ctx(tid):
         return tiers[tid]['ctx']
 
-    eligible = [t for t in ('tier-1', 'tier-2') if _usable(t, state, tiers, min_tier) and ctx(t) >= need]
+    # Fastest first: tier-2 (Josh G14), then tier-1 (TrashCan); an idle host wins over a busy faster one.
+    eligible = [t for t in ('tier-2', 'tier-1') if _usable(t, state, tiers, min_tier) and ctx(t) >= need]
     if eligible:
         idle = [t for t in eligible if state.get(t, {}).get('idle')]
         pool = idle or eligible
         why = 'idle' if idle else 'all busy'
-        if len(pool) == 1:
-            return pool[0], f'{pool[0]}: only fit, {why}'
-        if need <= 0.75 * ctx('tier-1'):
-            return 'tier-1', f'tier-1: small task, {why}'
-        return 'tier-2', f'tier-2: large task, {why}'
+        return pool[0], f'{pool[0]}: fastest fit, {why}'
     if _usable('tier-2', state, tiers, min_tier) and ctx('tier-2') < need:
         return None, f"split: need {need} tokens, tier-2 ctx {ctx('tier-2')}"
-    g14_up = any(_usable(t, state, tiers, min_tier) for t in ('tier-1', 'tier-2'))
-    if not g14_up and _usable('tier-0', state, tiers, min_tier) and ctx('tier-0') >= need:
-        return 'tier-0', 'tier-0: G14 tiers offline'
+    build_up = any(_usable(t, state, tiers, min_tier) for t in ('tier-1', 'tier-2'))
+    if not build_up and _usable('tier-0', state, tiers, min_tier) and ctx('tier-0') >= need:
+        return 'tier-0', 'tier-0: build hosts offline'
     if _usable('tier-3', state, tiers, min_tier):
         return 'tier-3', 'tier-3: no local tier fits'
     return 'tier-4', 'tier-4: last resort'
@@ -134,8 +134,11 @@ def select_tier(need, state, tiers, min_tier=0):
 def next_tier_id(tier_id, state, tiers):
     """The tier to escalate to after tier_id fails; None for tier-4 and unknown ids."""
     if tier_id in ('tier-1', 'tier-2', 'tier-0'):
-        if tier_id == 'tier-1' and _usable('tier-2', state, tiers, 0):
-            return 'tier-2'
+        # Dispatch order 2 > 1 > 0 > 3 > 4: after tier-2 try tier-1, then tier-0 (only when it is online).
+        if tier_id == 'tier-2' and _usable('tier-1', state, tiers, 0):
+            return 'tier-1'
+        if tier_id in ('tier-2', 'tier-1') and _usable('tier-0', state, tiers, 0):
+            return 'tier-0'
         target = 'tier-3'
     elif tier_id == 'tier-3':
         target = 'tier-4'

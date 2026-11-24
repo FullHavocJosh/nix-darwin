@@ -494,7 +494,7 @@ def main():
                                                        ("tier-0", "none"), ("tier-3", "available"),
                                                        ("tier-4", "available"), ("x", "available"),
                                                        ("tier-2", "available"))]
-          == ["tier-3", "tier-4", "tier-4", "tier-4", None, None, "tier-3"])
+          == ["tier-3", "tier-4", "tier-4", "tier-4", None, None, "tier-0"])
     erun = a.Run(p, "20260101-000002")
     ecalls, eclosed, ezen = [], [], ["available"]
     ereal = (a.zen_status, a.cmd_builder, a.tuios)

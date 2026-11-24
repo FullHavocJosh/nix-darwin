@@ -242,7 +242,7 @@ def main():
     check("models.json does not contain the key", secret not in gw_text)
 
     print("next_tier")
-    check("tier-2 then tier-3", a.next_tier("tier-2", "available") == "tier-3")
+    check("tier-2 then tier-3 (local off)", a.next_tier("tier-2", "available", False) == "tier-3")
     check("semi-local without local then free", a.next_tier("tier-2", "available", local_ok=False) == "tier-3")
 
     srv.shutdown()

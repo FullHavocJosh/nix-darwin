@@ -62,7 +62,7 @@ with tempfile.TemporaryDirectory() as tmp:
 with tempfile.TemporaryDirectory() as tmp:
     cfg = {"pi_build": tmp}
     model = a.write_build_pi(cfg, kind="tier-1")
-    check("tier-1 returns semi1/ model", isinstance(model, str) and model == "semi1/qwen3.5-9b", repr(model))
+    check("tier-1 returns semi1/ model", isinstance(model, str) and model == "semi1/trash-code", repr(model))
     model_path = os.path.join(tmp, "models.json")
     with open(model_path) as f:
         data = json.load(f)
