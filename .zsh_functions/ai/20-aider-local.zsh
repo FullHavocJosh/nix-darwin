@@ -81,6 +81,18 @@ function _run_aider_local() {
   # calls) disables reasoning; aistack tier 1 (pi, a live session) keeps it.
   local lms_model="${LOCAL_LLM_MODEL:-qwen/qwen3.5-9b}"
   local lms_max_tokens
+  # Review goes through the gateway's auto-review group (fastest healthy review host) when one answers; commit
+  # messages, plans, judge and secrets calls stay on the loopback llama-server.
+  local gw_base="" use_gw=0
+  local -a key_args=(--openai-api-key "sk-local")
+  # The key is loaded in this shell first: _llm_gateway_review_base runs in a subshell and cannot cache it.
+  if [[ "$model_alias" == "local-coder-review" && "${AISTACK_REVIEW_GATEWAY:-on}" != (off|0|no|false) ]] \
+      && _llm_gateway_key && gw_base=$(_llm_gateway_review_base); then
+    use_gw=1
+    endpoint="${gw_base%/v1}"
+    lms_model="auto-review"
+    key_args=()
+  fi
   case "$model_alias" in
     local-coder-commit) lms_max_tokens=512 ;;   # one 72-char line; measured ~15-40 tokens
     local-coder-plan)   lms_max_tokens=1024 ;;
@@ -123,10 +135,14 @@ EOF
   # BROWSER=true: with --yes-always aider auto-accepts its "Open URL for more info?" offer when a call
   # hits a token limit and would open aider.chat/docs/troubleshooting/token-limits.html in a browser.
   # Python's webbrowser honors $BROWSER, so the page is "opened" with /usr/bin/true instead.
-  raw_output=$(BROWSER=true timeout "${timeout_secs}s" aider \
+  local aider_base="${endpoint}/v1"
+  (( use_gw )) && aider_base="$gw_base"
+  local -a env_args=(BROWSER=true)
+  (( use_gw )) && env_args+=(OPENAI_API_KEY="$_LLM_GW_KEY")
+  raw_output=$(env "${env_args[@]}" timeout "${timeout_secs}s" aider \
     --model "$aider_model" \
-    --openai-api-base "${endpoint}/v1" \
-    --openai-api-key "sk-local" \
+    --openai-api-base "$aider_base" \
+    "${key_args[@]}" \
     --model-settings-file "$settings_file" \
     --no-git \
     --yes-always \
@@ -141,6 +157,12 @@ EOF
     --message "$prompt" 2>&1)
   local exit_code=$?
   [[ -n "$tmp_settings" ]] && rm -f "$tmp_settings"
+
+  # The gateway failed for a reason other than a timeout (down, 503, 401): retry once on the loopback server.
+  if (( use_gw )) && [ $exit_code -ne 0 ] && [ $exit_code -ne 124 ]; then
+    AISTACK_REVIEW_GATEWAY=off _run_aider_local "$@"
+    return $?
+  fi
 
   if [ $exit_code -eq 124 ]; then
     echo "Error: local model timeout after ${timeout_secs}s (raise AI_LOCAL_COMMIT_TIMEOUT or AI_LOCAL_REVIEW_TIMEOUT)" >&2

@@ -25,6 +25,22 @@
           "id": "lumo-max"
         }
       ]
+    },
+    "gateway": {
+      "baseUrl": "https://llm.rollet.family/auto/v1",
+      "api": "openai-completions",
+      "apiKey": "!python3 $HOME/.config/aistack/gateway_key.py",
+      "models": [
+        {
+          "id": "auto"
+        },
+        {
+          "id": "auto-build"
+        },
+        {
+          "id": "auto-review"
+        }
+      ]
     }
   }
 }

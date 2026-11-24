@@ -428,6 +428,21 @@ All automatically installed via nix-darwin/package managers:
 - `tuios` - Terminal multiplexer (daily stack)
 - `neovim` - Text editor
 
+### Gateway review and the pi `auto` model
+
+`gpa` and `gpr` review on the `llm.rollet.family` gateway first: `_run_aider_local` sends only the review call
+(`local-coder-review`) to `/auto/v1` with model `auto-review` when `GET /auto/v1/tiers` shows a healthy review
+backend (Cait's G14, then the Mac mini M1). Commit messages, plans, judge and secrets calls stay on the loopback
+llama-server, and the review falls back to loopback when the gateway is down, answers an error (not a timeout) or no
+key resolves. `AISTACK_REVIEW_GATEWAY=off` keeps everything local. The key resolves from `AISTACK_GATEWAY_KEY`, the file
+`~/.config/llm-gateway/key` (0600), Doppler `LLM_KEY_<LLM_DEVICE>` (for example `LLM_DEVICE=macbook-m3pro`), then
+`LLM_PUBLIC_API_KEY`. A device outside the LAN, such as the M3 Pro, needs only the key file and the gateway URL. The key
+never appears on a command line: curl reads it from stdin and aider from the environment.
+
+pi has a `gateway` provider in `.pi/agent/models.json` with the models `auto` and `auto-build` (build group: Josh G14,
+then TrashCan) and `auto-review`. It reads the key at request time through `.config/aistack/gateway_key.py`. The gateway
+picks the fastest healthy backend per request, so pi switches host when one goes offline, without a restart.
+
 ## 🤖 Claude Code & MCP Integration
 
 `config.nix` (`config/activation/`) and `packages-tui.nix` (`claude-setup/`) automatically set up Claude Code on activation:
