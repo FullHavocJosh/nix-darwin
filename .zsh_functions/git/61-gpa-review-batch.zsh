@@ -146,7 +146,8 @@ ${batch_context}
   local api_exit_code
 
   if [[ "$ai_tier" == "local" ]]; then
-    echo "  ⚪ Using local model [llama.cpp / $(_llamacpp_model_short)]" >&2
+    local _rt; _rt=$(_gpa_review_target 2>/dev/null) || _rt="⚪|$(_llamacpp_model_short)|llama.cpp | $(_llamacpp_model_short)"
+    echo "  ${_rt%%|*} Using ${_rt##*|}" >&2
     batch_result=$(echo "$full_prompt" | _run_ai_direct 2>&1)
     api_exit_code=$?
     if [ $api_exit_code -eq 1 ] && [[ -z "$AI_LOCAL_ONLY" ]]; then

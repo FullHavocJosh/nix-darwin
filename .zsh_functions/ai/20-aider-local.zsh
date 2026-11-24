@@ -159,9 +159,15 @@ EOF
   [[ -n "$tmp_settings" ]] && rm -f "$tmp_settings"
 
   # The gateway failed for a reason other than a timeout (down, 503, 401): retry once on the loopback server.
+  # gpa reads $GPA_REVIEW_TARGET_FILE after the call (this runs in a subshell, so a variable would be lost) to show
+  # where the review really ran.
   if (( use_gw )) && [ $exit_code -ne 0 ] && [ $exit_code -ne 124 ]; then
+    [[ -n "${GPA_REVIEW_TARGET_FILE:-}" ]] && print -r -- "local (the gateway failed, exit $exit_code)" > "$GPA_REVIEW_TARGET_FILE"
     AISTACK_REVIEW_GATEWAY=off _run_aider_local "$@"
     return $?
+  fi
+  if [[ "$model_alias" == "local-coder-review" && -n "${GPA_REVIEW_TARGET_FILE:-}" && ! -s "${GPA_REVIEW_TARGET_FILE}" ]]; then
+    print -r -- "$( (( use_gw )) && echo gateway || echo local )" > "$GPA_REVIEW_TARGET_FILE"
   fi
 
   if [ $exit_code -eq 124 ]; then

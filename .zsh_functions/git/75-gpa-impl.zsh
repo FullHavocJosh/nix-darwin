@@ -360,8 +360,15 @@ function _gpa_impl() {
   
   echo "ℹ Processing $total_files file(s) in $batch_count batch(es)"
   echo "  Total changes: $total_lines lines"
+  # Where the review will run: a gateway node or the loopback llama-server (see _gpa_review_target); the file
+  # is how _run_aider_local reports where each batch really ran, including a fallback to the loopback server.
+  local review_icon="⚪" review_label="$(_llamacpp_model_short)" review_full="llama.cpp | $(_llamacpp_model_short)" _rt
   if [[ "$tier_override" == "auto" ]]; then
-    echo "  Model: ⚪ llama.cpp | $(_llamacpp_model_short)"
+    _rt=$(_gpa_review_target 2>/dev/null) && { review_icon="${_rt%%|*}"; _rt="${_rt#*|}"; review_label="${_rt%%|*}"; review_full="${_rt#*|}"; }
+  fi
+  local review_target_file; review_target_file=$(mktemp "${TMPDIR:-/tmp}/gpa-review-target.XXXXXX")
+  if [[ "$tier_override" == "auto" ]]; then
+    echo "  Model: $review_icon $review_full"
   else
     echo "  Model: ☁ Claude Code $tier_override (--tier)"
   fi
@@ -377,7 +384,7 @@ function _gpa_impl() {
     local batch=$(echo "$batches" | jq -c ".[$batch_index]")
     local batch_num=$((batch_index + 1))
     
-    local tier_icon="⚪" tier_label="$(_llamacpp_model_short)" full_model_display="llama.cpp | $(_llamacpp_model_short)"
+    local tier_icon="$review_icon" tier_label="$review_label" full_model_display="$review_full"
     if [[ "$tier_override" != "auto" ]]; then
       tier_icon="☁"; tier_label="Claude $tier_override"; full_model_display="Claude Code | $tier_override"
     fi
@@ -388,8 +395,13 @@ function _gpa_impl() {
     # Note: must separate local declaration from assignment to preserve exit code.
     # In zsh, `local var=$(cmd)` swallows the subshell exit code.
     local batch_issues
-    batch_issues=$(_gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "$tier_override")
+    : > "$review_target_file"
+    batch_issues=$(GPA_REVIEW_TARGET_FILE="$review_target_file" _gpa_review_batch_with_timeout "$batch" "$batch_num" "$batch_count" "$tier_override")
     local review_status=$?
+    # the review ran somewhere other than announced (the gateway failed, so it used the loopback server)
+    if [[ "$tier_override" == "auto" && -s "$review_target_file" && "$(<"$review_target_file")" == *failed* ]]; then
+      echo "  ⚠ review ran on $(<"$review_target_file"): ⚪ llama.cpp | $(_llamacpp_model_short)"
+    fi
     
     if [ $review_status -eq 0 ]; then
       # Success - merge batch issues into all_issues
@@ -471,6 +483,7 @@ function _gpa_impl() {
     echo ""
     ((batch_index++))
   done
+  rm -f "$review_target_file"
   
   # Check if all batches failed (hard failures)
   if [ $failed_batches -eq $batch_count ]; then
