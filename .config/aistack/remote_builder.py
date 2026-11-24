@@ -43,6 +43,9 @@ DEFAULT_URL = (
     "https://llm.rollet.family/v1"  # the server used when no URL is configured
 )
 DEFAULT_ALIAS = "qwen3-coder-30b"
+DEVICE_ENV = "LLM_DEVICE"  # the device name in the gateway key table, e.g. MACBOOK_M2PRO; picks LLM_KEY_<NAME>
+DEVICE_KEY_FILE = "~/.config/llm-gateway/key"  # default per-device key file (0600), read before Doppler
+TIERS_URL = "https://llm.rollet.family/auto/v1/tiers"
 PROBE_TIMEOUT_S = 2.0
 MAX_TOKENS = 8192
 
@@ -95,6 +98,13 @@ def read_key():
     env_key = os.environ.get(KEY_ENV, "").strip()
     if env_key:
         return env_key
+    try:
+        with open(os.path.expanduser(DEVICE_KEY_FILE)) as fh:
+            file_key = fh.read().strip()
+        if file_key:
+            return file_key
+    except OSError:
+        pass
     return doppler_key()
 
 
@@ -105,27 +115,31 @@ def doppler_key():
     if "doppler" in _KEY_CACHE:
         return _KEY_CACHE["doppler"]
     key = None
-    try:
-        proc = subprocess.run(
-            [
-                "doppler",
-                "secrets",
-                "get",
-                "LLM_PUBLIC_API_KEY",
-                "--project",
-                "FullHavocJosh",
-                "--config",
-                "root_hetzner-cluster",
-                "--plain",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if proc.returncode == 0 and proc.stdout.strip():
-            key = proc.stdout.strip()
-    except (OSError, subprocess.TimeoutExpired):
-        key = None
+    device = os.environ.get(DEVICE_ENV, "").strip().upper().replace("-", "_")
+    names = (["LLM_KEY_" + device] if device else []) + ["LLM_PUBLIC_API_KEY"]
+    for name in names:  # the per-device key first, then the shared key
+        try:
+            proc = subprocess.run(
+                [
+                    "doppler",
+                    "secrets",
+                    "get",
+                    name,
+                    "--project",
+                    "FullHavocJosh",
+                    "--config",
+                    "root_hetzner-cluster",
+                    "--plain",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if proc.returncode == 0 and proc.stdout.strip():
+                key = proc.stdout.strip()
+                break
+        except (OSError, subprocess.TimeoutExpired):
+            continue
     _KEY_CACHE["doppler"] = key
     return key
 
@@ -218,6 +232,25 @@ def probe(timeout=PROBE_TIMEOUT_S):
     ):
         return True, ""
     return False, "model not listed"
+
+
+def gateway_health(timeout=PROBE_TIMEOUT_S):
+    """{backend id: healthy} for every backend in GET /auto/v1/tiers, or None when the gateway, the key
+    or the answer fails. Never raises; the key is never printed."""
+    key = read_key()
+    if not key:
+        return None
+    req = urllib.request.Request(TIERS_URL, headers={"Authorization": "Bearer " + key})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = json.load(r)
+        out = {}
+        for backends in data["groups"].values():
+            for b in backends:
+                out[b["id"]] = bool(b["healthy"])
+        return out
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
 
 
 def models_config(ctx):

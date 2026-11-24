@@ -272,6 +272,20 @@ def tier1_available():
     return probe_gateway(tier_url("tier-1"), tier_alias("tier-1"), semi_key_file())
 
 
+GATEWAY_BACKEND = {"tier-1": "trashcan", "tier-2": "josh-g14"}  # tier id to gateway backend id
+_HEALTH = {"at": 0.0, "value": None}
+HEALTH_TTL_S = 5.0
+
+
+def gateway_health():
+    """{backend id: healthy} from the gateway's /auto/v1/tiers, cached for 5 s; None when it cannot be read."""
+    now = time.monotonic()
+    if now - _HEALTH["at"] > HEALTH_TTL_S:
+        _HEALTH["value"] = load_remote_builder().gateway_health()
+        _HEALTH["at"] = now
+    return _HEALTH["value"]
+
+
 def tier_online(tid, run=None):
     """True when the tier can take a task now. False for an unknown id and for a disabled tier (tier-3 and tier-4
     ignore enabled)."""
@@ -290,6 +304,9 @@ def tier_online(tid, run=None):
             return False
         if tid == "tier-0":
             return local_builder_available()
+        health = gateway_health()
+        if health is not None and not health.get(GATEWAY_BACKEND[tid], True):
+            return False  # the gateway marks this backend down: skip the slower probe
         if tid == "tier-1":
             return tier1_available()
         return semi_local_available()

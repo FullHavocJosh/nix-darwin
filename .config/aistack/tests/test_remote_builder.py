@@ -326,6 +326,26 @@ check(
     api_key.startswith("!cat ") and tmp_key in api_key and DOP_KEY not in api_key,
     api_key,
 )
+# per-device key: the default key file wins over Doppler; Doppler tries LLM_KEY_<DEVICE> first
+os.environ.pop(rb.KEY_FILE_ENV, None)
+os.environ.pop(rb.KEY_ENV, None)
+dev_dir = tempfile.mkdtemp()
+rb.DEVICE_KEY_FILE = os.path.join(dev_dir, "key")
+with open(rb.DEVICE_KEY_FILE, "w") as fh:
+    fh.write("devfilekey\n")
+rb.reset_key_cache()
+check("read_key() uses the device key file before Doppler", rb.read_key() == "devfilekey", None)
+os.unlink(rb.DEVICE_KEY_FILE)
+write_stub('#!/bin/sh\necho "key-$3"\n')
+os.environ[rb.DEVICE_ENV] = "macbook-m2pro"
+rb.reset_key_cache()
+check("doppler_key() asks LLM_KEY_<DEVICE> first", rb.read_key() == "key-LLM_KEY_MACBOOK_M2PRO", None)
+os.environ.pop(rb.DEVICE_ENV, None)
+rb.reset_key_cache()
+check("doppler_key() falls back to LLM_PUBLIC_API_KEY", rb.read_key() == "key-LLM_PUBLIC_API_KEY", None)
+rb.reset_key_cache()
+rb.TIERS_URL = "http://127.0.0.1:9/auto/v1/tiers"
+check("gateway_health() is None when the gateway is unreachable", rb.gateway_health(0.5) is None, None)
 os.environ.clear()
 os.environ.update(saved_env)
 
