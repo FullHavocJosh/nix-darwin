@@ -37,6 +37,7 @@ KEY_FILE_ENV = (
 KEY_ENV = (
     "AIDEV_REMOTE_BUILDER_KEY"  # the bearer key itself, when no key file is at hand
 )
+GATEWAY_KEY_ENV = "AISTACK_GATEWAY_KEY"  # the gateway key exported by ~/.zshrc_envvars on hosts without Doppler
 OFF_ENV = "AIDEV_REMOTE_BUILDER"  # "off", "0", "no" or "false" disables the defaults
 MODEL_ENV = "AIDEV_REMOTE_BUILDER_MODEL"  # overrides DEFAULT_ALIAS
 DEFAULT_URL = (
@@ -87,8 +88,8 @@ def configured():
 
 def read_key():
     """The bearer key: the key file's stripped contents when one is configured (None when it cannot
-    be read), else AIDEV_REMOTE_BUILDER_KEY when non-empty, else the Doppler key (None when that
-    failed)."""
+    be read), else AIDEV_REMOTE_BUILDER_KEY when non-empty, else AISTACK_GATEWAY_KEY when non-empty,
+    else the file ~/.config/llm-gateway/key (0600), then Doppler key (None when that failed)."""
     if key_file():
         try:
             with open(key_file()) as fh:
@@ -99,6 +100,9 @@ def read_key():
     env_key = (os.environ.get(KEY_ENV, "") or os.environ.get("AISTACK_GATEWAY_KEY", "")).strip()
     if env_key:
         return env_key
+    gateway_key = os.environ.get(GATEWAY_KEY_ENV, "").strip()
+    if gateway_key:
+        return gateway_key
     try:
         with open(os.path.expanduser(DEVICE_KEY_FILE)) as fh:
             file_key = fh.read().strip()

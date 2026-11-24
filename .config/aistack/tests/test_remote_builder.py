@@ -24,7 +24,7 @@ FAILS = []
 KEY = "sk-remote-builder-test-key"
 SEEN = {}
 
-for k in (rb.URL_ENV, rb.KEY_FILE_ENV, rb.MODEL_ENV, rb.KEY_ENV):
+for k in (rb.URL_ENV, rb.KEY_FILE_ENV, rb.MODEL_ENV, rb.KEY_ENV, rb.GATEWAY_KEY_ENV):
     os.environ.pop(k, None)  # keep this run hermetic whatever the caller has set
 os.environ[rb.OFF_ENV] = "off"  # the new defaults off too, for the same reason
 
@@ -329,6 +329,16 @@ check(
 # per-device key: the default key file wins over Doppler; Doppler tries LLM_KEY_<DEVICE> first
 os.environ.pop(rb.KEY_FILE_ENV, None)
 os.environ.pop(rb.KEY_ENV, None)
+# Test AISTACK_GATEWAY_KEY before device key file
+os.environ[rb.GATEWAY_KEY_ENV] = "  gwkey \n"
+os.environ.pop(rb.KEY_FILE_ENV, None)
+os.environ.pop(rb.KEY_ENV, None)
+check("read_key() uses AISTACK_GATEWAY_KEY before the device key file", rb.read_key() == "gwkey", None)
+# Test AIDEV_REMOTE_BUILDER_KEY wins over AISTACK_GATEWAY_KEY
+os.environ[rb.KEY_ENV] = "envkey"
+check("AIDEV_REMOTE_BUILDER_KEY wins over AISTACK_GATEWAY_KEY", rb.read_key() == "envkey", None)
+os.environ.pop(rb.KEY_ENV, None)
+os.environ.pop(rb.GATEWAY_KEY_ENV, None)
 dev_dir = tempfile.mkdtemp()
 rb.DEVICE_KEY_FILE = os.path.join(dev_dir, "key")
 with open(rb.DEVICE_KEY_FILE, "w") as fh:

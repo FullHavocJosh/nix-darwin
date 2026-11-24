@@ -228,7 +228,7 @@ The local builder uses a remote OpenAI-compatible llama-server (the G14, behind 
 on-device 30B. It is on by default at `https://llm.rollet.family/v1`, so no env setup is needed. The key is fetched
 at runtime from Doppler (`LLM_PUBLIC_API_KEY` in `FullHavocJosh/root_hetzner-cluster`), like the public Lumo
 endpoint. A per-device key wins over the shared one: the key resolves from `AIDEV_REMOTE_BUILDER_KEY_FILE`,
-`AIDEV_REMOTE_BUILDER_KEY`, the file `~/.config/llm-gateway/key` (0600), then Doppler `LLM_KEY_<DEVICE>` when
+`AIDEV_REMOTE_BUILDER_KEY`, `AISTACK_GATEWAY_KEY`, the file `~/.config/llm-gateway/key` (0600), then Doppler `LLM_KEY_<DEVICE>` when
 `LLM_DEVICE` is set (for example `LLM_DEVICE=macbook-m3pro`), then `LLM_PUBLIC_API_KEY`. A device outside the LAN
 without Doppler needs only the key file. `tier_online` also reads backend health from the gateway's
 `GET /auto/v1/tiers` (cached 5 s): a backend marked unhealthy there is skipped without a probe, and when the
