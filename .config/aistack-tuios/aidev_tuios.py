@@ -1928,7 +1928,7 @@ def size_problems(prd, root=None, ctx=None):
         files = named_files(desc)
         total = read_bytes(files, desc, root) if root else 0
 
-        def check(sctx):
+        def check(sctx, s=s, text=text, files=files, total=total):
             limits = aidev_tiers.limits_for_ctx(sctx) or aidev_tiers.limits_for_ctx(cfg["tier-0"]["ctx"])
             max_chars = int(os.environ.get("AIDEV_TUIOS_TASK_MAX_CHARS") or limits["max_chars"])
             max_read = int(os.environ.get("AIDEV_TUIOS_TASK_MAX_READ") or limits["max_read"])
