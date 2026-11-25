@@ -25,6 +25,8 @@ UP = {"trashcan": {"healthy": True, "window": 65536, "rank": 1, "model": "trash-
 
 
 def main():
+    real_own_server = p.own_server
+    p.own_server = lambda *a, **k: None  # the tests must not depend on this host's llama-server
     t = p.planner_target(UP, KEY)
     check("healthy TrashCan with a 65536 window is plan-local", t["name"] == "plan-local" and t["backend"] == "trashcan")
     check("it goes through the gateway as node-trashcan", t["model"] == "node-trashcan" and t["base_url"].endswith("/auto"))
@@ -37,6 +39,23 @@ def main():
         f = p.planner_target(pool, KEY)
         check(f"{name} falls back to the Mac mini 9B", f["name"] == "plan-local-fallback" and f["backend"] == "macmini-m1"
               and f["base_url"] == "http://127.0.0.1:8080" and f["api_key"] == "sk-local")
+
+    OWN = {"healthy": True, "ctx": 131072, "ram_gb": 32}
+    o = p.planner_target(UP, KEY, own=OWN)
+    check("a 32 GB host with its own 9B plans on it, ahead of the TrashCan", o["name"] == "plan-local" and o["backend"] == "local-9b"
+          and o["base_url"] == "http://127.0.0.1:8080" and o["ctx"] == 131072 and o["api_key"] == "sk-local")
+    for name, own in (("a 16 GB host", dict(OWN, ram_gb=16)), ("an own window under 49152", dict(OWN, ctx=32768)),
+                      ("an unhealthy own server", dict(OWN, healthy=False)), ("no own server", None)):
+        check(f"{name} keeps the TrashCan", p.planner_target(UP, KEY, own=own)["backend"] == "trashcan")
+    check("own_server is None when nothing answers", real_own_server("http://127.0.0.1:1", timeout=1) is None)
+
+    class R:
+        def __init__(self, d): self.d = d
+        def __enter__(self): return self
+        def __exit__(self, *e): return False
+        def read(self, *a): return json.dumps(self.d).encode()
+    srv = real_own_server(ram_gb=32, opener=lambda u, timeout: R({"default_generation_settings": {"n_ctx": 131072}}))
+    check("own_server reads the window from /props", srv == {"healthy": True, "ctx": 131072, "ram_gb": 32})
 
     cfg = p.planner_models(t["base_url"], t["model"], t["ctx"], t["api_key"])
     prov = cfg["providers"]["planner"]
