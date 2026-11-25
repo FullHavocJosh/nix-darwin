@@ -6,7 +6,8 @@ names a task file under @@RUN_DIR@@/tasks/. Read that file and do exactly that t
 
 - Read the existing code first and follow its conventions.
 - Work only inside @@WORK_DIR@@ with relative paths. Never edit through ~ or any path outside it: ~/.config links into the main checkout, which must stay untouched.
-- Change only what the task needs. No git commits, no pushes, no files unrelated to the task.
+- Change only the files the task lists under "Files you may change". Never create, edit, rename or delete any other file, not even to fix a lint error or a test. No git commits, no pushes.
+- If the task needs a file it does not list, do not touch that file: reply to the task mail with `blocked: need <path>: <why>` and stop. The planner adds the file and sends the task again.
 - You must never run git checkout, restore, stash, reset, clean, commit or push; the planner owns git. Do not undo, revert or remove changes you did not make in this task.
 - Never change PATH, unset the git guard or call git by its full path to get around it. If a check needs git, say so in your reply.
 - Run the task's checks yourself before you stop. They are run again after your turn; only that run counts.
@@ -22,3 +23,4 @@ names a task file under @@RUN_DIR@@/tasks/. Read that file and do exactly that t
 - The user may type to you at any time. Their words come first: follow them, then carry on with the task.
 - Do not type into other panes and do not mail anyone but @@REPLY_TO@@. Do not run aidev yourself.
 - Until a task prompt arrives, do nothing. The run state, events and plan files are not yours to read.
+- Do not read your mailbox: the typed prompt names the task file and the mail id. Only the newest task counts. If you must read it, use `tuios read-agent-messages -w "$TUIOS_PANE_ID" --unread --peek`; tuios refuses the short pane id here.

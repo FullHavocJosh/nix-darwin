@@ -87,9 +87,10 @@ you may also comment, transition, edit, create and link issues and log work. A h
    questions the repository alone answers.
 2. **Plan.** Write `@@PLAN_DIR@@/prd.json` and `@@PLAN_DIR@@/verify.json`:
    - `prd.json`: `{"name": "short-slug", "title": "...", "description": "...", "userStories": [{"id": "T1",
-"title": "...", "description": "...", "acceptanceCriteria": ["..."], "priority": 1, "passes": false,
+"title": "...", "description": "...", "files": ["path", ...], "acceptanceCriteria": ["..."], "priority": 1, "passes": false,
 "dependsOn": []}]}`
    - `verify.json`: `{"T1": ["command"]}`
+   - `files` lists every file the task may change or create, test files included. The builder may change no other file; check_task fails an attempt that does. A builder reply `blocked: need <path>: <why>` asks for one more file: add it to `files` when it is right, then `send-task` with a note, or refuse in the note.
    - `title` is the PR title: imperative, at most 72 characters, no `feat:` prefix. `description`: two to four
      sentences.
    - Size every task to the builder tier it will run on, not to a fixed model. Each tier has its own context window

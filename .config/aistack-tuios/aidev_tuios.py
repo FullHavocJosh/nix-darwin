@@ -1635,6 +1635,37 @@ def snapshot_work(run, label):
     return path
 
 
+def scope_fingerprint(wd):
+    """{path: sha1 hex of the file's bytes, or None when the file is missing} for every path in git_out(wd, "diff", "--name-only", "HEAD") plus git_out(wd, "ls-files", "--others", "--exclude-standard")."""
+    result = {}
+    # Get changed tracked files
+    changed = git_out(wd, "diff", "--name-only", "HEAD").strip().splitlines()
+    # Get untracked files
+    untracked = git_out(wd, "ls-files", "--others", "--exclude-standard").strip().splitlines()
+    # Combine all file paths
+    all_files = set(changed) | set(untracked)
+    for path in all_files:
+        if path.strip():  # Skip empty lines
+            try:
+                with open(os.path.join(wd, path), "rb") as f:
+                    result[path] = hashlib.sha1(f.read()).hexdigest()
+            except OSError:
+                result[path] = None
+    return result
+
+
+def scope_violations(base, now, allowed):
+    """sorted paths p in set(base) | set(now) where base.get(p) != now.get(p) and p is not allowed. An allowed entry a
+    may be a bare file name or a partial path: p is allowed when p == a or p ends with "/" + a."""
+    result = set()
+    all_paths = set(base) | set(now)
+    for path in all_paths:
+        ok = any(path == a or path.endswith("/" + a) for a in allowed)
+        if not ok and base.get(path) != now.get(path):
+            result.add(path)
+    return sorted(result)
+
+
 def added_lines(patch):
     """{file: number of added lines} for every file with hunks in a git diff."""
     counts, cur = {}, None
@@ -1669,7 +1700,7 @@ NEVER_GIT = ("You must never run git checkout, restore, stash, reset, clean, com
              "Do not undo, revert or remove changes you did not make in this task.")
 
 
-def task_prompt(prd, story, verify_cmds, notes, wd=None, progress_path=None, retry_files=None):
+def task_prompt(prd, story, verify_cmds, notes, wd=None, progress_path=None, retry_files=None, files=None):
     verify_cmds = [verify_cmds] if isinstance(verify_cmds, str) else verify_cmds
     
     # Build the lists for consistent formatting
@@ -1697,9 +1728,14 @@ def task_prompt(prd, story, verify_cmds, notes, wd=None, progress_path=None, ret
         rules.append(f"- Keep a short progress note in {progress_path} (done so far, next step), "
                      "update it after each file you finish.")
     
+    # Add scope information if files are specified
+    scope = []
+    if files:
+        scope = ["", "## Files you may change"] + [f"- {f}" for f in files] + ["Change only these files. Never create, edit, rename or delete any other file, not even to fix a lint error or a failing test elsewhere. If the task needs another file, do not touch it: reply to the task mail with `blocked: need <path>: <why>` and stop."]
+    
     if retry_files:
         # Retry prompt format
-        lines = [f"# Task {story['id']}, retry: fix only", "", f"Plan: {prd.get('name', '')}"] + workdir
+        lines = [f"# Task {story['id']}, retry: fix only", "", f"Plan: {prd.get('name', '')}"] + workdir + scope
         lines += ["", "## Already done", "The work dir already holds uncommitted edits, this task's and earlier tasks', in these files:"]
         lines += [f"- {f}" for f in retry_files]
         lines += ["Do not redo the task and do not apply those edits again. Read the changed region before you edit it.",
@@ -1708,7 +1744,7 @@ def task_prompt(prd, story, verify_cmds, notes, wd=None, progress_path=None, ret
         return "\n".join(lines + checks + rules) + "\n"
     
     # Original prompt format
-    lines = header_lines + workdir + what_to_do + checks
+    lines = header_lines + workdir + scope + what_to_do + checks
     if notes:
         lines += ["", "## Earlier attempts and notes from Claude"] + notes
     lines += rules
@@ -2422,7 +2458,9 @@ def cmd_fallback(run, argv):
 def mail_task(run, builder, subject, mail_text, prompt):
     """Mail `mail_text` to the builder, then type `prompt` into it (tuios marks mail as data, not instructions, so the
     instruction itself is typed). @@MID@@ in `prompt` becomes the mail's id, the thread the reply goes to. Returns
-    that id, or None."""
+    that id, or None.
+    The builder's older unread mail is marked read first, so its inbox holds only this task."""
+    tuios("read-agent-messages", "-s", run.session, "-w", builder, "--unread")  # older task mail counts as read: only this task stays unread
     args = ["send-agent-message", "-s", run.session, "-w", builder, "--subject", subject]
     if os.environ.get("TUIOS_PANE_ID"):
         args += ["--from", os.environ["TUIOS_PANE_ID"]]
@@ -2822,8 +2860,16 @@ def cmd_send_task(run, argv):
     if t["attempts"] > 1 and wd and not handoff:
         changed = git_out(wd, "diff", "--name-only") + git_out(wd, "ls-files", "--others", "--exclude-standard")
         retry_files = [f for f in changed.splitlines() if f.strip()]
+    # Get files from story or description
+    story_files = stories[tid].get("files")
+    if not story_files:
+        desc = str(stories[tid].get("description") or "")
+        story_files = sorted(named_files(desc))
     path = write_text(os.path.join(run.dir, "tasks", f"{tid}.md"),
-                      task_prompt(prd, stories[tid], verify[tid], t["notes"], wd=wd, progress_path=progress_path, retry_files=retry_files))
+                      task_prompt(prd, stories[tid], verify[tid], t["notes"], wd=wd, progress_path=progress_path, retry_files=retry_files, files=story_files))
+    t["scope_files"] = list(story_files)
+    if t["attempts"] == 1 or "scope_base" not in t:  # a retry keeps the first attempt's base
+        t["scope_base"] = scope_fingerprint(wd) if wd else {}
     snapshot_work(run, f"{tid}-attempt{t['attempts']}-before")
     warn = ""
     if t["attempts"] == 1 and check_already_passes(verify[tid], wd, os.path.join(run.dir, "tasks", f"{tid}-baseline.txt")):
@@ -2862,6 +2908,12 @@ def check_task(run, tid, prefix=""):
     out = os.path.join(run.dir, "tasks", f"{tid}-verify-{t['attempts']}.txt")
     ok, text = run_verify(verify[tid], run.data["work_dir"], out)
     checks_ok = ok
+    if t.get("scope_files"):
+        bad = scope_violations(t.get("scope_base") or {}, scope_fingerprint(run.data["work_dir"]), set(t["scope_files"]))
+        if bad:
+            ok = False
+            text = "OUT OF SCOPE: changed files outside the task list: " + ", ".join(bad) + ". Undo those edits by hand; if the task needs a file, reply blocked: need <path>: <why>\n" + text
+            checks_ok = False
     ok = ok and not reason
     t["status"] = "verified" if ok else "failed"
     if not checks_ok:
