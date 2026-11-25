@@ -2536,9 +2536,16 @@ def pane_tail(session, name, n=3):
     return "\n".join(lines[-n:])
 
 
+def drop_queue(run, name):
+    """Drop every prompt still queued for pane `name` in the tuios daemon, so a stale task prompt is never typed after
+    a stop, a reset or a newer task."""
+    tuios("queue", "rm", "--all", "-s", run.session, "-w", name)
+
+
 def reset_pane(run, name, cmd):
     """Type the reset command `cmd` into pane `name` and wait for the pane to show a fresh session or, for Claude
     Code, a new agent session id. False when not confirmed; prints nothing."""
+    drop_queue(run, name)
     before = agent_session_id(run.session, name)
     tuios("send-text", "-s", run.session, "-w", name, cmd)
     time.sleep(1)
@@ -2560,6 +2567,7 @@ def reset_builder(run, builder):
     kind = tier_of(builder)
     if kind is None:
         return False
+    drop_queue(run, builder)
     if pane_finished(run, builder) and agent_state(run.session, builder) not in ("idle", "done", "none"):
         # its task is done or failed: do not let the pane spin, stop it so the reset below can run
         tuios("send-keys", "-s", run.session, "-w", builder, "escape")
@@ -2619,6 +2627,7 @@ def loop_stop(run, builder, tid, replied=False):
                                                             builder, tid)))
     if not fire:
         return False
+    drop_queue(run, builder)
     tuios("send-keys", "-s", run.session, "-w", builder, "escape")
     if not wait_rest(run.session, builder, 10):
         tuios("send-keys", "-s", run.session, "-w", builder, "ctrl+c")
@@ -2687,6 +2696,7 @@ def guard_poll(run, builder, tid):
 def guard_trip(run, builder, tid, reason):
     """Like loop_stop's stop path: tuios send-keys escape, wait_rest(run.session, builder, 10) else ctrl+c, then reset_pane(run, builder, RESET_CMD.get(tier_of(builder), '/new')). When t['status'] is 'verified' (reason 'turn after done') do nothing more than that and the event. Otherwise set t['status']='failed' and t['trip_reason']=reason. A reason in aidev_guard.CONTEXT_REASONS increments t['overflows'] (default 0), appends aidev_guard.handoff_note(attempt, reason, git_out(run.data['work_dir'], 'diff'), progress) instead of the generic note, with progress = the text of run.dir/tasks/<tid>-progress.txt (empty when missing), and sets t['tripped'] only when t['overflows'] >= aidev_guard.OVERFLOW_ESCALATE_AFTER: the first overflow retries on the same tier with the handoff, the second escalates. Any other reason sets t['tripped']=reason at once and appends '- Attempt N: stopped by the guard (<reason>); the builder was reset. Do less per step, avoid repeating a call, and finish with the done mail.'. Then run.event('guard_trip', builder=builder, task=tid, reason=reason), print f'builder {builder} stopped by the guard ({reason}); reset', run.save(); return True."""
     t = run.data['tasks'].get(tid)
+    drop_queue(run, builder)
     tuios("send-keys", "-s", run.session, "-w", builder, "escape")
     if not wait_rest(run.session, builder, 10):
         tuios("send-keys", "-s", run.session, "-w", builder, "ctrl+c")
