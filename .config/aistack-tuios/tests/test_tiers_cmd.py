@@ -99,7 +99,7 @@ def main():
     mod = load("aidev_tuios2", os.path.join(ROOT, "aidev_tuios.py"))
     seen = []
 
-    def fake_zen(run, refresh=False):
+    def fake_zen(run, refresh=False, provider='go'):
         seen.append(run.project)
         return {"state": "none", "model": None, "detail": "", "models": []}
 

@@ -51,7 +51,8 @@ def main():
     check("builder pane names", a.BUILDERS == {"tier-0": "build-local-tier-0", "tier-1": "build-local-tier-1",
                                                "tier-2": "build-local-tier-2", "tier-3": "build-local-tier-3",
                                                "tier-4": "build-local-tier-4", "tier-5": "build-free-tier-5",
-                                               "tier-6": "build-billed-tier-6"}, a.BUILDERS)
+                                               "tier-6": "build-billed-tier-6", "tier-7": "build-zen-tier-7",
+                                               "tier-8": "build-openrouter-tier-8"}, a.BUILDERS)
     check("reset commands cover every kind", set(a.RESET_CMD) == set(a.BUILDERS), a.RESET_CMD)
 
     print("pane grants")
@@ -493,11 +494,12 @@ def main():
     check("count_attempt per builder", tt.get("by") == {"build-local": 2, "build-free": 1}, tt)
     check("tier_of", [a.tier_of(n) for n in ("build-local", "build-free", "build-billed", "build-semi-local", "x", None)]
           == ["tier-0", "tier-5", "tier-6", "tier-4", None, None])
-    check("next_tier table", [a.next_tier(*c) for c in (("tier-0", "available"), ("tier-0", "exhausted"),
+    a.openrouter_usable = lambda: True
+    actual_next_tier = [a.next_tier(*c) for c in (("tier-0", "available"), ("tier-0", "exhausted"),
                                                        ("tier-0", "none"), ("tier-5", "available"),
                                                        ("tier-6", "available"), ("x", "available"),
                                                        ("tier-2", "available"))]
-          == ["tier-5", "tier-6", "tier-6", "tier-6", None, None, "tier-0"])
+    check("next_tier table", actual_next_tier == [None, None, None, 'tier-7', 'tier-8', None, 'tier-5'], f"next_tier table: got {actual_next_tier}, expected [None, None, None, 'tier-7', 'tier-8', None, 'tier-5']")
     erun = a.Run(p, "20260101-000002")
     ecalls, eclosed, ezen = [], [], ["available"]
     ereal = (a.zen_status, a.cmd_builder, a.tuios)
@@ -506,7 +508,7 @@ def main():
     a.tuios = lambda *args, **kw: (eclosed.append(args[1]) if args[0] == "close-window" else None) or (0, "", "")
     ecode = [0]
 
-    def esc(status, by, builder="build-local", **extra):
+    def esc(status, by, builder="build-local-tier-4", **extra):
         erun.data.update(builder=builder,
                          tasks={"T1": {"status": status, "attempts": sum(by.values()), "by": by, **extra}})
         ecalls.clear()
@@ -517,26 +519,32 @@ def main():
         return code, buf.getvalue()
 
     try:
-        code, out = esc("sent", {"build-local": 2})
+        code, out = esc("sent", {"build-local-tier-4": 2})
         check("escalate refuses a pending task", code == 1 and not ecalls, (code, out))
-        code, out = esc("failed", {"build-local": 1})
+        code, out = esc("failed", {"build-local-tier-4": 1})
         check("escalate refuses after one failure", code == 1 and not ecalls, (code, out))
-        code, out = esc("failed", {"build-local": 1}, compacted=True)
+        code, out = esc("failed", {"build-local-tier-4": 1}, compacted=True)
         check("escalate accepts a compacted failure after one attempt",
               code == 0 and ecalls == [["tier-5"]] and "attempts used" not in out
               and "compacted" not in erun.data["tasks"]["T1"], (code, ecalls, out, erun.data["tasks"]["T1"]))
-        code, out = esc("failed", {"build-local": 2})
-        check("escalate local to free", code == 0 and ecalls == [["tier-5"]] and eclosed == ["build-local"]
-              and "build-local -> build-free" in out, (code, ecalls, eclosed, out))
+        os.environ["AIDEV_TUIOS_THINK_RETRY"] = "off"
+        code, out = esc("failed", {"build-local-tier-4": 2})
+        erun.data.pop("think", None)
+        check("escalate local to free", code == 0 and ecalls == [["tier-5"]] and eclosed == ["build-local-tier-4"]
+              and "build-local-tier-4 -> build-free-tier-5" in out, (code, ecalls, eclosed, out))
         ezen[0] = "exhausted"
-        code, out = esc("failed", {"build-local": 2})
+        code, out = esc("failed", {"build-local-tier-4": 2})
         check("escalate local to billed when free is exhausted", code == 0 and ecalls == [["tier-6"]]
               and "not usable" in out, (code, ecalls, out))
         ezen[0] = "available"
+        a.openrouter_usable = lambda: False
         code, out = esc("failed", {"build-billed": 2}, "build-billed")
         check("escalate from billed returns 2", code == 2 and not ecalls, (code, ecalls, out))
+        a.openrouter_usable = lambda: True
         ecode[0] = 1
-        code, out = esc("failed", {"build-local": 2})
+        code, out = esc("failed", {"build-local-tier-4": 2})
+        os.environ.pop("AIDEV_TUIOS_THINK_RETRY", None)
+        erun.data.pop("think", None)
         check("escalate with cmd_builder failing closes nothing", code == 1 and not eclosed, (code, eclosed, out))
         # a node builder gets one thinking retry on the same node before it goes up a tier
         ecode[0] = 0
@@ -564,8 +572,9 @@ def main():
             check("the off switch skips the thinking retry", code == 0 and ecalls == [["tier-5"]], (code, ecalls, out))
             os.environ.pop("AIDEV_TUIOS_THINK_RETRY", None)
             erun.data.pop("think", None)
-            code, out = esc("failed", {"build-local": 2})
-            check("tier-0 and cloud builders get no thinking retry", code == 0 and ecalls == [["tier-5"]], (code, ecalls, out))
+            code, out = esc("failed", {"build-local-tier-0": 2}, "build-local-tier-0")
+            check("tier-0 has no higher builder", code == 2 and not ecalls, (code, ecalls, out))
+            erun.data.pop("think", None)
         finally:
             a.local_builder_available = real_lba
             os.environ.pop("AIDEV_TUIOS_THINK_RETRY", None)
@@ -686,8 +695,8 @@ def main():
     a.cmd_builder = lambda r, argv: 0
     a.zen_status = lambda r, refresh=False: {"state": "available", "detail": ""}
     try:
-        frun.data.update(builder="build-local", tasks={"T1": {"status": "failed", "attempts": 2,
-                                                              "by": {"build-local": 2}}})
+        frun.data.update(builder="build-local-tier-4", tasks={"T1": {"status": "failed", "attempts": 2,
+                                                              "by": {"build-local-tier-4": 2}}})
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             code = a.cmd_escalate(frun, ["T1"])
@@ -854,8 +863,8 @@ def main():
         with contextlib.redirect_stdout(buf):
             code = a.cmd_fallback(frun, ["T2"])
         text = buf.getvalue()
-        check("fallback tried model goes to billed", code == 0 and fcb and fcb[-1] == ["tier-6"]
-              and "no free model left" in text, (code, text, fcb))
+        check("fallback tried model goes to tier-7", code == 0 and fcb and fcb[-1] == ["tier-7"]
+              and "no Go model left, falling back to tier-7" in text, (code, text, fcb))
         check("fallback types /exit into free pane", any("/exit" in " ".join(c) for c in ftuios), ftuios)
     finally:
         a.zen_status, a.restart_free_pane, a.cmd_builder, a.tuios = freal

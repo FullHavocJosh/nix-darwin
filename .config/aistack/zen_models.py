@@ -206,7 +206,7 @@ def free_models(catalog, offered):
     return sorted(out, key=lambda i: zen_models(catalog)[i].get("release_date", ""), reverse=True)
 
 
-def candidates(catalog, offered, policy, private, limit=9, go_offered=None):
+def _candidates_all(catalog, offered, policy, private, limit=9, go_offered=None):
     """Model ids in the order to try them.
     Public: each Go id, then its Zen twin, then the free ids with Big Pickle first.
     Private: zero-retention free ids, then zero-retention Go ids."""
@@ -237,6 +237,19 @@ def candidates(catalog, offered, policy, private, limit=9, go_offered=None):
     return go_part + free_part[:limit]
 
 
+def candidates(catalog, offered, policy, private, limit=9, go_offered=None, provider=None):
+    """Model ids in the order to try them, filtered by provider when asked.
+    provider 'go': only the opencode-go/ ids. provider 'zen': no opencode-go/ id, the free ids first
+    (Big Pickle first), then the paid opencode/ Zen twins. None (default): every candidate, as before."""
+    out = _candidates_all(catalog, offered, policy, private, limit, go_offered=go_offered)
+    if provider == "go":
+        return [m for m in out if m.startswith("opencode-go/")]
+    if provider == "zen":
+        rest = [m for m in out if not m.startswith("opencode-go/")]
+        return [m for m in rest if not m.startswith("opencode/")] + [m for m in rest if m.startswith("opencode/")]
+    return out
+
+
 def _load_status_cache():
     try:
         data = json.load(open(STATUS_CACHE))
@@ -246,12 +259,12 @@ def _load_status_cache():
 
 
 def status(catalog, offered, policy, private, do_probe=False, refresh=False, probe_all=False, limit=9,
-           runner=subprocess.run, now=None, go_offered=None):
+           runner=subprocess.run, now=None, go_offered=None, provider=None):
     """State of each candidate: a fresh cached answer, a new probe, or "unprobed"."""
     now = time.time() if now is None else now
     cache = _load_status_cache()
     records, dirty, have_available = [], False, False
-    for mid in candidates(catalog, offered, policy, private, limit, go_offered=go_offered):
+    for mid in candidates(catalog, offered, policy, private, limit, go_offered=go_offered, provider=provider):
         rec = cache.get(mid)
         fresh = (not refresh and isinstance(rec, dict) and rec.get("state") in ("available", "exhausted")
                  and isinstance(rec.get("checked"), (int, float)) and now - rec["checked"] < STATUS_TTL_S)
@@ -277,7 +290,7 @@ def status(catalog, offered, policy, private, do_probe=False, refresh=False, pro
             "all_exhausted": bool(records) and all(r["state"] == "exhausted" for r in records), "warnings": []}
 
 
-def choose(catalog, offered, policy, private, source="", age_h=None, today=None):
+def choose(catalog, offered, policy, private, source="", age_h=None, today=None, provider=None, go_offered=None):
     warnings, notes = [], []
     free = free_models(catalog, offered)
     if offered is None:
@@ -295,7 +308,16 @@ def choose(catalog, offered, policy, private, source="", age_h=None, today=None)
     zero = [m for m in policy.get("zero_retention", []) if m in free]
     preferred = policy.get("public_preferred", "big-pickle")
     model = None
-    if private:
+    if provider == "zen":
+        notes.append("provider zen: a free Zen model, never an OpenCode Go id or a paid twin")
+    if provider == "go":
+        ids = candidates(catalog, offered, policy, private, go_offered=go_offered, provider="go")
+        model = ids[0] if ids else None
+        if model:
+            notes.append(f"provider go: {model} is the first Go model in policy order")
+        else:
+            warnings.append("no Go model is offered to this account for this repository type")
+    elif private:
         model = zero[0] if zero else None
         missing = [m for m in policy.get("zero_retention", []) if m not in free]
         for m in missing:
@@ -332,12 +354,14 @@ def main(argv=None):
             sp.add_argument("--private", choices=("yes", "no"), required=True)
         if name == "choose":
             sp.add_argument("--available", action="store_true", help="probe and use the first model that answers")
+            sp.add_argument("--provider", choices=("go", "zen"), help="filter by provider: 'go' = only opencode-go/ models, 'zen' = only Zen models (free ids first, then paid twins)")
         if name == "status":
             sp.add_argument("--probe", action="store_true")
             sp.add_argument("--all", action="store_true", help="probe every candidate, not only up to the first available")
             sp.add_argument("--refresh", action="store_true", help="ignore cached results")
             sp.add_argument("--limit", type=int, default=9)
             sp.add_argument("--json", action="store_true")
+            sp.add_argument("--provider", choices=("go", "zen"), help="filter by provider: 'go' = only opencode-go/ models, 'zen' = only Zen models (free ids first, then paid twins)")
     a = ap.parse_args(argv)
     # test hooks for shell-level tests: a fixed catalog and a fixed list of offered models
     a.catalog = a.catalog or os.environ.get("AISTACK_ZEN_CATALOG")
@@ -377,13 +401,14 @@ def main(argv=None):
         print("\n".join(res["warnings"]), file=sys.stderr)
         return 1
     private = a.private == "yes"
+    provider = a.provider
     if a.cmd == "status":
         go_offered_env = os.environ.get("AISTACK_ZEN_GO_OFFERED")
         if go_offered_env is None:
             go_offered = offered_go_ids()
         else:
             go_offered = {x for x in go_offered_env.split(",") if x}
-        st = status(catalog, offered, policy, private, do_probe=a.probe, refresh=a.refresh, probe_all=a.all, limit=a.limit, go_offered=go_offered)
+        st = status(catalog, offered, policy, private, do_probe=a.probe, refresh=a.refresh, probe_all=a.all, limit=a.limit, go_offered=go_offered, provider=provider)
         if a.json:
             print(json.dumps(st))
         else:
@@ -394,9 +419,13 @@ def main(argv=None):
             return 1
         best = next((r for r in st["models"] if r["model"] == st["best"]), None)
         return 0 if best and best["state"] == "available" else 3
-    res = choose(catalog, offered, policy, private=private, source=source, age_h=age)
+    go_offered = None
+    if provider is not None:
+        go_offered_env = os.environ.get("AISTACK_ZEN_GO_OFFERED")
+        go_offered = offered_go_ids() if go_offered_env is None else {x for x in go_offered_env.split(",") if x}
+    res = choose(catalog, offered, policy, private=private, source=source, age_h=age, provider=provider, go_offered=go_offered)
     if a.available:
-        st = status(catalog, offered, policy, private, do_probe=True)
+        st = status(catalog, offered, policy, private, do_probe=True, provider=provider, go_offered=go_offered)
         if st["best"]:
             res["model"] = st["best"]
             res["notes"].append(f"probed: {st['best']} is available")

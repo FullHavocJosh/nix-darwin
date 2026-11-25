@@ -77,7 +77,7 @@ def main():
     g = a.aidev_guard
     check(
         "CONTEXT_WINDOW is the per-tier constant",
-        g.CONTEXT_WINDOW == {"tier-0": 32768, "tier-1": 8192, "tier-2": 65536, "tier-3": 65536, "tier-4": 65536},
+        g.CONTEXT_WINDOW == {"tier-0": 32768, "tier-1": 65536, "tier-2": 65536, "tier-3": 65536, "tier-4": 65536},
         str(g.CONTEXT_WINDOW),
     )
     ok, why = g.preflight("tier-2", 65536 - 8192, 8192)
