@@ -1761,7 +1761,7 @@ def task_prompt(prd, story, verify_cmds, notes, wd=None, progress_path=None, ret
     if retry_files:
         # Retry prompt format
         lines = [f"# Task {story['id']}, retry: fix only", "", f"Plan: {prd.get('name', '')}"] + workdir + scope
-        lines += ["", "## Already done", "The work dir already holds uncommitted edits, this task's and earlier tasks', in these files:"]
+        lines += ["", "## Already done", "Earlier attempts left uncommitted edits in these files (only this task's, unless the first attempt had no baseline):"]
         lines += [f"- {f}" for f in retry_files]
         lines += ["Do not redo the task and do not apply those edits again. Read the changed region before you edit it.",
                   "", "## What to fix"] + recent_notes(notes)

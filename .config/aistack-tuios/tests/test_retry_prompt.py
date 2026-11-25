@@ -71,6 +71,7 @@ a.scope_fingerprint = lambda wd: {"CHANGED-FILE-A": "1"}
 # Send again: the file has "fix only" and CHANGED-FILE-A
 a.cmd_send_task(run, ["T1", "--to", "tier-3"])
 failures += check("retry with edits sends fix only", "fix only" in written[-1] and "CHANGED-FILE-A" in written[-1])
+failures += check("retry names the edited files without other tasks", "Earlier attempts left uncommitted edits" in written[-1] and "earlier tasks'" not in written[-1])
 
 # Set run.data["tasks"]["T1"]["handoff"] = True and send again: the file has UNIQUE-STORY-DESCRIPTION and 'handoff' is gone from the task
 run.data["tasks"]["T1"]["handoff"] = True
