@@ -769,9 +769,9 @@ class Run:
                         tasks[tid] = task
                 mine_tasks = self.data.get("tasks") or {}
                 for tid in base_tasks:
-                    if tid not in mine_tasks:  # deleted here: drop it, unless another helper changed it meanwhile
-                        if (disk.get("tasks") or {}).get(tid) == base_tasks[tid]:
-                            tasks.pop(tid, None)
+                    # deleted here: drop it, unless another helper changed it meanwhile
+                    if tid not in mine_tasks and (disk.get("tasks") or {}).get(tid) == base_tasks[tid]:
+                        tasks.pop(tid, None)
                 merged["tasks"] = tasks
                 wj(self.path, merged)
                 self.data = copy.deepcopy(merged)
@@ -1670,6 +1670,14 @@ def scope_violations(base, now, allowed):
         if not ok and base.get(path) != now.get(path):
             result.add(path)
     return sorted(result)
+
+
+def task_changed_files(t, wd):
+    """The files this task changed since its first attempt began (scope_base), sorted; None when the task has no
+    scope_base yet or there is no work dir."""
+    if not wd or "scope_base" not in t:
+        return None
+    return scope_violations(t["scope_base"] or {}, scope_fingerprint(wd), set())
 
 
 def added_lines(patch):
@@ -2783,8 +2791,9 @@ def guard_trip(run, builder, tid, reason):
                 progress = fh.read()
         except OSError:
             progress = ''
-        t['notes'].append(aidev_guard.handoff_note(attempt, reason,
-                                                  git_out(run.data['work_dir'], 'diff'), progress))
+        mine = task_changed_files(t, run.data['work_dir'])
+        task_diff = git_out(run.data['work_dir'], 'diff', '--', *mine) if mine else ('' if mine is not None else git_out(run.data['work_dir'], 'diff'))
+        t['notes'].append(aidev_guard.handoff_note(attempt, reason, task_diff, progress))
         if t['overflows'] >= aidev_guard.OVERFLOW_ESCALATE_AFTER:
             t['tripped'] = reason
     else:
@@ -2929,8 +2938,10 @@ def cmd_send_task(run, argv):
     handoff = t.pop('handoff', False)
     retry_files = None
     if t["attempts"] > 1 and wd and not handoff:
-        changed = git_out(wd, "diff", "--name-only") + git_out(wd, "ls-files", "--others", "--exclude-standard")
-        retry_files = [f for f in changed.splitlines() if f.strip()]
+        retry_files = task_changed_files(t, wd)
+        if retry_files is None:  # no base from attempt 1: fall back to every uncommitted file
+            changed = git_out(wd, "diff", "--name-only") + git_out(wd, "ls-files", "--others", "--exclude-standard")
+            retry_files = [f for f in changed.splitlines() if f.strip()]
     # Get files from story or description
     story_files = stories[tid].get("files")
     if not story_files:

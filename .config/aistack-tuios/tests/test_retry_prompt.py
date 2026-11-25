@@ -63,8 +63,10 @@ run = a.Run(p, "20260101-000001")
 run.data["session"] = "test"; run.data["builder"] = "build-local"; run.data["work_dir"] = p
 
 # Send T1 --to tier-3: the file has UNIQUE-STORY-DESCRIPTION
+a.scope_fingerprint = lambda wd: {}
 a.cmd_send_task(run, ["T1", "--to", "tier-3"])
 failures += check("first attempt sends the full task", "UNIQUE-STORY-DESCRIPTION" in written[-1])
+a.scope_fingerprint = lambda wd: {"CHANGED-FILE-A": "1"}
 
 # Send again: the file has "fix only" and CHANGED-FILE-A
 a.cmd_send_task(run, ["T1", "--to", "tier-3"])
