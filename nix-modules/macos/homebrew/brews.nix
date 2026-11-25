@@ -46,6 +46,7 @@
   "opentofu"
   "podman"
   "prettier"
+  "python@3.11"
   "python-lsp-server"
   "pipx"
   "python3"
