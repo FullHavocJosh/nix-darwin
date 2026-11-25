@@ -744,7 +744,8 @@ class Run:
 
     def save(self):
         """Write the state, merging with whatever another helper saved meanwhile: top-level keys this instance
-        changed win, the rest comes from disk, and tasks merge one by one."""
+        changed win, the rest comes from disk, and tasks merge one by one; a task this instance deleted is dropped
+        unless another helper changed it meanwhile."""
         os.makedirs(self.dir, exist_ok=True)
         with open(self.path + ".lock", "a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
@@ -766,6 +767,11 @@ class Run:
                 for tid, task in (self.data.get("tasks") or {}).items():
                     if task != base_tasks.get(tid):
                         tasks[tid] = task
+                mine_tasks = self.data.get("tasks") or {}
+                for tid in base_tasks:
+                    if tid not in mine_tasks:  # deleted here: drop it, unless another helper changed it meanwhile
+                        if (disk.get("tasks") or {}).get(tid) == base_tasks[tid]:
+                            tasks.pop(tid, None)
                 merged["tasks"] = tasks
                 wj(self.path, merged)
                 self.data = copy.deepcopy(merged)
@@ -3210,7 +3216,7 @@ def cmd_watch(run, argv):
 def finish_work(run):
     """Close this piece of work. The panes stay for the next one, so the run stays open: its work dir, builder and
     tasks move to "finished", and the builder pane closes (it worked in that work dir; it frees the gpt-oss-20b too).
-    Returns the work dir; prints nothing."""
+    A non-blank followups.txt carries over to the new plan dir. Returns the work dir; prints nothing."""
     wd = run.data.get("work_dir") or run.project
     for name in list(BUILDERS.values()) + list(LEGACY_BUILDER_PANES):
         if window_named(run.session, name):
@@ -3222,8 +3228,16 @@ def finish_work(run):
         os.remove(run.meta_path)
     # a per-run plan dir is archived; the shared one of runs started before them stays put
     if "plan_dir" in run.data and os.path.isdir(run.plan_dir):
+        fu = os.path.join(run.plan_dir, "followups.txt")
+        keep = ""
+        if os.path.isfile(fu):
+            with open(fu) as fh:
+                keep = fh.read()
         os.rename(run.plan_dir, os.path.join(run.dir, "plan-done-" + time.strftime("%Y%m%d-%H%M%S")))
         os.makedirs(run.plan_dir, exist_ok=True)
+        if keep.strip():
+            with open(fu, "w") as fh:
+                fh.write(keep)
     run.data.setdefault("finished", []).append({**done, "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
     run.data["tasks"] = {}
     run.event("finish", work_dir=wd)
