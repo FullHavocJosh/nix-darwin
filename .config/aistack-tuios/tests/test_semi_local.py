@@ -186,12 +186,15 @@ def main():
     print("auto_builder")
     real = (a.semi_local_available, a.local_builder_available, a.zen_status, a.zen_usable)
     try:
-        a.zen_status = lambda run, refresh=False: {"state": "available", "model": "m", "detail": ""}
+        a.zen_status = lambda run, refresh=False, provider="go": {"state": "available", "model": "m", "detail": ""}
         a.zen_usable = lambda s: True
         a.semi_local_available, a.local_builder_available = (lambda: True), (lambda: True)
         check("semi up: semi-local", a.auto_builder(None) == "tier-4")
         a.semi_local_available = lambda: False
-        check("semi down, local up: local", a.auto_builder(None) == "tier-0")
+        check("semi down, zen usable: free before local", a.auto_builder(None) == "tier-5")
+        a.zen_usable = lambda s: False
+        check("semi down, zen down, local up: local", a.auto_builder(None) == "tier-0")
+        a.zen_usable = lambda s: True
         a.local_builder_available = lambda: False
         check("both down, zen usable: free", a.auto_builder(None) == "tier-5")
     finally:

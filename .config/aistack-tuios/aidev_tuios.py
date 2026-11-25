@@ -2559,9 +2559,9 @@ def tier_of(builder):
 
 
 def keeps_builder(builder_pane):
-    """True when send-task keeps the open builder: a tier-0, tier-5, tier-7 or tier-8 pane the plan opened on purpose. The node
-    panes (tier-1 to tier-4) and no pane are re-selected by size and availability."""
-    return tier_of(builder_pane) in ("tier-0", "tier-5", "tier-7", "tier-8")
+    """True when send-task keeps the open builder: a tier-0, tier-5, tier-6, tier-7 or tier-8 pane the plan opened on purpose. The
+    node panes (tier-1 to tier-4) and no pane are re-selected by size and availability."""
+    return tier_of(builder_pane) in ("tier-0", "tier-5", "tier-6", "tier-7", "tier-8")
 
 
 def next_tier(kind, zen_state, local_ok=True):
