@@ -58,7 +58,27 @@ def choose_planner(env: dict[str, str], probe: callable = claude_available) -> t
         return ('local', why)
 
 
-def planner_models(base_url: str, model_id: str, ctx: int) -> dict:
+GATEWAY_BASE = 'https://llm.rollet.family/auto'
+PLAN_MIN_WINDOW = 49152  # a plan pane needs a window this large (the TrashCan serves 65536)
+
+
+def planner_target(pool, key_cmd, mini_url='http://127.0.0.1:8080', mini_model='qwen/qwen3.5-9b', mini_ctx=131072):
+    """
+    Pick where the local plan pane runs. pool is the gateway's {backend id: {healthy, window, ...}} (None when the
+    gateway cannot be read); key_cmd is the pi apiKey command that reads the gateway key at request time.
+
+    Returns the TrashCan (plan-local, model node-trashcan through the gateway) when it is healthy with a window of at
+    least PLAN_MIN_WINDOW, else the Mac mini's own 9B on loopback (plan-local-fallback).
+    """
+    tc = (pool or {}).get('trashcan') or {}
+    if tc.get('healthy') and int(tc.get('window') or 0) >= PLAN_MIN_WINDOW:
+        return {'name': 'plan-local', 'backend': 'trashcan', 'base_url': GATEWAY_BASE, 'model': 'node-trashcan',
+                'ctx': int(tc['window']), 'api_key': key_cmd}
+    return {'name': 'plan-local-fallback', 'backend': 'macmini-m1', 'base_url': mini_url, 'model': mini_model,
+            'ctx': mini_ctx, 'api_key': 'sk-local'}
+
+
+def planner_models(base_url: str, model_id: str, ctx: int, api_key: str = 'sk-local') -> dict:
     """
     Return planner model configuration.
     
@@ -70,7 +90,7 @@ def planner_models(base_url: str, model_id: str, ctx: int) -> dict:
             'planner': {
                 'baseUrl': base_url.rstrip('/') + '/v1',
                 'api': 'openai-completions',
-                'apiKey': 'sk-local',
+                'apiKey': api_key,
                 'models': [{
                     'id': model_id,
                     'reasoning': False,
