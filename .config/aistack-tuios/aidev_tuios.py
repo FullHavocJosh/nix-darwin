@@ -1047,9 +1047,11 @@ def write_build_pi(cfg, kind="tier-0", think=False):
             for pkind, pname in PI_PROVIDER.items():
                 providers[pname] = {
                     "baseUrl": tier_url(pkind), "api": "openai-completions", "apiKey": "!cat " + shlex.quote(key_path),
-                    "models": [{"id": tier_alias(pkind), "reasoning": False, "contextWindow": tiers()[pkind]["ctx"],
+                    "models": [{"id": tier_alias(pkind), "name": tiers()[pkind]["label"], "reasoning": False,
+                                "contextWindow": tiers()[pkind]["ctx"],
                                 "maxTokens": aidev_tiers.max_output_tokens(pkind, tiers())},
-                               {"id": think_alias(pkind), "reasoning": True, "contextWindow": tiers()[pkind]["ctx"],
+                               {"id": think_alias(pkind), "name": tiers()[pkind]["label"] + " (thinking)", "reasoning": True,
+                                "contextWindow": tiers()[pkind]["ctx"],
                                 "maxTokens": 2 * aidev_tiers.max_output_tokens(pkind, tiers())}]}
     wj(os.path.join(cfg["pi_build"], "models.json"), {"providers": providers})
     ext = os.path.join(cfg["pi_build"], "extensions")
@@ -1266,7 +1268,8 @@ def local_planner_body(run, cfg, task, has_lumo):
     system = prompt_text("claude", PROJECT=run.project, PLAN_DIR=run.plan_dir, RUN_DIR=run.dir, HELPER=HELPER,
                          LUMO=lumo_note) + "\n\n" + prompt_text("planner-local")
     first = task or "The user will describe the work. Greet them in one line and wait."
-    target = planner_local.planner_target(gateway_pool(), "!python3 " + os.path.join(AISTACK, "gateway_key.py"))
+    target = planner_local.planner_target(gateway_pool(), "!python3 " + os.path.join(AISTACK, "gateway_key.py"),
+                                          own=planner_local.own_server())
     model = target["model"]
     run.data["planner_target"] = {k: v for k, v in target.items() if k != "api_key"}
     wj(os.path.join(cfg["pi_plan"], "models.json"),
@@ -1915,8 +1918,21 @@ def tier_state(run):
     for tid, cfg in tiers().items():
         pane = cfg["pane"]
         out[tid] = {"online": tier_online(tid, run),
-                    "idle": not window_named(run.session, pane) or pane_idle(run.session, pane)}
+                    "idle": not window_named(run.session, pane) or pane_idle(run.session, pane)
+                    or pane_finished(run, pane)}
     return out
+
+
+def pane_task_active(run, pane):
+    """True while a task sent to `pane` is still in progress (status sent)."""
+    return any(t.get("builder") == pane and t.get("status") == "sent" for t in (run.data.get("tasks") or {}).values())
+
+
+def pane_finished(run, pane):
+    """True when `pane` ran tasks of this run and none is in progress: its work is done or failed, so the pane is free
+    even when its screen does not show the ready footer. send-task stops it and resets it with /new."""
+    tasks = (run.data.get("tasks") or {}).values()
+    return any(t.get("builder") == pane for t in tasks) and not pane_task_active(run, pane)
 
 
 def default_target_ctx():
@@ -1986,7 +2002,7 @@ def size_problems(prd, root=None, ctx=None):
     return out
 
 
-def cmd_check_plan(run, _argv):
+def _check_plan(run):
     if research_gate(run):
         return 3
     lib = load_lib(run.project, run)
@@ -2007,6 +2023,109 @@ def cmd_check_plan(run, _argv):
     run.save()
     print(f"plan ok: {len(prd['userStories'])} task(s), in order {', '.join(task_order(prd))}. Show the user {path}.")
     return 0
+
+
+STRUGGLE_CHECKS = int(os.environ.get("AIDEV_TUIOS_STRUGGLE_CHECKS", "3"))
+
+
+def struggle_reasons(run):
+    """Why the local plan pane looks stuck: check-plan failed STRUGGLE_CHECKS times in a row, or two tasks failed at
+    their builder tier. Empty on a Claude plan pane (already escalated)."""
+    if not planner_local.is_local(run.data.get("planner")):
+        return []
+    out = []
+    if int(run.data.get("check_fails") or 0) >= STRUGGLE_CHECKS:
+        out.append(f"check-plan failed {run.data['check_fails']} times in a row")
+    failed = [tid for tid, t in (run.data.get("tasks") or {}).items()
+              if t.get("status") == "failed" and int(t.get("attempts") or 0) >= ESCALATE_AFTER]
+    if len(failed) >= 2:
+        out.append(f"tasks {', '.join(sorted(failed))} failed at their builder tier")
+    return out
+
+
+def struggle_hint(run):
+    """One line for the plan pane when it looks stuck, else ''. It never escalates by itself."""
+    why = struggle_reasons(run)
+    if not why:
+        return ""
+    return (f"plan-local is struggling ({'; '.join(why)}). To hand the plan to Claude run: {HELPER} escalate-plan "
+            "\"<reason>\". It asks the user first; nothing is billed without their yes.")
+
+
+def cmd_check_plan(run, argv):
+    code = _check_plan(run)
+    if code in (0, 1):
+        run.data["check_fails"] = 0 if code == 0 else int(run.data.get("check_fails") or 0) + 1
+        run.save()
+        hint = struggle_hint(run) if code else ""
+        if hint:
+            print(hint)
+    return code
+
+
+def with_struggle_hint(fn):
+    def wrapped(run, argv):
+        code = fn(run, argv)
+        hint = struggle_hint(run)
+        if hint:
+            print(hint)
+        return code
+    return wrapped
+
+
+RELAUNCH_WAIT = 2
+
+
+def cmd_escalate_plan(run, argv):
+    """escalate-plan ["<reason>"]: ask the user whether the plan should move from plan-local to Claude (billed). Only
+    the person at an attached tuios client can answer tuios ask-human, so an agent cannot approve it. On yes the plan
+    pane is replaced by a Claude plan pane for the same run (the local conversation is not carried over)."""
+    if not planner_local.is_local(run.data.get("planner")):
+        print("the plan pane already runs on Claude")
+        return 0
+    reason = " ".join(argv).strip() or "; ".join(struggle_reasons(run)) or "the plan is not progressing"
+    question = short(f"plan-local is struggling: {reason}. Move the plan to Claude (billed)?", 160)
+    code, out, _err = tuios("ask-human", question, "-o", "yes", "-o", "no", "--timeout", "900", timeout=960)
+    if code == 2 or code == 124:
+        print("no answer yet: the question stays in the user's Inbox. Keep planning, or run escalate-plan again later.")
+        return 3
+    if code != 0 or out.strip().lower() != "yes":
+        run.event("escalate_plan_declined", reason=reason)
+        print("the user did not approve Claude: keep planning on plan-local")
+        return 1
+    cfg = pane_configs(run.project)
+    task = (f"Continue run {run.id} of {run.project}. The local planner struggled: {reason}. Read {run.plan_dir} "
+            f"(PLAN.txt, prd.json, verify.json) and run `{HELPER} tiers`, check each task's state, and carry the plan on "
+            "with the builders.")
+    script = write_script(run, PLAN, claude_pane_body(run, cfg, task, bool(window_named(run.session, RESEARCH))))
+    run.data["panes"].setdefault(PLAN, {})["script"] = script
+    run.data["planner"] = planner_local.PLANNER_CLAUDE
+    run.event("escalate_plan", reason=reason)
+    run.save()
+    subprocess.Popen([sys.executable, os.path.abspath(__file__), "relaunch-plan", run.session], env=TENV,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+    print("approved: this pane is replaced by a Claude plan pane in a few seconds")
+    return 0
+
+
+def cmd_relaunch_plan(argv):
+    """relaunch-plan <session>: close the plan window and open it again from the run's stored launcher. escalate-plan
+    starts it detached, because it closes the window the helper runs in."""
+    if not argv:
+        print("usage: relaunch-plan <session>", file=sys.stderr)
+        return 2
+    session = argv[0]
+    time.sleep(RELAUNCH_WAIT)
+    w = window_named(session, PLAN)
+    if not w:
+        return 1
+    run = session_run(project_root(w.get("cwd") or HOME), session)
+    pane = (run.data["panes"].get(PLAN) or {}) if run else {}
+    if not pane.get("script"):
+        return 1
+    tuios("close-window", w["window_id"], "-s", session)
+    return 0 if open_pane(run, session, PLAN, pane["script"], pane.get("cwd") or run.project, GRANTS[PLAN]) else 1
 
 
 def cmd_worktree(run, _argv):
@@ -2403,6 +2522,13 @@ def reset_builder(run, builder):
     kind = tier_of(builder)
     if kind is None:
         return False
+    if pane_finished(run, builder) and agent_state(run.session, builder) not in ("idle", "done", "none"):
+        # its task is done or failed: do not let the pane spin, stop it so the reset below can run
+        tuios("send-keys", "-s", run.session, "-w", builder, "escape")
+        if not wait_rest(run.session, builder, 10):
+            tuios("send-keys", "-s", run.session, "-w", builder, "ctrl+c")
+            wait_rest(run.session, builder, 10)
+        run.event("stop_finished_pane", builder=builder)
     deadline = time.time() + RESET_WAIT
     while True:
         st = agent_state(run.session, builder)
@@ -3001,6 +3127,45 @@ def cmd_plan_sid(run, argv):
     return 1
 
 
+def cmd_close_builder(run, argv):
+    """close-builder [tier-N|pane ...] [--force]: close build panes whose work is done, so no pane idles or spins.
+    With no target it closes every open build pane that is finished (ran tasks of this run, none in progress).
+    A pane with a task in progress, or one still working, is refused unless --force."""
+    force = "--force" in argv
+    targets = [a for a in argv if a != "--force"]
+    if targets:
+        names = []
+        for word in targets:
+            kind = norm_kind(word)
+            if not kind:
+                print(f"unknown builder {word}; use tier-0 to tier-6 or a build pane name")
+                return 2
+            names.append(BUILDERS[kind])
+    else:
+        names = [n for n in BUILDERS.values() if window_named(run.session, n) and pane_finished(run, n)]
+    closed, kept = [], []
+    for name in names:
+        if not window_named(run.session, name):
+            continue
+        if not force and pane_task_active(run, name):
+            kept.append(f"{name}: a task is in progress")
+            continue
+        if not force and agent_state(run.session, name) not in ("idle", "done", "none") and not pane_finished(run, name):
+            kept.append(f"{name}: still working")
+            continue
+        code, _out, err = tuios("close-window", name, "-s", run.session)
+        if code:
+            kept.append(f"{name}: close failed: {(err or '').strip()[:120]}")
+            continue
+        closed.append(name)
+        run.event("close_builder", builder=name, forced=force)
+        if run.data.get("builder") == name:
+            run.data["builder"] = None
+    run.save()
+    print("closed: " + (", ".join(closed) or "none") + ("; kept: " + "; ".join(kept) if kept else ""))
+    return 1 if kept and not closed else 0
+
+
 def cmd_finish(run, _argv):
     wd0 = run.data.get("work_dir")
     dirty = bool(git_out(wd0, "status", "--porcelain").strip()) if wd0 else True
@@ -3010,7 +3175,7 @@ def cmd_finish(run, _argv):
     note = f" Plan context: {cmd.split()[0]} queued." if queued else ""
     left = [n for n in list(BUILDERS.values()) + list(LEGACY_BUILDER_PANES) if window_named(run.session, n)]
     if left:
-        print(f"builder panes still open, close them by hand: {', '.join(left)}")
+        print(f"builder panes still open: {', '.join(left)}. Close the finished ones with {HELPER} close-builder.")
     if dirty:
         print(f"finished. Changes are uncommitted in {wd}: run commit, or the user commits with gpa. The panes stay "
               "open for the next piece of work." + note)
@@ -3437,11 +3602,10 @@ def cmd_tiers(_run, argv):
 
 
 def planners_rows():
-    """The plan panes, in the order to try them: plan-local (the TrashCan's 35B through the gateway, or the Mac mini's
-    9B when the TrashCan is down) and plan-billed (Claude, needs the user's yes). Claude is not probed (a probe is a
+    """The plan panes, in the order to try them: plan-local (the Mac mini's 9B through the gateway, or this host's own 9B) and plan-billed (Claude, needs the user's yes). Claude is not probed (a probe is a
     billed call), so its online state is None."""
-    t = planner_local.planner_target(gateway_pool(), "")
-    sp = aidev_tiers.SPEED.get("tier-1") if t["backend"] == "trashcan" else aidev_tiers.SPEED.get("tier-2")
+    t = planner_local.planner_target(gateway_pool(), "", own=planner_local.own_server())
+    sp = None if t["backend"] == "local-9b" else aidev_tiers.SPEED.get("tier-2")  # the Mac mini plans
     return [{"id": "plan-local", "backend": t["backend"], "model": t["model"], "ctx": t["ctx"],
              "online": t["name"] == "plan-local", "fallback": t["name"] != "plan-local", "needs_approval": False,
              "pp_tok_s": sp["pp"] if sp else None, "tg_tok_s": sp["tg"] if sp else None},
@@ -3495,8 +3659,8 @@ def cmd_fit(run, argv):
 
 HELPERS = {"tiers": cmd_tiers, "fit": cmd_fit, "ask-lumo": cmd_ask_lumo, "check-plan": cmd_check_plan, "worktree": cmd_worktree, "builder": cmd_builder,
            "escalate": cmd_escalate, "fallback": cmd_fallback,
-           "send-task": cmd_send_task, "wait-task": cmd_wait_task, "verify": cmd_verify, "watch": cmd_watch,
-           "approvals": cmd_approvals, "zen-check": cmd_zen_check, "finish": cmd_finish, "commit": cmd_commit,
+           "send-task": cmd_send_task, "wait-task": with_struggle_hint(cmd_wait_task), "verify": cmd_verify, "watch": cmd_watch,
+           "approvals": cmd_approvals, "zen-check": cmd_zen_check, "finish": cmd_finish, "close-builder": cmd_close_builder, "escalate-plan": cmd_escalate_plan, "commit": cmd_commit,
            "pr-status": cmd_pr_status, "gprr": cmd_gprr, "pr-describe": cmd_pr_describe,
            "merged": cmd_merged, "plan-sid": cmd_plan_sid, "explore": cmd_explore,
            "review-diff": cmd_review_diff, "reap": cmd_reap}
@@ -4056,6 +4220,8 @@ def main(argv):
         return cmd_status(rest)
     if cmd == "restore":
         return cmd_restore(rest)
+    if cmd == "relaunch-plan":
+        return cmd_relaunch_plan(rest)
     if cmd == "tiers":
         return cmd_tiers(None, rest)
     if cmd == "planners":
