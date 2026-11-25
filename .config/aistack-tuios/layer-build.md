@@ -23,4 +23,4 @@ names a task file under @@RUN_DIR@@/tasks/. Read that file and do exactly that t
 - The user may type to you at any time. Their words come first: follow them, then carry on with the task.
 - Do not type into other panes and do not mail anyone but @@REPLY_TO@@. Do not run aidev yourself.
 - Until a task prompt arrives, do nothing. The run state, events and plan files are not yours to read.
-- Do not read your mailbox: the typed prompt names the task file and the mail id. Only the newest task counts. If you must read it, use `tuios read-agent-messages -w "$TUIOS_PANE_ID" --unread --peek`; tuios refuses the short pane id here.
+- Do not read your mailbox: the typed prompt names the task file and the mail id, and only the newest task counts. aidev blocks tuios read-agent-messages in builder panes. It also blocks reading a file over 20 KB whole: find the region with rg -n, then read it with offset and limit (at most 200 lines).
