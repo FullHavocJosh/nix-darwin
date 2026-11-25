@@ -1,9 +1,11 @@
 { pkgs, lib, ... }:
 let
-  wallpaper = "/Users/jrollet/.wallpapers/wallhaven-rr13w1.png";
+  system = {
+    primaryUser = "jrollet";
+  };
 in
 {
-  system.primaryUser = "jrollet";
+  system.primaryUser = system.primaryUser;
 
   system.activationScripts.script.text = ''
     #!/usr/bin/env bash
@@ -37,9 +39,14 @@ in
     fi
 
     echo "Setting wallpaper..."
-    cp "${wallpaper}" "/Users/Shared/Wallpaper.png"
-    cp "${wallpaper}" "/Users/Shared/psv_backgroundimage.png"
-    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "${wallpaper}"'
+    WALLPAPER=$(cd "$HOME/.wallpapers" && find . -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \) 2>/dev/null | sort -R | head -1) || true
+    if [ -z "$WALLPAPER" ]; then
+      echo "Warning: No wallpaper files (jpg/jpeg/png) found in $HOME/.wallpapers"
+    else
+      cp "$WALLPAPER" "/Users/Shared/Wallpaper.png"
+      cp "$WALLPAPER" "/Users/Shared/psv_backgroundimage.png"
+      osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "$WALLPAPER"'
+    fi
     killall WallpaperAgent 2>/dev/null || true
     killall Dock
 

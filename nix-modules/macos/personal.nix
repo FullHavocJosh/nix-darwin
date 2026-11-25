@@ -1,13 +1,16 @@
 { pkgs, ... }:
 let
-  wallpaper = "/Users/havoc/.wallpapers/wallhaven-5yk6k9.jpg";
+  system = {
+    primaryUser = "havoc";
+  };
 in
 {
-  system.primaryUser = "havoc";
+  system.primaryUser = system.primaryUser;
 
   # Model and effort for aidev's Claude Code backbone (aidev_tuios.py falls back to AISTACK_CLAUDE_MODEL /
   # AISTACK_CLAUDE_EFFORT). Chosen per profile because work and personal use different Anthropic plans with different
-  # token costs (work.nix sets Opus at high effort). Per-session override: export AISTACK_CLAUDE_MODEL / AISTACK_CLAUDE_EFFORT.
+  # token costs (work.nix sets Opus at high effort). Per-session override: export AISTACK_CLAUDE_MODEL /
+  # AISTACK_CLAUDE_EFFORT.
   environment.variables.AISTACK_CLAUDE_MODEL = "claude-sonnet-5-5";
   environment.variables.AISTACK_CLAUDE_EFFORT = "medium";
 
@@ -19,8 +22,13 @@ in
     echo "Finished Stowing dotfiles..."
 
     echo "Setting wallpaper..."
-    launchctl asuser "$(id -u -- havoc)" osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "${wallpaper}"' 2>/dev/null || \
-      echo "Wallpaper: System Events not yet running, will apply on next login."
+    WALLPAPER=$(cd "$HOME/.wallpapers" && find . -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \) 2>/dev/null | sort -R | head -1) || true
+    if [ -z "$WALLPAPER" ]; then
+      echo "Warning: No wallpaper files (jpg/jpeg/png) found in $HOME/.wallpapers"
+    else
+      launchctl asuser "$(id -u -- havoc)" osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "$WALLPAPER"' 2>/dev/null || \
+        echo "Wallpaper: System Events not yet running, will apply on next login."
+    fi
 
     # Configure kubectl for personal devices only
     echo "Configuring kubectl for hetzner-cluster..."
