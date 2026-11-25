@@ -1266,9 +1266,11 @@ def local_planner_body(run, cfg, task, has_lumo):
     system = prompt_text("claude", PROJECT=run.project, PLAN_DIR=run.plan_dir, RUN_DIR=run.dir, HELPER=HELPER,
                          LUMO=lumo_note) + "\n\n" + prompt_text("planner-local")
     first = task or "The user will describe the work. Greet them in one line and wait."
-    model = "qwen/qwen3.5-9b"
+    target = planner_local.planner_target(gateway_pool(), "!python3 " + os.path.join(AISTACK, "gateway_key.py"))
+    model = target["model"]
+    run.data["planner_target"] = {k: v for k, v in target.items() if k != "api_key"}
     wj(os.path.join(cfg["pi_plan"], "models.json"),
-       planner_local.planner_models("http://127.0.0.1:8080", model, 131072))
+       planner_local.planner_models(target["base_url"], model, target["ctx"], target["api_key"]))
     sid = run.data["panes"].setdefault(PLAN, {}).setdefault("session_id", str(uuid.uuid4()))
     sysp = write_text(os.path.join(run.dir, "bin", f"{PLAN}.system.md"), system)
     marker = os.path.join(run.dir, "bin", f"{PLAN}.started")
@@ -3434,6 +3436,32 @@ def cmd_tiers(_run, argv):
     return 0
 
 
+def planners_rows():
+    """The plan panes, in the order to try them: plan-local (the TrashCan's 35B through the gateway, or the Mac mini's
+    9B when the TrashCan is down) and plan-billed (Claude, needs the user's yes). Claude is not probed (a probe is a
+    billed call), so its online state is None."""
+    t = planner_local.planner_target(gateway_pool(), "")
+    sp = aidev_tiers.SPEED.get("tier-1") if t["backend"] == "trashcan" else aidev_tiers.SPEED.get("tier-2")
+    return [{"id": "plan-local", "backend": t["backend"], "model": t["model"], "ctx": t["ctx"],
+             "online": t["name"] == "plan-local", "fallback": t["name"] != "plan-local", "needs_approval": False,
+             "pp_tok_s": sp["pp"] if sp else None, "tg_tok_s": sp["tg"] if sp else None},
+            {"id": "plan-billed", "backend": "claude-code", "model": CLAUDE_MODEL, "ctx": None, "online": None,
+             "fallback": False, "needs_approval": True, "pp_tok_s": None, "tg_tok_s": None}]
+
+
+def cmd_planners(_run, argv):
+    rows = planners_rows()
+    if "--json" in argv:
+        print(json.dumps(rows))
+        return 0
+    for r in rows:
+        state = "unknown" if r["online"] is None else ("online" if r["online"] else "offline")
+        extra = " (fallback: the TrashCan is down)" if r["fallback"] else ""
+        extra += " costs money, needs the user's yes" if r["needs_approval"] else ""
+        print(f"{r['id']} {r['backend']} {r['model']} ctx {r['ctx'] or 'n/a'} {state}{extra}")
+    return 0
+
+
 def cmd_fit(run, argv):
     """fit --chars N [--files F ...] [--out N]: which online tiers have the window for a task, and which to use."""
     chars, out_tokens, files, i = 0, 800, [], 0
@@ -3581,13 +3609,15 @@ def open_run(run, session, own, running, task, resume=False):
         planner, why = planner_local.choose_planner(os.environ)
         run.data["planner"] = planner
         if planner == "local" and why != "forced by AIDEV_TUIOS_PLANNER":
-            print(f"aidev: Claude is unavailable ({why}); planning with the local 9B", file=sys.stderr)
+            print(f"aidev: Claude is unavailable ({why}); planning locally", file=sys.stderr)
         if lumo:
             run.data["lumo_url"] = lumo[0]
             scripts[RESEARCH] = write_script(run, RESEARCH, lumo_body(run, cfg, lumo))
         body = local_planner_body if planner == "local" else claude_pane_body
         scripts[PLAN] = write_script(run, PLAN, body(run, cfg, task, bool(lumo)))
-        planner_name = "local 9B planner" if planner == "local" else f"Claude {CLAUDE_MODEL}"
+        tgt = run.data.get("planner_target") or {}
+        planner_name = (f"{tgt.get('name', 'plan-local')} on {tgt.get('backend', 'unknown')} ({tgt.get('model', '')})"
+                        if planner == "local" else f"Claude {CLAUDE_MODEL}")
         print(f"aidev: {planner_name}; " + (f"Lumo via {lumo[0]}" if lumo else "no Lumo (no tamer)"),
               file=sys.stderr)
     else:
@@ -4028,6 +4058,8 @@ def main(argv):
         return cmd_restore(rest)
     if cmd == "tiers":
         return cmd_tiers(None, rest)
+    if cmd == "planners":
+        return cmd_planners(None, rest)
     if cmd in HELPERS:
         return HELPERS[cmd](helper_run(), rest)
     print(__doc__)

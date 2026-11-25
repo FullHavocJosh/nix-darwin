@@ -26,9 +26,9 @@ def check(name, cond, extra=""):
         FAILS.append(name)
 
 
-# Test defaults: tier-0 4096, tier-1 8192, tier-2 8192
+# Test defaults: tier-0 4096, tier-1 4096 (the gateway plan profile caps output at 4096), tier-2 8192
 check("defaults tier-0", mod.max_output_tokens("tier-0") == 4096, str(mod.max_output_tokens("tier-0")))
-check("defaults tier-1", mod.max_output_tokens("tier-1") == 8192, str(mod.max_output_tokens("tier-1")))
+check("defaults tier-1", mod.max_output_tokens("tier-1") == 4096, str(mod.max_output_tokens("tier-1")))
 check("defaults tier-2", mod.max_output_tokens("tier-2") == 8192, str(mod.max_output_tokens("tier-2")))
 
 # Test tier-5 and tier-6 are 0 (from DEFAULTS)
@@ -58,7 +58,7 @@ with tempfile.TemporaryDirectory() as tmp:
     coder_max = data["providers"]["coder"]["models"][0]["maxTokens"]
     check("coder maxTokens 4096", coder_max == 4096, str(coder_max))
 
-# Test write_build_pi for tier-1 writes maxTokens 8192 for the tier-1 provider
+# Test write_build_pi for tier-1 writes maxTokens 4096 for the tier-1 provider
 with tempfile.TemporaryDirectory() as tmp:
     cfg = {"pi_build": tmp}
     model = a.write_build_pi(cfg, kind="tier-1")
@@ -67,7 +67,7 @@ with tempfile.TemporaryDirectory() as tmp:
     with open(model_path) as f:
         data = json.load(f)
     tier1_max = data["providers"]["gw1"]["models"][0]["maxTokens"]
-    check("tier-1 provider maxTokens 8192", tier1_max == 8192, str(tier1_max))
+    check("tier-1 provider maxTokens 4096", tier1_max == 4096, str(tier1_max))
     # Check that tier-2 provider is also written
     tier2_max = data["providers"]["gw2"]["models"][0]["maxTokens"]
     check("tier-2 provider maxTokens 8192", tier2_max == 8192, str(tier2_max))
@@ -84,6 +84,6 @@ with tempfile.TemporaryDirectory() as tmp:
     check("tier-2 provider maxTokens 8192", tier2_max == 8192, str(tier2_max))
     # Check that tier-1 provider is also written
     tier1_max = data["providers"]["gw1"]["models"][0]["maxTokens"]
-    check("tier-1 provider maxTokens 8192", tier1_max == 8192, str(tier1_max))
+    check("tier-1 provider maxTokens 4096", tier1_max == 4096, str(tier1_max))
 
 sys.exit(1 if FAILS else 0)

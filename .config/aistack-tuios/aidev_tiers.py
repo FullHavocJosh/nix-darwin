@@ -17,7 +17,7 @@ NODES_FASTEST_FIRST = tuple(reversed(NODE_TIERS))
 
 # MAX_OUTPUT_TOKENS: tier-0 runs at about 37 tok/s; the G14 30B runs at about 35 tok/s so 8192 tokens
 # is about 235 s and a 400 line file write is about 5000 tokens; do not set lower.
-MAX_OUTPUT_TOKENS = {'tier-0': 4096, 'tier-1': 8192, 'tier-2': 8192, 'tier-3': 8192, 'tier-4': 8192}
+MAX_OUTPUT_TOKENS = {'tier-0': 4096, 'tier-1': 4096, 'tier-2': 8192, 'tier-3': 8192, 'tier-4': 8192}
 
 _URL = 'https://llm.rollet.family/auto/v1'  # the pool; a node-<id> model pins the request to one node
 
@@ -31,9 +31,9 @@ def _node(n, label, ctx):
 DEFAULTS = {
     'tier-0': {'pane': 'build-local-tier-0', 'label': 'local gpt-oss-20b', 'kind': 'pi', 'ctx': 32768,
                'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 24, 'max_tokens': 4096},
-    # The window is the default; the gateway's live window replaces it (aidev_tuios.tiers_live). The TrashCan's 8192
-    # is below the ~12000 token pi overhead, so select_tier skips it for builds.
-    'tier-1': _node(1, 'TrashCan 7B', 8192),
+    # The window is the default; the gateway's live window replaces it (aidev_tuios.tiers_live). The TrashCan serves
+    # Qwen3.5-35B-A3B (experts in RAM) with a 65536 window and the gateway's plan profile (4096 output tokens).
+    'tier-1': dict(_node(1, 'TrashCan 35B-A3B', 65536), max_tokens=4096),
     'tier-2': _node(2, 'Mac mini M1 9B', 65536),
     'tier-3': _node(3, 'Cait G14 9B', 65536),
     'tier-4': _node(4, 'Josh G14 30B', 65536),
@@ -186,7 +186,7 @@ SPEED = {
     'tier-4': {'pp': 945, 'tg': 47, 'note': 'Josh G14, Qwen3-Coder-30B'},
     'tier-3': {'pp': 2829, 'tg': 41, 'note': 'Cait G14, Qwen3.5-9B'},
     'tier-2': {'pp': 95, 'tg': 6, 'note': 'Mac mini M1, Qwen3.5-9B'},
-    'tier-1': {'pp': 33, 'tg': 8, 'note': 'TrashCan, Qwen2.5-Coder-7B (about 20K tokens deep)'},
+    'tier-1': {'pp': 45, 'tg': 7, 'note': 'TrashCan, Qwen3.5-35B-A3B, experts in RAM (measured 2026-11-25 at 22K tokens deep)'},
 }
 PI_OVERHEAD = 12000  # tokens pi adds before the task text
 FIT_HEADROOM = 0.25  # a tier is only recommended when at least this share of its window stays free

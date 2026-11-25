@@ -190,8 +190,16 @@ tuios agent features must be on: `[agents] enabled = true` in `../tuios/config.t
 
 ## Local planner
 
-- aidev probes `claude` at start. If the probe fails, the plan pane runs `pi` on the local 9B model.
-- `AIDEV_TUIOS_PLANNER=claude|local` forces the choice.
+- aidev probes `claude` at start. If the probe fails, the plan pane runs `pi` on a local model. `AIDEV_TUIOS_PLANNER=claude|local`
+  forces the choice; the manage session always sets it (default `local`, `claude` only with the user's yes).
+- plan-local runs on the TrashCan: Qwen3.5-35B-A3B (experts in system RAM, attention and KV on the two GPUs), reached
+  through the gateway as `node-trashcan` with thinking off, a 65536 token window, 4096 output tokens, about 45 prompt and 7
+  generation tokens per second (measured 2026-11-25). A cold 20K-token prompt takes about 8 minutes; later turns reuse
+  the prefix cache. When the TrashCan is down or its gateway window is under 49152, the pane falls back to the Mac mini's
+  9B on `127.0.0.1:8080` (`plan-local-fallback`). The choice is made when the pane opens and recorded in the run as
+  `planner_target` (no key). pi reads the gateway key at request time through `gateway_key.py`.
+- `aidev planners [--json]` lists plan-local (backend, model, window, online, fallback, speed) and plan-billed
+  (Claude, needs the user's yes, never probed because a probe is a billed call).
 - The local planner cannot run `check-plan` or `send-task` until `ask-lumo` ran once or `ask-lumo --none-needed "<reason>"`
   was recorded. `AIDEV_TUIOS_PLANNER_GATE=off` disables the gate.
 - `ask-lumo` saves confirmed replies as notes under the run's `research` directory and reuses them for the same

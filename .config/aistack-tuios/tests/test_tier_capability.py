@@ -39,15 +39,15 @@ def main():
     t = load("aidev_tiers", os.path.join(ROOT, "aidev_tiers.py"))
     cfg = t.load_tiers()
     up = {tid: {"online": True} for tid in t.TIER_IDS}
-    # fit_rows: a 20K prompt fits tier-2 (65536) and not tier-1 (8192 by default)
+    # fit_rows: a 20K prompt fits every node tier (all have a 65536 window by default), the TrashCan included
     rows, best, why = t.fit_rows(20000, 800, cfg, up)
     r = {x["id"]: x for x in rows}
-    check("tier-1 too small for 20K at its default window", r["tier-1"]["fits"] is False)
+    check("tier-1 fits 20K at its 65536 window", r["tier-1"]["fits"] is True)
     check("tier-2 fits 20K", r["tier-2"]["fits"] is True and r["tier-2"]["headroom"] > 0.25)
     check("best is the tier with the shortest est_s that fits (Cait G14, tier-3)", best == "tier-3", (best, why))
     # a tight fit is flagged and not preferred when another has room
     rows, best, why = t.fit_rows(60000, 800, cfg, up)
-    check("60K of 65536 leaves under 25%: still a node tier but flagged", best in ("tier-2", "tier-3", "tier-4") and "under 25%" in why, why)
+    check("60K of 65536 leaves under 25%: still a node tier but flagged", best in ("tier-1", "tier-2", "tier-3", "tier-4") and "under 25%" in why, why)
     # nothing local fits: a cloud tier takes it, else split
     rows, best, why = t.fit_rows(90000, 800, cfg, up)
     check("over every local window goes to tier-5", best == "tier-5", (best, why))
@@ -67,7 +67,7 @@ def main():
     live = a.tiers_live()
     check("tiers_live takes the gateway window", live["tier-1"]["ctx"] == 32768 and live["tier-2"]["ctx"] == 65536)
     a.gateway_pool = lambda: None
-    check("tiers_live keeps the configured ctx without a gateway", a.tiers_live()["tier-1"]["ctx"] == 8192)
+    check("tiers_live keeps the configured ctx without a gateway", a.tiers_live()["tier-1"]["ctx"] == 65536)
 
     # size_problems: a story too big for the smallest online window fits the larger one
     a.tiers = lambda: {"tier-0": {"ctx": 32768, "enabled": True}, "tier-1": {"ctx": 16384, "enabled": True},
