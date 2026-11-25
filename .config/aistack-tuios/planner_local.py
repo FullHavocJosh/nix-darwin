@@ -62,14 +62,50 @@ GATEWAY_BASE = 'https://llm.rollet.family/auto'
 PLAN_MIN_WINDOW = 49152  # a plan pane needs a window this large (the TrashCan serves 65536)
 
 
-def planner_target(pool, key_cmd, mini_url='http://127.0.0.1:8080', mini_model='qwen/qwen3.5-9b', mini_ctx=131072):
+OWN_MIN_RAM_GB = 32  # a host with this much RAM runs its own 9B at 128K and is measured fast and accurate as a plan pane
+
+
+def own_server(url='http://127.0.0.1:8080', timeout=2, ram_gb=None, opener=None):
+    """
+    Describe this host's own llama-server: {'healthy', 'ctx', 'ram_gb'}, or None when it does not answer.
+    """
+    import urllib.request
+    opener = opener or urllib.request.urlopen
+    try:
+        with opener(url.rstrip('/') + '/props', timeout=timeout) as r:
+            ctx = int(json.load(r)['default_generation_settings']['n_ctx'])
+    except Exception:
+        return None
+    if ram_gb is None:
+        try:
+            ram_gb = int(subprocess.run(['sysctl', '-n', 'hw.memsize'], capture_output=True, text=True,
+                                        timeout=5, check=False).stdout.strip()) // 2**30
+        except Exception:
+            try:
+                ram_gb = int(open('/proc/meminfo').readline().split()[1]) // 2**20
+            except Exception:
+                ram_gb = 0
+    return {'healthy': True, 'ctx': ctx, 'ram_gb': ram_gb}
+
+
+def planner_target(pool, key_cmd, mini_url='http://127.0.0.1:8080', mini_model='qwen/qwen3.5-9b', mini_ctx=131072,
+                   own=None):
     """
     Pick where the local plan pane runs. pool is the gateway's {backend id: {healthy, window, ...}} (None when the
-    gateway cannot be read); key_cmd is the pi apiKey command that reads the gateway key at request time.
+    gateway cannot be read); key_cmd is the pi apiKey command that reads the gateway key at request time; own is
+    own_server() for this host (None when it has no llama-server).
 
-    Returns the TrashCan (plan-local, model node-trashcan through the gateway) when it is healthy with a window of at
-    least PLAN_MIN_WINDOW, else the Mac mini's own 9B on loopback (plan-local-fallback).
+    1. This host's own 9B (plan-local, backend local-9b) when it has at least OWN_MIN_RAM_GB of RAM and a window of at
+       least PLAN_MIN_WINDOW. Measured on a 32 GB M2 Pro: 27/30 on the executor scenarios at 112K tokens of context,
+       no model swap, nothing leaves the machine.
+    2. The TrashCan (plan-local, model node-trashcan through the gateway) when it is healthy with a window of at least
+       PLAN_MIN_WINDOW.
+    3. The Mac mini's own 9B on loopback (plan-local-fallback).
     """
+    if own and own.get('healthy') and int(own.get('ram_gb') or 0) >= OWN_MIN_RAM_GB \
+            and int(own.get('ctx') or 0) >= PLAN_MIN_WINDOW:
+        return {'name': 'plan-local', 'backend': 'local-9b', 'base_url': mini_url, 'model': mini_model,
+                'ctx': int(own['ctx']), 'api_key': 'sk-local'}
     tc = (pool or {}).get('trashcan') or {}
     if tc.get('healthy') and int(tc.get('window') or 0) >= PLAN_MIN_WINDOW:
         return {'name': 'plan-local', 'backend': 'trashcan', 'base_url': GATEWAY_BASE, 'model': 'node-trashcan',

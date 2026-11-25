@@ -1266,7 +1266,8 @@ def local_planner_body(run, cfg, task, has_lumo):
     system = prompt_text("claude", PROJECT=run.project, PLAN_DIR=run.plan_dir, RUN_DIR=run.dir, HELPER=HELPER,
                          LUMO=lumo_note) + "\n\n" + prompt_text("planner-local")
     first = task or "The user will describe the work. Greet them in one line and wait."
-    target = planner_local.planner_target(gateway_pool(), "!python3 " + os.path.join(AISTACK, "gateway_key.py"))
+    target = planner_local.planner_target(gateway_pool(), "!python3 " + os.path.join(AISTACK, "gateway_key.py"),
+                                          own=planner_local.own_server())
     model = target["model"]
     run.data["planner_target"] = {k: v for k, v in target.items() if k != "api_key"}
     wj(os.path.join(cfg["pi_plan"], "models.json"),
@@ -3440,8 +3441,8 @@ def planners_rows():
     """The plan panes, in the order to try them: plan-local (the TrashCan's 35B through the gateway, or the Mac mini's
     9B when the TrashCan is down) and plan-billed (Claude, needs the user's yes). Claude is not probed (a probe is a
     billed call), so its online state is None."""
-    t = planner_local.planner_target(gateway_pool(), "")
-    sp = aidev_tiers.SPEED.get("tier-1") if t["backend"] == "trashcan" else aidev_tiers.SPEED.get("tier-2")
+    t = planner_local.planner_target(gateway_pool(), "", own=planner_local.own_server())
+    sp = {"trashcan": aidev_tiers.SPEED.get("tier-1"), "local-9b": None}.get(t["backend"], aidev_tiers.SPEED.get("tier-2"))
     return [{"id": "plan-local", "backend": t["backend"], "model": t["model"], "ctx": t["ctx"],
              "online": t["name"] == "plan-local", "fallback": t["name"] != "plan-local", "needs_approval": False,
              "pp_tok_s": sp["pp"] if sp else None, "tg_tok_s": sp["tg"] if sp else None},
