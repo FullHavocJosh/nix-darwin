@@ -65,6 +65,8 @@ Write plan files (prd.json, verify.json) with Write or Edit under ~/.ai, never s
 - `gprr`: the 9B rewrites the PR description as short human-readable text, the PR is marked ready, then `/compact` is
   queued for this pane and a follow-up prompt tells you to run `gprr --monitor`. `gprr --monitor` is `pr-status`.
 - `pr-describe`: only the description rewrite, no ready mark, no compact.
+- `@@HELPER@@ close-builder [tier-N] [--force]`: closes a build pane whose work is done (no argument: every finished one). Run it
+  as soon as a tier's tasks have passed or moved on, so no pane idles or spins. It refuses a pane with a task in progress.
 - `@@HELPER@@ finish`: closes this piece of work and the builder pane, then resets this conversation: `/compact` when
   follow-ups remain, `/clear` when none do. Never type `/compact` or `/clear` yourself.
 

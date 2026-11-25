@@ -1047,9 +1047,11 @@ def write_build_pi(cfg, kind="tier-0", think=False):
             for pkind, pname in PI_PROVIDER.items():
                 providers[pname] = {
                     "baseUrl": tier_url(pkind), "api": "openai-completions", "apiKey": "!cat " + shlex.quote(key_path),
-                    "models": [{"id": tier_alias(pkind), "reasoning": False, "contextWindow": tiers()[pkind]["ctx"],
+                    "models": [{"id": tier_alias(pkind), "name": tiers()[pkind]["label"], "reasoning": False,
+                                "contextWindow": tiers()[pkind]["ctx"],
                                 "maxTokens": aidev_tiers.max_output_tokens(pkind, tiers())},
-                               {"id": think_alias(pkind), "reasoning": True, "contextWindow": tiers()[pkind]["ctx"],
+                               {"id": think_alias(pkind), "name": tiers()[pkind]["label"] + " (thinking)", "reasoning": True,
+                                "contextWindow": tiers()[pkind]["ctx"],
                                 "maxTokens": 2 * aidev_tiers.max_output_tokens(pkind, tiers())}]}
     wj(os.path.join(cfg["pi_build"], "models.json"), {"providers": providers})
     ext = os.path.join(cfg["pi_build"], "extensions")
@@ -1916,8 +1918,21 @@ def tier_state(run):
     for tid, cfg in tiers().items():
         pane = cfg["pane"]
         out[tid] = {"online": tier_online(tid, run),
-                    "idle": not window_named(run.session, pane) or pane_idle(run.session, pane)}
+                    "idle": not window_named(run.session, pane) or pane_idle(run.session, pane)
+                    or pane_finished(run, pane)}
     return out
+
+
+def pane_task_active(run, pane):
+    """True while a task sent to `pane` is still in progress (status sent)."""
+    return any(t.get("builder") == pane and t.get("status") == "sent" for t in (run.data.get("tasks") or {}).values())
+
+
+def pane_finished(run, pane):
+    """True when `pane` ran tasks of this run and none is in progress: its work is done or failed, so the pane is free
+    even when its screen does not show the ready footer. send-task stops it and resets it with /new."""
+    tasks = (run.data.get("tasks") or {}).values()
+    return any(t.get("builder") == pane for t in tasks) and not pane_task_active(run, pane)
 
 
 def default_target_ctx():
@@ -2404,6 +2419,13 @@ def reset_builder(run, builder):
     kind = tier_of(builder)
     if kind is None:
         return False
+    if pane_finished(run, builder) and agent_state(run.session, builder) not in ("idle", "done", "none"):
+        # its task is done or failed: do not let the pane spin, stop it so the reset below can run
+        tuios("send-keys", "-s", run.session, "-w", builder, "escape")
+        if not wait_rest(run.session, builder, 10):
+            tuios("send-keys", "-s", run.session, "-w", builder, "ctrl+c")
+            wait_rest(run.session, builder, 10)
+        run.event("stop_finished_pane", builder=builder)
     deadline = time.time() + RESET_WAIT
     while True:
         st = agent_state(run.session, builder)
@@ -3002,6 +3024,45 @@ def cmd_plan_sid(run, argv):
     return 1
 
 
+def cmd_close_builder(run, argv):
+    """close-builder [tier-N|pane ...] [--force]: close build panes whose work is done, so no pane idles or spins.
+    With no target it closes every open build pane that is finished (ran tasks of this run, none in progress).
+    A pane with a task in progress, or one still working, is refused unless --force."""
+    force = "--force" in argv
+    targets = [a for a in argv if a != "--force"]
+    if targets:
+        names = []
+        for word in targets:
+            kind = norm_kind(word)
+            if not kind:
+                print(f"unknown builder {word}; use tier-0 to tier-6 or a build pane name")
+                return 2
+            names.append(BUILDERS[kind])
+    else:
+        names = [n for n in BUILDERS.values() if window_named(run.session, n) and pane_finished(run, n)]
+    closed, kept = [], []
+    for name in names:
+        if not window_named(run.session, name):
+            continue
+        if not force and pane_task_active(run, name):
+            kept.append(f"{name}: a task is in progress")
+            continue
+        if not force and agent_state(run.session, name) not in ("idle", "done", "none") and not pane_finished(run, name):
+            kept.append(f"{name}: still working")
+            continue
+        code, _out, err = tuios("close-window", name, "-s", run.session)
+        if code:
+            kept.append(f"{name}: close failed: {(err or '').strip()[:120]}")
+            continue
+        closed.append(name)
+        run.event("close_builder", builder=name, forced=force)
+        if run.data.get("builder") == name:
+            run.data["builder"] = None
+    run.save()
+    print("closed: " + (", ".join(closed) or "none") + ("; kept: " + "; ".join(kept) if kept else ""))
+    return 1 if kept and not closed else 0
+
+
 def cmd_finish(run, _argv):
     wd0 = run.data.get("work_dir")
     dirty = bool(git_out(wd0, "status", "--porcelain").strip()) if wd0 else True
@@ -3011,7 +3072,7 @@ def cmd_finish(run, _argv):
     note = f" Plan context: {cmd.split()[0]} queued." if queued else ""
     left = [n for n in list(BUILDERS.values()) + list(LEGACY_BUILDER_PANES) if window_named(run.session, n)]
     if left:
-        print(f"builder panes still open, close them by hand: {', '.join(left)}")
+        print(f"builder panes still open: {', '.join(left)}. Close the finished ones with {HELPER} close-builder.")
     if dirty:
         print(f"finished. Changes are uncommitted in {wd}: run commit, or the user commits with gpa. The panes stay "
               "open for the next piece of work." + note)
@@ -3497,7 +3558,7 @@ def cmd_fit(run, argv):
 HELPERS = {"tiers": cmd_tiers, "fit": cmd_fit, "ask-lumo": cmd_ask_lumo, "check-plan": cmd_check_plan, "worktree": cmd_worktree, "builder": cmd_builder,
            "escalate": cmd_escalate, "fallback": cmd_fallback,
            "send-task": cmd_send_task, "wait-task": cmd_wait_task, "verify": cmd_verify, "watch": cmd_watch,
-           "approvals": cmd_approvals, "zen-check": cmd_zen_check, "finish": cmd_finish, "commit": cmd_commit,
+           "approvals": cmd_approvals, "zen-check": cmd_zen_check, "finish": cmd_finish, "close-builder": cmd_close_builder, "commit": cmd_commit,
            "pr-status": cmd_pr_status, "gprr": cmd_gprr, "pr-describe": cmd_pr_describe,
            "merged": cmd_merged, "plan-sid": cmd_plan_sid, "explore": cmd_explore,
            "review-diff": cmd_review_diff, "reap": cmd_reap}

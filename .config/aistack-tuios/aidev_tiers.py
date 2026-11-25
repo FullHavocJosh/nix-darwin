@@ -33,10 +33,10 @@ DEFAULTS = {
                'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 24, 'max_tokens': 4096},
     # The window is the default; the gateway's live window replaces it (aidev_tuios.tiers_live). The TrashCan serves
     # Qwen3.5-35B-A3B (experts in RAM) with a 65536 window and the gateway's plan profile (4096 output tokens).
-    'tier-1': dict(_node(1, 'TrashCan 35B-A3B', 65536), max_tokens=4096),
-    'tier-2': _node(2, 'Mac mini M1 9B', 65536),
-    'tier-3': _node(3, 'Cait G14 9B', 65536),
-    'tier-4': _node(4, 'Josh G14 30B', 65536),
+    'tier-1': dict(_node(1, 'qwen3.5-35B-A3B/Tier-1-D500x2', 65536), max_tokens=4096),
+    'tier-2': _node(2, 'qwen3.5-9B/Tier-2-M1', 65536),
+    'tier-3': _node(3, 'qwen3.5-9B/Tier-3-4070', 65536),
+    'tier-4': _node(4, 'qwen3-coder-30B/Tier-4-4090', 65536),
     'tier-5': {'pane': 'build-free-tier-5', 'label': 'free cloud', 'kind': 'opencode', 'ctx': 0,
                'alias': '', 'url': '', 'enabled': True, 'min_ram_gb': 0, 'max_tokens': 0},
     'tier-6': {'pane': 'build-billed-tier-6', 'label': 'billed Claude', 'kind': 'claude', 'ctx': 0,
