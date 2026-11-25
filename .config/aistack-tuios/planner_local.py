@@ -58,6 +58,14 @@ def choose_planner(env: dict[str, str], probe: callable = claude_available) -> t
         return ('local', why)
 
 
+PLANNER_LOCAL = 'local'
+PLANNER_CLAUDE = 'claude'
+
+
+def is_local(planner):
+    return planner == PLANNER_LOCAL
+
+
 GATEWAY_BASE = 'https://llm.rollet.family/auto'
 PLAN_MIN_WINDOW = 49152  # a plan pane needs a window this large (the TrashCan serves 65536)
 
@@ -88,30 +96,48 @@ def own_server(url='http://127.0.0.1:8080', timeout=2, ram_gb=None, opener=None)
     return {'healthy': True, 'ctx': ctx, 'ram_gb': ram_gb}
 
 
-def planner_target(pool, key_cmd, mini_url='http://127.0.0.1:8080', mini_model='qwen/qwen3.5-9b', mini_ctx=131072,
+def plan_node(pool):
+    """The gateway backend that plans: a healthy backend with the plan role and a window of at least PLAN_MIN_WINDOW,
+    the highest rank first; before the gateway reports roles, the Mac mini (macmini-m1) when it is healthy.
+    Returns (backend id, model, window) or None. auto-plan lets the gateway pick among plan nodes; a gateway that does
+    not report roles yet is addressed by the node-<id> pin."""
+    pool = pool or {}
+    ok = [(int(b.get('rank') or 0), bid, b) for bid, b in pool.items()
+          if b.get('healthy') and 'plan' in (b.get('roles') or []) and int(b.get('window') or 0) >= PLAN_MIN_WINDOW]
+    if ok:
+        _rank, bid, b = max(ok, key=lambda t: t[0])
+        return bid, 'auto-plan', int(b['window'])
+    mini = pool.get('macmini-m1') or {}
+    if mini.get('healthy') and not mini.get('roles') and int(mini.get('window') or 0) >= PLAN_MIN_WINDOW:
+        return 'macmini-m1', 'node-macmini-m1', int(mini['window'])
+    return None
+
+
+def planner_target(pool, key_cmd, mini_url='http://127.0.0.1:8080', mini_model='qwen/qwen3.5-9b', mini_ctx=65536,
                    own=None):
     """
-    Pick where the local plan pane runs. pool is the gateway's {backend id: {healthy, window, ...}} (None when the
-    gateway cannot be read); key_cmd is the pi apiKey command that reads the gateway key at request time; own is
+    Pick where the local plan pane runs. pool is the gateway's {backend id: {healthy, window, roles, ...}} (None when
+    the gateway cannot be read); key_cmd is the pi apiKey command that reads the gateway key at request time; own is
     own_server() for this host (None when it has no llama-server).
 
     1. This host's own 9B (plan-local, backend local-9b) when it has at least OWN_MIN_RAM_GB of RAM and a window of at
        least PLAN_MIN_WINDOW. Measured on a 32 GB M2 Pro: 27/30 on the executor scenarios at 112K tokens of context,
        no model swap, nothing leaves the machine.
-    2. The TrashCan (plan-local, model node-trashcan through the gateway) when it is healthy with a window of at least
-       PLAN_MIN_WINDOW.
-    3. The Mac mini's own 9B on loopback (plan-local-fallback).
+    2. The gateway's plan node (plan_node: the Mac mini, model auto-plan). The TrashCan never plans: it is a build node.
+    3. The Mac mini's own 9B on loopback (plan-local-fallback), for the Mini itself when the gateway cannot be read.
     """
     if own and own.get('healthy') and int(own.get('ram_gb') or 0) >= OWN_MIN_RAM_GB \
             and int(own.get('ctx') or 0) >= PLAN_MIN_WINDOW:
         return {'name': 'plan-local', 'backend': 'local-9b', 'base_url': mini_url, 'model': mini_model,
                 'ctx': int(own['ctx']), 'api_key': 'sk-local'}
-    tc = (pool or {}).get('trashcan') or {}
-    if tc.get('healthy') and int(tc.get('window') or 0) >= PLAN_MIN_WINDOW:
-        return {'name': 'plan-local', 'backend': 'trashcan', 'base_url': GATEWAY_BASE, 'model': 'node-trashcan',
-                'ctx': int(tc['window']), 'api_key': key_cmd}
+    node = plan_node(pool)
+    if node:
+        bid, model, window = node
+        return {'name': 'plan-local', 'backend': bid, 'base_url': GATEWAY_BASE, 'model': model, 'ctx': window,
+                'api_key': key_cmd}
+    ctx = int(own['ctx']) if own and own.get('healthy') and own.get('ctx') else mini_ctx  # the window the server serves
     return {'name': 'plan-local-fallback', 'backend': 'macmini-m1', 'base_url': mini_url, 'model': mini_model,
-            'ctx': mini_ctx, 'api_key': 'sk-local'}
+            'ctx': ctx, 'api_key': 'sk-local'}
 
 
 def planner_models(base_url: str, model_id: str, ctx: int, api_key: str = 'sk-local') -> dict:

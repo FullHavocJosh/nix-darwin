@@ -2002,7 +2002,7 @@ def size_problems(prd, root=None, ctx=None):
     return out
 
 
-def cmd_check_plan(run, _argv):
+def _check_plan(run):
     if research_gate(run):
         return 3
     lib = load_lib(run.project, run)
@@ -2023,6 +2023,109 @@ def cmd_check_plan(run, _argv):
     run.save()
     print(f"plan ok: {len(prd['userStories'])} task(s), in order {', '.join(task_order(prd))}. Show the user {path}.")
     return 0
+
+
+STRUGGLE_CHECKS = int(os.environ.get("AIDEV_TUIOS_STRUGGLE_CHECKS", "3"))
+
+
+def struggle_reasons(run):
+    """Why the local plan pane looks stuck: check-plan failed STRUGGLE_CHECKS times in a row, or two tasks failed at
+    their builder tier. Empty on a Claude plan pane (already escalated)."""
+    if not planner_local.is_local(run.data.get("planner")):
+        return []
+    out = []
+    if int(run.data.get("check_fails") or 0) >= STRUGGLE_CHECKS:
+        out.append(f"check-plan failed {run.data['check_fails']} times in a row")
+    failed = [tid for tid, t in (run.data.get("tasks") or {}).items()
+              if t.get("status") == "failed" and int(t.get("attempts") or 0) >= ESCALATE_AFTER]
+    if len(failed) >= 2:
+        out.append(f"tasks {', '.join(sorted(failed))} failed at their builder tier")
+    return out
+
+
+def struggle_hint(run):
+    """One line for the plan pane when it looks stuck, else ''. It never escalates by itself."""
+    why = struggle_reasons(run)
+    if not why:
+        return ""
+    return (f"plan-local is struggling ({'; '.join(why)}). To hand the plan to Claude run: {HELPER} escalate-plan "
+            "\"<reason>\". It asks the user first; nothing is billed without their yes.")
+
+
+def cmd_check_plan(run, argv):
+    code = _check_plan(run)
+    if code in (0, 1):
+        run.data["check_fails"] = 0 if code == 0 else int(run.data.get("check_fails") or 0) + 1
+        run.save()
+        hint = struggle_hint(run) if code else ""
+        if hint:
+            print(hint)
+    return code
+
+
+def with_struggle_hint(fn):
+    def wrapped(run, argv):
+        code = fn(run, argv)
+        hint = struggle_hint(run)
+        if hint:
+            print(hint)
+        return code
+    return wrapped
+
+
+RELAUNCH_WAIT = 2
+
+
+def cmd_escalate_plan(run, argv):
+    """escalate-plan ["<reason>"]: ask the user whether the plan should move from plan-local to Claude (billed). Only
+    the person at an attached tuios client can answer tuios ask-human, so an agent cannot approve it. On yes the plan
+    pane is replaced by a Claude plan pane for the same run (the local conversation is not carried over)."""
+    if not planner_local.is_local(run.data.get("planner")):
+        print("the plan pane already runs on Claude")
+        return 0
+    reason = " ".join(argv).strip() or "; ".join(struggle_reasons(run)) or "the plan is not progressing"
+    question = short(f"plan-local is struggling: {reason}. Move the plan to Claude (billed)?", 160)
+    code, out, _err = tuios("ask-human", question, "-o", "yes", "-o", "no", "--timeout", "900", timeout=960)
+    if code == 2 or code == 124:
+        print("no answer yet: the question stays in the user's Inbox. Keep planning, or run escalate-plan again later.")
+        return 3
+    if code != 0 or out.strip().lower() != "yes":
+        run.event("escalate_plan_declined", reason=reason)
+        print("the user did not approve Claude: keep planning on plan-local")
+        return 1
+    cfg = pane_configs(run.project)
+    task = (f"Continue run {run.id} of {run.project}. The local planner struggled: {reason}. Read {run.plan_dir} "
+            f"(PLAN.txt, prd.json, verify.json) and run `{HELPER} tiers`, check each task's state, and carry the plan on "
+            "with the builders.")
+    script = write_script(run, PLAN, claude_pane_body(run, cfg, task, bool(window_named(run.session, RESEARCH))))
+    run.data["panes"].setdefault(PLAN, {})["script"] = script
+    run.data["planner"] = planner_local.PLANNER_CLAUDE
+    run.event("escalate_plan", reason=reason)
+    run.save()
+    subprocess.Popen([sys.executable, os.path.abspath(__file__), "relaunch-plan", run.session], env=TENV,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+    print("approved: this pane is replaced by a Claude plan pane in a few seconds")
+    return 0
+
+
+def cmd_relaunch_plan(argv):
+    """relaunch-plan <session>: close the plan window and open it again from the run's stored launcher. escalate-plan
+    starts it detached, because it closes the window the helper runs in."""
+    if not argv:
+        print("usage: relaunch-plan <session>", file=sys.stderr)
+        return 2
+    session = argv[0]
+    time.sleep(RELAUNCH_WAIT)
+    w = window_named(session, PLAN)
+    if not w:
+        return 1
+    run = session_run(project_root(w.get("cwd") or HOME), session)
+    pane = (run.data["panes"].get(PLAN) or {}) if run else {}
+    if not pane.get("script"):
+        return 1
+    tuios("close-window", w["window_id"], "-s", session)
+    return 0 if open_pane(run, session, PLAN, pane["script"], pane.get("cwd") or run.project, GRANTS[PLAN]) else 1
 
 
 def cmd_worktree(run, _argv):
@@ -3499,11 +3602,10 @@ def cmd_tiers(_run, argv):
 
 
 def planners_rows():
-    """The plan panes, in the order to try them: plan-local (the TrashCan's 35B through the gateway, or the Mac mini's
-    9B when the TrashCan is down) and plan-billed (Claude, needs the user's yes). Claude is not probed (a probe is a
+    """The plan panes, in the order to try them: plan-local (the Mac mini's 9B through the gateway, or this host's own 9B) and plan-billed (Claude, needs the user's yes). Claude is not probed (a probe is a
     billed call), so its online state is None."""
     t = planner_local.planner_target(gateway_pool(), "", own=planner_local.own_server())
-    sp = {"trashcan": aidev_tiers.SPEED.get("tier-1"), "local-9b": None}.get(t["backend"], aidev_tiers.SPEED.get("tier-2"))
+    sp = None if t["backend"] == "local-9b" else aidev_tiers.SPEED.get("tier-2")  # the Mac mini plans
     return [{"id": "plan-local", "backend": t["backend"], "model": t["model"], "ctx": t["ctx"],
              "online": t["name"] == "plan-local", "fallback": t["name"] != "plan-local", "needs_approval": False,
              "pp_tok_s": sp["pp"] if sp else None, "tg_tok_s": sp["tg"] if sp else None},
@@ -3557,8 +3659,8 @@ def cmd_fit(run, argv):
 
 HELPERS = {"tiers": cmd_tiers, "fit": cmd_fit, "ask-lumo": cmd_ask_lumo, "check-plan": cmd_check_plan, "worktree": cmd_worktree, "builder": cmd_builder,
            "escalate": cmd_escalate, "fallback": cmd_fallback,
-           "send-task": cmd_send_task, "wait-task": cmd_wait_task, "verify": cmd_verify, "watch": cmd_watch,
-           "approvals": cmd_approvals, "zen-check": cmd_zen_check, "finish": cmd_finish, "close-builder": cmd_close_builder, "commit": cmd_commit,
+           "send-task": cmd_send_task, "wait-task": with_struggle_hint(cmd_wait_task), "verify": cmd_verify, "watch": cmd_watch,
+           "approvals": cmd_approvals, "zen-check": cmd_zen_check, "finish": cmd_finish, "close-builder": cmd_close_builder, "escalate-plan": cmd_escalate_plan, "commit": cmd_commit,
            "pr-status": cmd_pr_status, "gprr": cmd_gprr, "pr-describe": cmd_pr_describe,
            "merged": cmd_merged, "plan-sid": cmd_plan_sid, "explore": cmd_explore,
            "review-diff": cmd_review_diff, "reap": cmd_reap}
@@ -4118,6 +4220,8 @@ def main(argv):
         return cmd_status(rest)
     if cmd == "restore":
         return cmd_restore(rest)
+    if cmd == "relaunch-plan":
+        return cmd_relaunch_plan(rest)
     if cmd == "tiers":
         return cmd_tiers(None, rest)
     if cmd == "planners":
