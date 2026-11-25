@@ -1032,7 +1032,7 @@ def write_lumo_pi(cfg, lumo, model=None):
         "models": [{"id": model or LUMO_MODEL, "reasoning": False}]}}})
 
 
-PI_BUILD_EXTENSIONS = ("pi-stop-after-reply.ts", "pi-tool-log.ts")
+PI_BUILD_EXTENSIONS = ("pi-stop-after-reply.ts", "pi-tool-log.ts", "pi-read-cap.ts")
 PI_PROVIDER = {t: "gw" + t[-1] for t in aidev_tiers.NODE_TIERS}  # pi provider name of a gateway node tier
 
 
@@ -1714,6 +1714,17 @@ NEVER_GIT = ("You must never run git checkout, restore, stash, reset, clean, com
              "Do not undo, revert or remove changes you did not make in this task.")
 
 
+NOTES_KEEP = 3  # the newest notes a task prompt carries; older ones only fill a small builder's context
+
+
+def recent_notes(notes):
+    """The last NOTES_KEEP notes, after one line that says how many older notes were left out."""
+    notes = list(notes or [])
+    if len(notes) <= NOTES_KEEP:
+        return notes
+    return [f"- ({len(notes) - NOTES_KEEP} earlier notes left out; the newest follow)"] + notes[-NOTES_KEEP:]
+
+
 def task_prompt(prd, story, verify_cmds, notes, wd=None, progress_path=None, retry_files=None, files=None):
     verify_cmds = [verify_cmds] if isinstance(verify_cmds, str) else verify_cmds
     
@@ -1753,14 +1764,14 @@ def task_prompt(prd, story, verify_cmds, notes, wd=None, progress_path=None, ret
         lines += ["", "## Already done", "The work dir already holds uncommitted edits, this task's and earlier tasks', in these files:"]
         lines += [f"- {f}" for f in retry_files]
         lines += ["Do not redo the task and do not apply those edits again. Read the changed region before you edit it.",
-                  "", "## What to fix"] + list(notes or [])
+                  "", "## What to fix"] + recent_notes(notes)
         lines += ["", "## Goal (context only)"] + [f"- {c}" for c in story.get("acceptanceCriteria", [])]
         return "\n".join(lines + checks + rules) + "\n"
     
     # Original prompt format
     lines = header_lines + workdir + scope + what_to_do + checks
     if notes:
-        lines += ["", "## Earlier attempts and notes from Claude"] + notes
+        lines += ["", "## Earlier attempts and notes from Claude"] + recent_notes(notes)
     lines += rules
     return "\n".join(lines) + "\n"
 
