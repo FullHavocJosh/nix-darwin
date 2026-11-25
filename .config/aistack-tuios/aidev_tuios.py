@@ -2164,10 +2164,47 @@ def cmd_relaunch_plan(argv):
     return 0 if open_pane(run, session, PLAN, pane["script"], pane.get("cwd") or run.project, GRANTS[PLAN]) else 1
 
 
+def pr_state(project, number):
+    """The GitHub state of PR `number` (OPEN, MERGED or CLOSED), or "" when gh fails or there is no number."""
+    if not number:
+        return ""
+    try:
+        res = subprocess.run(["gh", "pr", "view", str(number), "--json", "state", "-q", ".state"], cwd=project,
+                             capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return res.stdout.strip() if res.returncode == 0 else ""
+
+
+def retire_work_dir(run, why):
+    """Forget a saved work dir that is no longer the place to work: its builder panes close, the run's worktree record
+    is removed, the old work dir and tasks move to finished, so worktree makes a new one."""
+    for name in BUILDERS.values():
+        if window_named(run.session, name):
+            tuios("close-window", name, "-s", run.session)
+    done = {k: run.data.pop(k, None) for k in ("work_dir", "builder", "tasks")}
+    meta = rj(run.meta_path)
+    if meta:
+        done["project"] = meta
+        os.remove(run.meta_path)
+    run.data.setdefault("finished", []).append({**done, "why": why, "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+    run.data["tasks"] = {}
+    run.event("retire_work_dir", work_dir=done.get("work_dir"), why=why)
+    run.save()
+    print(f"work dir {done.get('work_dir')} retired: {why}")
+
+
 def cmd_worktree(run, _argv):
-    if run.data.get("work_dir"):
-        print(f"work dir: {run.data['work_dir']}")
-        return 0
+    saved = run.data.get("work_dir") or (rj(run.meta_path) or {}).get("work_dir")
+    if saved:
+        state = pr_state(run.project, (rj(run.meta_path) or {}).get("pr_number")) if os.path.isdir(saved) else ""
+        if not os.path.isdir(saved):
+            retire_work_dir(run, "its directory is gone")
+        elif state in ("MERGED", "CLOSED"):
+            retire_work_dir(run, f"its PR is {state.lower()}")
+        elif run.data.get("work_dir"):
+            print(f"work dir: {run.data['work_dir']}")
+            return 0
     lib = load_lib(run.project, run)
     prd, verify, _h = lib.load_plan(run.project)
     if lib.validate(prd, verify):
@@ -2209,6 +2246,18 @@ def auto_builder(run):
     return 'tier-6'
 
 
+def stale_builder_pane(w, wd):
+    """True when builder window `w` started in another work dir than `wd`: its cwd is gone, or is neither wd nor under
+    it. A window without a cwd is not stale."""
+    cwd = (w or {}).get("cwd")
+    if not cwd:
+        return False
+    if not os.path.isdir(cwd):
+        return True
+    c, d = os.path.realpath(cwd), os.path.realpath(wd)
+    return not (c == d or c.startswith(d + os.sep))
+
+
 def cmd_builder(run, argv):
     approved = "--approved" in argv
     argv = [w for w in argv if w != "--approved"]
@@ -2221,7 +2270,13 @@ def cmd_builder(run, argv):
     if not wd:
         print("no work dir yet: run worktree first")
         return 1
-    if window_named(run.session, name):
+    w = window_named(run.session, name)
+    if w and stale_builder_pane(w, wd):
+        tuios("close-window", name, "-s", run.session)
+        run.event("builder_restart", builder=name, old=w.get("cwd"), work_dir=wd)
+        print(f"{name} worked in {w.get('cwd')}, not {wd}: closed it to open a new one")
+        w = None
+    if w:
         run.data["builder"] = name
         run.save()
         print(f"{name} is already open; it is the builder now")
