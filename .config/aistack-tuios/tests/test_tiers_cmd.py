@@ -2,6 +2,7 @@
 """Tests for cmd_tiers in aidev_tuios: text and --json output, offline tiers.
 Run: PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_tiers_cmd.py
 """
+
 import contextlib
 import importlib.util
 import io
@@ -17,7 +18,11 @@ FAILS = []
 
 
 def check(name, cond, extra=""):
-    print(("  PASS " if cond else "  FAIL ") + name + (f"  [{extra}]" if extra and not cond else ""))
+    print(
+        ("  PASS " if cond else "  FAIL ")
+        + name
+        + (f"  [{extra}]" if extra and not cond else "")
+    )
     if not cond:
         FAILS.append(name)
 
@@ -43,19 +48,53 @@ def main():
     code, out = run_cmd(mod, [])
     lines = out.splitlines()
     check("text exits 0", code == 0)
-    check("text has seven lines", len(lines) == 7, out)
-    check("tier-2 line", lines[2].startswith("tier-2 build-local-tier-2 ctx 65536 online limits chars "), lines[2])
-    check("offline tier shows offline", "offline" in lines[0] and "online" not in lines[0], lines[0])
+    check("text has nine lines", len(lines) == 9, out)
+    check(
+        "tier-2 line",
+        lines[2].startswith("tier-2 build-local-tier-2 ctx 65536 online limits chars "),
+        lines[2],
+    )
+    check(
+        "offline tier shows offline",
+        "offline" in lines[0] and "online" not in lines[0],
+        lines[0],
+    )
     check("tier-5 ctx n/a", "ctx n/a" in lines[5], lines[5])
     code, out = run_cmd(mod, ["--json"])
     data = json.loads(out)
-    check("json has seven entries", len(data) == 7)
-    keys = {"id", "pane", "kind", "ctx", "online", "enabled", "max_chars", "max_read", "max_files"}
-    check("json keeps every original key (manage reads them)", all(keys <= set(d) for d in data))
+    check("json has nine entries", len(data) == 9)
+    keys = {
+        "id",
+        "pane",
+        "kind",
+        "ctx",
+        "online",
+        "enabled",
+        "max_chars",
+        "max_read",
+        "max_files",
+    }
+    check(
+        "json keeps every original key (manage reads them)",
+        all(keys <= set(d) for d in data),
+    )
     extra = {"room", "model", "thinking", "pp_tok_s", "tg_tok_s"}
-    check("json adds only the capability keys", all(set(d) == keys | extra for d in data))
-    check("json online flags", [d["online"] for d in data] == [False, False, True, False, False, False, True])
-    need = mod.task_need({"title": "t", "description": "d", "acceptanceCriteria": []}, None)
+    check(
+        "json adds only the capability keys", all(set(d) == keys | extra for d in data)
+    )
+    check(
+        "json online flags",
+        [d["online"] for d in data]
+        == [False, False, True, False, False, False, True, False, False],
+    )
+    by_id = {d["id"]: d for d in data}
+    check(
+        "json lists tier-7 and tier-8 offline",
+        by_id["tier-7"]["online"] is False and by_id["tier-8"]["online"] is False,
+    )
+    need = mod.task_need(
+        {"title": "t", "description": "d", "acceptanceCriteria": []}, None
+    )
     check("task_need counts the overhead", need >= 12000, str(need))
     mod = load("aidev_tuios2", os.path.join(ROOT, "aidev_tuios.py"))
     seen = []
@@ -74,10 +113,22 @@ def main():
     mod = load("aidev_tuios3", os.path.join(ROOT, "aidev_tuios.py"))
     mod.zen_status = lambda run, refresh=False: run.project.nope
     code, out = run_cmd(mod, [])
-    check("cmd_tiers with a raising zen_status", code == 0 and len(out.splitlines()) == 7, out)
-    for pane, want in (("build-local-tier-0", True), ("build-free-tier-5", True), ("build-billed-tier-6", True),
-                       ("build-local-tier-1", False), ("build-local-tier-2", False), ("build-local-tier-3", False),
-                       ("build-local-tier-4", False), ("", False), (None, False)):
+    check(
+        "cmd_tiers with a raising zen_status",
+        code == 0 and len(out.splitlines()) == 9,
+        out,
+    )
+    for pane, want in (
+        ("build-local-tier-0", True),
+        ("build-free-tier-5", True),
+        ("build-billed-tier-6", True),
+        ("build-local-tier-1", False),
+        ("build-local-tier-2", False),
+        ("build-local-tier-3", False),
+        ("build-local-tier-4", False),
+        ("", False),
+        (None, False),
+    ):
         check(f"keeps_builder {pane!r}", mod.keeps_builder(pane) is want)
     for pane in ("tier-0", "tier-5", "tier-6"):
         check(f"keeps_builder {pane}", mod.keeps_builder(pane) is True)
