@@ -317,7 +317,7 @@ TAMER_MINI_URL = os.environ.get(
     "AISTACK_TAMER_MINI_URL", "http://macminim1.rollet.family:3003/v1"
 ).rstrip("/")
 TAMER_PUBLIC_URL = os.environ.get(
-    "AISTACK_LUMO_PUBLIC_URL", "https://lumo.rollet.family/v1"
+    "AISTACK_LUMO_PUBLIC_URL", "https://llm.rollet.family/lumo/v1"
 ).rstrip("/")
 
 
@@ -358,30 +358,16 @@ def tamer_mini_key():
 
 
 def tamer_public_key():
-    """The key of the public endpoint: AISTACK_LUMO_PUBLIC_KEY, else Doppler (root_hetzner-cluster), else ''."""
+    """The key of the public endpoint: AISTACK_LUMO_PUBLIC_KEY, else the gateway device key via remote_builder.read_key(), else ''."""
     k = os.environ.get("AISTACK_LUMO_PUBLIC_KEY")
     if k:
         return k
     try:
-        r = subprocess.run(
-            [
-                "doppler",
-                "secrets",
-                "get",
-                "LUMO_PUBLIC_API_KEY",
-                "--project",
-                "FullHavocJosh",
-                "--config",
-                "root_hetzner-cluster",
-                "--plain",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=20,
-        )
-    except (OSError, subprocess.TimeoutExpired):
+        import remote_builder
+
+        return remote_builder.read_key() or ""
+    except Exception:
         return ""
-    return r.stdout.strip() if r.returncode == 0 else ""
 
 
 def tamer_endpoints():
@@ -389,7 +375,7 @@ def tamer_endpoints():
     for it (so a working local tamer costs no Doppler lookup and no request to the others):
       1. this machine's own tamer (127.0.0.1)
       2. MacMiniM1's tamer on the home network
-      3. the public endpoint https://lumo.rollet.family/v1 (for when this machine is away from home)
+      3. the public endpoint https://llm.rollet.family/lumo/v1 (for when this machine is away from home)
     AISTACK_TAMER_URL with AISTACK_TAMER_KEY pins one; AISTACK_LUMO_URL / AISTACK_LUMO_KEY are the older names for
     the same pin (they used to point at the planner proxy)."""
     import urllib.request
