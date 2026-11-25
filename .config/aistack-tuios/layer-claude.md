@@ -54,6 +54,8 @@ Write plan files (prd.json, verify.json) with Write or Edit under ~/.ai, never s
   builder. The note carries guidance after a failure. `--to` lets different builders work at once.
 - `@@HELPER@@ wait-task <id> [seconds]`: blocks on the builder's mail (540 s default), then runs the task's verify
   commands and prints VERIFIED or CHECKS FAILED. Exit 3: no reply yet, or an event; read the line, act, run again.
+  Exit 4: the builder replied blocked (NEEDS FILE or BLOCKED); no checks ran and the attempt does not count: act on
+  it, then send-task with a note.
 - `@@HELPER@@ verify <id>`: runs the verify commands again.
 - `@@HELPER@@ watch`: blocks until mail or a research-pane exchange arrives. Run it only in the background.
 - `@@HELPER@@ approvals [approve|deny]`: shows or answers the builder's permission prompt.
