@@ -5,22 +5,17 @@
                          (usable), a yellow ? (could not tell) or a red x (looks unusable). A red x never blocks a
                          choice: a check can be wrong.
 
-Keys: 1-9 or up/down + enter start a choice, r runs the checks again, s leaves a shell, q quits. The rows below the
-line (Zen, Go) only report; they are what the cloud builders and fallbacks use.
+Keys: 1-9 or up/down + enter start a choice, r runs the checks again, s leaves a shell, q quits. The last rows
+(OpenCode Zen and Go) only report; they are what the cloud builders and fallbacks use.
 
-Outside the advisor and plan modes, the picker also starts full-tool sessions:
-  pi on a node:   pi through the llm.rollet.family gateway pinned to one node (model node-<id>), one row per node,
-                  each showing whether the node is online (gateway /auto/v1/tiers), busy, its model and window
-  Claude Code:    plain claude
-  OpenCode:       plain opencode
-  OpenRouter:     pi on OpenRouter (AI_OPENROUTER_MODEL, default ~anthropic/claude-sonnet-latest)
-
-  1 Claude (advisor): aidev's Claude and Lumo panes, Claude in advisor mode (AIDEV_TUIOS_ADVISOR=1)
-  2 Claude (plan):    aidev start with planner forced to claude (AIDEV_TUIOS_PLANNER=claude)
-  3 9B (advisor):     pi on the always-on llama-server (:8080), advisor prompt, read-only tools
-  4 9B (plan):        aidev start with planner forced to local (AIDEV_TUIOS_PLANNER=local)
-  5 gpt-oss-20b (advisor): pi on the gpt-oss-20b (loaded on demand), advisor prompt, read-only tools
-  6 Manage session: only in ~/ai-info; runs ~/ai-info/manage/launch.sh
+The rows are grouped by function, and each row reads "model / device or service":
+  manage          only in ~/ai-info: the manage session (Claude Code), runs ~/ai-info/manage/launch.sh
+  plan            aidev start with the planner forced: local (this host's own 9B on 32 GB or more, else the Mac mini
+                  through the gateway) or Claude (billed)
+  advisor         a read-only advisor: Claude, the 9B on this host, gpt-oss-20b on this host
+  pi on a node    pi through the llm.rollet.family gateway pinned to one build node (model node-<id>), one row per
+                  node with its online and busy state, model and window (gateway /auto/v1/tiers)
+  cloud sessions  Claude Code, OpenCode, OpenRouter (pi), and the OpenCode Zen and Go status rows
 """
 import importlib.util
 import json
@@ -48,26 +43,32 @@ MARK = {"ok": f"{GREEN}✓{RESET}", "bad": f"{RED}✗{RESET}", "maybe": f"{YELLO
 
 GATEWAY_TIERS = os.environ.get("AISTACK_GATEWAY_URL") or "https://llm.rollet.family/auto/v1"
 OPENROUTER_MODEL = os.environ.get("AI_OPENROUTER_MODEL") or "~anthropic/claude-sonnet-latest"
-# the gateway's backend ids (GET /auto/v1/tiers), shown in this order; the label is the device name
-NODES = [("josh-g14", "Josh G14"), ("cait-g14", "Cait G14"), ("trashcan", "TrashCan"), ("macmini-m1", "Mac mini M1")]
+# the gateway's build nodes (GET /auto/v1/tiers), shown in this order: id, device, GPU, model. The Mac mini is the plan
+# node, not a build node, so it has no pi row.
+NODES = [("josh-g14", "Josh G14", "RTX 4090", "qwen3-coder-30B"), ("cait-g14", "Cait G14", "RTX 4070", "qwen3.5-9B"),
+         ("trashcan", "TrashCan", "2x D500", "qwen3.5-35B-A3B")]
 # subheader drawn above the first row of each section
-SECTIONS = {"node:josh-g14": "pi on a node (full tools, through the gateway)",
-            "claude-code": "standard sessions"}
+SECTIONS = {"manage": "manage", "9b-plan": "plan", "claude": "advisor",
+            "node:josh-g14": "pi on a node (build nodes, through the gateway)", "claude-code": "cloud sessions"}
 
-# key, label, what it starts (None: a status row only)
+# key, label ("model / device or service"), startable (False: a status row only); startable rows come first within a
+# section and the status-only rows are last
 def build_rows(cwd=None):
-    rows = [("claude", "Claude (advisor)", True), ("claude-plan", "Claude (plan)", True),
-            ("9b", "9B (advisor)", True), ("9b-plan", "9B (plan)", True), ("30b", "gpt-oss-20b (advisor)", True)]
+    rows = []
     if os.path.realpath(cwd or os.getcwd()) == os.path.realpath(os.path.expanduser("~/ai-info")):
-        rows.append(("manage", "Manage session", True))
-    rows += [("node:" + nid, "pi: " + label, True) for nid, label in NODES]
-    rows += [("claude-code", "Claude Code", True), ("opencode", "OpenCode", True), ("openrouter", "OpenRouter (pi)", True),
-             ("zen", "OpenCode Zen (free)", False), ("go", "OpenCode Go", False)]
+        rows.append(("manage", "Claude / Claude Code", True))
+    rows += [("9b-plan", "qwen3.5-9B / plan target", True), ("claude-plan", "Claude / Claude Code (billed)", True),
+             ("claude", "Claude / Claude Code", True), ("9b", "qwen3.5-9B / this host", True),
+             ("30b", "gpt-oss-20B / this host", True)]
+    rows += [("node:" + nid, f"{model} / {label} ({gpu})", True) for nid, label, gpu, model in NODES]
+    rows += [("claude-code", "Claude / Claude Code", True), ("opencode", "any model / OpenCode", True),
+             ("openrouter", f"{OPENROUTER_MODEL.lstrip('~')} / OpenRouter", True),
+             ("zen", "opencode models / OpenCode Zen", False), ("go", "opencode-go models / OpenCode Go", False)]
     return rows
 
 
 ROWS = build_rows()
-MIRROR = {"claude-plan": "claude", "9b-plan": "9b", "claude-code": "claude"}
+MIRROR = {"claude-plan": "claude", "claude-code": "claude"}
 state = {k: ("wait", "checking") for k, _l, _s in ROWS if k not in MIRROR}
 lock = threading.Lock()
 
@@ -187,23 +188,32 @@ def check_opencode():
     set_state("opencode", "ok" if path else "bad", path or "opencode is not installed")
 
 
+def fetch_pool():
+    """The gateway's backends {id: {healthy, busy, window, model, rank, roles, ...}} from /auto/v1/tiers; raises on any
+    failure."""
+    spec = importlib.util.spec_from_file_location("remote_builder", os.path.join(AISTACK, "remote_builder.py"))
+    rb = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rb)
+    key = rb.read_key()
+    if not key:
+        raise OSError("no gateway key")
+    data = get_json(GATEWAY_TIERS + "/tiers", {"Authorization": "Bearer " + key}, timeout=4)
+    return {b["id"]: b for g in data["groups"].values() for b in g}
+
+
+GATEWAY_ERRORS = (OSError, ValueError, KeyError, TypeError, AttributeError, ImportError, FileNotFoundError)
+
+
 def check_nodes():
     """One gateway call fills every node row: online (healthy), busy (a request is running or queued), model, window."""
-    keys = ["node:" + nid for nid, _l in NODES]
+    keys = ["node:" + nid for nid, _l, _g, _m in NODES]
     try:
-        spec = importlib.util.spec_from_file_location("remote_builder", os.path.join(AISTACK, "remote_builder.py"))
-        rb = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(rb)
-        key = rb.read_key()
-        if not key:
-            raise OSError("no gateway key")
-        data = get_json(GATEWAY_TIERS + "/tiers", {"Authorization": "Bearer " + key}, timeout=4)
-        pool = {b["id"]: b for g in data["groups"].values() for b in g}
-    except (OSError, ValueError, KeyError, TypeError, AttributeError, ImportError, FileNotFoundError) as e:
+        pool = fetch_pool()
+    except GATEWAY_ERRORS as e:
         for k in keys:
             set_state(k, "maybe", f"gateway not readable ({e.__class__.__name__}); try it")
         return
-    for (nid, _label), k in zip(NODES, keys):
+    for (nid, _label, _gpu, _model), k in zip(NODES, keys):
         b = pool.get(nid)
         if b is None:
             set_state(k, "bad", "not in the gateway pool")
@@ -217,6 +227,28 @@ def check_nodes():
             set_state(k, "ok", "online; " + info)
 
 
+def load_planner_local():
+    spec = importlib.util.spec_from_file_location("planner_local", os.path.join(HERE, "planner_local.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def check_plan():
+    """Where the local plan pane would run now: this host's own 9B, the Mac mini through the gateway, or the Mini's
+    loopback fallback."""
+    pl = load_planner_local()
+    try:
+        pool = fetch_pool()
+    except GATEWAY_ERRORS:
+        pool = None
+    t = pl.planner_target(pool, "", own=pl.own_server(LLAMA))
+    detail = f"{t['backend']} ({t['model']}), {t['ctx']} ctx"
+    if t["name"] == "plan-local-fallback":
+        return set_state("9b-plan", "maybe" if pool is None else "bad", "no plan node answers; fallback " + detail)
+    set_state("9b-plan", "ok", detail)
+
+
 def check_manage():
     if not os.path.isfile(MANAGE_LAUNCH):
         return set_state("manage", "bad", "launch.sh missing")
@@ -225,7 +257,7 @@ def check_manage():
     set_state("manage", "ok", MANAGE_LAUNCH)
 
 
-CHECKS = {"claude": check_claude, "9b": check_9b, "30b": check_30b, "openrouter": check_openrouter,
+CHECKS = {"claude": check_claude, "9b": check_9b, "plan": check_plan, "30b": check_30b, "openrouter": check_openrouter,
           "zen": check_zen_and_go, "opencode": check_opencode, "nodes": check_nodes}
 if any(key == "manage" for key, _label, _startable in ROWS):
     CHECKS["manage"] = check_manage
@@ -242,17 +274,16 @@ def draw(cursor):
     with lock:
         snap = dict(state)
     out = ["\x1b[H\x1b[2J", "dev picker: what should this session start?\n\n"]
-    room = max(10, shutil.get_terminal_size().columns - 34)
+    room = max(10, shutil.get_terminal_size().columns - 14 - max(len(r[1]) for r in ROWS))
     STARTABLE = len([r for r in ROWS if r[2]])
+    width = max(len(label) for _k, label, _s in ROWS)
     for i, (key, label, startable) in enumerate(ROWS):
         if key in SECTIONS:
             out.append(f"  {DIM}---- {SECTIONS[key]} ----{RESET}\n")
-        if i == STARTABLE:
-            out.append(f"  {DIM}---- cloud (status only) ----{RESET}\n")
         status, detail = snap[MIRROR.get(key, key)]
         pointer = ">" if startable and i == cursor else " "
         num = f"{i + 1}" if startable and i < 9 else " "
-        out.append(f" {pointer}{num} [{MARK[status]}] {label:<22} {DIM}{detail[:room]}{RESET}\n")
+        out.append(f" {pointer}{num} [{MARK[status]}] {label:<{width}} {DIM}{detail[:room]}{RESET}\n")
     out.append(f"\n {DIM}1-{min(STARTABLE, 9)} / arrows+enter start, r recheck, s shell, q quit; a red x never blocks a choice{RESET}\n")
     sys.stdout.write("".join(out))
     sys.stdout.flush()

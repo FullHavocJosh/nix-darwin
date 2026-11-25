@@ -25,3 +25,5 @@
 10. When every task has passed, mail your lead `tuios send-agent-message --reply-to <id> "done: <result>"` before any
     commit.
 11. Always answer by running one command. Never reply with prose alone.
+12. When a helper prints "plan-local is struggling", run the escalate-plan command it names with a one-line reason. It
+    asks the user; on a no or no answer, carry on planning. Never ask for Claude in prose.
