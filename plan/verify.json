@@ -1,0 +1,8 @@
+{
+  "G0": [
+    "python3 -m py_compile .config/aistack-tuios/aidev_tuios.py",
+    "ruff check --config .config/aistack-tuios/ruff.toml .config/aistack-tuios/aidev_tuios.py",
+    "python3 .config/aistack-tuios/tests/test_aidev_tuios.py",
+    "python3 .config/aistack-tuios/aidev_tuios.py gateway-health"
+  ]
+}

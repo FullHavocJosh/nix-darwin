@@ -1,0 +1,23 @@
+{
+  "name": "gateway-health-diagnostic",
+  "title": "Add gateway-health diagnostic subcommand",
+  "description": "Add a read-only gateway-health command to aidev_tuios.py that shows gateway tier health and the tier_online decision. This diagnostic helps verify that the gateway is the only source for tiers 1-4.",
+  "userStories": [
+    {
+      "id": "G0",
+      "title": "gateway-health command",
+      "description": "Add cmd_gateway_health function and register it in main. The function prints key sources, probe key file status, gateway groups with health status, and tier-N lines for tier-1 through tier-4. Register it next to tiers in main.",
+      "files": [".config/aistack-tuios/aidev_tuios.py"],
+      "acceptanceCriteria": [
+        "python3 -m py_compile .config/aistack-tuios/aidev_tuios.py exits 0",
+        "ruff check --config .config/aistack-tuios/ruff.toml .config/aistack-tuios/aidev_tuios.py exits 0",
+        "PYTHONDONTWRITEBYTECODE=1 python3 .config/aistack-tuios/tests/test_aidev_tuios.py exits 0",
+        "python3 .config/aistack-tuios/aidev_tuios.py gateway-health exits 0 and prints a key sources line, a probe key file line, and one line starting tier-1, tier-2, tier-3 and tier-4",
+        "git diff HEAD --stat lists only .config/aistack-tuios/aidev_tuios.py"
+      ],
+      "priority": 1,
+      "passes": false,
+      "dependsOn": []
+    }
+  ]
+}

@@ -4062,6 +4062,42 @@ def cmd_fit(run, argv):
     return 0 if best else 1
 
 
+def cmd_gateway_health(_run, argv):
+    """gateway-health: what the gateway reports per group and what tier_online decides. Never prints a key."""
+    import urllib.request
+    rb = load_remote_builder()
+    sources = []
+    if rb.key_file():
+        sources.append("key file")
+    for name in (rb.KEY_ENV, "AISTACK_GATEWAY_KEY", rb.GATEWAY_KEY_ENV):
+        if (os.environ.get(name) or "").strip():
+            sources.append("env " + name)
+    if os.path.isfile(os.path.expanduser(rb.DEVICE_KEY_FILE)):
+        sources.append("device key file")
+    key = rb.read_key()
+    print("key sources set: " + (", ".join(sources) or "none") + "; read_key resolves: " + ("yes" if key else "no"))
+    probe_key = semi_key_file()
+    print("probe key file: " + ("present" if probe_key and os.path.isfile(probe_key) else "missing"))
+    groups = None
+    if key:
+        req = urllib.request.Request(rb.TIERS_URL, headers={"Authorization": "Bearer " + key})
+        try:
+            with urllib.request.urlopen(req, timeout=8) as r:
+                groups = json.load(r)["groups"]
+        except Exception as e:
+            print("tiers endpoint: " + type(e).__name__)
+    if groups is None:
+        print("gateway tiers: not readable (no answer or no key)")
+    else:
+        for name, backends in groups.items():
+            for b in backends:
+                print(f"group {name}: {b['id']} healthy={b['healthy']} window={b.get('window')} model={b.get('model')}")
+    pool = gateway_pool() or {}
+    for tid in aidev_tiers.NODE_TIERS:
+        print(f"{tid}: gateway pool says {pool.get(GATEWAY_BACKEND[tid], {}).get('healthy')}, tier_online says {tier_online(tid)}")
+    return 0
+
+
 HELPERS = {"tiers": cmd_tiers, "fit": cmd_fit, "ask-lumo": cmd_ask_lumo, "check-plan": cmd_check_plan, "worktree": cmd_worktree, "builder": cmd_builder,
            "escalate": cmd_escalate, "fallback": cmd_fallback,
            "send-task": cmd_send_task, "wait-task": with_struggle_hint(cmd_wait_task), "verify": cmd_verify, "watch": cmd_watch,
@@ -4629,6 +4665,8 @@ def main(argv):
         return cmd_relaunch_plan(rest)
     if cmd == "tiers":
         return cmd_tiers(None, rest)
+    if cmd == "gateway-health":
+        return cmd_gateway_health(None, rest)
     if cmd == "planners":
         return cmd_planners(None, rest)
     if cmd in HELPERS:
