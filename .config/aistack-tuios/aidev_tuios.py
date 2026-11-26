@@ -3115,7 +3115,8 @@ def cmd_send_task(run, argv):
     prd, verify, _h = lib.load_plan(run.project)
     stories = {s["id"]: s for s in (prd or {}).get("userStories", [])}
     if tid not in stories or tid not in (verify or {}):
-        print(f"no task {tid} in the plan")
+        valid = ", ".join(s for s in stories if s in (verify or {})) or "none"
+        print(f"no task {tid} in the plan; valid ids: {valid}")
         return 1
     picked = None
     open_builder = builder if builder and window_named(run.session, builder) else None
