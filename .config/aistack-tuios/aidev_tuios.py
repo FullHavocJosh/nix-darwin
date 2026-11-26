@@ -3309,6 +3309,15 @@ def cmd_wait_task(run, argv):
         return 3
     if status == "timeout":
         st = agent_state(run.session, builder)
+        if st == "errored":
+            kind = next((k for k, n in BUILDERS.items() if n == builder), None)
+            if kind:
+                tuios("close-window", builder, "-s", run.session)
+                run.data.setdefault("unready", []).append(kind)
+                run.data["builder"] = None
+                run.save()
+                print(f"{tid}: {builder} errored; {kind} is marked unready. Run `{HELPER} builder` with no tier, then `{HELPER} send-task {tid}`.")
+                return 3
         msg = (f"{tid}: no reply after {limit} s; {builder} is {st}"
                + (" and waits on a prompt for the user" if st == "needs_input" else "")
                + f". Run wait-task {tid} again, or look at the pane.")
