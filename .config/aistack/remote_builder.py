@@ -239,21 +239,31 @@ def probe(timeout=PROBE_TIMEOUT_S):
     return False, "model not listed"
 
 
-def gateway_pool(timeout=PROBE_TIMEOUT_S):
+def gateway_pool(timeout=PROBE_TIMEOUT_S, key=None):
     """{backend id: {"healthy", "window", "rank", "model"}} for every backend in GET /auto/v1/tiers, or None when
     the gateway, the key or the answer fails. Never raises; the key is never printed."""
-    key = read_key()
+    key = key if key is not None else read_key()
     if not key:
         return None
     req = urllib.request.Request(TIERS_URL, headers={"Authorization": "Bearer " + key})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             data = json.load(r)
-        out = {}
+        # collect per-backend health across groups
+        temp = {}
         for backends in data["groups"].values():
             for b in backends:
-                out.setdefault(b["id"], {"healthy": bool(b["healthy"]), "window": int(b.get("window") or 0),
-                                         "rank": b.get("rank"), "model": b.get("model", "")})
+                bid = b["id"]
+                if bid not in temp:
+                    temp[bid] = {"healthy_flags": [], "window": int(b.get("window") or 0),
+                                 "rank": b.get("rank"), "model": b.get("model", "")}
+                temp[bid]["healthy_flags"].append(bool(b["healthy"]))
+        out = {}
+        for bid, info in temp.items():
+            out[bid] = {"healthy": all(info["healthy_flags"]),
+                        "window": info["window"],
+                        "rank": info["rank"],
+                        "model": info["model"]}
         return out
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
