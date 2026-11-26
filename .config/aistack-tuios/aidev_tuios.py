@@ -2529,7 +2529,7 @@ def cmd_builder(run, argv):
         return 2
     name, wd = BUILDERS[kind], run.data.get("work_dir")
     if not wd:
-        print("no work dir yet: run worktree first")
+        print(f"no work dir yet: run worktree first: {HELPER} worktree")
         return 1
     w = window_named(run.session, name)
     if w and stale_builder_pane(w, wd):
