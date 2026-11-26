@@ -1,7 +1,4 @@
 { pkgs, lib, ... }:
-let
-  wallpaper = "/Users/jrollet/.wallpapers/wallhaven-rr13w1.png";
-in
 {
   system.primaryUser = "jrollet";
 
@@ -37,9 +34,14 @@ in
     fi
 
     echo "Setting wallpaper..."
-    cp "${wallpaper}" "/Users/Shared/Wallpaper.png"
-    cp "${wallpaper}" "/Users/Shared/psv_backgroundimage.png"
-    osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "${wallpaper}"'
+    WALLPAPER=$(find -L /Users/jrollet/.wallpapers -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \) | sort -R | head -1)
+    if [ -z "$WALLPAPER" ]; then
+      echo "Wallpaper: none found in /Users/jrollet/.wallpapers, skipping."
+    else
+      cp "$WALLPAPER" "/Users/Shared/Wallpaper.png"
+      cp "$WALLPAPER" "/Users/Shared/psv_backgroundimage.png"
+      osascript -e "tell application \"System Events\" to set picture of every desktop to POSIX file \"$WALLPAPER\""
+    fi
     killall WallpaperAgent 2>/dev/null || true
     killall Dock
 
