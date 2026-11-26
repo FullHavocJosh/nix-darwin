@@ -2253,6 +2253,18 @@ def struggle_hint(run):
             "\"<reason>\". It asks the user first; nothing is billed without their yes.")
 
 
+def next_commands_hint(run):
+    """The commands that follow a valid plan, in order, with the full helper path."""
+    lib = load_lib(run.project, run)
+    prd, _verify, _h = lib.load_plan(run.project)
+    stories = (prd or {}).get("userStories") or []
+    steps = [] if run.data.get("work_dir") else [f"{HELPER} worktree"]
+    steps.append(f"{HELPER} builder")
+    if stories:
+        steps.append(f"{HELPER} send-task {stories[0]['id']}")
+    return "Next, in this order: " + "; then ".join(steps)
+
+
 def cmd_check_plan(run, argv):
     code = _check_plan(run)
     if code in (0, 1):
@@ -2261,6 +2273,8 @@ def cmd_check_plan(run, argv):
         hint = struggle_hint(run) if code else ""
         if hint:
             print(hint)
+        elif code == 0:
+            print(next_commands_hint(run))
     return code
 
 
