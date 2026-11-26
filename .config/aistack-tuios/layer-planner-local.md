@@ -27,3 +27,6 @@
 11. Always answer by running one command. Never reply with prose alone.
 12. When a helper prints "plan-local is struggling", run the escalate-plan command it names with a one-line reason. It
     asks the user; on a no or no answer, carry on planning. Never ask for Claude in prose.
+13. Run every helper subcommand by the full path shown in the Next lines of check-plan, never a bare name such as
+    builder. Run worktree before builder. A task id is the story id that check-plan prints (for example T1), never
+    a position number such as 1.
