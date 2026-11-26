@@ -286,6 +286,7 @@ description = "Previous agent, every session"
 [startup]
 tiled = true
 daemon = true
+open_default_window = false
 
 [agents]
 # on: aidev_test's Claude pane mails the builder, asks the Lumo pane (ask-agent) and asks you (ask-human).
@@ -294,6 +295,7 @@ enabled = true
 herdr_protocol = "off"
 # off: the SessionStart hook tells agents not to rename their pane or session.
 name_hint = "off"
+view_list = "column"
 
 [agents.permissions]
 # strict: a pane started without --grants holds `grants` (your shells). aidev starts every model pane with its own
@@ -310,17 +312,41 @@ window_title_align = "left"
 window_button_style = "pill"
 show_cpu = true
 show_ram = true
-clock_format = "3:004PM"
-show_clock = true
+clock_format = "03:04 PM"
+show_clock = false
 dock_prefix_indicator = "pill"
 
 # The focused border is red in window mode, where single keys act on panes, and blue in terminal mode, where keys go
 # to the program.
 border_focused_color_window = "#f38ba8"
 border_focused_color_terminal = "#89b4fa"
+shared_borders = false
+hide_scrollbar = true
+border_style = "glyphs"
+glyphs = "default"
+theme = ""
+dock_compact = false
+dock_mode_pill = "input"
+dock_mode_split_letter = false
+calm = false
+theme_transition = "none"
+whichkey_enabled = false
+click_to_type = "single"
+auto_enter_terminal_on_focus = "all"
+nvim_navigation = true
+alt_drag = true
+right_click_opens_menu = true
+niri_reverse_scroll = true
+max_fps = 120
+dock_workspace_tabs = true
+dock_workspace_tooltip = false
+dock_pill_caps = true
+dockbar_position = "top"
 
 [spotlight]
 enabled = false
+follow = "mouse"
+dim = 25
 
 # One rail, on the left. No [appearance.sidebar.left/right] edge tables: the edge opposite position stays hidden
 # unless its table sets enabled = true, and ctrl+t H toggles it for a moment.
@@ -329,17 +355,21 @@ enabled = true
 position = "left"
 width = 39
 # Files as a tree that opens folders in place, capped at a fifth of the rail; agents get the most room.
-sections = "sessions:30,terminals:15,files:20,agents:35"
+sections = "sessions,files"
 files_style = "tree"
-header_case = "uppercase"
+header_case = "lowercase"
 # No window count on session rows: every dev session has the same few windows.
 show_counts = false
-row_style = "underline"
-header_style = "pill"
+row_style = "pill"
+header_style = "icon"
 show_numbers = false
 marquee = true
 tooltips = true
 subagent_collapse = "collapsed"
+show_glyphs = true
+file_icons = true
+file_icon_colors = true
+group_main = true
 
 # The two Macs link to each other (dev, peerdev); each Mac also lists itself, which tuios only holds as an idle link.
 [hosts.macmini]
@@ -364,3 +394,33 @@ suppress_focused = true
 # focusing it first.
 [dock.tabs]
 attention_fg = "#f38ba8"
+
+[path_picker]
+show_hidden = true
+
+[files]
+drop_keep_hours = 24
+
+[dock]
+meter_interval_ms = 2000
+center = ["windows"]
+left = ["mode", "workspaces"]
+right = ["notifications", "copy-help", "session-controls", "ram", "cpu"]
+
+[shell]
+integration = "auto"
+
+[notifications]
+bell = "both"
+level = "error"
+
+[notifications.mail]
+enabled = false
+
+[screensaver]
+enabled = true
+idle_minutes = 30
+while_busy = true
+
+[daemon]
+resume_agents = "auto"
