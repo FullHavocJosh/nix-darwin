@@ -302,6 +302,21 @@ _HEALTH = {"at": 0.0, "value": None}
 HEALTH_TTL_S = 5.0
 
 
+def effective_gateway_key():
+    """The key every gateway call uses: read_key(), else the cached key file the alias probe and pi use. None when neither."""
+    key = load_remote_builder().read_key()
+    if key:
+        return key
+    path = semi_key_file()
+    if path:
+        try:
+            with open(path) as fh:
+                return fh.read().strip() or None
+        except OSError:
+            return None
+    return None
+
+
 def gateway_pool():
     """{backend id: {healthy, window, rank, model}} from the gateway's /auto/v1/tiers, cached for 5 s; None when it
     cannot be read."""
@@ -309,7 +324,7 @@ def gateway_pool():
     if now - _HEALTH["at"] > HEALTH_TTL_S:
         fn = getattr(load_remote_builder(), "gateway_pool", None)  # an older installed remote_builder lacks it
         try:
-            _HEALTH["value"] = fn() if fn else None
+            _HEALTH["value"] = fn(key=effective_gateway_key()) if fn else None
         except Exception:
             _HEALTH["value"] = None
         _HEALTH["at"] = now
@@ -4074,7 +4089,7 @@ def cmd_gateway_health(_run, argv):
             sources.append("env " + name)
     if os.path.isfile(os.path.expanduser(rb.DEVICE_KEY_FILE)):
         sources.append("device key file")
-    key = rb.read_key()
+    key = effective_gateway_key()
     print("key sources set: " + (", ".join(sources) or "none") + "; read_key resolves: " + ("yes" if key else "no"))
     probe_key = semi_key_file()
     print("probe key file: " + ("present" if probe_key and os.path.isfile(probe_key) else "missing"))
