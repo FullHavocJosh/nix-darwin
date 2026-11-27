@@ -50,6 +50,7 @@ def main():
 
     # check-plan counts consecutive failures
     codes = iter([1, 1, 1, 0])
+    a.next_commands_hint = lambda run: "next"
     a._check_plan = lambda run: next(codes)
     run = make_run()
     for _ in range(3):

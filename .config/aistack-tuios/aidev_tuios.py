@@ -2253,6 +2253,18 @@ def struggle_hint(run):
             "\"<reason>\". It asks the user first; nothing is billed without their yes.")
 
 
+def next_commands_hint(run):
+    """The commands that follow a valid plan, in order, with the full helper path."""
+    lib = load_lib(run.project, run)
+    prd, _verify, _h = lib.load_plan(run.project)
+    stories = (prd or {}).get("userStories") or []
+    steps = [] if run.data.get("work_dir") else [f"{HELPER} worktree"]
+    steps.append(f"{HELPER} builder")
+    if stories:
+        steps.append(f"{HELPER} send-task {stories[0]['id']}")
+    return "Next, in this order: " + "; then ".join(steps)
+
+
 def cmd_check_plan(run, argv):
     code = _check_plan(run)
     if code in (0, 1):
@@ -2261,6 +2273,8 @@ def cmd_check_plan(run, argv):
         hint = struggle_hint(run) if code else ""
         if hint:
             print(hint)
+        elif code == 0:
+            print(next_commands_hint(run))
     return code
 
 
@@ -2529,7 +2543,7 @@ def cmd_builder(run, argv):
         return 2
     name, wd = BUILDERS[kind], run.data.get("work_dir")
     if not wd:
-        print("no work dir yet: run worktree first")
+        print(f"no work dir yet: run worktree first: {HELPER} worktree")
         return 1
     w = window_named(run.session, name)
     if w and stale_builder_pane(w, wd):
@@ -3115,7 +3129,8 @@ def cmd_send_task(run, argv):
     prd, verify, _h = lib.load_plan(run.project)
     stories = {s["id"]: s for s in (prd or {}).get("userStories", [])}
     if tid not in stories or tid not in (verify or {}):
-        print(f"no task {tid} in the plan")
+        valid = ", ".join(s for s in stories if s in (verify or {})) or "none"
+        print(f"no task {tid} in the plan; valid ids: {valid}")
         return 1
     picked = None
     open_builder = builder if builder and window_named(run.session, builder) else None

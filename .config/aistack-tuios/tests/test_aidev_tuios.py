@@ -238,6 +238,18 @@ def main():
     a.wj(os.path.join(plan_dir, "verify.json"), {"T1": ["python3 -c 'import calc; assert calc.sub(3, 1) == 2'"]})
     check("a valid plan passes check-plan and gets PLAN.txt",
           a.cmd_check_plan(hr, []) == 0 and os.path.isfile(os.path.join(plan_dir, "PLAN.txt")))
+    import contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        a.cmd_check_plan(hr, [])
+    check("a valid plan prints the exact next commands",
+          "worktree" in buf.getvalue() and "send-task T1" in buf.getvalue() and a.HELPER in buf.getvalue(),
+          buf.getvalue())
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        code = a.cmd_send_task(hr, ["T9"])
+    check("send-task with an unknown id lists the valid ids", code == 1 and "valid ids: T1" in buf.getvalue(),
+          (code, buf.getvalue()))
     os.environ["AIDEV_TUIOS_WORKTREE_MODE"] = "none"
     check("worktree outside a main checkout works in the project",
           a.cmd_worktree(hr, []) == 0 and hr.data["work_dir"] == p)

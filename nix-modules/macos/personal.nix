@@ -1,7 +1,4 @@
 { pkgs, ... }:
-let
-  wallpaper = "/Users/havoc/.wallpapers/wallhaven-5yk6k9.jpg";
-in
 {
   system.primaryUser = "havoc";
 
@@ -19,8 +16,13 @@ in
     echo "Finished Stowing dotfiles..."
 
     echo "Setting wallpaper..."
-    launchctl asuser "$(id -u -- havoc)" osascript -e 'tell application "System Events" to set picture of every desktop to POSIX file "${wallpaper}"' 2>/dev/null || \
-      echo "Wallpaper: System Events not yet running, will apply on next login."
+    WALLPAPER=$(find -L /Users/havoc/.wallpapers -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \) | sort -R | head -1)
+    if [ -z "$WALLPAPER" ]; then
+      echo "Wallpaper: none found in /Users/havoc/.wallpapers, skipping."
+    else
+      launchctl asuser "$(id -u -- havoc)" osascript -e "tell application \"System Events\" to set picture of every desktop to POSIX file \"$WALLPAPER\"" 2>/dev/null || \
+        echo "Wallpaper: System Events not yet running, will apply on next login."
+    fi
 
     # Configure kubectl for personal devices only
     echo "Configuring kubectl for hetzner-cluster..."
